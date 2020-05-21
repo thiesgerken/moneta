@@ -1,0 +1,6 @@
+[Unit]
+Description=Backup Moneta
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /var/backups/backup-moneta.sh
