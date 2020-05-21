@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 table! {
     use diesel::sql_types::*;
     use crate::enums::*;

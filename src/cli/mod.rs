@@ -18,7 +18,7 @@ pub fn build(multiple: bool) -> App<'static, 'static> {
                 .short("c")
                 .long("config")
                 .value_name("file")
-                .help("read configuration from this file (instead of config.* in '/etc/moneydb' and moneydb.* in '.')"))
+                .help("read configuration from this file (instead of config.* in '/etc/moneta' and moneta.* in '.')"))
         .arg(Arg::with_name("v")
                 .short("v")
                 .long("verbose")
@@ -26,7 +26,7 @@ pub fn build(multiple: bool) -> App<'static, 'static> {
                 .help("specify multiple times (up to three) to increase verbosity level"))
         .arg(Arg::with_name("database")
                 .long("database")
-                .help("database url [default: 'postgres://localhost/money3']")
+                .help("database url [default: 'postgres://localhost/moneta']")
                 .value_name("url"))
         .subcommand(user::build())
     // .subcommand(import::build())
@@ -44,14 +44,14 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            database: "postgres://localhost/money3".into(),
+            database: "postgres://localhost/moneta".into(),
             verbosity: 0,
         }
     }
 }
 
 // set default settings and load overrides from config files
-// files that are considered: basenames /etc/stockdb/config and ./stockdb
+// files that are considered: basenames /etc/moneta/config and ./moneta
 // fails, if additional_file does not exist or cannot be read
 pub fn initialize_settings(additional_file: Option<&str>) -> Result<config::Config, ConfigError> {
     // let default: Config = Default::default();
@@ -64,9 +64,9 @@ pub fn initialize_settings(additional_file: Option<&str>) -> Result<config::Conf
             .expect("unable to read config file");
     } else {
         settings
-            .merge(config::File::with_name("/etc/moneydb/config").required(false))
+            .merge(config::File::with_name("/etc/moneta/config").required(false))
             .unwrap()
-            .merge(config::File::with_name("./moneydb").required(false))
+            .merge(config::File::with_name("./moneta").required(false))
             .unwrap();
     }
 

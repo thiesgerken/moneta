@@ -1,4 +1,4 @@
-use moneydb::cli;
+use moneta::cli;
 
 use clap::{crate_authors, crate_name, crate_version, App, Arg, ArgGroup, Shell};
 use std::io;
@@ -7,7 +7,7 @@ fn main() {
     let matches = App::new(crate_name!())
         .version(crate_version!())
         .author(crate_authors!())
-        .about("Generator of useful files for the distribution of moneydb")
+        .about("Generator of useful files for the distribution of moneta")
         .arg(
             Arg::with_name("bash")
                 .long("bash")

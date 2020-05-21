@@ -1,0 +1,128 @@
+stages:
+  # - bundle
+  - build
+  - package
+  # - deploy
+
+# bundle:
+#   stage: bundle
+#   cache:
+#     key: ${CI_JOB_NAME}
+#     paths:
+#       - .yarn-cache
+#   tags:
+#     - docker
+#   image: git.thiesgerken.de:5005/thies/moneta/web
+#   script:
+#     - cd web
+#     - yarn install
+#     - yarn test --all && yarn test:lint:js
+#     - yarn run build && yarn run analyze
+#   before_script:
+#     - mkdir -p .yarn-registry
+#     - ln -s $(pwd)/.yarn-cache ~/.yarn-cache
+#   artifacts:
+#     expire_in: 1 month
+#     paths:
+#       - web/build
+
+.build:
+  stage: build
+  # dependencies:
+  #   - bundle
+  script:
+    - cargo build --target=x86_64-unknown-linux-gnu --release
+    - cp target/x86_64-unknown-linux-gnu/release/moneta .
+    - strip -s moneta
+    - target/x86_64-unknown-linux-gnu/release/generate --config > config-dist.toml
+    - target/x86_64-unknown-linux-gnu/release/generate --bash > bash-completions
+    - target/x86_64-unknown-linux-gnu/release/generate --zsh > zsh-completions
+  before_script:
+    - export LANG=C.UTF-8
+    - rustup update
+    - mkdir -p .cargo-registry ~/.cargo
+    - ln -s $(pwd)/.cargo-registry ~/.cargo/registry
+    - cargo --version
+  cache:
+    key: ${CI_JOB_NAME}
+    paths:
+      # - target
+      - .cargo-registry
+  artifacts:
+    expire_in: 1 month
+    paths:
+      - moneta
+      - config-dist.toml
+      - bash-completions
+      - zsh-completions
+
+# build-arch:
+#   extends: .build-server
+#   tags:
+#     - docker
+#   image: git.thiesgerken.de:5005/thies/moneta/build-arch
+
+build-ubuntu:
+  extends: .build
+  tags:
+    - docker
+  image: git.thiesgerken.de:5005/thies/moneta/build-ubuntu
+
+package-ubuntu:
+  stage: package
+  tags:
+    - docker
+  image: git.thiesgerken.de:5005/thies/moneta/build-ubuntu
+  dependencies:
+    - build-ubuntu
+  script:
+    - (cd package/ubuntu && ./package.sh)
+    - mv package/ubuntu/build/moneta.deb .
+  artifacts:
+    expire_in: 1 month
+    paths:
+      - moneta.deb
+# package-arch:
+#   stage: package
+#   tags:
+#     - docker
+#   image: git.thiesgerken.de:5005/thies/moneta/build-arch
+#   dependencies:
+#     - build-seer-arch
+#   script:
+#     - chmod -R 777 package/arch # makepkg must not be run as root
+#     - su nobody -s /usr/bin/bash -c "cd package/arch && ./package.sh"
+#     - mv package/arch/build/moneta-0.1.0-0-x86_64.pkg.tar.xz .
+#   artifacts:
+#     expire_in: 1 month
+#     paths:
+#       - moneta-0.1.0-0-x86_64.pkg.tar.xz
+
+# .deploy-thiesgerken-de:
+#   stage: deploy
+#   dependencies:
+#     - package-ubuntu
+#   script:
+#     - echo "$RSA_THIESGERKEN_DE" > id_rsa
+#     - chmod 500 id_rsa
+#     - scp -i id_rsa -oStrictHostKeyChecking=no moneta.deb thies@thiesgerken.de:~
+#     - ssh -i id_rsa -oStrictHostKeyChecking=no thies@thiesgerken.de "sudo systemctl stop moneta"
+#     - ssh -i id_rsa -oStrictHostKeyChecking=no thies@thiesgerken.de "sudo dpkg --force-confdef --force-confold -i moneta.deb && rm moneta.deb"
+#     - ssh -i id_rsa -oStrictHostKeyChecking=no thies@thiesgerken.de "sudo systemctl enable moneta && sudo systemctl start moneta"
+#     - rm id_rsa
+#   environment:
+#     name: thiesgerken.de
+#     url: https://moneta.thiesgerken.de
+#   tags:
+#     - build-tools
+
+# deploy-thiesgerken-de:
+#   extends: .deploy-thiesgerken-de
+#   only:
+#     - master
+
+# deploy-thiesgerken-de-manual:
+#   extends: .deploy-thiesgerken-de
+#   when: manual
+#   except:
+#     - master

@@ -1,4 +1,4 @@
-use moneydb::initialize_logging;
+use moneta::initialize_logging;
 
 fn main() {
     initialize_logging(2);
