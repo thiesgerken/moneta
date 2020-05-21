@@ -1,0 +1,360 @@
+use crate::models::*;
+use crate::schema::*;
+
+use diesel::prelude::*;
+use log::{info, warn};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NativeFormat {
+    users: Vec<User>,
+    accounts: Vec<Account>,
+    account_synchronizations: Vec<AccountSynchronization>,
+    balances: Vec<Balance>,
+    categories: Vec<Category>,
+    category_replacements: Vec<CategoryReplacement>,
+    expenses: Vec<Expense>,
+    expense_categories: Vec<ExpenseCategory>,
+    expense_transactions: Vec<ExpenseTransaction>,
+    expense_receipts: Vec<ExpenseReceipt>,
+    delivery_rules: Vec<DeliveryRule>,
+}
+
+impl NativeFormat {
+    pub fn new(connection: &PgConnection) -> Self {
+        let users = users::table
+            .load::<User>(connection)
+            .expect("Error loading users");
+        let accounts = accounts::table
+            .load::<Account>(connection)
+            .expect("Error loading accounts");
+        let account_synchronizations = account_synchronizations::table
+            .load::<AccountSynchronization>(connection)
+            .expect("Error loading account_synchronizations");
+        let balances = balances::table
+            .load::<Balance>(connection)
+            .expect("Error loading balances");
+        let categories = categories::table
+            .load::<Category>(connection)
+            .expect("Error loading categories");
+        let category_replacements = category_replacements::table
+            .load::<CategoryReplacement>(connection)
+            .expect("Error loading category_replacements");
+        let expenses = expenses::table
+            .load::<Expense>(connection)
+            .expect("Error loading expenses");
+        let expense_categories = expense_categories::table
+            .load::<ExpenseCategory>(connection)
+            .expect("Error loading expense_categories");
+        let expense_transactions = expense_transactions::table
+            .load::<ExpenseTransaction>(connection)
+            .expect("Error loading expense_transactions");
+        let expense_receipts = expense_receipts::table
+            .load::<ExpenseReceipt>(connection)
+            .expect("Error loading expense_receipts");
+        let delivery_rules = delivery_rules::table
+            .load::<DeliveryRule>(connection)
+            .expect("Error loading delivery_rules");
+
+        NativeFormat {
+            users,
+            accounts,
+            account_synchronizations,
+            balances,
+            categories,
+            category_replacements,
+            expenses,
+            expense_categories,
+            expense_transactions,
+            expense_receipts,
+            delivery_rules,
+        }
+    }
+
+    pub fn write_to(&self, connection: &PgConnection) {
+        let users_count = diesel::insert_into(users::table)
+            .values(&self.users)
+            .on_conflict_do_nothing()
+            .execute(connection)
+            .expect("Error writing users into the database");
+        info!(
+            "imported {} of {} users into the database",
+            users_count,
+            self.users.len()
+        );
+
+        let accounts_count = diesel::insert_into(accounts::table)
+            .values(&self.accounts)
+            .on_conflict_do_nothing()
+            .execute(connection)
+            .expect("Error writing accounts into the database");
+        info!(
+            "imported {} of {} accounts into the database",
+            accounts_count,
+            self.accounts.len()
+        );
+
+        let account_synchronizations_count = diesel::insert_into(account_synchronizations::table)
+            .values(&self.account_synchronizations)
+            .on_conflict_do_nothing()
+            .execute(connection)
+            .expect("Error writing account_synchronizations into the database");
+        info!(
+            "imported {} of {} account_synchronizations into the database",
+            account_synchronizations_count,
+            self.account_synchronizations.len()
+        );
+
+        let balances_count = diesel::insert_into(balances::table)
+        .values(&self.balances)
+        .on_conflict_do_nothing()
+        .execute(connection)
+        .expect("Error writing balances into the database");
+    info!(
+        "imported {} of {} balances into the database",
+        balances_count,
+        self.balances.len()
+    );
+
+    let categories_count = diesel::insert_into(categories::table)
+    .values(&self.categories)
+    .on_conflict_do_nothing()
+    .execute(connection)
+    .expect("Error writing categories into the database");
+info!(
+    "imported {} of {} categories into the database",
+    categories_count,
+    self.categories.len()
+);
+
+let category_replacements_count = diesel::insert_into(category_replacements::table)
+.values(&self.category_replacements)
+.on_conflict_do_nothing()
+.execute(connection)
+.expect("Error writing category_replacements into the database");
+info!(
+"imported {} of {} category_replacements into the database",
+category_replacements_count,
+self.category_replacements.len()
+);
+
+let expenses_count = diesel::insert_into(expenses::table)
+.values(&self.expenses)
+.on_conflict_do_nothing()
+.execute(connection)
+.expect("Error writing expenses into the database");
+info!(
+"imported {} of {} expenses into the database",
+expenses_count,
+self.expenses.len()
+);
+
+let expense_categories_count = diesel::insert_into(expense_categories::table)
+.values(&self.expense_categories)
+.on_conflict_do_nothing()
+.execute(connection)
+.expect("Error writing expense_categories into the database");
+info!(
+"imported {} of {} expense_categories into the database",
+expense_categories_count,
+self.expense_categories.len()
+);
+
+let expense_transactions_count = diesel::insert_into(expense_transactions::table)
+.values(&self.expense_transactions)
+.on_conflict_do_nothing()
+.execute(connection)
+.expect("Error writing expense_transactions into the database");
+info!(
+"imported {} of {} expense_transactions into the database",
+expense_transactions_count,
+self.expense_transactions.len()
+);
+
+let expense_receipts_count = diesel::insert_into(expense_receipts::table)
+.values(&self.expense_receipts)
+.on_conflict_do_nothing()
+.execute(connection)
+.expect("Error writing expense_receipts into the database");
+info!(
+"imported {} of {} expense_receipts into the database",
+expense_receipts_count,
+self.expense_receipts.len()
+);
+
+let delivery_rules_count = diesel::insert_into(delivery_rules::table)
+.values(&self.delivery_rules)
+.on_conflict_do_nothing()
+.execute(connection)
+.expect("Error writing delivery_rules into the database");
+info!(
+"imported {} of {} delivery_rules into the database",
+delivery_rules_count,
+self.delivery_rules.len()
+);
+}
+}
+
+// #[derive(Serialize, Deserialize, Debug)]
+// pub struct MoneyDBFormat {
+//     users: Vec<MoneyDBUser>,
+//     #[serde(rename = "securitiesAccounts")]
+//     accounts: Vec<MoneyDBSecurityAccount>,
+//     stocks: Vec<MoneyDBStock>,
+//     #[serde(rename = "stockTransactions")]
+//     transactions: Vec<MoneyDBTransaction>,
+// }
+
+// impl MoneyDBFormat {
+//     pub fn write_to(&self, connection: &PgConnection) {
+//         let users = diesel::insert_into(users::table)
+//             .values(self.users.iter().map(|u| u.convert()).collect::<Vec<_>>())
+//             .load::<User>(connection)
+//             .expect("Error writing users into the database");
+//         let user_map = users
+//             .iter()
+//             .zip(&self.users)
+//             .map(|(n, o)| (o.id, n.id))
+//             .collect::<HashMap<_, _>>();
+//         info!("imported {} users into the database", users.len());
+
+//         let accounts = diesel::insert_into(accounts::table)
+//             .values(
+//                 self.accounts
+//                     .iter()
+//                     .map(|a| a.convert(&user_map))
+//                     .collect::<Vec<_>>(),
+//             )
+//             .load::<Account>(connection)
+//             .expect("Error writing accounts into the database");
+//         let account_map = accounts
+//             .iter()
+//             .zip(&self.accounts)
+//             .map(|(n, o)| (o.id, n.id))
+//             .collect::<HashMap<_, _>>();
+//         info!("imported {} accounts into the database", accounts.len());
+
+//         let stock_map = self
+//             .stocks
+//             .iter()
+//             .map(|s| (s.id, s.isin.to_string()))
+//             .collect::<HashMap<_, _>>();
+
+//         let exchanges = stock_exchanges::table
+//             .load::<StockExchange>(connection)
+//             .expect("Error loading stock exchanges from the database");
+
+//         let transaction_count = diesel::insert_into(transactions::table)
+//             .values(
+//                 self.transactions
+//                     .iter()
+//                     .map(|t| t.convert(&account_map, &stock_map, &exchanges))
+//                     .collect::<Vec<_>>(),
+//             )
+//             .execute(connection)
+//             .expect("Error writing transactions into the database");
+//         info!(
+//             "imported {} transactions into the database",
+//             transaction_count
+//         );
+
+//         warn!("Note that the passwords of all users have been reset!")
+//     }
+// }
+
+// #[derive(Serialize, Deserialize, Debug)]
+// struct MoneyDBUser {
+//     #[serde(rename = "fullName")]
+//     full_name: String,
+//     name: String,
+//     id: i32,
+// }
+
+// impl MoneyDBUser {
+//     fn convert(&self) -> NewUser {
+//         NewUser {
+//             name: self.name.to_string(),
+//             full_name: self.full_name.to_string(),
+//             hash: String::new(),
+//         }
+//     }
+// }
+
+// #[derive(Serialize, Deserialize, Debug)]
+// struct MoneyDBSecurityAccount {
+//     id: i32,
+//     #[serde(rename = "ownerId")]
+//     user_id: i32,
+//     iban: String,
+//     title: String,
+//     broker: String,
+// }
+
+// impl MoneyDBSecurityAccount {
+//     fn convert(&self, user_map: &HashMap<i32, i32>) -> NewAccount {
+//         NewAccount {
+//             user_id: *user_map.get(&self.user_id).unwrap(),
+//             name: format!("{} ({})", self.title, self.broker),
+//             iban: Some(self.iban.to_string()),
+//         }
+//     }
+// }
+
+// #[derive(Serialize, Deserialize, Debug)]
+// struct MoneyDBStock {
+//     id: i32,
+//     isin: String,
+// }
+
+// #[derive(Serialize, Deserialize, Debug)]
+// struct MoneyDBTransaction {
+//     #[serde(rename = "accountId")]
+//     account_id: i32,
+//     #[serde(rename = "stockId")]
+//     stock_id: i32,
+//     amount: f64,
+//     fees: f64,
+//     exchange: String,
+//     date: DateTime<Utc>,
+//     units: f64,
+// }
+
+// impl MoneyDBTransaction {
+//     fn convert(
+//         &self,
+//         account_map: &HashMap<i32, i32>,
+//         stock_map: &HashMap<i32, String>,
+//         exchanges: &[StockExchange],
+//     ) -> NewTransaction {
+//         let isin = stock_map.get(&self.stock_id).unwrap().to_string();
+
+//         let mut t = NewTransaction {
+//             account_id: *account_map.get(&self.account_id).unwrap(),
+//             isin: isin.clone(),
+//             amount: (self.amount * -100.0).round() as i64,
+//             fees: (self.fees * -100.0).round() as i64,
+//             date: self.date,
+//             units: self.units,
+//             onvista_exchange_id: None,
+//             exchange: None,
+//             receipt_number: None,
+//             comments: String::new(),
+//         };
+
+//         let ex = exchanges
+//             .iter()
+//             .find(|e| e.isin == isin && e.name == self.exchange);
+//         if let Some(ex) = ex {
+//             t.onvista_exchange_id = ex.onvista_exchange_id;
+//         } else if !self.exchange.is_empty() {
+//             warn!(
+//                 "Unknown exchange '{}' for transaction {:?}, assuming OTC",
+//                 self.exchange, self
+//             );
+//             t.exchange = Some(self.exchange.clone());
+//         }
+
+//         t
+//     }
+// }
