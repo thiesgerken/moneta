@@ -1,5 +1,5 @@
-// pub mod export;
-// pub mod import;
+pub mod export;
+pub mod import;
 pub mod user;
 
 use clap::{crate_authors, crate_name, crate_version, App, Arg};
@@ -29,8 +29,8 @@ pub fn build(multiple: bool) -> App<'static, 'static> {
                 .help("database url [default: 'postgres://localhost/moneta']")
                 .value_name("url"))
         .subcommand(user::build())
-    // .subcommand(import::build())
-    // .subcommand(export::build())
+    .subcommand(import::build())
+    .subcommand(export::build())
 }
 
 #[derive(Serialize, Deserialize, Debug)]

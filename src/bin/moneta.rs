@@ -25,10 +25,10 @@ fn main() {
 
     if let Some(sub_matches) = matches.subcommand_matches("user") {
         cli::user::handle(&connection, sub_matches);
-    // } else if let Some(sub_matches) = matches.subcommand_matches("import") {
-    //     cli::import::handle(&connection, sub_matches);
-    // } else if let Some(sub_matches) = matches.subcommand_matches("export") {
-    //     cli::export::handle(&connection, sub_matches);
+    } else if let Some(sub_matches) = matches.subcommand_matches("import") {
+        cli::import::handle(&connection, sub_matches);
+    } else if let Some(sub_matches) = matches.subcommand_matches("export") {
+        cli::export::handle(&connection, sub_matches);
     // } else if let Some(sub_matches) = matches.subcommand_matches("serve") {
     //     std::mem::drop(connection); // `serve::handle` creates its own connections
     //     cli::serve::handle(

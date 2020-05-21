@@ -2,9 +2,9 @@
 #![feature(str_strip)]
 
 pub mod cli;
+pub mod enums;
 pub mod models;
 pub mod schema;
-pub mod enums;
 pub mod serialization;
 
 #[macro_use]
@@ -73,7 +73,7 @@ pub fn initialize_logging(verbosity: u32) {
     // log_config.add_filter_ignore_str("reqwest");
     // log_config.add_filter_ignore_str("selectors");
 
-    // log_config.add_filter_allow_str("stockdb");
+    // log_config.add_filter_allow_str("moneta");
 
     if let Err(e) = TermLogger::init(level, log_config.build(), TerminalMode::Mixed) {
         SimpleLogger::init(level, log_config.build())
