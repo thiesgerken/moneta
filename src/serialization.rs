@@ -1,3 +1,4 @@
+use crate::enums::*;
 use crate::models::*;
 use crate::schema::*;
 
@@ -224,48 +225,70 @@ impl MoneyDBFormat {
             .collect::<HashMap<_, _>>();
         info!("imported {} users into the database", users.len());
 
+        let accounts = diesel::insert_into(accounts::table)
+            .values(
+                self.accounts
+                    .iter()
+                    .map(|a| a.convert(&user_map))
+                    .collect::<Vec<_>>(),
+            )
+            .load::<Account>(connection)
+            .expect("Error writing accounts into the database");
+        let account_map = accounts
+            .iter()
+            .zip(&self.accounts)
+            .map(|(n, o)| (o.id, n.id))
+            .collect::<HashMap<_, _>>();
+        info!("imported {} accounts into the database", accounts.len());
+
+        let num_account_syncs = diesel::insert_into(account_synchronizations::table)
+            .values(
+                self.account_syncings
+                    .iter()
+                    .map(|a| a.convert(&account_map))
+                    .collect::<Vec<_>>(),
+            )
+            .execute(connection)
+            .expect("Error writing account synchronizations into the database");
+        info!(
+            "imported {} account synchronizations into the database",
+            num_account_syncs
+        );
+
+        let categories = diesel::insert_into(categories::table)
+            .values(
+                self.categories
+                    .iter()
+                    .map(|a| a.convert(&user_map))
+                    .collect::<Vec<_>>(),
+            )
+            .load::<Category>(connection)
+            .expect("Error writing categories into the database");
+        let category_map = categories
+            .iter()
+            .zip(&self.categories)
+            .map(|(n, o)| (o.id, n.id))
+            .collect::<HashMap<_, _>>();
+        info!("imported {} categories into the database", categories.len());
+
+        let num_cat_repl = diesel::insert_into(category_replacements::table)
+            .values(
+                self.category_replacements
+                    .iter()
+                    .map(|a| a.convert(&user_map, &category_map))
+                    .collect::<Vec<_>>(),
+            )
+            .execute(connection)
+            .expect("Error writing category replacements into the database");
+        info!(
+            "imported {} category replacements into the database",
+            num_cat_repl
+        );
+
+        // TODO
         todo!();
-        // let accounts = diesel::insert_into(accounts::table)
-        //     .values(
-        //         self.accounts
-        //             .iter()
-        //             .map(|a| a.convert(&user_map))
-        //             .collect::<Vec<_>>(),
-        //     )
-        //     .load::<Account>(connection)
-        //     .expect("Error writing accounts into the database");
-        // let account_map = accounts
-        //     .iter()
-        //     .zip(&self.accounts)
-        //     .map(|(n, o)| (o.id, n.id))
-        //     .collect::<HashMap<_, _>>();
-        // info!("imported {} accounts into the database", accounts.len());
 
-        // let stock_map = self
-        //     .stocks
-        //     .iter()
-        //     .map(|s| (s.id, s.isin.to_string()))
-        //     .collect::<HashMap<_, _>>();
-
-        // let exchanges = stock_exchanges::table
-        //     .load::<StockExchange>(connection)
-        //     .expect("Error loading stock exchanges from the database");
-
-        // let transaction_count = diesel::insert_into(transactions::table)
-        //     .values(
-        //         self.transactions
-        //             .iter()
-        //             .map(|t| t.convert(&account_map, &stock_map, &exchanges))
-        //             .collect::<Vec<_>>(),
-        //     )
-        //     .execute(connection)
-        //     .expect("Error writing transactions into the database");
-        // info!(
-        //     "imported {} transactions into the database",
-        //     transaction_count
-        // );
-
-        warn!("Note that the passwords of all users have been reset!")
+        warn!("Note that the passwords of all imported users need to be renewed!")
     }
 }
 
@@ -287,6 +310,52 @@ impl MoneyDBUser {
     }
 }
 
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub enum MoneyDBAvailability {
+    Immediately,
+    Weeks,
+    Months,
+    Years,
+    Decades,
+}
+
+impl MoneyDBAvailability {
+    fn convert(&self) -> AccountAvailability {
+        match &self {
+            MoneyDBAvailability::Immediately => AccountAvailability::Immediately,
+            MoneyDBAvailability::Weeks => AccountAvailability::Weeks,
+            MoneyDBAvailability::Months => AccountAvailability::Months,
+            MoneyDBAvailability::Years => AccountAvailability::Years,
+            MoneyDBAvailability::Decades => AccountAvailability::Decades,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub enum MoneyDBAccountKind {
+    Cash,
+    Credit,
+    Debit,
+    Debt,
+    Virtual,
+    Investment,
+    Prepayment,
+}
+
+impl MoneyDBAccountKind {
+    fn convert(&self) -> AccountKind {
+        match &self {
+            MoneyDBAccountKind::Cash => AccountKind::Cash,
+            MoneyDBAccountKind::Credit => AccountKind::Credit,
+            MoneyDBAccountKind::Debit => AccountKind::Debit,
+            MoneyDBAccountKind::Debt => AccountKind::Debt,
+            MoneyDBAccountKind::Virtual => AccountKind::Virtual,
+            MoneyDBAccountKind::Investment => AccountKind::Stocks,
+            MoneyDBAccountKind::Prepayment => AccountKind::Other,
+        }
+    }
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct MoneyDBAccount {
@@ -301,6 +370,26 @@ struct MoneyDBAccount {
     hidden: bool,
 }
 
+impl MoneyDBAccount {
+    fn convert(&self, user_map: &HashMap<i32, i32>) -> NewAccount {
+        NewAccount {
+            user_id: *user_map.get(&self.owner_id).unwrap(),
+            name: self.title.clone(),
+            description: self.description.clone(),
+            color: if self.color.is_empty() {
+                None
+            } else {
+                Some(self.color.clone())
+            },
+            iban: self.iban.clone(),
+            kind: self.kind.convert(),
+            availability: self.availability.convert(),
+            risk: AccountRisk::Medium,
+            hidden: self.hidden,
+        }
+    }
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct MoneyDBAccountSyncing {
@@ -309,24 +398,14 @@ struct MoneyDBAccountSyncing {
     sign: bool,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
-pub enum MoneyDBAvailability {
-    Immediately,
-    Weeks,
-    Months,
-    Years,
-    Decades,
-}
-
-#[derive(Debug, Clone, Copy, Deserialize)]
-pub enum MoneyDBAccountKind {
-    Cash,
-    Credit,
-    Debit,
-    Debt,
-    Virtual,
-    Investment,
-    Prepayment,
+impl MoneyDBAccountSyncing {
+    fn convert(&self, account_map: &HashMap<i32, i32>) -> AccountSynchronization {
+        AccountSynchronization {
+            account1: *account_map.get(&self.account1).unwrap(),
+            account2: *account_map.get(&self.account2).unwrap(),
+            invert: !self.sign,
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -339,12 +418,42 @@ struct MoneyDBCategory {
     color: String,
 }
 
+impl MoneyDBCategory {
+    fn convert(&self, user_map: &HashMap<i32, i32>) -> NewCategory {
+        NewCategory {
+            user_id: *user_map.get(&self.owner_id).unwrap(),
+            name: self.title.clone(),
+            description: self.description.clone(),
+            color: if self.color.is_empty() {
+                None
+            } else {
+                Some(self.color.clone())
+            },
+            parent: None,
+        }
+    }
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct MoneyDBCategoryReplacement {
     owner_id: i32,
     original: i32,
     replacement: i32,
+}
+
+impl MoneyDBCategoryReplacement {
+    fn convert(
+        &self,
+        user_map: &HashMap<i32, i32>,
+        category_map: &HashMap<i32, i32>,
+    ) -> CategoryReplacement {
+        CategoryReplacement {
+            user_id: *user_map.get(&self.owner_id).unwrap(),
+            original: *category_map.get(&self.original).unwrap(),
+            replacement: *category_map.get(&self.replacement).unwrap(),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -368,13 +477,75 @@ struct MoneyDBExpense {
     last_modified_by: i32,
 }
 
+impl MoneyDBExpense {
+    fn convert(
+        &self,
+        user_map: &HashMap<i32, i32>,
+        account_map: &HashMap<i32, i32>,
+        category_map: &HashMap<i32, i32>,
+        flags: &[MoneyDBExpenseFlag],
+    ) -> NewExpense {
+        NewExpense {
+            user_id: *user_map.get(&self.owner_id).unwrap(),
+            title: self.title.clone(),
+            description: self.description.clone(),
+            comments: self.comments.clone(),
+            store: self.store.clone(),
+            booking_start: Some(self.booking_date.unwrap_or(self.value_date)),
+            booking_end: Some(self.booking_date.unwrap_or(self.value_date)),
+            booking_month_count: None,
+            booking_month_offset: None,
+            is_deleted: false,
+            is_template: flags
+                .iter()
+                .any(|f| f.flagging == MoneyDBExpenseFlagging::Template && f.expense_id == self.id),
+            is_preliminary: flags.iter().any(|f| {
+                f.flagging == MoneyDBExpenseFlagging::Preliminary && f.expense_id == self.id
+            }),
+            is_tax_relevant: flags.iter().any(|f| {
+                f.flagging == MoneyDBExpenseFlagging::TaxRelevant && f.expense_id == self.id
+            }),
+        }
+    }
+
+    fn convert_transactions(
+        &self,
+        sharings: &[MoneyDBExpenseSharing],
+    ) -> Vec<NewExpenseTransaction> {
+        if sharings.iter().any(|s| {
+            s.sharing_type == MoneyDBExpenseSharingType::FixedAmount && s.expense_id == self.id
+        }) {
+            // TODO: translate all equal and percentage things to fixed amount, as in the new version the percentage is calculated differently? (how exactly?)
+        } else {
+            // TODO: translate all equal things, percentage can stay as-is?
+        }
+    }
+
+    fn convert_history(
+        &self,
+        user_map: &HashMap<i32, i32>,
+        expense_map: &HashMap<i32, i32>,
+    ) -> NewExpenseEvent {
+        NewExpenseEvent {
+            expense_id: *expense_map.get(&self.id).unwrap(),
+            user_id: *user_map.get(&self.last_modified_by).unwrap(),
+            date: self.last_modified,
+            tool: self.last_modified_through,
+            automatic: false,
+            event_type: ExpenseEventType::Modify,
+            event_target: ExpenseEventTarget::Expense,
+            payload: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Deserialize)]
 pub enum MoneyDBExpenseSharingType {
     Equal,
     FixedAmount,
     FixedFraction,
 }
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
 pub enum MoneyDBExpenseFlagging {
     Template,
     NeedsAttention,
@@ -413,42 +584,3 @@ struct MoneyDBAutomationRule {
     filter_amount: Option<f64>,
     last_delivery: Option<DateTime<Utc>>,
 }
-
-// impl MoneyDBTransaction {
-//     fn convert(
-//         &self,
-//         account_map: &HashMap<i32, i32>,
-//         stock_map: &HashMap<i32, String>,
-//         exchanges: &[StockExchange],
-//     ) -> NewTransaction {
-//         let isin = stock_map.get(&self.stock_id).unwrap().to_string();
-
-//         let mut t = NewTransaction {
-//             account_id: *account_map.get(&self.account_id).unwrap(),
-//             isin: isin.clone(),
-//             amount: (self.amount * -100.0).round() as i64,
-//             fees: (self.fees * -100.0).round() as i64,
-//             date: self.date,
-//             units: self.units,
-//             onvista_exchange_id: None,
-//             exchange: None,
-//             receipt_number: None,
-//             comments: String::new(),
-//         };
-
-//         let ex = exchanges
-//             .iter()
-//             .find(|e| e.isin == isin && e.name == self.exchange);
-//         if let Some(ex) = ex {
-//             t.onvista_exchange_id = ex.onvista_exchange_id;
-//         } else if !self.exchange.is_empty() {
-//             warn!(
-//                 "Unknown exchange '{}' for transaction {:?}, assuming OTC",
-//                 self.exchange, self
-//             );
-//             t.exchange = Some(self.exchange.clone());
-//         }
-
-//         t
-//     }
-// }

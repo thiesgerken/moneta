@@ -4,7 +4,7 @@ CREATE TYPE expense_event_target AS ENUM ('expense', 'categories', 'receipts', '
 CREATE TABLE expense_events (
   id SERIAL PRIMARY KEY,
   expense_id INTEGER NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   date TIMESTAMPTZ NOT NULL,
   tool TEXT NOT NULL,
   automatic BOOLEAN NOT NULL,

@@ -1,5 +1,5 @@
-use crate::schema::*;
 use crate::enums::*;
+use crate::schema::*;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -176,7 +176,7 @@ pub struct Expense {
     pub title: String,
     pub description: String,
     pub store: String,
-    pub comment: String,
+    pub comments: String,
     // constraint: either booking_start and booking_end != null OR booking_month_offset and booking_month_count != null
     pub booking_start: Option<DateTime<Utc>>,
     pub booking_end: Option<DateTime<Utc>>,
@@ -196,7 +196,7 @@ pub struct NewExpense {
     pub title: String,
     pub description: String,
     pub store: String,
-    pub comment: String,
+    pub comments: String,
     pub booking_start: Option<DateTime<Utc>>,
     pub booking_end: Option<DateTime<Utc>>,
     pub booking_month_offset: Option<i32>,
@@ -261,7 +261,7 @@ pub struct NewExpenseTransaction {
 pub struct ExpenseEvent {
     pub id: i32,
     pub expense_id: i32,
-    pub user_id: i32,
+    pub user_id: Option<i32>,
     pub date: DateTime<Utc>,
     pub tool: String,
     pub automatic: bool,

@@ -4,7 +4,7 @@ CREATE TABLE expenses (
   title TEXT NOT NULL,
   description TEXT NOT NULL,
   store TEXT NOT NULL,
-  comment TEXT NOT NULL,
+  comments TEXT NOT NULL,
   booking_start TIMESTAMPTZ,
   booking_end TIMESTAMPTZ,
   booking_month_offset INTEGER,

@@ -100,7 +100,7 @@ table! {
     expense_events (id) {
         id -> Int4,
         expense_id -> Int4,
-        user_id -> Int4,
+        user_id -> Nullable<Int4>,
         date -> Timestamptz,
         tool -> Text,
         automatic -> Bool,
@@ -147,7 +147,7 @@ table! {
         title -> Text,
         description -> Text,
         store -> Text,
-        comment -> Text,
+        comments -> Text,
         booking_start -> Nullable<Timestamptz>,
         booking_end -> Nullable<Timestamptz>,
         booking_month_offset -> Nullable<Int4>,
