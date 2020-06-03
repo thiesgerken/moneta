@@ -131,8 +131,8 @@ table! {
         account_id -> Int4,
         date -> Timestamptz,
         amount -> Nullable<Int8>,
-        percentage -> Nullable<Float8>,
-        comment -> Text,
+        fraction -> Nullable<Float8>,
+        comments -> Text,
         statement -> Text,
     }
 }

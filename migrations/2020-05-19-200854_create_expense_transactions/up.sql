@@ -4,8 +4,8 @@ CREATE TABLE expense_transactions (
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   date TIMESTAMPTZ NOT NULL,
   amount BIGINT,
-  percentage DOUBLE PRECISION,
-  comment TEXT NOT NULL,
+  fraction DOUBLE PRECISION,
+  comments TEXT NOT NULL,
   statement TEXT NOT NULL,
-  CHECK (num_nonnulls(amount, percentage) = 1)
+  CHECK (num_nonnulls(amount, fraction) = 1)
 )

@@ -225,10 +225,11 @@ pub struct ExpenseTransaction {
     pub expense_id: i32,
     pub account_id: i32,
     pub date: DateTime<Utc>,
-    // constraint: amount is null OR percentage is null
+    // constraint: amount is null OR fraction is null
+    // constraint: fraction can only be used if the expense has exactly one transaction with an amount
     pub amount: Option<i64>,
-    pub percentage: Option<f64>,
-    pub comment: String,
+    pub fraction: Option<f64>,
+    pub comments: String,
     pub statement: String,
 }
 
@@ -240,8 +241,8 @@ pub struct NewExpenseTransaction {
     pub account_id: i32,
     pub date: DateTime<Utc>,
     pub amount: Option<i64>,
-    pub percentage: Option<f64>,
-    pub comment: String,
+    pub fraction: Option<f64>,
+    pub comments: String,
     pub statement: String,
 }
 

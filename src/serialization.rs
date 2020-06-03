@@ -210,6 +210,7 @@ pub struct MoneyDBFormat {
     expense_flags: Vec<MoneyDBExpenseFlag>,
     expense_sharings: Vec<MoneyDBExpenseSharing>,
     automation_rules: Vec<MoneyDBAutomationRule>,
+    balances: Vec<MoneyDBBalance>,
 }
 
 impl MoneyDBFormat {
@@ -285,8 +286,79 @@ impl MoneyDBFormat {
             num_cat_repl
         );
 
-        // TODO
-        todo!();
+        let num_balances = diesel::insert_into(balances::table)
+            .values(
+                self.balances
+                    .iter()
+                    .map(|a| a.convert(&account_map))
+                    .collect::<Vec<_>>(),
+            )
+            .execute(connection)
+            .expect("Error writing balances into the database");
+        info!("imported {} balances into the database", num_balances);
+
+        // TODO: need to chunk these?
+
+        let expenses = diesel::insert_into(expenses::table)
+            .values(
+                self.expenses
+                    .iter()
+                    .map(|a| a.convert(&user_map, &self.expense_flags))
+                    .collect::<Vec<_>>(),
+            )
+            .load::<Expense>(connection)
+            .expect("Error writing expenses into the database");
+        let expense_map = expenses
+            .iter()
+            .zip(&self.expenses)
+            .map(|(n, o)| (o.id, n.id))
+            .collect::<HashMap<_, _>>();
+        info!("imported {} expenses into the database", expenses.len());
+
+        let num_expense_transactions = diesel::insert_into(expense_transactions::table)
+            .values(
+                self.expenses
+                    .iter()
+                    .map(|a| {
+                        a.convert_transactions(&expense_map, &account_map, &self.expense_sharings)
+                    })
+                    .flatten()
+                    .collect::<Vec<_>>(),
+            )
+            .execute(connection)
+            .expect("Error writing expense transactions into the database");
+        info!(
+            "imported {} expense transactions into the database",
+            num_expense_transactions
+        );
+
+        let num_expense_categories = diesel::insert_into(expense_categories::table)
+            .values(
+                self.expenses
+                    .iter()
+                    .map(|a| a.convert_category(&expense_map, &category_map))
+                    .collect::<Vec<_>>(),
+            )
+            .execute(connection)
+            .expect("Error writing expense categories into the database");
+        info!(
+            "imported {} expense categories into the database",
+            num_expense_categories
+        );
+
+        let num_expense_events = diesel::insert_into(expense_events::table)
+            .values(
+                self.expenses
+                    .iter()
+                    .map(|a| a.convert_history(&user_map, &expense_map))
+                    .collect::<Vec<_>>(),
+            )
+            .execute(connection)
+            .expect("Error writing expense events into the database");
+        info!(
+            "imported {} expense events into the database",
+            num_expense_events
+        );
 
         warn!("Note that the passwords of all imported users need to be renewed!")
     }
@@ -436,6 +508,26 @@ impl MoneyDBCategory {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+struct MoneyDBBalance {
+    id: i32,
+    account_id: i32,
+    date: DateTime<Utc>,
+    amount: f64,
+}
+
+impl MoneyDBBalance {
+    fn convert(&self, account_map: &HashMap<i32, i32>) -> Balance {
+        Balance {
+            account_id: *account_map.get(&self.account_id).unwrap(),
+            date: self.date,
+            amount: (self.amount * 100.0) as i64,
+            comment: String::new(),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 struct MoneyDBCategoryReplacement {
     owner_id: i32,
     original: i32,
@@ -478,13 +570,7 @@ struct MoneyDBExpense {
 }
 
 impl MoneyDBExpense {
-    fn convert(
-        &self,
-        user_map: &HashMap<i32, i32>,
-        account_map: &HashMap<i32, i32>,
-        category_map: &HashMap<i32, i32>,
-        flags: &[MoneyDBExpenseFlag],
-    ) -> NewExpense {
+    fn convert(&self, user_map: &HashMap<i32, i32>, flags: &[MoneyDBExpenseFlag]) -> NewExpense {
         NewExpense {
             user_id: *user_map.get(&self.owner_id).unwrap(),
             title: self.title.clone(),
@@ -508,17 +594,82 @@ impl MoneyDBExpense {
         }
     }
 
+    fn convert_category(
+        &self,
+        expense_map: &HashMap<i32, i32>,
+        category_map: &HashMap<i32, i32>,
+    ) -> ExpenseCategory {
+        ExpenseCategory {
+            weight: 1.0,
+            category_id: *category_map.get(&self.category_id).unwrap(),
+            expense_id: *expense_map.get(&self.id).unwrap(),
+        }
+    }
+
     fn convert_transactions(
         &self,
+        expense_map: &HashMap<i32, i32>,
+        account_map: &HashMap<i32, i32>,
         sharings: &[MoneyDBExpenseSharing],
     ) -> Vec<NewExpenseTransaction> {
-        if sharings.iter().any(|s| {
+        let mut res = Vec::new();
+
+        res.push(NewExpenseTransaction {
+            expense_id: *expense_map.get(&self.id).unwrap(),
+            account_id: *account_map.get(&self.account_id).unwrap(),
+            statement: self.transaction.clone(),
+            comments: String::new(),
+            date: self.value_date,
+            amount: Some((self.amount * 100.0) as i64),
+            fraction: None,
+        });
+
+        let num_equal = sharings
+            .iter()
+            .filter(|s| {
+                s.sharing_type == MoneyDBExpenseSharingType::Equal && s.expense_id == self.id
+            })
+            .collect::<Vec<_>>()
+            .len();
+
+        // in the new version percentage is only allowed if exactly one transaction has an amount
+        let any_fixed_amount = sharings.iter().any(|s| {
             s.sharing_type == MoneyDBExpenseSharingType::FixedAmount && s.expense_id == self.id
-        }) {
-            // TODO: translate all equal and percentage things to fixed amount, as in the new version the percentage is calculated differently? (how exactly?)
-        } else {
-            // TODO: translate all equal things, percentage can stay as-is?
+        });
+
+        for s in sharings.into_iter().filter(|s| s.expense_id == self.id) {
+            let mut t = NewExpenseTransaction {
+                expense_id: *expense_map.get(&self.id).unwrap(),
+                account_id: *account_map.get(&s.account_id).unwrap(),
+                statement: String::new(),
+                comments: String::new(),
+                date: self.value_date,
+                amount: None,
+                fraction: None,
+            };
+
+            if s.sharing_type == MoneyDBExpenseSharingType::FixedAmount {
+                t.amount = Some((s.param * 100.0) as i64)
+            } else if s.sharing_type == MoneyDBExpenseSharingType::Equal {
+                if !any_fixed_amount {
+                    t.fraction = Some(1.0 / (num_equal + 1) as f64);
+                } else {
+                    // warn!("expense {}: converting equal to fixed amount", &self.id);
+                    t.amount = Some((self.amount / (num_equal + 1) as f64 * 100.0) as i64);
+                }
+            } else if s.sharing_type == MoneyDBExpenseSharingType::FixedFraction {
+                if !any_fixed_amount {
+                    t.fraction = Some(s.param);
+                } else {
+                    // warn!("expense {}: converting fixed fraction to fixed amount", &self.id);
+                    t.amount = Some((self.amount * s.param * 100.0) as i64);
+                }
+            }
+
+            res.push(t);
         }
+
+        res
     }
 
     fn convert_history(
@@ -530,7 +681,7 @@ impl MoneyDBExpense {
             expense_id: *expense_map.get(&self.id).unwrap(),
             user_id: *user_map.get(&self.last_modified_by).unwrap(),
             date: self.last_modified,
-            tool: self.last_modified_through,
+            tool: self.last_modified_through.clone(),
             automatic: false,
             event_type: ExpenseEventType::Modify,
             event_target: ExpenseEventTarget::Expense,
@@ -539,7 +690,7 @@ impl MoneyDBExpense {
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
 pub enum MoneyDBExpenseSharingType {
     Equal,
     FixedAmount,
