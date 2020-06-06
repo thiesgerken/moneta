@@ -297,8 +297,6 @@ impl MoneyDBFormat {
             .expect("Error writing balances into the database");
         info!("imported {} balances into the database", num_balances);
 
-        // TODO: need to chunk these?
-
         let expenses = diesel::insert_into(expenses::table)
             .values(
                 self.expenses

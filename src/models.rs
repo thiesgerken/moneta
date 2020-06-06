@@ -2,6 +2,7 @@ use crate::enums::*;
 use crate::schema::*;
 
 use chrono::{DateTime, Utc};
+use diesel::deserialize::QueryableByName;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Queryable, Insertable, Identifiable, Serialize, Deserialize)]
@@ -26,6 +27,7 @@ pub struct NewUser {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -35,6 +37,7 @@ pub struct NewUser {
 )]
 #[belongs_to(User, foreign_key = "user_id")]
 #[serde(rename_all = "camelCase")]
+#[table_name = "accounts"]
 pub struct Account {
     pub id: i32,
     pub user_id: i32,
@@ -161,6 +164,7 @@ pub struct Balance {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -170,6 +174,7 @@ pub struct Balance {
 )]
 #[belongs_to(User, foreign_key = "user_id")]
 #[serde(rename_all = "camelCase")]
+#[table_name = "expenses"]
 pub struct Expense {
     pub id: i32,
     pub user_id: i32,
@@ -211,6 +216,7 @@ pub struct NewExpense {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -219,6 +225,7 @@ pub struct NewExpense {
     AsChangeset,
 )]
 #[belongs_to(Expense, foreign_key = "expense_id")]
+#[table_name = "expense_transactions"]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseTransaction {
     pub id: i32,
