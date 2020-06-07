@@ -1,6 +1,5 @@
 CREATE TABLE expenses (
   id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT NOT NULL,
   store TEXT NOT NULL,

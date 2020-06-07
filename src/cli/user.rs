@@ -132,10 +132,8 @@ pub fn handle(connection: &PgConnection, sub_matches: &ArgMatches<'_>) {
         table.add_row(row!["ID", "Name", "Full Name", "# Accounts", "# Expenses"]);
 
         for u in us.iter() {
-            let expense_count: i64 = Expense::belonging_to(u)
-                .select(diesel::dsl::count(crate::schema::expenses::dsl::id))
-                .first(connection)
-                .expect("Could not obtain expenses of user");
+            let expense_count = crate::queries::relevant_expenses(&connection, u.id)
+                .expect("Could not obtain expenses of user").len();
             let account_count: i64 = Account::belonging_to(u)
                 .select(diesel::dsl::count(crate::schema::accounts::dsl::id))
                 .first(connection)

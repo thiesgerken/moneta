@@ -4,7 +4,7 @@ table! {
     use diesel::sql_types::*;
     use crate::enums::*;
 
-    account_synchronizations (account1, account2) {
+    account_synchronizations (account1) {
         account1 -> Int4,
         account2 -> Int4,
         invert -> Bool,
@@ -59,7 +59,7 @@ table! {
     use diesel::sql_types::*;
     use crate::enums::*;
 
-    category_replacements (user_id, original, replacement) {
+    category_replacements (user_id, original) {
         user_id -> Int4,
         original -> Int4,
         replacement -> Int4,
@@ -143,7 +143,6 @@ table! {
 
     expenses (id) {
         id -> Int4,
-        user_id -> Int4,
         title -> Text,
         description -> Text,
         store -> Text,
@@ -185,7 +184,6 @@ joinable!(expense_events -> users (user_id));
 joinable!(expense_receipts -> expenses (expense_id));
 joinable!(expense_transactions -> accounts (account_id));
 joinable!(expense_transactions -> expenses (expense_id));
-joinable!(expenses -> users (user_id));
 
 allow_tables_to_appear_in_same_query!(
     account_synchronizations,

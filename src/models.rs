@@ -2,7 +2,6 @@ use crate::enums::*;
 use crate::schema::*;
 
 use chrono::{DateTime, Utc};
-use diesel::deserialize::QueryableByName;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Queryable, Insertable, Identifiable, Serialize, Deserialize)]
@@ -112,9 +111,10 @@ pub struct NewCategory {
     AsChangeset,
 )]
 #[serde(rename_all = "camelCase")]
-#[primary_key("account1", "account2")]
+#[primary_key("account1")]
 pub struct AccountSynchronization {
-    // constraint: account1 < account2
+    // constraint: account1 < account2, account1 and account2 are unique
+    // also (not checked by db: each account can only be synced to at most one other account)
     pub account1: i32,
     pub account2: i32,
     pub invert: bool,
@@ -131,7 +131,7 @@ pub struct AccountSynchronization {
     AsChangeset,
 )]
 #[serde(rename_all = "camelCase")]
-#[primary_key("user_id", "original", "replacement")]
+#[primary_key("user_id", "original")]
 #[belongs_to(User, foreign_key = "user_id")]
 pub struct CategoryReplacement {
     pub user_id: i32,
@@ -172,12 +172,10 @@ pub struct Balance {
     Deserialize,
     AsChangeset,
 )]
-#[belongs_to(User, foreign_key = "user_id")]
 #[serde(rename_all = "camelCase")]
 #[table_name = "expenses"]
 pub struct Expense {
     pub id: i32,
-    pub user_id: i32,
     pub title: String,
     pub description: String,
     pub store: String,
@@ -197,7 +195,6 @@ pub struct Expense {
 #[table_name = "expenses"]
 #[serde(rename_all = "camelCase")]
 pub struct NewExpense {
-    pub user_id: i32,
     pub title: String,
     pub description: String,
     pub store: String,

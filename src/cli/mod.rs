@@ -1,5 +1,6 @@
 pub mod export;
 pub mod import;
+pub mod serve;
 pub mod user;
 
 use clap::{crate_authors, crate_name, crate_version, App, Arg};
@@ -29,8 +30,9 @@ pub fn build(multiple: bool) -> App<'static, 'static> {
                 .help("database url [default: 'postgres://localhost/moneta']")
                 .value_name("url"))
         .subcommand(user::build())
-    .subcommand(import::build())
-    .subcommand(export::build())
+        .subcommand(import::build())
+        .subcommand(export::build())
+        .subcommand(serve::build())
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -39,6 +41,7 @@ pub struct Config {
     #[serde(skip)]
     pub verbosity: i64,
     pub database: String,
+    pub web: serve::Config,
 }
 
 impl Default for Config {
@@ -46,6 +49,7 @@ impl Default for Config {
         Self {
             database: "postgres://localhost/moneta".into(),
             verbosity: 0,
+            web: Default::default(),
         }
     }
 }

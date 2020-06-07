@@ -5,8 +5,10 @@ pub mod cli;
 pub mod enums;
 pub mod models;
 pub mod queries;
+pub mod rendering;
 pub mod schema;
 pub mod serialization;
+pub mod web;
 
 #[macro_use]
 extern crate diesel;
@@ -14,14 +16,14 @@ extern crate diesel;
 #[macro_use]
 extern crate diesel_migrations;
 
-// #[macro_use]
-// extern crate rocket_contrib;
+#[macro_use]
+extern crate rocket_contrib;
 
-// #[macro_use]
-// extern crate rocket;
+#[macro_use]
+extern crate rocket;
 
-// #[macro_use]
-// extern crate rust_embed;
+#[macro_use]
+extern crate rust_embed;
 
 use argonautica::{Hasher, Verifier};
 use diesel::pg::PgConnection;

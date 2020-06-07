@@ -4,7 +4,8 @@ use crate::schema::*;
 
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use log::{info, warn};
+use itertools::izip;
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -242,19 +243,32 @@ impl MoneyDBFormat {
             .collect::<HashMap<_, _>>();
         info!("imported {} accounts into the database", accounts.len());
 
-        let num_account_syncs = diesel::insert_into(account_synchronizations::table)
+        let account_syncs = diesel::insert_into(account_synchronizations::table)
             .values(
                 self.account_syncings
                     .iter()
                     .map(|a| a.convert(&account_map))
                     .collect::<Vec<_>>(),
             )
-            .execute(connection)
+            .load::<AccountSynchronization>(connection)
             .expect("Error writing account synchronizations into the database");
         info!(
             "imported {} account synchronizations into the database",
-            num_account_syncs
+            account_syncs.len()
         );
+
+        // verify that each account has at most one synchronization
+        let mut synced_accounts = account_syncs
+            .iter()
+            .map(|s| vec![s.account1, s.account2])
+            .flatten()
+            .collect::<Vec<_>>();
+        synced_accounts.sort();
+        synced_accounts.dedup();
+
+        if synced_accounts.len() != 2 * account_syncs.len() {
+            error!("Some accounts are in multiple synchronization relationships ({} account syncings involving {} accounts). This is unsupported!", account_syncs.len(), synced_accounts.len());
+        }
 
         let categories = diesel::insert_into(categories::table)
             .values(
@@ -301,7 +315,7 @@ impl MoneyDBFormat {
             .values(
                 self.expenses
                     .iter()
-                    .map(|a| a.convert(&user_map, &self.expense_flags))
+                    .map(|a| a.convert(&self.expense_flags))
                     .collect::<Vec<_>>(),
             )
             .load::<Expense>(connection)
@@ -312,23 +326,6 @@ impl MoneyDBFormat {
             .map(|(n, o)| (o.id, n.id))
             .collect::<HashMap<_, _>>();
         info!("imported {} expenses into the database", expenses.len());
-
-        let num_expense_transactions = diesel::insert_into(expense_transactions::table)
-            .values(
-                self.expenses
-                    .iter()
-                    .map(|a| {
-                        a.convert_transactions(&expense_map, &account_map, &self.expense_sharings)
-                    })
-                    .flatten()
-                    .collect::<Vec<_>>(),
-            )
-            .execute(connection)
-            .expect("Error writing expense transactions into the database");
-        info!(
-            "imported {} expense transactions into the database",
-            num_expense_transactions
-        );
 
         let num_expense_categories = diesel::insert_into(expense_categories::table)
             .values(
@@ -357,6 +354,51 @@ impl MoneyDBFormat {
             "imported {} expense events into the database",
             num_expense_events
         );
+
+        let converted_transactions = self
+            .expenses
+            .iter()
+            .map(|a| a.convert_transactions(&expense_map, &account_map, &self.expense_sharings))
+            .collect::<Vec<_>>();
+
+        let num_expense_transactions = diesel::insert_into(expense_transactions::table)
+            .values(converted_transactions.iter().flatten().collect::<Vec<_>>())
+            .execute(connection)
+            .expect("Error writing expense transactions into the database");
+        info!(
+            "imported {} expense transactions into the database",
+            num_expense_transactions
+        );
+
+        // verify that each imported expense has something to do with the user_id of the original expense
+        for (old_exp, new_exp, transactions) in
+            izip!(&self.expenses, &expenses, &converted_transactions)
+        {
+            let uid = user_map.get(&old_exp.owner_id).unwrap();
+            if !transactions.iter().any(|t| {
+                let acc = accounts.iter().find(|a| a.id == t.account_id).unwrap();
+                if &acc.user_id == uid {
+                    return true;
+                }
+
+                if let Some(sync) = account_syncs
+                    .iter()
+                    .find(|a| a.account1 == t.account_id || a.account2 == t.account_id)
+                {
+                    let other_id = if sync.account1 == t.account_id {
+                        sync.account2
+                    } else {
+                        sync.account1
+                    };
+                    let other = accounts.iter().find(|a| a.id == other_id).unwrap();
+                    return &other.user_id == uid;
+                } else {
+                    return false;
+                }
+            }) {
+                error!("expense {} (new id: {}) will not be accessible by its current owner {} (new id: {}). This is unsupported!", old_exp.id, new_exp.id, old_exp.owner_id, uid);
+            }
+        }
 
         warn!("Note that the passwords of all imported users need to be renewed!")
     }
@@ -568,9 +610,8 @@ struct MoneyDBExpense {
 }
 
 impl MoneyDBExpense {
-    fn convert(&self, user_map: &HashMap<i32, i32>, flags: &[MoneyDBExpenseFlag]) -> NewExpense {
+    fn convert(&self, flags: &[MoneyDBExpenseFlag]) -> NewExpense {
         NewExpense {
-            user_id: *user_map.get(&self.owner_id).unwrap(),
             title: self.title.clone(),
             description: self.description.clone(),
             comments: self.comments.clone(),

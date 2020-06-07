@@ -1,7 +1,5 @@
 use crate::models::*;
-use crate::schema::*;
 
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_query;
 use diesel::sql_types::Integer;
