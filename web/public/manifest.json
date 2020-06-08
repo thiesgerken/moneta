@@ -1,0 +1,20 @@
+{
+  "short_name": "Moneta",
+  "name": "Moneta",
+  "icons": [
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#b26a00",
+  "background_color": "#ffffff"
+}
