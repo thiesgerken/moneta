@@ -1,35 +1,35 @@
 stages:
-  # - bundle
+  - bundle
   - build
   - package
   # - deploy
 
-# bundle:
-#   stage: bundle
-#   cache:
-#     key: ${CI_JOB_NAME}
-#     paths:
-#       - .yarn-cache
-#   tags:
-#     - docker
-#   image: git.thiesgerken.de:5005/thies/moneta/web
-#   script:
-#     - cd web
-#     - yarn install
-#     - yarn test --all && yarn test:lint:js
-#     - yarn run build && yarn run analyze
-#   before_script:
-#     - mkdir -p .yarn-registry
-#     - ln -s $(pwd)/.yarn-cache ~/.yarn-cache
-#   artifacts:
-#     expire_in: 1 month
-#     paths:
-#       - web/build
+bundle:
+  stage: bundle
+  cache:
+    key: ${CI_JOB_NAME}
+    paths:
+      - .yarn-cache
+  tags:
+    - docker
+  image: git.thiesgerken.de:5005/thies/moneta/web
+  script:
+    - cd web
+    - yarn install
+    - yarn test --all && yarn test:lint:js
+    - yarn run build && yarn run analyze
+  before_script:
+    - mkdir -p .yarn-registry
+    - ln -s $(pwd)/.yarn-cache ~/.yarn-cache
+  artifacts:
+    expire_in: 1 month
+    paths:
+      - web/build
 
 .build:
   stage: build
-  # dependencies:
-  #   - bundle
+  dependencies:
+    - bundle
   script:
     - cargo build --target=x86_64-unknown-linux-gnu --release
     - cp target/x86_64-unknown-linux-gnu/release/moneta .
