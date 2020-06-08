@@ -98,31 +98,31 @@ package-ubuntu:
 #     paths:
 #       - moneta-0.1.0-0-x86_64.pkg.tar.xz
 
-# .deploy-thiesgerken-de:
-#   stage: deploy
-#   dependencies:
-#     - package-ubuntu
-#   script:
-#     - echo "$RSA_THIESGERKEN_DE" > id_rsa
-#     - chmod 500 id_rsa
-#     - scp -i id_rsa -oStrictHostKeyChecking=no moneta.deb thies@thiesgerken.de:~
-#     - ssh -i id_rsa -oStrictHostKeyChecking=no thies@thiesgerken.de "sudo systemctl stop moneta"
-#     - ssh -i id_rsa -oStrictHostKeyChecking=no thies@thiesgerken.de "sudo dpkg --force-confdef --force-confold -i moneta.deb && rm moneta.deb"
-#     - ssh -i id_rsa -oStrictHostKeyChecking=no thies@thiesgerken.de "sudo systemctl enable moneta && sudo systemctl start moneta"
-#     - rm id_rsa
-#   environment:
-#     name: thiesgerken.de
-#     url: https://moneta.thiesgerken.de
-#   tags:
-#     - build-tools
+.deploy-thiesgerken-de:
+  stage: deploy
+  dependencies:
+    - package-ubuntu
+  script:
+    - echo "$RSA_THIESGERKEN_DE" > id_rsa
+    - chmod 500 id_rsa
+    - scp -i id_rsa -oStrictHostKeyChecking=no moneta.deb thies@thiesgerken.de:~
+    - ssh -i id_rsa -oStrictHostKeyChecking=no thies@thiesgerken.de "sudo systemctl stop moneta"
+    - ssh -i id_rsa -oStrictHostKeyChecking=no thies@thiesgerken.de "sudo dpkg --force-confdef --force-confold -i moneta.deb && rm moneta.deb"
+    - ssh -i id_rsa -oStrictHostKeyChecking=no thies@thiesgerken.de "sudo systemctl enable moneta && sudo systemctl start moneta"
+    - rm id_rsa
+  environment:
+    name: thiesgerken.de
+    url: https://moneta.thiesgerken.de
+  tags:
+    - build-tools
 
-# deploy-thiesgerken-de:
-#   extends: .deploy-thiesgerken-de
-#   only:
-#     - master
+deploy-thiesgerken-de:
+  extends: .deploy-thiesgerken-de
+  only:
+    - master
 
-# deploy-thiesgerken-de-manual:
-#   extends: .deploy-thiesgerken-de
-#   when: manual
-#   except:
-#     - master
+deploy-thiesgerken-de-manual:
+  extends: .deploy-thiesgerken-de
+  when: manual
+  except:
+    - master
