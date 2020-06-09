@@ -1,4 +1,6 @@
 use crate::models::*;
+use crate::queries;
+use crate::rendering::RenderedAccount;
 use crate::schema::*;
 use crate::web::user::UserId;
 use crate::web::DbConn;
@@ -13,45 +15,49 @@ use rocket_contrib::json::Json;
 pub fn list(
     uid: UserId,
     connection: DbConn,
-    offset: Option<i64>,
-    count: Option<i64>,
-) -> Option<Json<Vec<Account>>> {
-    accounts::table
-        .filter(accounts::user_id.eq(*uid))
-        .order(accounts::id.asc())
-        .limit(count.unwrap_or(i64::max_value()))
-        .offset(offset.unwrap_or(0))
-        .load::<Account>(&*connection)
-        .map(Json)
-        .ok()
+    offset: Option<i32>,
+    count: Option<i32>,
+) -> Option<Json<Vec<RenderedAccount>>> {
+    let accs = queries::relevant_accounts(&*connection, *uid, offset, count)
+        .ok()?
+        .into_iter()
+        .map(|(account, syncing)| RenderedAccount {
+            info: account,
+            synchronization: syncing,
+        })
+        .collect();
+
+    Some(Json(accs))
 }
 
 #[get("/accounts/<id>")]
-pub fn get(uid: UserId, connection: DbConn, id: i32) -> Option<Json<Account>> {
-    accounts::table
-        .find(id)
-        .filter(accounts::user_id.eq(*uid)) // return a 404 on other accounts
-        .first(&*connection)
-        .map(Json)
-        .ok()
+pub fn get(uid: UserId, connection: DbConn, id: i32) -> Option<Json<RenderedAccount>> {
+    let (account, syncing) = queries::relevant_account_by_id(&*connection, *uid, id).ok()??;
+
+    Some(Json(RenderedAccount {
+        info: account,
+        synchronization: syncing,
+    }))
 }
 
 #[delete("/accounts/<id>")]
 pub fn delete(uid: UserId, connection: DbConn, id: i32) -> Result<(), Status> {
-    let row_count = diesel::delete(
-        accounts::table
-            .filter(accounts::user_id.eq(*uid))
-            .filter(accounts::id.eq(id)),
-    )
-    .execute(&*connection)
-    .map_err(|_| Status::InternalServerError)?;
+    // let row_count = diesel::delete(
+    //     accounts::table
+    //         .filter(accounts::user_id.eq(*uid))
+    //         .filter(accounts::id.eq(id)),
+    // )
+    // .execute(&*connection)
+    // .map_err(|_| Status::InternalServerError)?;
 
-    if row_count == 0 {
-        Err(Status::NotFound)
-    } else {
-        info!("Deleted record {} from the account table", id);
-        Ok(())
-    }
+    // if row_count == 0 {
+    //     Err(Status::NotFound)
+    // } else {
+    //     info!("Deleted record {} from the account table", id);
+    //     Ok(())
+    // }
+
+    todo!() // TODO
 }
 
 #[put("/accounts/<id>", data = "<account>")]
@@ -61,24 +67,26 @@ pub fn update(
     id: i32,
     account: Json<Account>,
 ) -> Result<(), Status> {
-    let mut acc = account.0;
-    acc.user_id = *uid;
+    // let mut acc = account.0;
+    // acc.user_id = *uid;
 
-    let row_count = diesel::update(
-        accounts::table
-            .filter(accounts::id.eq(id))
-            .filter(accounts::user_id.eq(*uid)),
-    )
-    .set(acc)
-    .execute(&*connection)
-    .map_err(|_| Status::InternalServerError)?;
+    // let row_count = diesel::update(
+    //     accounts::table
+    //         .filter(accounts::id.eq(id))
+    //         .filter(accounts::user_id.eq(*uid)),
+    // )
+    // .set(acc)
+    // .execute(&*connection)
+    // .map_err(|_| Status::InternalServerError)?;
 
-    if row_count == 0 {
-        Err(Status::NotFound)
-    } else {
-        info!("updated record {} from the account table", id);
-        Ok(())
-    }
+    // if row_count == 0 {
+    //     Err(Status::NotFound)
+    // } else {
+    //     info!("updated record {} from the account table", id);
+    //     Ok(())
+    // }
+
+    todo!() // TODO
 }
 
 #[post("/accounts", data = "<account>")]
@@ -87,13 +95,15 @@ pub fn create(
     connection: DbConn,
     account: Json<NewAccount>,
 ) -> Result<Json<Account>, Status> {
-    let mut acc = account.0;
-    acc.user_id = *uid;
+    // let mut acc = account.0;
+    // acc.user_id = *uid;
 
-    let t: Account = diesel::insert_into(crate::schema::accounts::table)
-        .values(&acc)
-        .get_result(&*connection)
-        .map_err(|_| Status::InternalServerError)?;
+    // let t: Account = diesel::insert_into(crate::schema::accounts::table)
+    //     .values(&acc)
+    //     .get_result(&*connection)
+    //     .map_err(|_| Status::InternalServerError)?;
 
-    Ok(Json(t))
+    // Ok(Json(t))
+
+    todo!() // TODO
 }

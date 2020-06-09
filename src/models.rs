@@ -103,6 +103,7 @@ pub struct NewCategory {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -112,6 +113,7 @@ pub struct NewCategory {
 )]
 #[serde(rename_all = "camelCase")]
 #[primary_key("account1")]
+#[table_name = "account_synchronizations"]
 pub struct AccountSynchronization {
     // constraint: account1 < account2, account1 and account2 are unique
     // also (not checked by db: each account can only be synced to at most one other account)

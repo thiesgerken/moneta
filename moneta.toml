@@ -3,8 +3,4 @@ database = "postgres://localhost/moneta"
 [web]
 port = 8484
 address = "0.0.0.0"
-secret_key = ""
-application_server_key = ""
-
-[push]
-# key_file = "vapid.pem"
+secret_key = "M7/dfyV00H6WoOGNxygzdOudibhuPdQwJay5pi+I1cg="

@@ -1,7 +1,11 @@
 use crate::models::*;
 
+use serde::{Deserialize, Serialize};
+
 // The contents of these "Rendered" entities may have been altered to be viewed by the user that requests them
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RenderedAccount {
     pub info: Account,
     pub synchronization: Option<AccountSynchronization>,

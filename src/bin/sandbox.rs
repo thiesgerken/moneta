@@ -6,5 +6,8 @@ fn main() {
     let connection =
         connect("postgres://localhost/moneta").expect("error connecting and migrating to db");
 
-    println!("{:?}", moneta::queries::relevant_accounts(&connection, 1));
+    println!(
+        "{:?}",
+        moneta::queries::relevant_accounts(&connection, 1, None, None)
+    );
 }

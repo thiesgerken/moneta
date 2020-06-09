@@ -7,10 +7,26 @@ use diesel::sql_types::Integer;
 pub fn relevant_accounts(
     connection: &PgConnection,
     user_id: i32,
-) -> Result<Vec<Account>, diesel::result::Error> {
+    offset: Option<i32>,
+    limit: Option<i32>,
+) -> Result<Vec<(Account, Option<AccountSynchronization>)>, diesel::result::Error> {
     sql_query(include_str!("sql/relevant_accounts.sql"))
         .bind::<Integer, _>(user_id)
-        .get_results::<Account>(connection)
+        .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
+        .bind::<Integer, _>(offset.unwrap_or(0))
+        .get_results::<(Account, Option<AccountSynchronization>)>(connection)
+}
+
+pub fn relevant_account_by_id(
+    connection: &PgConnection,
+    user_id: i32,
+    id: i32,
+) -> Result<Option<(Account, Option<AccountSynchronization>)>, diesel::result::Error> {
+    sql_query(include_str!("sql/relevant_account_by_id.sql"))
+        .bind::<Integer, _>(user_id)
+        .bind::<Integer, _>(id)
+        .get_result::<(Account, Option<AccountSynchronization>)>(connection)
+        .optional()
 }
 
 // TODO: allow filtering for booking date
