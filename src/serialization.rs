@@ -556,8 +556,8 @@ struct MoneyDBBalance {
 }
 
 impl MoneyDBBalance {
-    fn convert(&self, account_map: &HashMap<i32, i32>) -> Balance {
-        Balance {
+    fn convert(&self, account_map: &HashMap<i32, i32>) -> NewBalance {
+        NewBalance {
             account_id: *account_map.get(&self.account_id).unwrap(),
             date: self.date,
             amount: (self.amount * 100.0) as i64,

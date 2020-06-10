@@ -40,70 +40,70 @@ pub fn get(uid: UserId, connection: DbConn, id: i32) -> Option<Json<RenderedAcco
     }))
 }
 
-#[delete("/accounts/<id>")]
-pub fn delete(uid: UserId, connection: DbConn, id: i32) -> Result<(), Status> {
-    // let row_count = diesel::delete(
-    //     accounts::table
-    //         .filter(accounts::user_id.eq(*uid))
-    //         .filter(accounts::id.eq(id)),
-    // )
-    // .execute(&*connection)
-    // .map_err(|_| Status::InternalServerError)?;
+// #[delete("/accounts/<id>")]
+// pub fn delete(uid: UserId, connection: DbConn, id: i32) -> Result<(), Status> {
+//     // let row_count = diesel::delete(
+//     //     accounts::table
+//     //         .filter(accounts::user_id.eq(*uid))
+//     //         .filter(accounts::id.eq(id)),
+//     // )
+//     // .execute(&*connection)
+//     // .map_err(|_| Status::InternalServerError)?;
 
-    // if row_count == 0 {
-    //     Err(Status::NotFound)
-    // } else {
-    //     info!("Deleted record {} from the account table", id);
-    //     Ok(())
-    // }
+//     // if row_count == 0 {
+//     //     Err(Status::NotFound)
+//     // } else {
+//     //     info!("Deleted record {} from the account table", id);
+//     //     Ok(())
+//     // }
 
-    todo!() // TODO
-}
+//     todo!() // TODO
+// }
 
-#[put("/accounts/<id>", data = "<account>")]
-pub fn update(
-    uid: UserId,
-    connection: DbConn,
-    id: i32,
-    account: Json<Account>,
-) -> Result<(), Status> {
-    // let mut acc = account.0;
-    // acc.user_id = *uid;
+// #[put("/accounts/<id>", data = "<account>")]
+// pub fn update(
+//     uid: UserId,
+//     connection: DbConn,
+//     id: i32,
+//     account: Json<Account>,
+// ) -> Result<(), Status> {
+//     // let mut acc = account.0;
+//     // acc.user_id = *uid;
 
-    // let row_count = diesel::update(
-    //     accounts::table
-    //         .filter(accounts::id.eq(id))
-    //         .filter(accounts::user_id.eq(*uid)),
-    // )
-    // .set(acc)
-    // .execute(&*connection)
-    // .map_err(|_| Status::InternalServerError)?;
+//     // let row_count = diesel::update(
+//     //     accounts::table
+//     //         .filter(accounts::id.eq(id))
+//     //         .filter(accounts::user_id.eq(*uid)),
+//     // )
+//     // .set(acc)
+//     // .execute(&*connection)
+//     // .map_err(|_| Status::InternalServerError)?;
 
-    // if row_count == 0 {
-    //     Err(Status::NotFound)
-    // } else {
-    //     info!("updated record {} from the account table", id);
-    //     Ok(())
-    // }
+//     // if row_count == 0 {
+//     //     Err(Status::NotFound)
+//     // } else {
+//     //     info!("updated record {} from the account table", id);
+//     //     Ok(())
+//     // }
 
-    todo!() // TODO
-}
+//     todo!() // TODO
+// }
 
-#[post("/accounts", data = "<account>")]
-pub fn create(
-    uid: UserId,
-    connection: DbConn,
-    account: Json<NewAccount>,
-) -> Result<Json<Account>, Status> {
-    // let mut acc = account.0;
-    // acc.user_id = *uid;
+// #[post("/accounts", data = "<account>")]
+// pub fn create(
+//     uid: UserId,
+//     connection: DbConn,
+//     account: Json<NewAccount>,
+// ) -> Result<Json<Account>, Status> {
+//     // let mut acc = account.0;
+//     // acc.user_id = *uid;
 
-    // let t: Account = diesel::insert_into(crate::schema::accounts::table)
-    //     .values(&acc)
-    //     .get_result(&*connection)
-    //     .map_err(|_| Status::InternalServerError)?;
+//     // let t: Account = diesel::insert_into(crate::schema::accounts::table)
+//     //     .values(&acc)
+//     //     .get_result(&*connection)
+//     //     .map_err(|_| Status::InternalServerError)?;
 
-    // Ok(Json(t))
+//     // Ok(Json(t))
 
-    todo!() // TODO
-}
+//     todo!() // TODO
+// }

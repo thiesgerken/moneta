@@ -25,3 +25,21 @@ pub struct RenderedCategory {
 }
 
 pub type RenderedBalance = Balance;
+
+impl RenderedBalance {
+    pub fn render(
+        mut balance: Balance,
+        account_sync: Option<AccountSynchronization>,
+    ) -> RenderedBalance {
+        if let Some(sync) = account_sync {
+            balance.account_id = if sync.account1 == balance.account_id {
+                sync.account2
+            } else {
+                sync.account1
+            };
+            balance.amount *= if sync.invert { -1 } else { 1 };
+        }
+
+        balance
+    }
+}

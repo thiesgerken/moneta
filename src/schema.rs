@@ -33,7 +33,8 @@ table! {
     use diesel::sql_types::*;
     use crate::enums::*;
 
-    balances (account_id, date) {
+    balances (id) {
+        id -> Int4,
         account_id -> Int4,
         date -> Timestamptz,
         amount -> Int8,

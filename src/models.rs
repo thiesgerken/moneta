@@ -145,6 +145,7 @@ pub struct CategoryReplacement {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -154,8 +155,20 @@ pub struct CategoryReplacement {
 )]
 #[belongs_to(Account, foreign_key = "account_id")]
 #[serde(rename_all = "camelCase")]
-#[primary_key("account_id", "date")]
+#[primary_key("id")]
+#[table_name = "balances"]
 pub struct Balance {
+    pub id: i32,
+    pub account_id: i32,
+    pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
+    pub amount: i64,         // cents
+    pub comment: String,
+}
+
+#[derive(Debug, Clone, Insertable, Serialize, Deserialize)]
+#[table_name = "balances"]
+#[serde(rename_all = "camelCase")]
+pub struct NewBalance {
     pub account_id: i32,
     pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
     pub amount: i64,         // cents
