@@ -13,12 +13,12 @@ use rocket_contrib::json::Json;
 
 #[get("/accounts?<offset>&<count>")]
 pub fn list(
-    uid: UserId,
+    _uid: UserId,
     connection: DbConn,
     offset: Option<i32>,
     count: Option<i32>,
 ) -> Option<Json<Vec<RenderedAccount>>> {
-    let accs = queries::relevant_accounts(&*connection, *uid, offset, count)
+    let accs = queries::accounts(&*connection, offset, count)
         .ok()?
         .into_iter()
         .map(|(account, syncing)| RenderedAccount {
@@ -31,8 +31,8 @@ pub fn list(
 }
 
 #[get("/accounts/<id>")]
-pub fn get(uid: UserId, connection: DbConn, id: i32) -> Option<Json<RenderedAccount>> {
-    let (account, syncing) = queries::relevant_account_by_id(&*connection, *uid, id).ok()??;
+pub fn get(_uid: UserId, connection: DbConn, id: i32) -> Option<Json<RenderedAccount>> {
+    let (account, syncing) = queries::account_by_id(&*connection, id).ok()??;
 
     Some(Json(RenderedAccount {
         info: account,

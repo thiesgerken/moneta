@@ -1,5 +1,7 @@
 pub mod accounts;
 pub mod balances;
+pub mod categories;
+pub mod expenses;
 pub mod static_files;
 pub mod user;
 
@@ -54,12 +56,22 @@ pub fn handle(config: Config) {
                 accounts::get,
                 // accounts::delete,
                 // accounts::update,
-                // accounts::create
+                // accounts::create,
                 balances::list,
                 balances::get,
                 // balances::delete,
                 // balances::update,
-                // balances::create
+                // balances::create,
+                categories::list,
+                categories::get,
+                // categories::delete,
+                // categories::update,
+                // categories::create,
+                expenses::list,
+                expenses::get,
+                // categories::delete,
+                // categories::update,
+                // categories::create,
             ],
         )
         .mount("/", routes![static_files::serve, static_files::index])

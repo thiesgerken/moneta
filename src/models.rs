@@ -69,6 +69,7 @@ pub struct NewAccount {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -125,6 +126,7 @@ pub struct AccountSynchronization {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -134,6 +136,7 @@ pub struct AccountSynchronization {
 )]
 #[serde(rename_all = "camelCase")]
 #[primary_key("user_id", "original")]
+#[table_name = "category_replacements"]
 #[belongs_to(User, foreign_key = "user_id")]
 pub struct CategoryReplacement {
     pub user_id: i32,

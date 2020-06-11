@@ -19,9 +19,11 @@ pub struct RenderedExpense {
     pub transactions: Vec<ExpenseTransaction>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RenderedCategory {
     pub info: Category,
-    pub replaces: Vec<Category>,
+    pub replaces: Vec<i32>,
 }
 
 pub type RenderedBalance = Balance;
@@ -41,5 +43,18 @@ impl RenderedBalance {
         }
 
         balance
+    }
+}
+
+impl RenderedCategory {
+    pub fn render(category: Category, replaces: &[CategoryReplacement]) -> RenderedCategory {
+        RenderedCategory {
+            replaces: replaces
+                .iter()
+                .filter(|c| c.replacement == category.id)
+                .map(|c| c.original)
+                .collect(),
+            info: category,
+        }
     }
 }

@@ -121,6 +121,11 @@ function ResponsiveDrawer(props) {
             text: 'Konten',
             icon: <CreditCardIcon />,
           },
+          {
+            key: 'balances',
+            text: 'Kontostände',
+            icon: <CreditCardIcon />,
+          },
         ].map(makeMenuItem)}
       </List>
       <Divider />

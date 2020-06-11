@@ -18,13 +18,13 @@ pub fn list(
     offset: Option<i32>,
     count: Option<i32>,
 ) -> Option<Json<Vec<RenderedBalance>>> {
-    let accs = queries::relevant_balances(&*connection, *uid, offset, count)
+    let bals = queries::relevant_balances(&*connection, *uid, offset, count)
         .ok()?
         .into_iter()
         .map(|(balance, syncing)| RenderedBalance::render(balance, syncing))
         .collect();
 
-    Some(Json(accs))
+    Some(Json(bals))
 }
 
 #[get("/balances/<id>")]

@@ -78,22 +78,42 @@ const Accounts = ({ accounts, updateAccounts }) => {
 
   const columns = [
     {
-      name: 'id',
+      name: 'info.id',
       label: 'ID',
       options: {
         display: false,
       },
     },
     {
-      name: 'name',
+      name: 'info.name',
       label: 'Name',
       options: {
         sortDirection: 'asc',
       },
     },
     {
-      name: 'iban',
+      name: 'info.description',
+      label: 'Beschreibung',
+    },
+    {
+      name: 'info.kind',
+      label: 'Art',
+    },
+    {
+      name: 'info.availability',
+      label: 'Verfügbarkeit',
+    },
+    {
+      name: 'info.risk',
+      label: 'Risiko',
+    },
+    {
+      name: 'info.iban',
       label: 'IBAN',
+    },
+    {
+      name: 'info.color',
+      label: 'Farbe',
     },
   ];
 
@@ -108,7 +128,7 @@ const Accounts = ({ accounts, updateAccounts }) => {
     },
     onRowsSelect: (_, rows) => {
       if (rows.length > 0 && rows[0].dataIndex < accounts.items.length)
-        setAccountId(accounts.items[rows[0].dataIndex].id);
+        setAccountId(accounts.items[rows[0].dataIndex].info.id);
       else setAccountId(null);
     },
     download: false,
@@ -117,7 +137,7 @@ const Accounts = ({ accounts, updateAccounts }) => {
     responsive: 'scrollFullHeight',
     customToolbar: () => (
       <>
-        <Tooltip title="Neues Depot">
+        <Tooltip title="Neues Konto">
           <IconButton onClick={() => setAccountId(-1)}>
             <AddIcon />
           </IconButton>
@@ -126,7 +146,7 @@ const Accounts = ({ accounts, updateAccounts }) => {
     ),
     textLabels: {
       body: {
-        noMatch: 'Keine Depots vorhanden.',
+        noMatch: 'Keine Konten vorhanden.',
         toolTip: 'Sortieren',
         columnHeaderTooltip: column => `Sortiere nach ${column.label}`,
       },

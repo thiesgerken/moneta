@@ -7,23 +7,28 @@ use diesel::sql_types::Integer;
 pub fn relevant_accounts(
     connection: &PgConnection,
     user_id: i32,
-    offset: Option<i32>,
-    limit: Option<i32>,
 ) -> Result<Vec<(Account, Option<AccountSynchronization>)>, diesel::result::Error> {
     sql_query(include_str!("sql/relevant_accounts.sql"))
         .bind::<Integer, _>(user_id)
+        .get_results::<(Account, Option<AccountSynchronization>)>(connection)
+}
+
+pub fn accounts(
+    connection: &PgConnection,
+    offset: Option<i32>,
+    limit: Option<i32>,
+) -> Result<Vec<(Account, Option<AccountSynchronization>)>, diesel::result::Error> {
+    sql_query(include_str!("sql/accounts.sql"))
         .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
         .bind::<Integer, _>(offset.unwrap_or(0))
         .get_results::<(Account, Option<AccountSynchronization>)>(connection)
 }
 
-pub fn relevant_account_by_id(
+pub fn account_by_id(
     connection: &PgConnection,
-    user_id: i32,
     id: i32,
 ) -> Result<Option<(Account, Option<AccountSynchronization>)>, diesel::result::Error> {
-    sql_query(include_str!("sql/relevant_account_by_id.sql"))
-        .bind::<Integer, _>(user_id)
+    sql_query(include_str!("sql/account_by_id.sql"))
         .bind::<Integer, _>(id)
         .get_result::<(Account, Option<AccountSynchronization>)>(connection)
         .optional()
@@ -58,10 +63,26 @@ pub fn relevant_balance_by_id(
 pub fn relevant_expenses(
     connection: &PgConnection,
     user_id: i32,
+    offset: Option<i32>,
+    limit: Option<i32>,
 ) -> Result<Vec<Expense>, diesel::result::Error> {
     sql_query(include_str!("sql/relevant_expenses.sql"))
         .bind::<Integer, _>(user_id)
+        .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
+        .bind::<Integer, _>(offset.unwrap_or(0))
         .get_results::<Expense>(connection)
+}
+
+pub fn relevant_expense_by_id(
+    connection: &PgConnection,
+    user_id: i32,
+    id: i32,
+) -> Result<Option<Expense>, diesel::result::Error> {
+    sql_query(include_str!("sql/relevant_expense_by_id.sql"))
+        .bind::<Integer, _>(user_id)
+        .bind::<Integer, _>(id)
+        .get_result::<Expense>(connection)
+        .optional()
 }
 
 // TODO: allow filtering for value date

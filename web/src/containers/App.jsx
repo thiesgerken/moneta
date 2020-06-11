@@ -13,6 +13,7 @@ import { logout, checkLogin } from '../actions/authentication';
 import Dashboard from './Dashboard';
 import Settings from './Settings';
 import Accounts from './Accounts';
+import Balances from './Balances';
 
 const App = ({ loggedIn, onLogout, initialized, onInitAuthentication }) => {
   if (!initialized) {
@@ -27,6 +28,7 @@ const App = ({ loggedIn, onLogout, initialized, onInitAuthentication }) => {
       <Switch>
         <Route path="/logout" render={onLogout} />
         <Route path="/accounts" render={() => <Accounts />} />
+        <Route path="/balances" render={() => <Balances />} />
         <Route path="/settings" render={() => <Settings />} />
         <Route render={() => <Dashboard />} />
       </Switch>
