@@ -2,6 +2,9 @@
 
 ## TODO
 
+- add missing functionalities
+- express sql queries using diesel
+
 ## Install
 
 - `openssl rand -base64 32` to obtain secret key

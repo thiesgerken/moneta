@@ -10,7 +10,7 @@ pub fn relevant_accounts(
 ) -> Result<Vec<(Account, Option<AccountSynchronization>)>, diesel::result::Error> {
     sql_query(include_str!("sql/relevant_accounts.sql"))
         .bind::<Integer, _>(user_id)
-        .get_results::<(Account, Option<AccountSynchronization>)>(connection)
+        .load::<(Account, Option<AccountSynchronization>)>(connection)
 }
 
 pub fn accounts(
@@ -21,7 +21,7 @@ pub fn accounts(
     sql_query(include_str!("sql/accounts.sql"))
         .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
         .bind::<Integer, _>(offset.unwrap_or(0))
-        .get_results::<(Account, Option<AccountSynchronization>)>(connection)
+        .load::<(Account, Option<AccountSynchronization>)>(connection)
 }
 
 pub fn account_by_id(
@@ -44,7 +44,7 @@ pub fn relevant_balances(
         .bind::<Integer, _>(user_id)
         .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
         .bind::<Integer, _>(offset.unwrap_or(0))
-        .get_results::<(Balance, Option<AccountSynchronization>)>(connection)
+        .load::<(Balance, Option<AccountSynchronization>)>(connection)
 }
 
 pub fn relevant_balance_by_id(
@@ -59,7 +59,6 @@ pub fn relevant_balance_by_id(
         .optional()
 }
 
-// TODO: allow filtering for booking date
 pub fn relevant_expenses(
     connection: &PgConnection,
     user_id: i32,
@@ -70,7 +69,7 @@ pub fn relevant_expenses(
         .bind::<Integer, _>(user_id)
         .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
         .bind::<Integer, _>(offset.unwrap_or(0))
-        .get_results::<Expense>(connection)
+        .load::<Expense>(connection)
 }
 
 pub fn relevant_expense_by_id(
@@ -85,12 +84,91 @@ pub fn relevant_expense_by_id(
         .optional()
 }
 
-// TODO: allow filtering for value date
+pub fn expense_transactions_by_expense_id(
+    connection: &PgConnection,
+    user_id: i32,
+    id: i32,
+) -> Result<Vec<(ExpenseTransaction, Option<AccountSynchronization>)>, diesel::result::Error> {
+    sql_query(include_str!("sql/expense_transactions_by_expense_id.sql"))
+        .bind::<Integer, _>(user_id)
+        .bind::<Integer, _>(id)
+        .load::<(ExpenseTransaction, Option<AccountSynchronization>)>(connection)
+}
+
+pub fn expense_categories_by_expense_id(
+    connection: &PgConnection,
+    user_id: i32,
+    id: i32,
+) -> Result<Vec<(ExpenseCategory, Option<CategoryReplacement>)>, diesel::result::Error> {
+    sql_query(include_str!("sql/expense_categories_by_expense_id.sql"))
+        .bind::<Integer, _>(user_id)
+        .bind::<Integer, _>(id)
+        .load::<(ExpenseCategory, Option<CategoryReplacement>)>(connection)
+}
+
+// needed data for expenses returned by `relevant_expenses`
+pub fn expense_categories_by_expense_range(
+    connection: &PgConnection,
+    user_id: i32,
+    offset: Option<i32>,
+    limit: Option<i32>,
+) -> Result<Vec<(ExpenseCategory, Option<CategoryReplacement>)>, diesel::result::Error> {
+    sql_query(include_str!("sql/expense_categories_by_expense_range.sql"))
+        .bind::<Integer, _>(user_id)
+        .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
+        .bind::<Integer, _>(offset.unwrap_or(0))
+        .load::<(ExpenseCategory, Option<CategoryReplacement>)>(connection)
+}
+
+// needed data for expenses returned by `relevant_expenses`
+pub fn expense_transactions_by_expense_range(
+    connection: &PgConnection,
+    user_id: i32,
+    offset: Option<i32>,
+    limit: Option<i32>,
+) -> Result<Vec<(ExpenseTransaction, Option<AccountSynchronization>)>, diesel::result::Error> {
+    sql_query(include_str!(
+        "sql/expense_transactions_by_expense_range.sql"
+    ))
+    .bind::<Integer, _>(user_id)
+    .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
+    .bind::<Integer, _>(offset.unwrap_or(0))
+    .load::<(ExpenseTransaction, Option<AccountSynchronization>)>(connection)
+}
+
+// needed data for expenses returned by `relevant_expenses`
+pub fn expense_events_by_expense_range(
+    connection: &PgConnection,
+    user_id: i32,
+    offset: Option<i32>,
+    limit: Option<i32>,
+) -> Result<Vec<ExpenseEvent>, diesel::result::Error> {
+    sql_query(include_str!("sql/expense_events_by_expense_range.sql"))
+        .bind::<Integer, _>(user_id)
+        .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
+        .bind::<Integer, _>(offset.unwrap_or(0))
+        .load::<ExpenseEvent>(connection)
+}
+
+// needed data for expenses returned by `relevant_expenses`
+pub fn expense_receipts_by_expense_range(
+    connection: &PgConnection,
+    user_id: i32,
+    offset: Option<i32>,
+    limit: Option<i32>,
+) -> Result<Vec<ExpenseReceipt>, diesel::result::Error> {
+    sql_query(include_str!("sql/expense_receipts_by_expense_range.sql"))
+        .bind::<Integer, _>(user_id)
+        .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
+        .bind::<Integer, _>(offset.unwrap_or(0))
+        .load::<ExpenseReceipt>(connection)
+}
+
 pub fn relevant_transactions(
     connection: &PgConnection,
     user_id: i32,
 ) -> Result<Vec<ExpenseTransaction>, diesel::result::Error> {
     sql_query(include_str!("sql/relevant_transactions.sql"))
         .bind::<Integer, _>(user_id)
-        .get_results::<ExpenseTransaction>(connection)
+        .load::<ExpenseTransaction>(connection)
 }

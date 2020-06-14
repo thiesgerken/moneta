@@ -26,5 +26,12 @@ serde_json = "1.0"
 simplelog = "0.8"
 toml = "0.5"
 
+[dev-dependencies]
+criterion = "0.3"
+
 [profile.release]
 lto = true
+
+[[bench]]
+name = "rendering"
+harness = false

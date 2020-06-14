@@ -1,14 +1,9 @@
-use crate::models::*;
 use crate::queries;
 use crate::rendering::RenderedAccount;
-use crate::schema::*;
 use crate::web::user::UserId;
 use crate::web::DbConn;
 
-use diesel::prelude::*;
-use log::info;
 use rocket::http::Status;
-use rocket_contrib::databases::diesel;
 use rocket_contrib::json::Json;
 
 #[get("/accounts?<offset>&<count>")]
@@ -17,9 +12,9 @@ pub fn list(
     connection: DbConn,
     offset: Option<i32>,
     count: Option<i32>,
-) -> Option<Json<Vec<RenderedAccount>>> {
+) -> Result<Json<Vec<RenderedAccount>>, Status> {
     let accs = queries::accounts(&*connection, offset, count)
-        .ok()?
+        .map_err(|_| Status::InternalServerError)?
         .into_iter()
         .map(|(account, syncing)| RenderedAccount {
             info: account,
@@ -27,14 +22,16 @@ pub fn list(
         })
         .collect();
 
-    Some(Json(accs))
+    Ok(Json(accs))
 }
 
 #[get("/accounts/<id>")]
-pub fn get(_uid: UserId, connection: DbConn, id: i32) -> Option<Json<RenderedAccount>> {
-    let (account, syncing) = queries::account_by_id(&*connection, id).ok()??;
+pub fn get(_uid: UserId, connection: DbConn, id: i32) -> Result<Json<RenderedAccount>, Status> {
+    let (account, syncing) = queries::account_by_id(&*connection, id)
+        .map_err(|_| Status::InternalServerError)?
+        .ok_or(Status::NotFound)?;
 
-    Some(Json(RenderedAccount {
+    Ok(Json(RenderedAccount {
         info: account,
         synchronization: syncing,
     }))

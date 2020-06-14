@@ -272,6 +272,7 @@ pub struct NewExpenseTransaction {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -280,6 +281,7 @@ pub struct NewExpenseTransaction {
     AsChangeset,
 )]
 #[belongs_to(Expense, foreign_key = "expense_id")]
+#[table_name = "expense_events"]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseEvent {
     pub id: i32,
@@ -311,6 +313,7 @@ pub struct NewExpenseEvent {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -333,6 +336,7 @@ pub struct ExpenseCategory {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -341,6 +345,7 @@ pub struct ExpenseCategory {
     AsChangeset,
 )]
 #[belongs_to(Expense, foreign_key = "expense_id")]
+#[table_name = "expense_receipts"]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseReceipt {
     pub id: i32,
