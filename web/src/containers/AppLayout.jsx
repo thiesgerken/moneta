@@ -117,6 +117,16 @@ function ResponsiveDrawer(props) {
       <List>
         {[
           {
+            key: 'expenses',
+            text: 'Ausgaben',
+            icon: <CreditCardIcon />,
+          },
+          {
+            key: 'categories',
+            text: 'Kategorien',
+            icon: <CreditCardIcon />,
+          },
+          {
             key: 'accounts',
             text: 'Konten',
             icon: <CreditCardIcon />,

@@ -14,6 +14,8 @@ import Dashboard from './Dashboard';
 import Settings from './Settings';
 import Accounts from './Accounts';
 import Balances from './Balances';
+import Expenses from './Expenses';
+import Categories from './Categories';
 
 const App = ({ loggedIn, onLogout, initialized, onInitAuthentication }) => {
   if (!initialized) {
@@ -28,6 +30,8 @@ const App = ({ loggedIn, onLogout, initialized, onInitAuthentication }) => {
       <Switch>
         <Route path="/logout" render={onLogout} />
         <Route path="/accounts" render={() => <Accounts />} />
+        <Route path="/expenses" render={() => <Expenses />} />
+        <Route path="/categories" render={() => <Categories />} />
         <Route path="/balances" render={() => <Balances />} />
         <Route path="/settings" render={() => <Settings />} />
         <Route render={() => <Dashboard />} />
