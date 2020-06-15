@@ -88,7 +88,7 @@ const Categories = ({ categories, updateCategories }) => {
       name: 'info.name',
       label: 'Name',
       options: {
-        sortDirection: 'asc',
+        sortOrder: 'asc',
       },
     },
     {
@@ -96,20 +96,8 @@ const Categories = ({ categories, updateCategories }) => {
       label: 'Beschreibung',
     },
     {
-      name: 'info.kind',
-      label: 'Art',
-    },
-    {
-      name: 'info.availability',
-      label: 'Verfügbarkeit',
-    },
-    {
-      name: 'info.risk',
-      label: 'Risiko',
-    },
-    {
-      name: 'info.iban',
-      label: 'IBAN',
+      name: 'info.parent',
+      label: 'Oberkategorie',
     },
     {
       name: 'info.color',
@@ -120,13 +108,14 @@ const Categories = ({ categories, updateCategories }) => {
   const options = {
     selectableRows: 'single',
     selectableRowsOnClick: true,
-    disableToolbarSelect: true,
+    selectToolbarPlacement: 'none',
+    enableNestedDataAccess: '.',
     print: false,
     page: page === null ? 0 : parseInt(page, 10), // https://github.com/gregnb/mui-datatables/issues/957
     onChangePage: p => {
       setPage(p === 0 ? null : p);
     },
-    onRowsSelect: (_, rows) => {
+    onRowSelectionChange: (_, rows) => {
       if (rows.length > 0 && rows[0].dataIndex < categories.items.length)
         setCategoryId(categories.items[rows[0].dataIndex].info.id);
       else setCategoryId(null);
@@ -134,10 +123,10 @@ const Categories = ({ categories, updateCategories }) => {
     download: false,
     filter: false,
     rowsPerPageOptions: mdUp ? [10, 25, 50] : [10],
-    responsive: 'scrollFullHeight',
+    responsive: 'standard',
     customToolbar: () => (
       <>
-        <Tooltip title="Neues Konto">
+        <Tooltip title="Neue Kategorie">
           <IconButton onClick={() => setCategoryId(-1)}>
             <AddIcon />
           </IconButton>
@@ -146,7 +135,7 @@ const Categories = ({ categories, updateCategories }) => {
     ),
     textLabels: {
       body: {
-        noMatch: 'Keine Konten vorhanden.',
+        noMatch: 'Keine Kategorien vorhanden.',
         toolTip: 'Sortieren',
         columnHeaderTooltip: column => `Sortiere nach ${column.label}`,
       },
@@ -209,7 +198,7 @@ const Categories = ({ categories, updateCategories }) => {
           >
             <ThemeProvider theme={myTheme}>
               <MUIDataTable
-                title="Depots"
+                title="Kategorien"
                 data={categories.items}
                 columns={columns}
                 options={options}

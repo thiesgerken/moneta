@@ -92,7 +92,7 @@ const Balances = ({ balances, updateBalances }) => {
       name: 'date',
       label: 'Datum',
       options: {
-        sortDirection: 'desc',
+        sortOrder: 'desc',
       },
     },
     {
@@ -108,13 +108,14 @@ const Balances = ({ balances, updateBalances }) => {
   const options = {
     selectableRows: 'single',
     selectableRowsOnClick: true,
-    disableToolbarSelect: true,
+    selectToolbarPlacement: 'none',
+    enableNestedDataAccess: '.',
     print: false,
     page: page === null ? 0 : parseInt(page, 10), // https://github.com/gregnb/mui-datatables/issues/957
     onChangePage: p => {
       setPage(p === 0 ? null : p);
     },
-    onRowsSelect: (_, rows) => {
+    onRowSelectionChange: (_, rows) => {
       if (rows.length > 0 && rows[0].dataIndex < balances.items.length)
         setBalanceId(balances.items[rows[0].dataIndex].id);
       else setBalanceId(null);
@@ -122,10 +123,10 @@ const Balances = ({ balances, updateBalances }) => {
     download: false,
     filter: false,
     rowsPerPageOptions: mdUp ? [10, 25, 50] : [10],
-    responsive: 'scrollFullHeight',
+    responsive: 'standard',
     customToolbar: () => (
       <>
-        <Tooltip title="Neues Konto">
+        <Tooltip title="Neuer Kontostand">
           <IconButton onClick={() => setBalanceId(-1)}>
             <AddIcon />
           </IconButton>
@@ -134,7 +135,7 @@ const Balances = ({ balances, updateBalances }) => {
     ),
     textLabels: {
       body: {
-        noMatch: 'Keine Konten vorhanden.',
+        noMatch: 'Keine Kontostände vorhanden.',
         toolTip: 'Sortieren',
         columnHeaderTooltip: column => `Sortiere nach ${column.label}`,
       },
@@ -197,7 +198,7 @@ const Balances = ({ balances, updateBalances }) => {
           >
             <ThemeProvider theme={myTheme}>
               <MUIDataTable
-                title="Depots"
+                title="Kontostände"
                 data={balances.items}
                 columns={columns}
                 options={options}

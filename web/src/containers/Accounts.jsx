@@ -88,7 +88,7 @@ const Accounts = ({ accounts, updateAccounts }) => {
       name: 'info.name',
       label: 'Name',
       options: {
-        sortDirection: 'asc',
+        sortOrder: 'asc',
       },
     },
     {
@@ -120,13 +120,14 @@ const Accounts = ({ accounts, updateAccounts }) => {
   const options = {
     selectableRows: 'single',
     selectableRowsOnClick: true,
-    disableToolbarSelect: true,
+    selectToolbarPlacement: 'none',
+    enableNestedDataAccess: '.',
     print: false,
     page: page === null ? 0 : parseInt(page, 10), // https://github.com/gregnb/mui-datatables/issues/957
     onChangePage: p => {
       setPage(p === 0 ? null : p);
     },
-    onRowsSelect: (_, rows) => {
+    onRowSelectionChange: (_, rows) => {
       if (rows.length > 0 && rows[0].dataIndex < accounts.items.length)
         setAccountId(accounts.items[rows[0].dataIndex].info.id);
       else setAccountId(null);
@@ -134,7 +135,7 @@ const Accounts = ({ accounts, updateAccounts }) => {
     download: false,
     filter: false,
     rowsPerPageOptions: mdUp ? [10, 25, 50] : [10],
-    responsive: 'scrollFullHeight',
+    responsive: 'standard',
     customToolbar: () => (
       <>
         <Tooltip title="Neues Konto">
@@ -209,7 +210,7 @@ const Accounts = ({ accounts, updateAccounts }) => {
           >
             <ThemeProvider theme={myTheme}>
               <MUIDataTable
-                title="Depots"
+                title="Konten"
                 data={accounts.items}
                 columns={columns}
                 options={options}

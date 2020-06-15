@@ -92,7 +92,7 @@ const Expenses = ({ expenses, updateExpenses }) => {
       name: 'info.bookingStart',
       label: 'Buchungszeitraum',
       options: {
-        sortDirection: 'desc',
+        sortOrder: 'desc',
       },
     },
     {
@@ -112,13 +112,14 @@ const Expenses = ({ expenses, updateExpenses }) => {
   const options = {
     selectableRows: 'single',
     selectableRowsOnClick: true,
-    disableToolbarSelect: true,
+    selectToolbarPlacement: 'none',
+    enableNestedDataAccess: '.',
     print: false,
     page: page === null ? 0 : parseInt(page, 10), // https://github.com/gregnb/mui-datatables/issues/957
     onChangePage: p => {
       setPage(p === 0 ? null : p);
     },
-    onRowsSelect: (_, rows) => {
+    onRowSelectionChange: (_, rows) => {
       if (rows.length > 0 && rows[0].dataIndex < expenses.items.length)
         setExpenseId(expenses.items[rows[0].dataIndex].info.id);
       else setExpenseId(null);
@@ -126,10 +127,10 @@ const Expenses = ({ expenses, updateExpenses }) => {
     download: false,
     filter: false,
     rowsPerPageOptions: mdUp ? [10, 25, 50] : [10],
-    responsive: 'scrollFullHeight',
+    responsive: 'standard',
     customToolbar: () => (
       <>
-        <Tooltip title="Neues Konto">
+        <Tooltip title="Neue Ausgabe">
           <IconButton onClick={() => setExpenseId(-1)}>
             <AddIcon />
           </IconButton>
@@ -138,7 +139,7 @@ const Expenses = ({ expenses, updateExpenses }) => {
     ),
     textLabels: {
       body: {
-        noMatch: 'Keine Konten vorhanden.',
+        noMatch: 'Keine Ausgaben vorhanden.',
         toolTip: 'Sortieren',
         columnHeaderTooltip: column => `Sortiere nach ${column.label}`,
       },
@@ -201,7 +202,7 @@ const Expenses = ({ expenses, updateExpenses }) => {
           >
             <ThemeProvider theme={myTheme}>
               <MUIDataTable
-                title="Depots"
+                title="Ausgaben"
                 data={expenses.items}
                 columns={columns}
                 options={options}
