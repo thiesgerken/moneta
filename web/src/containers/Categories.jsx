@@ -2,7 +2,7 @@ import { connect } from 'react-redux';
 import React, { useEffect } from 'react';
 import PropTypes from 'prop-types';
 import MUIDataTable from 'mui-datatables';
-import { find } from 'lodash';
+import { map, find, filter } from 'lodash';
 import {
   ThemeProvider,
   createMuiTheme,
@@ -18,6 +18,8 @@ import { useLocation, useHistory } from 'react-router';
 
 import { updateCategories as updateCategoriesAction } from '../actions/categories';
 import CategoryDialog from './CategoryDialog';
+import ColorboxLabel from '../components/ColorboxLabel';
+import { muiDatatablesLang } from '../lang';
 
 function useQuery(key) {
   const location = useLocation();
@@ -35,7 +37,7 @@ function useQuery(key) {
   return [query.get(key), set];
 }
 
-const Categories = ({ categories, updateCategories }) => {
+const Categories = ({ userId, categories, updateCategories }) => {
   const [categoryId, setCategoryId] = useQuery('id');
   const [page, setPage] = useQuery('page');
 
@@ -78,10 +80,20 @@ const Categories = ({ categories, updateCategories }) => {
 
   const columns = [
     {
+      name: 'info.color',
+      options: {
+        filter: false,
+        sort: false,
+        viewColumns: false,
+        display: false,
+      },
+    },
+    {
       name: 'info.id',
       label: 'ID',
       options: {
         display: false,
+        filter: false,
       },
     },
     {
@@ -89,19 +101,56 @@ const Categories = ({ categories, updateCategories }) => {
       label: 'Name',
       options: {
         sortOrder: 'asc',
+        filter: false,
+        customBodyRender: (v, { rowData }) => {
+          const color = rowData[0];
+          if (color === null || color === '') return v;
+
+          return <ColorboxLabel color={color}>{v}</ColorboxLabel>;
+        },
       },
     },
     {
       name: 'info.description',
       label: 'Beschreibung',
+      options: {
+        filter: false,
+        sort: false,
+      },
     },
     {
       name: 'info.parent',
       label: 'Oberkategorie',
+      options: {
+        sort: false,
+        customBodyRender: v => {
+          if (v === null) return '';
+
+          const c = find(categories.items, cc => cc.info.id === v);
+          if (c === undefined) return v;
+
+          // TODO: display as otheruser/name if the parent does not belong to this user
+          return c.info.name;
+        },
+        display: mdUp,
+      },
     },
     {
-      name: 'info.color',
-      label: 'Farbe',
+      name: 'replaces',
+      label: 'Ersetzt',
+      options: {
+        filter: false,
+        sort: false,
+        customBodyRender: v => {
+          return map(v, cId => {
+            // TODO: display as otheruser/name if the parent does not belong to this user
+            const c = find(categories.items, cc => cc.info.id === cId);
+            if (c === undefined) return cId;
+            return c.info.name;
+          }).join(', ');
+        },
+        display: mdUp,
+      },
     },
   ];
 
@@ -121,7 +170,6 @@ const Categories = ({ categories, updateCategories }) => {
       else setCategoryId(null);
     },
     download: false,
-    filter: false,
     rowsPerPageOptions: mdUp ? [10, 25, 50] : [10],
     responsive: 'standard',
     customToolbar: () => (
@@ -133,38 +181,7 @@ const Categories = ({ categories, updateCategories }) => {
         </Tooltip>
       </>
     ),
-    textLabels: {
-      body: {
-        noMatch: 'Keine Kategorien vorhanden.',
-        toolTip: 'Sortieren',
-        columnHeaderTooltip: column => `Sortiere nach ${column.label}`,
-      },
-      pagination: {
-        next: 'Nächste Seite',
-        previous: 'Vorherige Seite',
-        rowsPerPage: 'Zeilen pro Seite:',
-        displayRows: 'von',
-      },
-      toolbar: {
-        search: 'Suchen',
-        viewColumns: 'Spalten',
-        filterTable: 'Filter',
-      },
-      filter: {
-        all: 'Alle',
-        title: 'FILTER',
-        reset: 'RESET',
-      },
-      viewColumns: {
-        title: 'Angezeigte Spalten',
-        titleAria: 'Zeigen/Ausblenden von Tabellenspalten',
-      },
-      selectedRows: {
-        text: 'Zeile(n) ausgewählt',
-        delete: 'Löschen',
-        deleteAria: 'ausgewählte Zeilen löschen',
-      },
-    },
+    textLabels: muiDatatablesLang,
   };
   return (
     <div style={{ margin: '-4px' }}>
@@ -199,7 +216,7 @@ const Categories = ({ categories, updateCategories }) => {
             <ThemeProvider theme={myTheme}>
               <MUIDataTable
                 title="Kategorien"
-                data={categories.items}
+                data={filter(categories.items, c => c.info.userId === userId)}
                 columns={columns}
                 options={options}
               />
@@ -219,6 +236,7 @@ const Categories = ({ categories, updateCategories }) => {
 };
 
 Categories.propTypes = {
+  userId: PropTypes.number.isRequired,
   updateCategories: PropTypes.func.isRequired,
   categories: PropTypes.shape({
     items: PropTypes.arrayOf(PropTypes.object),
@@ -231,10 +249,11 @@ const mapDispatchToProps = dispatch => ({
 });
 
 const mapStateToProps = state => {
-  const { categories } = state;
+  const { categories, authentication } = state;
 
   return {
     categories,
+    userId: authentication.userInfo.id,
   };
 };
 

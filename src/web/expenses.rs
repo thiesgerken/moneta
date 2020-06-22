@@ -5,10 +5,65 @@ use crate::schema::*;
 use crate::web::user::UserId;
 use crate::web::DbConn;
 
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use rocket::http::Status;
 use rocket_contrib::databases::diesel;
 use rocket_contrib::json::Json;
+use serde::{Deserialize, Serialize};
+
+use std::collections::HashMap;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SortDirection {
+    Ascending,
+    Descending,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SortBy {
+    pub direction: SortDirection,
+    pub column: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryRequest {
+    pub page: i32,
+    pub rows_per_page: i32,
+    pub needle: Option<String>,
+    pub sort_by: Vec<SortBy>,
+    pub filter_by: HashMap<String, Vec<String>>, // column -> needles
+    pub from: Option<DateTime<Utc>>,
+    pub to: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResponse {
+    pub records: Vec<RenderedExpense>,
+    pub total_record_count: i32,
+    pub filtered_record_count: i32,
+    pub filter_hints: HashMap<String, Vec<String>>, // lists of possible filter values for some columns
+}
+
+#[post("/expenses/query", data = "<request>")]
+pub fn query(
+    uid: UserId,
+    connection: DbConn,
+    request: Json<QueryRequest>,
+) -> Result<Json<QueryResponse>, Status> {
+    // first: find out the relevant expense ids (filtered + in correct order) and load them; also load the total number of rows (as add column to avoid 2nd query?)
+    // find out the total number of expenses (skip if no filters active)
+    // in all relevant expenses: assemble stores and put them in filter_hints
+    // error if the request if for more than 100 records
+    // ask for associated info for these expenses (simply passing the expense ids as params)
+
+    // TODO
+    todo!();
+}
 
 #[get("/expenses?<offset>&<count>")]
 pub fn list(

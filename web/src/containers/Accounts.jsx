@@ -2,7 +2,7 @@ import { connect } from 'react-redux';
 import React, { useEffect } from 'react';
 import PropTypes from 'prop-types';
 import MUIDataTable from 'mui-datatables';
-import { find } from 'lodash';
+import { find, filter } from 'lodash';
 import {
   ThemeProvider,
   createMuiTheme,
@@ -18,6 +18,8 @@ import { useLocation, useHistory } from 'react-router';
 
 import { updateAccounts as updateAccountsAction } from '../actions/accounts';
 import AccountDialog from './AccountDialog';
+import { muiDatatablesLang } from '../lang';
+import ColorboxLabel from '../components/ColorboxLabel';
 
 function useQuery(key) {
   const location = useLocation();
@@ -35,7 +37,7 @@ function useQuery(key) {
   return [query.get(key), set];
 }
 
-const Accounts = ({ accounts, updateAccounts }) => {
+const Accounts = ({ userId, accounts, updateAccounts }) => {
   const [accountId, setAccountId] = useQuery('id');
   const [page, setPage] = useQuery('page');
 
@@ -78,10 +80,20 @@ const Accounts = ({ accounts, updateAccounts }) => {
 
   const columns = [
     {
+      name: 'info.color',
+      options: {
+        filter: false,
+        sort: false,
+        viewColumns: false,
+        display: false,
+      },
+    },
+    {
       name: 'info.id',
       label: 'ID',
       options: {
         display: false,
+        filter: false,
       },
     },
     {
@@ -89,31 +101,41 @@ const Accounts = ({ accounts, updateAccounts }) => {
       label: 'Name',
       options: {
         sortOrder: 'asc',
+        filter: false,
+        customBodyRender: (v, { rowData }) => {
+          const color = rowData[0];
+          if (color === null || color === '') return v;
+
+          return <ColorboxLabel color={color}>{v}</ColorboxLabel>;
+        },
       },
     },
     {
       name: 'info.description',
       label: 'Beschreibung',
-    },
-    {
-      name: 'info.kind',
-      label: 'Art',
-    },
-    {
-      name: 'info.availability',
-      label: 'Verfügbarkeit',
-    },
-    {
-      name: 'info.risk',
-      label: 'Risiko',
+      options: {
+        sort: false,
+        filter: false,
+      },
     },
     {
       name: 'info.iban',
       label: 'IBAN',
+      options: {
+        filter: false,
+      },
     },
     {
-      name: 'info.color',
-      label: 'Farbe',
+      name: 'meta.kind',
+      label: 'Art',
+    },
+    {
+      name: 'meta.availability',
+      label: 'Verfügbarkeit',
+    },
+    {
+      name: 'meta.risk',
+      label: 'Risiko',
     },
   ];
 
@@ -133,7 +155,6 @@ const Accounts = ({ accounts, updateAccounts }) => {
       else setAccountId(null);
     },
     download: false,
-    filter: false,
     rowsPerPageOptions: mdUp ? [10, 25, 50] : [10],
     responsive: 'standard',
     customToolbar: () => (
@@ -145,38 +166,7 @@ const Accounts = ({ accounts, updateAccounts }) => {
         </Tooltip>
       </>
     ),
-    textLabels: {
-      body: {
-        noMatch: 'Keine Konten vorhanden.',
-        toolTip: 'Sortieren',
-        columnHeaderTooltip: column => `Sortiere nach ${column.label}`,
-      },
-      pagination: {
-        next: 'Nächste Seite',
-        previous: 'Vorherige Seite',
-        rowsPerPage: 'Zeilen pro Seite:',
-        displayRows: 'von',
-      },
-      toolbar: {
-        search: 'Suchen',
-        viewColumns: 'Spalten',
-        filterTable: 'Filter',
-      },
-      filter: {
-        all: 'Alle',
-        title: 'FILTER',
-        reset: 'RESET',
-      },
-      viewColumns: {
-        title: 'Angezeigte Spalten',
-        titleAria: 'Zeigen/Ausblenden von Tabellenspalten',
-      },
-      selectedRows: {
-        text: 'Zeile(n) ausgewählt',
-        delete: 'Löschen',
-        deleteAria: 'ausgewählte Zeilen löschen',
-      },
-    },
+    textLabels: muiDatatablesLang,
   };
   return (
     <div style={{ margin: '-4px' }}>
@@ -211,7 +201,7 @@ const Accounts = ({ accounts, updateAccounts }) => {
             <ThemeProvider theme={myTheme}>
               <MUIDataTable
                 title="Konten"
-                data={accounts.items}
+                data={filter(accounts.items, c => c.info.userId === userId)}
                 columns={columns}
                 options={options}
               />
@@ -231,6 +221,7 @@ const Accounts = ({ accounts, updateAccounts }) => {
 };
 
 Accounts.propTypes = {
+  userId: PropTypes.number.isRequired,
   updateAccounts: PropTypes.func.isRequired,
   accounts: PropTypes.shape({
     items: PropTypes.arrayOf(PropTypes.object),
@@ -243,10 +234,11 @@ const mapDispatchToProps = dispatch => ({
 });
 
 const mapStateToProps = state => {
-  const { accounts } = state;
+  const { accounts, authentication } = state;
 
   return {
     accounts,
+    userId: authentication.userInfo.id,
   };
 };
 

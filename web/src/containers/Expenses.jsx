@@ -18,6 +18,7 @@ import { useLocation, useHistory } from 'react-router';
 
 import { updateExpenses as updateExpensesAction } from '../actions/expenses';
 import ExpenseDialog from './ExpenseDialog';
+import { muiDatatablesLang } from '../lang';
 
 function useQuery(key) {
   const location = useLocation();
@@ -114,10 +115,28 @@ const Expenses = ({ expenses, updateExpenses }) => {
     selectableRowsOnClick: true,
     selectToolbarPlacement: 'none',
     enableNestedDataAccess: '.',
+    serverSide: true,
     print: false,
     page: page === null ? 0 : parseInt(page, 10), // https://github.com/gregnb/mui-datatables/issues/957
-    onChangePage: p => {
-      setPage(p === 0 ? null : p);
+    // onChangePage: p => {
+    //   setPage(p === 0 ? null : p);
+    // },
+    onTableChange: (action, tableState) => {
+      console.log(action, tableState);
+
+      // a developer could react to change on an action basis or
+      // examine the state as a whole and do whatever they want
+
+      // switch (action) {
+      //   case 'changePage':
+      //     this.changePage(tableState.page, tableState.sortOrder);
+      //     break;
+      //   case 'sort':
+      //     this.sort(tableState.page, tableState.sortOrder);
+      //     break;
+      //   default:
+      //     console.log('action not handled.');
+      // }
     },
     onRowSelectionChange: (_, rows) => {
       if (rows.length > 0 && rows[0].dataIndex < expenses.items.length)
@@ -125,8 +144,8 @@ const Expenses = ({ expenses, updateExpenses }) => {
       else setExpenseId(null);
     },
     download: false,
-    filter: false,
     rowsPerPageOptions: mdUp ? [10, 25, 50] : [10],
+    filterType: 'multiselect',
     responsive: 'standard',
     customToolbar: () => (
       <>
@@ -137,38 +156,7 @@ const Expenses = ({ expenses, updateExpenses }) => {
         </Tooltip>
       </>
     ),
-    textLabels: {
-      body: {
-        noMatch: 'Keine Ausgaben vorhanden.',
-        toolTip: 'Sortieren',
-        columnHeaderTooltip: column => `Sortiere nach ${column.label}`,
-      },
-      pagination: {
-        next: 'Nächste Seite',
-        previous: 'Vorherige Seite',
-        rowsPerPage: 'Zeilen pro Seite:',
-        displayRows: 'von',
-      },
-      toolbar: {
-        search: 'Suchen',
-        viewColumns: 'Spalten',
-        filterTable: 'Filter',
-      },
-      filter: {
-        all: 'Alle',
-        title: 'FILTER',
-        reset: 'RESET',
-      },
-      viewColumns: {
-        title: 'Angezeigte Spalten',
-        titleAria: 'Zeigen/Ausblenden von Tabellenspalten',
-      },
-      selectedRows: {
-        text: 'Zeile(n) ausgewählt',
-        delete: 'Löschen',
-        deleteAria: 'ausgewählte Zeilen löschen',
-      },
-    },
+    textLabels: muiDatatablesLang,
   };
   return (
     <div style={{ margin: '-4px' }}>
@@ -203,7 +191,7 @@ const Expenses = ({ expenses, updateExpenses }) => {
             <ThemeProvider theme={myTheme}>
               <MUIDataTable
                 title="Ausgaben"
-                data={expenses.items}
+                data={expenses.items.slice(0, 30)}
                 columns={columns}
                 options={options}
               />

@@ -18,6 +18,7 @@ import { useLocation, useHistory } from 'react-router';
 
 import { updateBalances as updateBalancesAction } from '../actions/balances';
 import BalanceDialog from './BalanceDialog';
+import { muiDatatablesLang } from '../lang';
 
 function useQuery(key) {
   const location = useLocation();
@@ -121,7 +122,6 @@ const Balances = ({ balances, updateBalances }) => {
       else setBalanceId(null);
     },
     download: false,
-    filter: false,
     rowsPerPageOptions: mdUp ? [10, 25, 50] : [10],
     responsive: 'standard',
     customToolbar: () => (
@@ -133,38 +133,7 @@ const Balances = ({ balances, updateBalances }) => {
         </Tooltip>
       </>
     ),
-    textLabels: {
-      body: {
-        noMatch: 'Keine Kontostände vorhanden.',
-        toolTip: 'Sortieren',
-        columnHeaderTooltip: column => `Sortiere nach ${column.label}`,
-      },
-      pagination: {
-        next: 'Nächste Seite',
-        previous: 'Vorherige Seite',
-        rowsPerPage: 'Zeilen pro Seite:',
-        displayRows: 'von',
-      },
-      toolbar: {
-        search: 'Suchen',
-        viewColumns: 'Spalten',
-        filterTable: 'Filter',
-      },
-      filter: {
-        all: 'Alle',
-        title: 'FILTER',
-        reset: 'RESET',
-      },
-      viewColumns: {
-        title: 'Angezeigte Spalten',
-        titleAria: 'Zeigen/Ausblenden von Tabellenspalten',
-      },
-      selectedRows: {
-        text: 'Zeile(n) ausgewählt',
-        delete: 'Löschen',
-        deleteAria: 'ausgewählte Zeilen löschen',
-      },
-    },
+    textLabels: muiDatatablesLang,
   };
   return (
     <div style={{ margin: '-4px' }}>

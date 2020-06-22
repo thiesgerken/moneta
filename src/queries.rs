@@ -1,4 +1,5 @@
 use crate::models::*;
+use crate::schema::*;
 
 use diesel::prelude::*;
 use diesel::sql_query;
@@ -18,9 +19,15 @@ pub fn accounts(
     offset: Option<i32>,
     limit: Option<i32>,
 ) -> Result<Vec<(Account, Option<AccountSynchronization>)>, diesel::result::Error> {
-    sql_query(include_str!("sql/accounts.sql"))
-        .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
-        .bind::<Integer, _>(offset.unwrap_or(0))
+    accounts::table
+        .left_join(
+            account_synchronizations::table.on(accounts::id
+                .eq(account_synchronizations::account1)
+                .or(accounts::id.eq(account_synchronizations::account2))),
+        )
+        .order(accounts::id)
+        .limit(limit.unwrap_or(i32::MAX) as i64)
+        .offset(offset.unwrap_or(0) as i64)
         .load::<(Account, Option<AccountSynchronization>)>(connection)
 }
 
@@ -28,8 +35,13 @@ pub fn account_by_id(
     connection: &PgConnection,
     id: i32,
 ) -> Result<Option<(Account, Option<AccountSynchronization>)>, diesel::result::Error> {
-    sql_query(include_str!("sql/account_by_id.sql"))
-        .bind::<Integer, _>(id)
+    accounts::table
+        .filter(accounts::id.eq(id))
+        .left_join(
+            account_synchronizations::table.on(accounts::id
+                .eq(account_synchronizations::account1)
+                .or(accounts::id.eq(account_synchronizations::account2))),
+        )
         .get_result::<(Account, Option<AccountSynchronization>)>(connection)
         .optional()
 }
@@ -65,7 +77,7 @@ pub fn relevant_expenses(
     offset: Option<i32>,
     limit: Option<i32>,
 ) -> Result<Vec<Expense>, diesel::result::Error> {
-    sql_query(include_str!("sql/relevant_expenses.sql"))
+    sql_query(include_str!("sql/expense_ranges_simple/expense_range.sql"))
         .bind::<Integer, _>(user_id)
         .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
         .bind::<Integer, _>(offset.unwrap_or(0))
@@ -113,11 +125,13 @@ pub fn expense_categories_by_expense_range(
     offset: Option<i32>,
     limit: Option<i32>,
 ) -> Result<Vec<(ExpenseCategory, Option<CategoryReplacement>)>, diesel::result::Error> {
-    sql_query(include_str!("sql/expense_categories_by_expense_range.sql"))
-        .bind::<Integer, _>(user_id)
-        .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
-        .bind::<Integer, _>(offset.unwrap_or(0))
-        .load::<(ExpenseCategory, Option<CategoryReplacement>)>(connection)
+    sql_query(include_str!(
+        "sql/expense_ranges_simple/expense_categories_by_expense_range.sql"
+    ))
+    .bind::<Integer, _>(user_id)
+    .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
+    .bind::<Integer, _>(offset.unwrap_or(0))
+    .load::<(ExpenseCategory, Option<CategoryReplacement>)>(connection)
 }
 
 // needed data for expenses returned by `relevant_expenses`
@@ -128,7 +142,7 @@ pub fn expense_transactions_by_expense_range(
     limit: Option<i32>,
 ) -> Result<Vec<(ExpenseTransaction, Option<AccountSynchronization>)>, diesel::result::Error> {
     sql_query(include_str!(
-        "sql/expense_transactions_by_expense_range.sql"
+        "sql/expense_ranges_simple/expense_transactions_by_expense_range.sql"
     ))
     .bind::<Integer, _>(user_id)
     .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
@@ -143,11 +157,13 @@ pub fn expense_events_by_expense_range(
     offset: Option<i32>,
     limit: Option<i32>,
 ) -> Result<Vec<ExpenseEvent>, diesel::result::Error> {
-    sql_query(include_str!("sql/expense_events_by_expense_range.sql"))
-        .bind::<Integer, _>(user_id)
-        .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
-        .bind::<Integer, _>(offset.unwrap_or(0))
-        .load::<ExpenseEvent>(connection)
+    sql_query(include_str!(
+        "sql/expense_ranges_simple/expense_events_by_expense_range.sql"
+    ))
+    .bind::<Integer, _>(user_id)
+    .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
+    .bind::<Integer, _>(offset.unwrap_or(0))
+    .load::<ExpenseEvent>(connection)
 }
 
 // needed data for expenses returned by `relevant_expenses`
@@ -157,11 +173,13 @@ pub fn expense_receipts_by_expense_range(
     offset: Option<i32>,
     limit: Option<i32>,
 ) -> Result<Vec<ExpenseReceipt>, diesel::result::Error> {
-    sql_query(include_str!("sql/expense_receipts_by_expense_range.sql"))
-        .bind::<Integer, _>(user_id)
-        .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
-        .bind::<Integer, _>(offset.unwrap_or(0))
-        .load::<ExpenseReceipt>(connection)
+    sql_query(include_str!(
+        "sql/expense_ranges_simple/expense_receipts_by_expense_range.sql"
+    ))
+    .bind::<Integer, _>(user_id)
+    .bind::<Integer, _>(limit.unwrap_or(i32::MAX))
+    .bind::<Integer, _>(offset.unwrap_or(0))
+    .load::<ExpenseReceipt>(connection)
 }
 
 pub fn relevant_transactions(
