@@ -1,6 +1,7 @@
 use moneta::cli;
 use moneta::queries;
 use moneta::rendering::RenderedExpense;
+use moneta::schema::*;
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use diesel::prelude::*;
@@ -101,6 +102,41 @@ fn run_filter_and_render_queries(connection: &PgConnection) -> Option<()> {
     Some(())
 }
 
+fn count_all_expenses(connection: &PgConnection) -> Option<usize> {
+    let q = expenses::table
+        .select(diesel::dsl::count(expenses::id))
+        .filter(
+            expenses::id.eq_any(
+                expenses::table
+                    .select(expenses::id)
+                    // .distinct_on(expenses::id)
+                    .left_join(
+                        expense_transactions::table
+                            .on(expense_transactions::expense_id.eq(expenses::id)),
+                    )
+                    .left_join(
+                        account_synchronizations::table.on(expense_transactions::account_id
+                            .eq(account_synchronizations::account1)
+                            .or(expense_transactions::account_id
+                                .eq(account_synchronizations::account2))),
+                    )
+                    .left_join(
+                        accounts::table.on(accounts::id.eq(expense_transactions::account_id)),
+                    )
+                    .filter(
+                        accounts::user_id
+                            .eq(1)
+                            .or(account_synchronizations::user1.eq(1))
+                            .or(account_synchronizations::user2.eq(1)),
+                    ),
+            ),
+        );
+
+    // let all = diesel::debug_query::<diesel::pg::Pg, _>(&q);
+    let all = q.load::<i64>(connection).ok()?;
+    Some(all.len())
+}
+
 pub fn criterion_benchmark(c: &mut Criterion) {
     let mut log_config = simplelog::ConfigBuilder::new();
     log_config.set_time_format_str("");
@@ -116,14 +152,17 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let connection = moneta::connect(&config.database).unwrap();
     debug!("config={:?}", &config);
 
-    c.bench_function("RenderedExpense::filter_and_render (optim)", |b| {
-        b.iter(|| run_filter_and_render_optim(&connection))
-    });
-    c.bench_function("RenderedExpense::filter_and_render (naive)", |b| {
-        b.iter(|| run_filter_and_render_naive(&connection))
-    });
-    c.bench_function("RenderedExpense::filter_and_render (queries only)", |b| {
-        b.iter(|| run_filter_and_render_queries(&connection))
+    // c.bench_function("RenderedExpense::filter_and_render (optim)", |b| {
+    //     b.iter(|| run_filter_and_render_optim(&connection))
+    // });
+    // c.bench_function("RenderedExpense::filter_and_render (naive)", |b| {
+    //     b.iter(|| run_filter_and_render_naive(&connection))
+    // });
+    // c.bench_function("RenderedExpense::filter_and_render (queries only)", |b| {
+    //     b.iter(|| run_filter_and_render_queries(&connection))
+    // });
+    c.bench_function("count all expenses", |b| {
+        b.iter(|| count_all_expenses(&connection))
     });
 }
 

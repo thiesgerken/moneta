@@ -21,7 +21,7 @@ impl Deref for UserId {
     }
 }
 
-pub struct UserId(i32);
+pub struct UserId(pub i32);
 
 impl<'a, 'r> FromRequest<'a, 'r> for UserId {
     type Error = ();

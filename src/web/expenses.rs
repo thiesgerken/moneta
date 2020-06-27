@@ -2,11 +2,15 @@ use crate::models::*;
 use crate::queries;
 use crate::rendering::RenderedExpense;
 use crate::schema::*;
+use crate::web::pagination::*;
 use crate::web::user::UserId;
 use crate::web::DbConn;
 
 use chrono::{DateTime, Utc};
+use diesel::dsl::sql;
 use diesel::prelude::*;
+use diesel::sql_types::BigInt;
+use log::{info, warn};
 use rocket::http::Status;
 use rocket_contrib::databases::diesel;
 use rocket_contrib::json::Json;
@@ -14,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum SortDirection {
     Ascending,
@@ -31,8 +35,8 @@ pub struct SortBy {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryRequest {
-    pub page: i32,
-    pub rows_per_page: i32,
+    pub page: i64,
+    pub rows_per_page: i64,
     pub needle: Option<String>,
     pub sort_by: Vec<SortBy>,
     pub filter_by: HashMap<String, Vec<String>>, // column -> needles
@@ -44,9 +48,15 @@ pub struct QueryRequest {
 #[serde(rename_all = "camelCase")]
 pub struct QueryResponse {
     pub records: Vec<RenderedExpense>,
-    pub total_record_count: i32,
-    pub filtered_record_count: i32,
-    pub filter_hints: HashMap<String, Vec<String>>, // lists of possible filter values for some columns
+    pub filtered_record_count: i64,
+    pub total_record_count: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InfoResponse {
+    pub total_record_count: i64,
+    pub filter_hints: HashMap<String, Vec<String>>, // lists of some possible filter values for some columns
 }
 
 #[post("/expenses/query", data = "<request>")]
@@ -55,14 +65,337 @@ pub fn query(
     connection: DbConn,
     request: Json<QueryRequest>,
 ) -> Result<Json<QueryResponse>, Status> {
-    // first: find out the relevant expense ids (filtered + in correct order) and load them; also load the total number of rows (as add column to avoid 2nd query?)
-    // find out the total number of expenses (skip if no filters active)
-    // in all relevant expenses: assemble stores and put them in filter_hints
-    // error if the request if for more than 100 records
-    // ask for associated info for these expenses (simply passing the expense ids as params)
+    let request = request.0;
 
-    // TODO
-    todo!();
+    if request.rows_per_page > 100 {
+        warn!(
+            "Request with too many rows per page ({} > 100)",
+            request.rows_per_page
+        );
+        return Err(Status::BadRequest);
+    }
+
+    if request.rows_per_page <= 0 || request.page < 0 {
+        warn!("Request with invalid paging settings");
+        return Err(Status::BadRequest);
+    }
+
+    let mut query = expenses::table
+        .select(expenses::all_columns)
+        .distinct()
+        .left_join(
+            expense_transactions::table.on(expense_transactions::expense_id.eq(expenses::id)),
+        )
+        .left_join(
+            account_synchronizations::table.on(expense_transactions::account_id
+                .eq(account_synchronizations::account1)
+                .or(expense_transactions::account_id.eq(account_synchronizations::account2))),
+        )
+        .left_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
+        .filter(
+            accounts::user_id
+                .eq(*uid)
+                .or(account_synchronizations::user1.eq(*uid))
+                .or(account_synchronizations::user2.eq(*uid)),
+        )
+        .filter(expenses::is_deleted.eq(false))
+        .into_boxed();
+
+    if let Some(from) = request.from {
+        query = query.filter(expenses::booking_end.ge(from));
+    }
+    if let Some(to) = request.to {
+        query = query.filter(expenses::booking_start.le(to));
+    }
+
+    for sb in request.sort_by.iter() {
+        let asc = sb.direction == SortDirection::Ascending;
+        // TODO: sorting by amount would be nice
+
+        match sb.column.as_ref() {
+            "title" => {
+                if asc {
+                    query = query.then_order_by(expenses::title.asc());
+                } else {
+                    query = query.then_order_by(expenses::title.desc());
+                }
+            }
+            "id" => {
+                if asc {
+                    query = query.then_order_by(expenses::id.asc());
+                } else {
+                    query = query.then_order_by(expenses::id.desc());
+                }
+            }
+            "store" => {
+                if asc {
+                    query = query.then_order_by(expenses::store.asc());
+                } else {
+                    query = query.then_order_by(expenses::store.desc());
+                }
+            }
+            "description" => {
+                if asc {
+                    query = query.then_order_by(expenses::description.asc());
+                } else {
+                    query = query.then_order_by(expenses::description.desc());
+                }
+            }
+            "comments" => {
+                if asc {
+                    query = query.then_order_by(expenses::comments.asc());
+                } else {
+                    query = query.then_order_by(expenses::comments.desc());
+                }
+            }
+            "bookingStart" | "booking_start" => {
+                if asc {
+                    query = query.then_order_by(expenses::booking_start.asc());
+                } else {
+                    query = query.then_order_by(expenses::booking_start.desc());
+                }
+            }
+            "bookingEnd" | "booking_end" => {
+                if asc {
+                    query = query.then_order_by(expenses::booking_end.asc());
+                } else {
+                    query = query.then_order_by(expenses::booking_end.desc());
+                }
+            }
+            "isTemplate" | "is_template" => {
+                if asc {
+                    query = query.then_order_by(expenses::is_template.asc());
+                } else {
+                    query = query.then_order_by(expenses::is_template.desc());
+                }
+            }
+            "isPreliminary" | "is_preliminary" => {
+                if asc {
+                    query = query.then_order_by(expenses::is_preliminary.asc());
+                } else {
+                    query = query.then_order_by(expenses::is_preliminary.desc());
+                }
+            }
+            "isTaxRelevant" | "is_tax_relevant" => {
+                if asc {
+                    query = query.then_order_by(expenses::is_tax_relevant.asc());
+                } else {
+                    query = query.then_order_by(expenses::is_tax_relevant.desc());
+                }
+            }
+            _ => {
+                return Err(Status::BadRequest);
+            }
+        }
+    }
+
+    for (column, values) in request.filter_by.iter() {
+        match column.as_ref() {
+            "title" => {
+                query = query.filter(expenses::title.eq_any(values));
+            }
+            "id" => {
+                let values_parsed = values
+                    .into_iter()
+                    .map(|s| s.parse().ok())
+                    .collect::<Option<Vec<i32>>>()
+                    .ok_or(Status::BadRequest)?;
+
+                query = query.filter(expenses::id.eq_any(values_parsed));
+            }
+            "store" => {
+                query = query.filter(expenses::store.eq_any(values));
+            }
+            "description" => {
+                query = query.filter(expenses::description.eq_any(values));
+            }
+            "comments" => {
+                query = query.filter(expenses::comments.eq_any(values));
+            }
+            "isTemplate" | "is_template" => {
+                let values_parsed = values
+                    .into_iter()
+                    .map(|s| s.parse().ok())
+                    .collect::<Option<Vec<bool>>>()
+                    .ok_or(Status::BadRequest)?;
+                query = query.filter(expenses::is_template.eq_any(values_parsed));
+            }
+            "isPreliminary" | "is_preliminary" => {
+                let values_parsed = values
+                    .into_iter()
+                    .map(|s| s.parse().ok())
+                    .collect::<Option<Vec<bool>>>()
+                    .ok_or(Status::BadRequest)?;
+                query = query.filter(expenses::is_preliminary.eq_any(values_parsed));
+            }
+            "isTaxRelevant" | "is_tax_relevant" => {
+                let values_parsed = values
+                    .into_iter()
+                    .map(|s| s.parse().ok())
+                    .collect::<Option<Vec<bool>>>()
+                    .ok_or(Status::BadRequest)?;
+                query = query.filter(expenses::is_tax_relevant.eq_any(values_parsed));
+            }
+            _ => {
+                return Err(Status::BadRequest);
+            }
+        }
+    }
+
+    if let Some(s) = request.needle {
+        // TODO: more fields to search in (amount would be nice ...)
+
+        let s = s.trim();
+        if !s.is_empty() {
+            query = query.filter(
+                expenses::store
+                    .ilike(s.to_owned())
+                    .or(expenses::description.ilike(s.to_owned()))
+                    .or(expenses::title.ilike(s.to_owned()))
+                    .or(expenses::comments.ilike(s.to_owned())),
+            );
+        }
+    }
+
+    let (expenses, row_count) = query
+        .paginate(request.page)
+        .per_page(request.rows_per_page)
+        .load_and_count::<Expense>(&connection)
+        .map_err(|_| Status::InternalServerError)?;
+
+    let exp_ids = expenses.iter().map(|e| e.id).collect::<Vec<_>>();
+
+    let transactions = expense_transactions::table
+        .left_join(
+            account_synchronizations::table.on((account_synchronizations::account1
+                .eq(expense_transactions::account_id)
+                .and(account_synchronizations::user1.ne(*uid)))
+            .or(account_synchronizations::account2
+                .eq(expense_transactions::account_id)
+                .and(account_synchronizations::user2.ne(*uid)))),
+        )
+        .filter(
+            expense_transactions::expense_id.eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
+        )
+        .load::<(ExpenseTransaction, Option<AccountSynchronization>)>(&*connection)
+        .map_err(|_| Status::InternalServerError)?;
+
+    let categories = expense_categories::table
+        .left_join(
+            category_replacements::table.on(category_replacements::original
+                .eq(expense_categories::category_id)
+                .and(category_replacements::user_id.eq(*uid))),
+        )
+        .filter(expense_categories::expense_id.eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()))
+        .load::<(ExpenseCategory, Option<CategoryReplacement>)>(&*connection)
+        .map_err(|_| Status::InternalServerError)?;
+
+    let receipts = expense_receipts::table
+        .filter(expense_receipts::expense_id.eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()))
+        .load::<ExpenseReceipt>(&*connection)
+        .map_err(|_| Status::InternalServerError)?;
+    let events = expense_events::table
+        .filter(expense_events::expense_id.eq_any(exp_ids))
+        .load::<ExpenseEvent>(&*connection)
+        .map_err(|_| Status::InternalServerError)?;
+
+    let rexps = expenses
+        .into_iter()
+        .map(|e| {
+            RenderedExpense::filter_and_render(e, &transactions, &categories, &receipts, &events)
+        })
+        .collect::<Vec<_>>();
+
+    Ok(Json(QueryResponse {
+        records: rexps,
+        filtered_record_count: row_count,
+        total_record_count: if request.filter_by.is_empty() {
+            Some(row_count)
+        } else {
+            None
+        },
+    }))
+}
+
+#[get("/expenses/info")]
+pub fn info(uid: UserId, connection: DbConn) -> Result<Json<InfoResponse>, Status> {
+    let total_record_count = expenses::table
+        .select(diesel::dsl::count(expenses::id))
+        .filter(
+            expenses::id.eq_any(
+                expenses::table
+                    .select(expenses::id)
+                    .distinct_on(expenses::id)
+                    .left_join(
+                        expense_transactions::table
+                            .on(expense_transactions::expense_id.eq(expenses::id)),
+                    )
+                    .left_join(
+                        account_synchronizations::table.on(expense_transactions::account_id
+                            .eq(account_synchronizations::account1)
+                            .or(expense_transactions::account_id
+                                .eq(account_synchronizations::account2))),
+                    )
+                    .left_join(
+                        accounts::table.on(accounts::id.eq(expense_transactions::account_id)),
+                    )
+                    .filter(
+                        accounts::user_id
+                            .eq(*uid)
+                            .or(account_synchronizations::user1.eq(*uid))
+                            .or(account_synchronizations::user2.eq(*uid)),
+                    ),
+            ),
+        )
+        .get_result::<i64>(&*connection)
+        .map_err(|_| Status::InternalServerError)?;
+
+    let mut filter_hints = HashMap::<String, Vec<String>>::new();
+
+    let stores = expenses::table
+        .select((expenses::store, sql::<BigInt>("count(*) AS cnt")))
+        .order(sql::<BigInt>("cnt").desc())
+        .filter(
+            expenses::id.eq_any(
+                expenses::table
+                    .select(expenses::id)
+                    .distinct_on(expenses::id)
+                    .left_join(
+                        expense_transactions::table
+                            .on(expense_transactions::expense_id.eq(expenses::id)),
+                    )
+                    .left_join(
+                        account_synchronizations::table.on(expense_transactions::account_id
+                            .eq(account_synchronizations::account1)
+                            .or(expense_transactions::account_id
+                                .eq(account_synchronizations::account2))),
+                    )
+                    .left_join(
+                        accounts::table.on(accounts::id.eq(expense_transactions::account_id)),
+                    )
+                    .filter(
+                        accounts::user_id
+                            .eq(*uid)
+                            .or(account_synchronizations::user1.eq(*uid))
+                            .or(account_synchronizations::user2.eq(*uid)),
+                    ),
+            ),
+        )
+        .filter(expenses::store.ne(""))
+        .filter(sql("TRUE GROUP BY expenses.store"))
+        .limit(50)
+        .load::<(String, i64)>(&*connection)
+        .map_err(|_| Status::InternalServerError)?;
+
+    filter_hints.insert(
+        "store".to_owned(),
+        stores.into_iter().map(|(s, _)| s).collect::<Vec<_>>(),
+    );
+
+    Ok(Json(InfoResponse {
+        total_record_count,
+        filter_hints,
+    }))
 }
 
 #[get("/expenses?<offset>&<count>")]

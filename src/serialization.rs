@@ -247,7 +247,7 @@ impl MoneyDBFormat {
             .values(
                 self.account_syncings
                     .iter()
-                    .map(|a| a.convert(&account_map))
+                    .map(|a| a.convert(&account_map, &accounts))
                     .collect::<Vec<_>>(),
             )
             .load::<AccountSynchronization>(connection)
@@ -511,10 +511,19 @@ struct MoneyDBAccountSyncing {
 }
 
 impl MoneyDBAccountSyncing {
-    fn convert(&self, account_map: &HashMap<i32, i32>) -> AccountSynchronization {
+    fn convert(
+        &self,
+        account_map: &HashMap<i32, i32>,
+        accounts: &[Account],
+    ) -> AccountSynchronization {
+        let account1 = *account_map.get(&self.account1).unwrap();
+        let account2 = *account_map.get(&self.account2).unwrap();
+
         AccountSynchronization {
-            account1: *account_map.get(&self.account1).unwrap(),
-            account2: *account_map.get(&self.account2).unwrap(),
+            account1,
+            account2,
+            user1: accounts.iter().find(|a| a.id == account1).unwrap().user_id,
+            user2: accounts.iter().find(|a| a.id == account2).unwrap().user_id,
             invert: !self.sign,
         }
     }
@@ -616,10 +625,8 @@ impl MoneyDBExpense {
             description: self.description.clone(),
             comments: self.comments.clone(),
             store: self.store.clone(),
-            booking_start: Some(self.booking_date.unwrap_or(self.value_date)),
-            booking_end: Some(self.booking_date.unwrap_or(self.value_date)),
-            booking_month_count: None,
-            booking_month_offset: None,
+            booking_start: self.booking_date.unwrap_or(self.value_date),
+            booking_end: self.booking_date.unwrap_or(self.value_date),
             is_deleted: false,
             is_template: flags
                 .iter()

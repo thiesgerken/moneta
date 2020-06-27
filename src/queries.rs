@@ -46,6 +46,7 @@ pub fn account_by_id(
         .optional()
 }
 
+#[deprecated]
 pub fn relevant_balances(
     connection: &PgConnection,
     user_id: i32,
@@ -59,6 +60,7 @@ pub fn relevant_balances(
         .load::<(Balance, Option<AccountSynchronization>)>(connection)
 }
 
+#[deprecated]
 pub fn relevant_balance_by_id(
     connection: &PgConnection,
     user_id: i32,
@@ -71,6 +73,7 @@ pub fn relevant_balance_by_id(
         .optional()
 }
 
+#[deprecated]
 pub fn relevant_expenses(
     connection: &PgConnection,
     user_id: i32,
@@ -84,6 +87,32 @@ pub fn relevant_expenses(
         .load::<Expense>(connection)
 }
 
+// pub fn relevant_expenses_diesel(
+//     user_id: i32,
+// ) ->
+// > {
+//     expenses::table
+//         .select(expenses::id)
+//         .distinct()
+//         .left_join(
+//             expense_transactions::table.on(expense_transactions::expense_id.eq(expenses::id)),
+//         )
+//         .left_join(
+//             account_synchronizations::table.on(expense_transactions::account_id
+//                 .eq(account_synchronizations::account1)
+//                 .or(expense_transactions::account_id.eq(account_synchronizations::account2))),
+//         )
+//         .left_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
+//         .filter(
+//             accounts::user_id
+//                 .eq(user_id)
+//                 .or(account_synchronizations::user1.eq(user_id))
+//                 .or(account_synchronizations::user2.eq(user_id)),
+//         )
+//         .into_boxed()
+// }
+
+#[deprecated]
 pub fn relevant_expense_by_id(
     connection: &PgConnection,
     user_id: i32,
@@ -96,6 +125,7 @@ pub fn relevant_expense_by_id(
         .optional()
 }
 
+#[deprecated]
 pub fn expense_transactions_by_expense_id(
     connection: &PgConnection,
     user_id: i32,
@@ -107,6 +137,7 @@ pub fn expense_transactions_by_expense_id(
         .load::<(ExpenseTransaction, Option<AccountSynchronization>)>(connection)
 }
 
+#[deprecated]
 pub fn expense_categories_by_expense_id(
     connection: &PgConnection,
     user_id: i32,
@@ -119,6 +150,7 @@ pub fn expense_categories_by_expense_id(
 }
 
 // needed data for expenses returned by `relevant_expenses`
+#[deprecated]
 pub fn expense_categories_by_expense_range(
     connection: &PgConnection,
     user_id: i32,
@@ -135,6 +167,7 @@ pub fn expense_categories_by_expense_range(
 }
 
 // needed data for expenses returned by `relevant_expenses`
+#[deprecated]
 pub fn expense_transactions_by_expense_range(
     connection: &PgConnection,
     user_id: i32,
@@ -151,6 +184,7 @@ pub fn expense_transactions_by_expense_range(
 }
 
 // needed data for expenses returned by `relevant_expenses`
+#[deprecated]
 pub fn expense_events_by_expense_range(
     connection: &PgConnection,
     user_id: i32,
@@ -167,6 +201,7 @@ pub fn expense_events_by_expense_range(
 }
 
 // needed data for expenses returned by `relevant_expenses`
+#[deprecated]
 pub fn expense_receipts_by_expense_range(
     connection: &PgConnection,
     user_id: i32,
@@ -182,6 +217,7 @@ pub fn expense_receipts_by_expense_range(
     .load::<ExpenseReceipt>(connection)
 }
 
+#[deprecated]
 pub fn relevant_transactions(
     connection: &PgConnection,
     user_id: i32,

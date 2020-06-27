@@ -2,6 +2,7 @@ pub mod accounts;
 pub mod balances;
 pub mod categories;
 pub mod expenses;
+pub mod pagination;
 pub mod static_files;
 pub mod user;
 
@@ -69,6 +70,8 @@ pub fn handle(config: Config) {
                 // categories::create,
                 expenses::list,
                 expenses::get,
+                expenses::query,
+                expenses::info,
                 // categories::delete,
                 // categories::update,
                 // categories::create,

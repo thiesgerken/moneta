@@ -120,6 +120,8 @@ pub struct AccountSynchronization {
     // also (not checked by db: each account can only be synced to at most one other account)
     pub account1: i32,
     pub account2: i32,
+    pub user1: i32, // owner of account1. Workaround because otherwise a lot of queries would not be representable using diesel
+    pub user2: i32, // owner of account2
     pub invert: bool,
 }
 #[derive(
@@ -198,11 +200,8 @@ pub struct Expense {
     pub description: String,
     pub store: String,
     pub comments: String,
-    // constraint: either booking_start and booking_end != null OR booking_month_offset and booking_month_count != null
-    pub booking_start: Option<DateTime<Utc>>,
-    pub booking_end: Option<DateTime<Utc>>,
-    pub booking_month_offset: Option<i32>,
-    pub booking_month_count: Option<i32>,
+    pub booking_start: DateTime<Utc>,
+    pub booking_end: DateTime<Utc>,
     pub is_deleted: bool,
     pub is_template: bool,
     pub is_preliminary: bool,
@@ -217,10 +216,8 @@ pub struct NewExpense {
     pub description: String,
     pub store: String,
     pub comments: String,
-    pub booking_start: Option<DateTime<Utc>>,
-    pub booking_end: Option<DateTime<Utc>>,
-    pub booking_month_offset: Option<i32>,
-    pub booking_month_count: Option<i32>,
+    pub booking_start: DateTime<Utc>,
+    pub booking_end: DateTime<Utc>,
     pub is_deleted: bool,
     pub is_template: bool,
     pub is_preliminary: bool,
