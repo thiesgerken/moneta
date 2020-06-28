@@ -19,7 +19,7 @@
     "react/jsx-wrap-multilines": "off",
     "react/jsx-one-expression-per-line": "off",
     "react/jsx-curly-newline": "off",
-    "import/prefer-default-export": "warning"
+    "import/prefer-default-export": "warn"
   },
   "parserOptions": {
     "ecmaFeatures": {
