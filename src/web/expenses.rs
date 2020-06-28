@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use diesel::dsl::sql;
 use diesel::prelude::*;
 use diesel::sql_types::BigInt;
-use log::{ warn};
+use log::warn;
 use rocket::http::Status;
 use rocket_contrib::databases::diesel;
 use rocket_contrib::json::Json;

@@ -57,21 +57,6 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
   ]);
   const [prevQuery, currentQuery] = query;
 
-  let initialExpense = {
-    id: null,
-    userId: -1,
-    name: '',
-    iban: '',
-  };
-  if (
-    expenses.items !== null &&
-    expenseId !== null &&
-    parseInt(expenseId, 10) >= 0
-  ) {
-    const a = find(expenses.items, x => x.id === parseInt(expenseId, 10));
-    if (a !== undefined) initialExpense = a;
-  }
-
   const currentQueryData = findExpenseQueryData(expenses, currentQuery);
   const currentQueryResponse =
     currentQueryData && currentQueryData.data
@@ -93,6 +78,21 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
     displayedQuery = prevQuery;
     displayedResponse = prevQueryResponse;
   }
+
+  const initialExpense = {
+    id: null,
+    userId: -1,
+    name: '',
+    iban: '',
+  };
+  // if (
+  //   expenses.items !== null &&
+  //   expenseId !== null &&
+  //   parseInt(expenseId, 10) >= 0
+  // ) {
+  //   const a = find(expenses.items, x => x.id === parseInt(expenseId, 10));
+  //   if (a !== undefined) initialExpense = a;
+  // }
 
   const theme = useTheme();
   const mdUp = useMediaQuery(theme.breakpoints.up('md'));
@@ -121,11 +121,15 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
       label: 'ID',
       options: {
         display: false,
+        filter: false,
       },
     },
     {
       name: 'info.title',
       label: 'Titel',
+      options: {
+        filter: false,
+      },
     },
     {
       name: 'info.bookingStart',
@@ -137,14 +141,27 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
     {
       name: 'info.description',
       label: 'Beschreibung',
+      options: {
+        filter: false,
+      },
     },
     {
       name: 'info.comments',
       label: 'Kommentare',
+      options: {
+        filter: false,
+      },
     },
     {
       name: 'info.store',
       label: 'Geschäft',
+      options: {
+        filter: true,
+        filterType: 'textField',
+        filterOptions: {
+          names: expenses.info.data ? expenses.info.data.filterHints.store : [],
+        },
+      },
     },
   ];
 
@@ -160,7 +177,7 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
     //   setPage(p === 0 ? null : p);
     // },
     onTableChange: (action, tableState) => {
-      // console.log(action, tableState);
+      console.log(action, tableState);
 
       const newQuery = {
         page: tableState.page,
@@ -174,20 +191,6 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
 
       if (JSON.stringify(newQuery) !== JSON.stringify(currentQuery))
         setQuery([currentQuery, newQuery]);
-
-      // a developer could react to change on an action basis or
-      // examine the state as a whole and do whatever they want
-
-      // switch (action) {
-      //   case 'changePage':
-      //     this.changePage(tableState.page, tableState.sortOrder);
-      //     break;
-      //   case 'sort':
-      //     this.sort(tableState.page, tableState.sortOrder);
-      //     break;
-      //   default:
-      //     console.log('action not handled.');
-      // }
     },
     // onRowSelectionChange: (_, rows) => {
     //   if (rows.length > 0 && rows[0].dataIndex < expenses.items.length)
@@ -268,8 +271,8 @@ Expenses.propTypes = {
   updateExpenses: PropTypes.func.isRequired,
   updateExpenseInfo: PropTypes.func.isRequired,
   expenses: PropTypes.shape({
-    items: PropTypes.arrayOf(PropTypes.object),
-    isFetching: PropTypes.bool,
+    info: PropTypes.arrayOf(PropTypes.object),
+    queries: PropTypes.arrayOf(PropTypes.object),
   }).isRequired,
 };
 
