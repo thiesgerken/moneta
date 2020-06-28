@@ -5,3 +5,5 @@ export const findExpenseQueryData = (expenses, query) => {
 
   return find(expenses.queries, x => qjson === JSON.stringify(x.query)) || null;
 };
+
+export default findExpenseQueryData;
