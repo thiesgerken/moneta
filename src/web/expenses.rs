@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use diesel::dsl::sql;
 use diesel::prelude::*;
 use diesel::sql_types::BigInt;
-use log::{info, warn};
+use log::{ warn};
 use rocket::http::Status;
 use rocket_contrib::databases::diesel;
 use rocket_contrib::json::Json;
@@ -245,17 +245,24 @@ pub fn query(
     if let Some(s) = request.needle {
         // TODO: more fields to search in (amount would be nice ...)
 
-        let s = s.trim();
+        let s = format!("%{}%", s.trim());
         if !s.is_empty() {
             query = query.filter(
                 expenses::store
-                    .ilike(s.to_owned())
-                    .or(expenses::description.ilike(s.to_owned()))
-                    .or(expenses::title.ilike(s.to_owned()))
-                    .or(expenses::comments.ilike(s.to_owned())),
+                    .ilike(s.clone())
+                    .or(expenses::description.ilike(s.clone()))
+                    .or(expenses::title.ilike(s.clone()))
+                    .or(expenses::comments.ilike(s)),
             );
         }
     }
+
+    // let res = query
+    //     .paginate(request.page)
+    //     .per_page(request.rows_per_page)
+    //     .load_and_count::<Expense>(&connection);
+    // info!("{:?}", res);
+    // let (expenses, row_count) = res.map_err(|_| Status::InternalServerError)?;
 
     let (expenses, row_count) = query
         .paginate(request.page)
@@ -309,7 +316,10 @@ pub fn query(
     Ok(Json(QueryResponse {
         records: rexps,
         filtered_record_count: row_count,
-        total_record_count: if request.filter_by.is_empty() {
+        total_record_count: if request.filter_by.is_empty()
+            && request.from.is_none()
+            && request.to.is_none()
+        {
             Some(row_count)
         } else {
             None

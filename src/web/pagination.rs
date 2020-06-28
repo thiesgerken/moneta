@@ -59,7 +59,7 @@ where
         out.push_sql(") t LIMIT ");
         out.push_bind_param::<BigInt, _>(&self.per_page)?;
         out.push_sql(" OFFSET ");
-        let offset = (self.page - 1) * self.per_page;
+        let offset = self.page * self.per_page;
         out.push_bind_param::<BigInt, _>(&offset)?;
         Ok(())
     }

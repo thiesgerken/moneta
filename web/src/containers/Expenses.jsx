@@ -1,5 +1,5 @@
 import { connect } from 'react-redux';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import MUIDataTable from 'mui-datatables';
 import { find } from 'lodash';
@@ -16,9 +16,13 @@ import {
 import AddIcon from '@material-ui/icons/Add';
 import { useLocation, useHistory } from 'react-router';
 
-import { updateExpenses as updateExpensesAction } from '../actions/expenses';
+import {
+  updateExpenses as updateExpensesAction,
+  updateExpenseInfo as updateExpenseInfoAction,
+} from '../actions/expenses';
 import ExpenseDialog from './ExpenseDialog';
 import { muiDatatablesLang } from '../lang';
+import { findExpenseQueryData } from '../selectors/expenses';
 
 function useQuery(key) {
   const location = useLocation();
@@ -36,9 +40,22 @@ function useQuery(key) {
   return [query.get(key), set];
 }
 
-const Expenses = ({ expenses, updateExpenses }) => {
+const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
   const [expenseId, setExpenseId] = useQuery('id');
-  const [page, setPage] = useQuery('page');
+  // const [page, setPage] = useQuery('page');
+  const [query, setQuery] = useState([
+    null,
+    {
+      page: 0,
+      rowsPerPage: 10,
+      filterBy: {},
+      sortBy: [],
+      needle: null,
+      from: null,
+      to: null,
+    },
+  ]);
+  const [prevQuery, currentQuery] = query;
 
   let initialExpense = {
     id: null,
@@ -53,6 +70,28 @@ const Expenses = ({ expenses, updateExpenses }) => {
   ) {
     const a = find(expenses.items, x => x.id === parseInt(expenseId, 10));
     if (a !== undefined) initialExpense = a;
+  }
+
+  const currentQueryData = findExpenseQueryData(expenses, currentQuery);
+  const currentQueryResponse =
+    currentQueryData && currentQueryData.data
+      ? currentQueryData.data
+      : { records: [], filteredRecordCount: 0, totalRecordCount: null };
+
+  const isLoading = !currentQueryData || currentQueryData.isFetching;
+  let displayedQuery = currentQuery;
+  let displayedResponse = currentQueryResponse;
+
+  if (prevQuery && isLoading) {
+    // continue displaying the old data for now (and a loading indicator)
+    const prevQueryData = findExpenseQueryData(expenses, prevQuery);
+    const prevQueryResponse =
+      prevQueryData && prevQueryData.data
+        ? prevQueryData.data
+        : { records: [], filteredRecordCount: 0, totalRecordCount: null };
+
+    displayedQuery = prevQuery;
+    displayedResponse = prevQueryResponse;
   }
 
   const theme = useTheme();
@@ -72,10 +111,9 @@ const Expenses = ({ expenses, updateExpenses }) => {
     });
 
   useEffect(() => {
-    updateExpenses();
+    updateExpenseInfo();
+    updateExpenses(currentQuery);
   });
-
-  const isLoading = expenses.isFetching;
 
   const columns = [
     {
@@ -117,12 +155,25 @@ const Expenses = ({ expenses, updateExpenses }) => {
     enableNestedDataAccess: '.',
     serverSide: true,
     print: false,
-    page: page === null ? 0 : parseInt(page, 10), // https://github.com/gregnb/mui-datatables/issues/957
+    // page: page === null ? 0 : parseInt(page, 10), // https://github.com/gregnb/mui-datatables/issues/957
     // onChangePage: p => {
     //   setPage(p === 0 ? null : p);
     // },
     onTableChange: (action, tableState) => {
-      console.log(action, tableState);
+      // console.log(action, tableState);
+
+      const newQuery = {
+        page: tableState.page,
+        rowsPerPage: tableState.rowsPerPage,
+        filterBy: {},
+        sortBy: [],
+        needle: tableState.searchText,
+        from: null,
+        to: null,
+      };
+
+      if (JSON.stringify(newQuery) !== JSON.stringify(currentQuery))
+        setQuery([currentQuery, newQuery]);
 
       // a developer could react to change on an action basis or
       // examine the state as a whole and do whatever they want
@@ -138,13 +189,16 @@ const Expenses = ({ expenses, updateExpenses }) => {
       //     console.log('action not handled.');
       // }
     },
-    onRowSelectionChange: (_, rows) => {
-      if (rows.length > 0 && rows[0].dataIndex < expenses.items.length)
-        setExpenseId(expenses.items[rows[0].dataIndex].info.id);
-      else setExpenseId(null);
-    },
+    // onRowSelectionChange: (_, rows) => {
+    //   if (rows.length > 0 && rows[0].dataIndex < expenses.items.length)
+    //     setExpenseId(expenses.items[rows[0].dataIndex].info.id);
+    //   else setExpenseId(null);
+    // },
     download: false,
     rowsPerPageOptions: mdUp ? [10, 25, 50] : [10],
+    rowsPerPage: displayedQuery.rowsPerPage,
+    page: displayedQuery.page,
+    count: displayedResponse.filteredRecordCount,
     filterType: 'multiselect',
     responsive: 'standard',
     customToolbar: () => (
@@ -191,7 +245,7 @@ const Expenses = ({ expenses, updateExpenses }) => {
             <ThemeProvider theme={myTheme}>
               <MUIDataTable
                 title="Ausgaben"
-                data={expenses.items.slice(0, 30)}
+                data={displayedResponse.records}
                 columns={columns}
                 options={options}
               />
@@ -212,6 +266,7 @@ const Expenses = ({ expenses, updateExpenses }) => {
 
 Expenses.propTypes = {
   updateExpenses: PropTypes.func.isRequired,
+  updateExpenseInfo: PropTypes.func.isRequired,
   expenses: PropTypes.shape({
     items: PropTypes.arrayOf(PropTypes.object),
     isFetching: PropTypes.bool,
@@ -219,7 +274,8 @@ Expenses.propTypes = {
 };
 
 const mapDispatchToProps = dispatch => ({
-  updateExpenses: () => dispatch(updateExpensesAction()),
+  updateExpenses: query => dispatch(updateExpensesAction(query)),
+  updateExpenseInfo: () => dispatch(updateExpenseInfoAction()),
 });
 
 const mapStateToProps = state => {

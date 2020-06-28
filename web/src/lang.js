@@ -1,6 +1,6 @@
 export const muiDatatablesLang = {
   body: {
-    noMatch: 'Keine Konten vorhanden.',
+    noMatch: 'Keine Daten vorhanden.',
     toolTip: 'Sortieren',
     columnHeaderTooltip: column => `Sortiere nach ${column.label}`,
   },
