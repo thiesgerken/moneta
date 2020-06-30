@@ -2,7 +2,6 @@ import { connect } from 'react-redux';
 import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import MUIDataTable from 'mui-datatables';
-import { find } from 'lodash';
 import {
   ThemeProvider,
   createMuiTheme,
@@ -15,6 +14,8 @@ import {
 } from '@material-ui/core';
 import AddIcon from '@material-ui/icons/Add';
 import { useLocation, useHistory } from 'react-router';
+import * as moment from 'moment';
+import { map } from 'lodash';
 
 import {
   updateExpenses as updateExpensesAction,
@@ -96,6 +97,7 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
 
   const theme = useTheme();
   const mdUp = useMediaQuery(theme.breakpoints.up('md'));
+  const xsDown = useMediaQuery(theme.breakpoints.down('xs'));
 
   const myTheme = th =>
     createMuiTheme({
@@ -121,7 +123,26 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
       label: 'ID',
       options: {
         display: false,
-        filter: false,
+        filterType: 'textField',
+      },
+    },
+    {
+      name: 'info.bookingEnd',
+      label: 'Buchungszeitraum',
+      options: {
+        filter: false, // TODO: one could integrate from-to filtering here!
+        customBodyRenderLite: i => {
+          const r = displayedResponse.records[i];
+          const st = moment(r.info.bookingStart);
+          const en = moment(r.info.bookingEnd);
+
+          if (xsDown) return st.format('L');
+
+          if (st.isSame(en)) return st.format('L LT');
+          if (st.isSame(en, 'day'))
+            return `${st.format('L LT')} - ${en.format('LT')}`;
+          return `${st.format('L')} - ${en.format('L')}`;
+        },
       },
     },
     {
@@ -132,10 +153,56 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
       },
     },
     {
-      name: 'info.bookingStart',
-      label: 'Buchungszeitraum',
+      // TODO: rendering of categories
+      // TODO: filter values for categories
+      name: 'categories',
+      label: 'Kategorien',
       options: {
-        sortOrder: 'desc',
+        customBodyRenderLite: i => {
+          return map(
+            displayedResponse.records[i].categories,
+            c => c.categoryId
+          ).join(', ');
+        },
+        sort: false,
+      },
+    },
+    {
+      // TODO: rendering of accounts
+      // TODO: filter values for accounts
+      name: 'transactions',
+      label: 'Konten',
+      options: {
+        customBodyRenderLite: i => {
+          return map(
+            displayedResponse.records[i].transactions,
+            t => t.accountId
+          ).join(', ');
+        },
+        sort: false,
+      },
+    },
+    {
+      name: 'totalAmount',
+      label: 'Betrag',
+      options: {
+        // TODO: highlight amount depending on sign
+        customBodyRenderLite: i =>
+          `${(displayedResponse.records[i].totalAmount / 100.0).toFixed(2)}€`,
+        filter: false,
+        sort: false,
+      },
+    },
+    {
+      name: 'info.store',
+      label: 'Geschäft',
+      options: {
+        filter: true,
+        // filterType: 'textField',
+        filterOptions: {
+          names: expenses.info.data ? expenses.info.data.filterHints.store : [],
+          fullWidth: true,
+        },
       },
     },
     {
@@ -153,14 +220,39 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
       },
     },
     {
-      name: 'info.store',
-      label: 'Geschäft',
+      name: 'info.isPreliminary',
+      label: 'Vorläufig',
       options: {
-        filter: true,
-        filterType: 'textField',
-        filterOptions: {
-          names: expenses.info.data ? expenses.info.data.filterHints.store : [],
-        },
+        display: false,
+        filterType: 'checkbox',
+        customFilterListOptions: { render: () => `Vorläufig` },
+      },
+    },
+    {
+      name: 'info.isTaxRelevant',
+      label: 'Steuerrelevant',
+      options: {
+        display: false,
+        filterType: 'checkbox',
+        customFilterListOptions: { render: () => `Steuerrelevant` },
+      },
+    },
+    {
+      name: 'info.isTemplate',
+      label: 'Vorlage',
+      options: {
+        display: false,
+        filterType: 'checkbox',
+        customFilterListOptions: { render: () => `Vorlage` },
+      },
+    },
+    {
+      name: 'info.isUnchecked',
+      label: 'Unüberprüft',
+      options: {
+        display: false,
+        filterType: 'checkbox',
+        customFilterListOptions: { render: () => `nicht überprüft` },
       },
     },
   ];
@@ -179,6 +271,8 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
     onTableChange: (action, tableState) => {
       console.log(action, tableState);
 
+      // TODO: default sorting!
+
       const newQuery = {
         page: tableState.page,
         rowsPerPage: tableState.rowsPerPage,
@@ -188,6 +282,21 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
         from: null,
         to: null,
       };
+
+      if (tableState.sortOrder.direction) {
+        let column = tableState.sortOrder.name;
+        if (column.startsWith('info.')) column = column.substring(5);
+
+        newQuery.sortBy.push({
+          direction:
+            tableState.sortOrder.direction === 'asc'
+              ? 'ascending'
+              : 'descending',
+          column,
+        });
+      }
+
+      // TODO: filtering
 
       if (JSON.stringify(newQuery) !== JSON.stringify(currentQuery))
         setQuery([currentQuery, newQuery]);
@@ -271,7 +380,7 @@ Expenses.propTypes = {
   updateExpenses: PropTypes.func.isRequired,
   updateExpenseInfo: PropTypes.func.isRequired,
   expenses: PropTypes.shape({
-    info: PropTypes.arrayOf(PropTypes.object),
+    info: PropTypes.object,
     queries: PropTypes.arrayOf(PropTypes.object),
   }).isRequired,
 };

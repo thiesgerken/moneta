@@ -18,17 +18,10 @@ use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub enum SortDirection {
-    Ascending,
-    Descending,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SortBy {
-    pub direction: SortDirection,
+    pub direction: String, // ascending | descending
     pub column: String,
 }
 
@@ -109,7 +102,7 @@ pub fn query(
     }
 
     for sb in request.sort_by.iter() {
-        let asc = sb.direction == SortDirection::Ascending;
+        let asc = sb.direction.to_lowercase() == "ascending";
         // TODO: sorting by amount would be nice
 
         match sb.column.as_ref() {
@@ -183,6 +176,13 @@ pub fn query(
                     query = query.then_order_by(expenses::is_tax_relevant.desc());
                 }
             }
+            "isUnchecked" | "is_unchecked" => {
+                if asc {
+                    query = query.then_order_by(expenses::is_unchecked.asc());
+                } else {
+                    query = query.then_order_by(expenses::is_unchecked.desc());
+                }
+            }
             _ => {
                 return Err(Status::BadRequest);
             }
@@ -190,6 +190,8 @@ pub fn query(
     }
 
     for (column, values) in request.filter_by.iter() {
+        // TODO: filtering by account and category
+
         match column.as_ref() {
             "title" => {
                 query = query.filter(expenses::title.eq_any(values));
@@ -236,6 +238,14 @@ pub fn query(
                     .ok_or(Status::BadRequest)?;
                 query = query.filter(expenses::is_tax_relevant.eq_any(values_parsed));
             }
+            "isUnchecked" | "is_unchecked" => {
+                let values_parsed = values
+                    .into_iter()
+                    .map(|s| s.parse().ok())
+                    .collect::<Option<Vec<bool>>>()
+                    .ok_or(Status::BadRequest)?;
+                query = query.filter(expenses::is_unchecked.eq_any(values_parsed));
+            }
             _ => {
                 return Err(Status::BadRequest);
             }
@@ -273,6 +283,7 @@ pub fn query(
     let exp_ids = expenses.iter().map(|e| e.id).collect::<Vec<_>>();
 
     let transactions = expense_transactions::table
+        .inner_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
         .left_join(
             account_synchronizations::table.on((account_synchronizations::account1
                 .eq(expense_transactions::account_id)
@@ -284,7 +295,7 @@ pub fn query(
         .filter(
             expense_transactions::expense_id.eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
         )
-        .load::<(ExpenseTransaction, Option<AccountSynchronization>)>(&*connection)
+        .load::<(ExpenseTransaction, Account, Option<AccountSynchronization>)>(&*connection)
         .map_err(|_| Status::InternalServerError)?;
 
     let categories = expense_categories::table
@@ -309,7 +320,14 @@ pub fn query(
     let rexps = expenses
         .into_iter()
         .map(|e| {
-            RenderedExpense::filter_and_render(e, &transactions, &categories, &receipts, &events)
+            RenderedExpense::filter_and_render(
+                *uid,
+                e,
+                &transactions[..],
+                &categories,
+                &receipts,
+                &events,
+            )
         })
         .collect::<Vec<_>>();
 
@@ -439,7 +457,7 @@ pub fn list(
     for e in exps.into_iter() {
         while transactions
             .get(t_i)
-            .map(|(t, _)| e.id > t.expense_id)
+            .map(|(t, _, _)| e.id > t.expense_id)
             .unwrap_or(false)
         {
             t_i += 1;
@@ -467,6 +485,7 @@ pub fn list(
         }
 
         rexps.push(RenderedExpense::filter_and_render(
+            *uid,
             e,
             &transactions[t_i..],
             &categories[c_i..],
@@ -505,7 +524,7 @@ pub fn get(uid: UserId, connection: DbConn, id: i32) -> Result<Json<RenderedExpe
         .load::<ExpenseEvent>(&*connection)
         .map_err(|_| Status::InternalServerError)?;
 
-    let rexp = RenderedExpense::render(exp, transactions, categories, receipts, events);
+    let rexp = RenderedExpense::render(*uid, exp, transactions, categories, receipts, events);
     Ok(Json(rexp))
 }
 

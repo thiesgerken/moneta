@@ -156,6 +156,7 @@ table! {
         is_template -> Bool,
         is_preliminary -> Bool,
         is_tax_relevant -> Bool,
+        is_unchecked -> Bool,
     }
 }
 

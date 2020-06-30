@@ -637,6 +637,9 @@ impl MoneyDBExpense {
             is_tax_relevant: flags.iter().any(|f| {
                 f.flagging == MoneyDBExpenseFlagging::TaxRelevant && f.expense_id == self.id
             }),
+            is_unchecked: flags.iter().any(|f| {
+                f.flagging == MoneyDBExpenseFlagging::NeedsAttention && f.expense_id == self.id
+            }),
         }
     }
 
@@ -666,7 +669,7 @@ impl MoneyDBExpense {
             statement: self.transaction.clone(),
             comments: String::new(),
             date: self.value_date,
-            amount: Some((self.amount * 100.0) as i64),
+            amount: Some((self.amount * -100.0) as i64),
             fraction: None,
         });
 
@@ -698,17 +701,17 @@ impl MoneyDBExpense {
                 t.amount = Some((s.param * 100.0) as i64)
             } else if s.sharing_type == MoneyDBExpenseSharingType::Equal {
                 if !any_fixed_amount {
-                    t.fraction = Some(1.0 / (num_equal + 1) as f64);
+                    t.fraction = Some(-1.0 / (num_equal + 1) as f64);
                 } else {
                     // warn!("expense {}: converting equal to fixed amount", &self.id);
-                    t.amount = Some((self.amount / (num_equal + 1) as f64 * 100.0) as i64);
+                    t.amount = Some((self.amount / (num_equal + 1) as f64 * -100.0) as i64);
                 }
             } else if s.sharing_type == MoneyDBExpenseSharingType::FixedFraction {
                 if !any_fixed_amount {
-                    t.fraction = Some(s.param);
+                    t.fraction = Some(-1.0 * s.param);
                 } else {
                     // warn!("expense {}: converting fixed fraction to fixed amount", &self.id);
-                    t.amount = Some((self.amount * s.param * 100.0) as i64);
+                    t.amount = Some((self.amount * s.param * -100.0) as i64);
                 }
             }
 

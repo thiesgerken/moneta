@@ -9,5 +9,6 @@ CREATE TABLE expenses (
   is_deleted BOOL NOT NULL,
   is_template BOOL NOT NULL,
   is_preliminary BOOL NOT NULL,
-  is_tax_relevant BOOL NOT NULL
+  is_tax_relevant BOOL NOT NULL,
+  is_unchecked BOOL NOT NULL
 )

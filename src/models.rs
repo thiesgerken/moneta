@@ -206,6 +206,7 @@ pub struct Expense {
     pub is_template: bool,
     pub is_preliminary: bool,
     pub is_tax_relevant: bool,
+    pub is_unchecked: bool,
 }
 
 #[derive(Debug, Clone, Insertable, Serialize, Deserialize)]
@@ -222,6 +223,7 @@ pub struct NewExpense {
     pub is_template: bool,
     pub is_preliminary: bool,
     pub is_tax_relevant: bool,
+    pub is_unchecked: bool,
 }
 
 #[derive(
