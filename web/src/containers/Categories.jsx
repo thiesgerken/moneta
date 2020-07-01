@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import PropTypes from 'prop-types';
 import MUIDataTable from 'mui-datatables';
 import { map, find, filter } from 'lodash';
+import tinycolor from 'tinycolor2';
 import {
   ThemeProvider,
   createMuiTheme,
@@ -18,7 +19,6 @@ import { useLocation, useHistory } from 'react-router';
 
 import { updateCategories as updateCategoriesAction } from '../actions/categories';
 import CategoryDialog from './CategoryDialog';
-import ColorboxLabel from '../components/ColorboxLabel';
 import { muiDatatablesLang } from '../lang';
 
 function useQuery(key) {
@@ -102,11 +102,28 @@ const Categories = ({ userId, categories, updateCategories }) => {
       options: {
         sortOrder: 'asc',
         filter: false,
-        customBodyRender: (v, { rowData }) => {
-          const color = rowData[0];
-          if (color === null || color === '') return v;
+        // customBodyRender: (v, { rowData }) => {
+        //   const color = rowData[0];
+        //   if (color === null || color === '') return v;
 
-          return <ColorboxLabel color={color}>{v}</ColorboxLabel>;
+        //   return <ColorboxLabel color={color}>{v}</ColorboxLabel>;
+        // },
+      },
+    },
+    {
+      name: 'info.color',
+      label: 'Farbe',
+      options: {
+        sort: false,
+        filter: false,
+        setCellProps: v => {
+          const c = tinycolor(v);
+          if (!c.isValid()) return {};
+
+          if (c.getBrightness() >= 120)
+            return { style: { backgroundColor: v } };
+
+          return { style: { backgroundColor: v, color: '#F7F7F7' } };
         },
       },
     },

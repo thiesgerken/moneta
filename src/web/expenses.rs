@@ -6,7 +6,7 @@ use crate::web::pagination::*;
 use crate::web::user::UserId;
 use crate::web::DbConn;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use diesel::dsl::sql;
 use diesel::prelude::*;
 use diesel::sql_types::BigInt;
@@ -106,77 +106,77 @@ pub fn query(
         // TODO: sorting by amount would be nice
 
         match sb.column.as_ref() {
-            "title" => {
+            "info.title" => {
                 if asc {
                     query = query.then_order_by(expenses::title.asc());
                 } else {
                     query = query.then_order_by(expenses::title.desc());
                 }
             }
-            "id" => {
+            "info.id" => {
                 if asc {
                     query = query.then_order_by(expenses::id.asc());
                 } else {
                     query = query.then_order_by(expenses::id.desc());
                 }
             }
-            "store" => {
+            "info.store" => {
                 if asc {
                     query = query.then_order_by(expenses::store.asc());
                 } else {
                     query = query.then_order_by(expenses::store.desc());
                 }
             }
-            "description" => {
+            "info.description" => {
                 if asc {
                     query = query.then_order_by(expenses::description.asc());
                 } else {
                     query = query.then_order_by(expenses::description.desc());
                 }
             }
-            "comments" => {
+            "info.comments" => {
                 if asc {
                     query = query.then_order_by(expenses::comments.asc());
                 } else {
                     query = query.then_order_by(expenses::comments.desc());
                 }
             }
-            "bookingStart" | "booking_start" => {
+            "info.bookingStart" | "info.booking_start" => {
                 if asc {
                     query = query.then_order_by(expenses::booking_start.asc());
                 } else {
                     query = query.then_order_by(expenses::booking_start.desc());
                 }
             }
-            "bookingEnd" | "booking_end" => {
+            "info.bookingEnd" | "info.booking_end" => {
                 if asc {
                     query = query.then_order_by(expenses::booking_end.asc());
                 } else {
                     query = query.then_order_by(expenses::booking_end.desc());
                 }
             }
-            "isTemplate" | "is_template" => {
+            "info.isTemplate" | "info.is_template" => {
                 if asc {
                     query = query.then_order_by(expenses::is_template.asc());
                 } else {
                     query = query.then_order_by(expenses::is_template.desc());
                 }
             }
-            "isPreliminary" | "is_preliminary" => {
+            "info.isPreliminary" | "info.is_preliminary" => {
                 if asc {
                     query = query.then_order_by(expenses::is_preliminary.asc());
                 } else {
                     query = query.then_order_by(expenses::is_preliminary.desc());
                 }
             }
-            "isTaxRelevant" | "is_tax_relevant" => {
+            "info.isTaxRelevant" | "info.is_tax_relevant" => {
                 if asc {
                     query = query.then_order_by(expenses::is_tax_relevant.asc());
                 } else {
                     query = query.then_order_by(expenses::is_tax_relevant.desc());
                 }
             }
-            "isUnchecked" | "is_unchecked" => {
+            "info.isUnchecked" | "info.is_unchecked" => {
                 if asc {
                     query = query.then_order_by(expenses::is_unchecked.asc());
                 } else {
@@ -193,10 +193,10 @@ pub fn query(
         // TODO: filtering by account and category
 
         match column.as_ref() {
-            "title" => {
+            "info.title" => {
                 query = query.filter(expenses::title.eq_any(values));
             }
-            "id" => {
+            "info.id" => {
                 let values_parsed = values
                     .into_iter()
                     .map(|s| s.parse().ok())
@@ -205,16 +205,16 @@ pub fn query(
 
                 query = query.filter(expenses::id.eq_any(values_parsed));
             }
-            "store" => {
+            "info.store" => {
                 query = query.filter(expenses::store.eq_any(values));
             }
-            "description" => {
+            "info.description" => {
                 query = query.filter(expenses::description.eq_any(values));
             }
-            "comments" => {
+            "info.comments" => {
                 query = query.filter(expenses::comments.eq_any(values));
             }
-            "isTemplate" | "is_template" => {
+            "info.isTemplate" | "info.is_template" => {
                 let values_parsed = values
                     .into_iter()
                     .map(|s| s.parse().ok())
@@ -222,7 +222,7 @@ pub fn query(
                     .ok_or(Status::BadRequest)?;
                 query = query.filter(expenses::is_template.eq_any(values_parsed));
             }
-            "isPreliminary" | "is_preliminary" => {
+            "info.isPreliminary" | "info.is_preliminary" => {
                 let values_parsed = values
                     .into_iter()
                     .map(|s| s.parse().ok())
@@ -230,7 +230,7 @@ pub fn query(
                     .ok_or(Status::BadRequest)?;
                 query = query.filter(expenses::is_preliminary.eq_any(values_parsed));
             }
-            "isTaxRelevant" | "is_tax_relevant" => {
+            "info.isTaxRelevant" | "info.is_tax_relevant" => {
                 let values_parsed = values
                     .into_iter()
                     .map(|s| s.parse().ok())
@@ -238,7 +238,7 @@ pub fn query(
                     .ok_or(Status::BadRequest)?;
                 query = query.filter(expenses::is_tax_relevant.eq_any(values_parsed));
             }
-            "isUnchecked" | "is_unchecked" => {
+            "info.isUnchecked" | "info.is_unchecked" => {
                 let values_parsed = values
                     .into_iter()
                     .map(|s| s.parse().ok())
@@ -410,8 +410,11 @@ pub fn info(uid: UserId, connection: DbConn) -> Result<Json<InfoResponse>, Statu
             ),
         )
         .filter(expenses::store.ne(""))
+        .filter(
+            expenses::booking_end.gt(Utc::now().checked_sub_signed(Duration::weeks(24)).unwrap()),
+        )
         .filter(sql("TRUE GROUP BY expenses.store"))
-        .limit(50)
+        .limit(25)
         .load::<(String, i64)>(&*connection)
         .map_err(|_| Status::InternalServerError)?;
 

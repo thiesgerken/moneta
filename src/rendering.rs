@@ -21,6 +21,7 @@ pub struct RenderedExpense {
     pub categories: Vec<ExpenseCategory>,
     pub transactions: Vec<ExpenseTransaction>,
     pub total_amount: i64,
+    pub calculated_amounts: Vec<i64>, // for each transaction
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,7 +68,7 @@ pub fn calculate_total_amount(
     uid: i32,
     info: &Expense,
     transactions: &[(ExpenseTransaction, Account, Option<AccountSynchronization>)],
-) -> i64 {
+) -> (i64, Vec<i64>) {
     let ts_with_amount = transactions
         .iter()
         .filter_map(|(t, _, _)| t.amount)
@@ -92,14 +93,21 @@ pub fn calculate_total_amount(
         .filter(|(_, a, acs)| acs.is_some() || a.user_id == uid)
         .filter_map(|(t, _, _)| t.amount)
         .sum::<i64>();
-    total_amount += (sum_of_amounts as f64
-        * transactions
-            .iter()
-            .filter(|(_, a, acs)| acs.is_some() || a.user_id == uid)
-            .filter_map(|(t, _, _)| t.fraction)
-            .sum::<f64>()) as i64;
+    total_amount += transactions
+        .iter()
+        .filter(|(_, a, acs)| acs.is_some() || a.user_id == uid)
+        .filter_map(|(t, _, _)| t.fraction.map(|x| (x * sum_of_amounts as f64) as i64))
+        .sum::<i64>();
 
-    total_amount
+    let calculated_amounts = transactions
+        .iter()
+        .map(|(t, _, _)| {
+            t.amount
+                .unwrap_or_else(|| (t.fraction.unwrap_or(0.0) * sum_of_amounts as f64) as i64)
+        })
+        .collect::<Vec<_>>();
+
+    (total_amount, calculated_amounts)
 }
 
 impl RenderedExpense {
@@ -131,7 +139,7 @@ impl RenderedExpense {
             })
             .collect::<Vec<_>>();
 
-        let total_amount = calculate_total_amount(uid, &info, &transactions);
+        let (total_amount, calculated_amounts) = calculate_total_amount(uid, &info, &transactions);
 
         let categories = categories
             .into_iter()
@@ -155,6 +163,7 @@ impl RenderedExpense {
             transactions,
             receipts,
             total_amount,
+            calculated_amounts,
         }
     }
 
@@ -222,7 +231,7 @@ impl RenderedExpense {
             .cloned()
             .collect();
 
-        let total_amount = calculate_total_amount(uid, &info, &transactions);
+        let (total_amount, calculated_amounts) = calculate_total_amount(uid, &info, &transactions);
         let transactions = transactions
             .into_iter()
             .map(|(t, _, _)| t)
@@ -235,6 +244,7 @@ impl RenderedExpense {
             transactions,
             receipts,
             total_amount,
+            calculated_amounts,
         }
     }
 }

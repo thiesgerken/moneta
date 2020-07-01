@@ -15,15 +15,19 @@ import {
 import AddIcon from '@material-ui/icons/Add';
 import { useLocation, useHistory } from 'react-router';
 import * as moment from 'moment';
-import { map } from 'lodash';
+import { forEach, map, sortBy, uniqBy, zip } from 'lodash';
 
 import {
   updateExpenses as updateExpensesAction,
   updateExpenseInfo as updateExpenseInfoAction,
 } from '../actions/expenses';
+import { updateAccounts as updateAccountsAction } from '../actions/accounts';
+import { updateCategories as updateCategoriesAction } from '../actions/categories';
 import ExpenseDialog from './ExpenseDialog';
 import { muiDatatablesLang } from '../lang';
 import { findExpenseQueryData } from '../selectors/expenses';
+import { findAccount } from '../selectors/accounts';
+import { findCategory } from '../selectors/categories';
 
 function useQuery(key) {
   const location = useLocation();
@@ -41,16 +45,24 @@ function useQuery(key) {
   return [query.get(key), set];
 }
 
-const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
+const Expenses = ({
+  expenses,
+  updateExpenses,
+  updateExpenseInfo,
+  accounts,
+  updateAccounts,
+  categories,
+  updateCategories,
+  userInfo,
+}) => {
   const [expenseId, setExpenseId] = useQuery('id');
-  // const [page, setPage] = useQuery('page');
   const [query, setQuery] = useState([
     null,
     {
       page: 0,
       rowsPerPage: 10,
       filterBy: {},
-      sortBy: [],
+      sortBy: [{ column: 'info.bookingEnd', direction: 'descending' }],
       needle: null,
       from: null,
       to: null,
@@ -65,7 +77,7 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
       : { records: [], filteredRecordCount: 0, totalRecordCount: null };
 
   const isLoading = !currentQueryData || currentQueryData.isFetching;
-  let displayedQuery = currentQuery;
+  // let displayedQuery = currentQuery;
   let displayedResponse = currentQueryResponse;
 
   if (prevQuery && isLoading) {
@@ -76,7 +88,7 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
         ? prevQueryData.data
         : { records: [], filteredRecordCount: 0, totalRecordCount: null };
 
-    displayedQuery = prevQuery;
+    // displayedQuery = prevQuery;
     displayedResponse = prevQueryResponse;
   }
 
@@ -86,6 +98,7 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
     name: '',
     iban: '',
   };
+
   // if (
   //   expenses.items !== null &&
   //   expenseId !== null &&
@@ -113,9 +126,14 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
     });
 
   useEffect(() => {
+    updateAccounts();
+    updateCategories();
     updateExpenseInfo();
     updateExpenses(currentQuery);
   });
+
+  // TODO: how to control column widths?
+  // TODO: add ellipses in text fields
 
   const columns = [
     {
@@ -124,6 +142,7 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
       options: {
         display: false,
         filterType: 'textField',
+        customFilterListOptions: { render: v => `ID: ${v}` },
       },
     },
     {
@@ -153,33 +172,104 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
       },
     },
     {
-      // TODO: rendering of categories
+      // TODO: rendering of categories: set background color to gradient
       // TODO: filter values for categories
       name: 'categories',
       label: 'Kategorien',
       options: {
         customBodyRenderLite: i => {
-          return map(
-            displayedResponse.records[i].categories,
-            c => c.categoryId
-          ).join(', ');
+          const cs = uniqBy(
+            sortBy(displayedResponse.records[i].categories, [
+              c => -1 * c.weight,
+            ]),
+            t => t.categoryId
+          );
+
+          return map(cs, c => {
+            const cat = findCategory(categories, c.categoryId);
+            if (!cat) return `[${c.categoryId}]`;
+
+            // TODO: find out username of the other user
+            if (userInfo && cat.info.userId === userInfo.id)
+              return cat.info.name;
+            return `${cat.info.userId}/${cat.info.name}`;
+          }).join(', ');
         },
         sort: false,
       },
     },
     {
-      // TODO: rendering of accounts
+      // TODO: rendering of accounts: set background color to gradient
       // TODO: filter values for accounts
       name: 'transactions',
       label: 'Konten',
       options: {
         customBodyRenderLite: i => {
-          return map(
-            displayedResponse.records[i].transactions,
-            t => t.accountId
-          ).join(', ');
+          // TODO: first sort by accountId, sum the calculatedAmounts of transactions belonging to the same account id
+          // (do something similar in setCellProps)
+          const ts = uniqBy(
+            sortBy(
+              zip(
+                displayedResponse.records[i].transactions,
+                displayedResponse.records[i].calculatedAmounts
+              ),
+              [t => Math.abs(t[1])]
+            ),
+            t => t[0].accountId
+          );
+
+          return map(ts, t => {
+            const acc = findAccount(accounts, t[0].accountId);
+            if (!acc) return `[${t[0].accountId}]`;
+
+            // TODO: find out username of the other user
+            if (userInfo && acc.info.userId === userInfo.id)
+              return acc.info.name;
+            return `${acc.info.userId}/${acc.info.name}`;
+          }).join(', ');
         },
         sort: false,
+        setCellProps: (_, i) => {
+          console.log(i);
+          return {};
+          // if (data.sharing.length == 0) {
+          //   Util.setBackgroundColor(rowjq.find('td:nth-child(4)'), data.account.color, false);
+          // } else {
+          //   let colors = [data.account.color];
+          //   let w1 = Math.abs(data.amount);
+          //   if (w1 == 0) w1 = 1;
+          //   let weights = [w1];
+          //   let sums = [0, w1];
+
+          //   for (let j = 0; j < data.sharing.length; j++) {
+          //     let w = Math.abs(data.sharing[j].calculatedAmount);
+          //     if (w == 0) w = 1;
+
+          //     colors.push(data.sharing[j].account.color);
+          //     weights.push(w);
+          //     sums.push(sums[sums.length - 1] + weights[weights.length - 1]);
+          //   }
+
+          //   let totalWeight = weights.reduce((a, b) => a + b, 0);
+          //   let s = 'border-style: none; background-image: linear-gradient(to right, ';
+
+          //   for (let i = 0; i < colors.length; i++) {
+          //     if (i != 0) s += ',';
+          //     s += colors[i];
+
+          //     if (i != 0) {
+          //       s += ' ' + (sums[i] / totalWeight * 100).toFixed(0) + '%';
+          //     }
+
+          //     if (i != colors.length - 1) {
+          //       s += ', ' + colors[i] + ' ' + (sums[i + 1] / totalWeight * 100).toFixed(0) + '%';
+          //     }
+          //   }
+          //   s += ');';
+
+          //   rowjq.find('td:nth-child(4)').attr('style', s);
+          // }
+        },
       },
     },
     {
@@ -198,10 +288,8 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
       label: 'Geschäft',
       options: {
         filter: true,
-        // filterType: 'textField',
         filterOptions: {
           names: expenses.info.data ? expenses.info.data.filterHints.store : [],
-          fullWidth: true,
         },
       },
     },
@@ -225,7 +313,7 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
       options: {
         display: false,
         filterType: 'checkbox',
-        customFilterListOptions: { render: () => `Vorläufig` },
+        customFilterListOptions: { render: () => 'Vorläufig' },
       },
     },
     {
@@ -234,7 +322,7 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
       options: {
         display: false,
         filterType: 'checkbox',
-        customFilterListOptions: { render: () => `Steuerrelevant` },
+        customFilterListOptions: { render: () => 'Steuerrelevant' },
       },
     },
     {
@@ -243,7 +331,7 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
       options: {
         display: false,
         filterType: 'checkbox',
-        customFilterListOptions: { render: () => `Vorlage` },
+        customFilterListOptions: { render: () => 'Vorlage' },
       },
     },
     {
@@ -257,21 +345,23 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
     },
   ];
 
+  const currentSortOrder = {};
+  if (currentQuery.sortBy.length > 0) {
+    currentSortOrder.direction =
+      currentQuery.sortBy[0].direction === 'ascending' ? 'asc' : 'desc';
+    currentSortOrder.name = currentQuery.sortBy[0].column;
+  }
+
   const options = {
+    resizableColumns: true,
     selectableRows: 'single',
     selectableRowsOnClick: true,
     selectToolbarPlacement: 'none',
     enableNestedDataAccess: '.',
     serverSide: true,
     print: false,
-    // page: page === null ? 0 : parseInt(page, 10), // https://github.com/gregnb/mui-datatables/issues/957
-    // onChangePage: p => {
-    //   setPage(p === 0 ? null : p);
-    // },
     onTableChange: (action, tableState) => {
       console.log(action, tableState);
-
-      // TODO: default sorting!
 
       const newQuery = {
         page: tableState.page,
@@ -284,8 +374,7 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
       };
 
       if (tableState.sortOrder.direction) {
-        let column = tableState.sortOrder.name;
-        if (column.startsWith('info.')) column = column.substring(5);
+        const column = tableState.sortOrder.name;
 
         newQuery.sortBy.push({
           direction:
@@ -296,7 +385,13 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
         });
       }
 
-      // TODO: filtering
+      forEach(tableState.filterList, (v, i) => {
+        if (v.length > 0) {
+          newQuery.filterBy[columns[i].name] = map(v, x =>
+            typeof x === 'boolean' ? (!x).toString() : x
+          );
+        }
+      });
 
       if (JSON.stringify(newQuery) !== JSON.stringify(currentQuery))
         setQuery([currentQuery, newQuery]);
@@ -308,9 +403,10 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
     // },
     download: false,
     rowsPerPageOptions: mdUp ? [10, 25, 50] : [10],
-    rowsPerPage: displayedQuery.rowsPerPage,
-    page: displayedQuery.page,
-    count: displayedResponse.filteredRecordCount,
+    rowsPerPage: currentQuery.rowsPerPage,
+    page: currentQuery.page,
+    count: currentQueryResponse.filteredRecordCount,
+    sortOrder: currentSortOrder,
     filterType: 'multiselect',
     responsive: 'standard',
     customToolbar: () => (
@@ -376,25 +472,61 @@ const Expenses = ({ expenses, updateExpenses, updateExpenseInfo }) => {
   );
 };
 
+Expenses.defaultProps = { userInfo: null };
+
 Expenses.propTypes = {
   updateExpenses: PropTypes.func.isRequired,
   updateExpenseInfo: PropTypes.func.isRequired,
+  updateCategories: PropTypes.func.isRequired,
+  updateAccounts: PropTypes.func.isRequired,
   expenses: PropTypes.shape({
-    info: PropTypes.object,
-    queries: PropTypes.arrayOf(PropTypes.object),
+    info: PropTypes.shape({
+      isFetching: PropTypes.bool.isRequired,
+      data: PropTypes.shape({
+        filterHints: PropTypes.shape({
+          store: PropTypes.arrayOf(PropTypes.string),
+        }),
+      }),
+    }).isRequired,
+    queries: PropTypes.arrayOf(
+      PropTypes.shape({
+        isFetching: PropTypes.bool.isRequired,
+        // eslint-disable-next-line react/forbid-prop-types
+        data: PropTypes.object,
+        // eslint-disable-next-line react/forbid-prop-types
+        query: PropTypes.object.isRequired,
+      })
+    ),
   }).isRequired,
+  accounts: PropTypes.shape({
+    isFetching: PropTypes.bool.isRequired,
+    items: PropTypes.arrayOf(PropTypes.object),
+  }).isRequired,
+  categories: PropTypes.shape({
+    isFetching: PropTypes.bool.isRequired,
+    items: PropTypes.arrayOf(PropTypes.object),
+  }).isRequired,
+  userInfo: PropTypes.shape({
+    id: PropTypes.number.isRequired,
+  }),
 };
 
 const mapDispatchToProps = dispatch => ({
   updateExpenses: query => dispatch(updateExpensesAction(query)),
   updateExpenseInfo: () => dispatch(updateExpenseInfoAction()),
+  updateAccounts: () => dispatch(updateAccountsAction()),
+  updateCategories: () => dispatch(updateCategoriesAction()),
 });
 
 const mapStateToProps = state => {
-  const { expenses } = state;
+  const { expenses, accounts, categories, authentication } = state;
+  const { userInfo } = authentication;
 
   return {
     expenses,
+    accounts,
+    categories,
+    userInfo,
   };
 };
 

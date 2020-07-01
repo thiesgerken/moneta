@@ -26,7 +26,7 @@ const ColorboxLabel = ({ color, children }) => {
         className={classes.colorRectangle}
         style={{ backgroundColor: color }}
       />
-      &nbsp;&nbsp;{children}
+      &nbsp;{children}
     </span>
   );
 };
