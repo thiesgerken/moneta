@@ -114,3 +114,15 @@ pub fn login(
         }
     }
 }
+
+#[get("/user/list")]
+pub fn list(_uid: UserId, connection: DbConn) -> Option<Json<Vec<UserInfo>>> {
+    Some(Json(
+        users::table
+            .load::<User>(&*connection)
+            .ok()?
+            .into_iter()
+            .map(|u| UserInfo::new(u))
+            .collect::<Vec<_>>(),
+    ))
+}

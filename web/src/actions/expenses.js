@@ -1,3 +1,4 @@
+import { map, sortBy, zip } from 'lodash';
 import { findExpenseQueryData } from '../selectors/expenses';
 
 export const FETCH_EXPENSE_INFO_REQUEST = 'FETCH_EXPENSE_INFO_REQUEST';
@@ -81,6 +82,31 @@ export const modifyExpenseError = (id, method, error) => ({
   receivedAt: Date.now(),
 });
 
+const preprocessExpense = e => {
+  let accountsByAmount = {};
+
+  zip(e.transactions, e.calculatedAmounts).forEach(([t, amount]) => {
+    if (amount === 0) return;
+    if (!(t.accountId in accountsByAmount)) accountsByAmount[t.accountId] = 0;
+    accountsByAmount[t.accountId] += amount;
+  });
+
+  accountsByAmount = sortBy(
+    map(accountsByAmount, (amount, aid) => ({
+      accountId: parseInt(aid, 10),
+      amount,
+    })),
+    [x => -Math.abs(x.amount), x => x.accountId]
+  );
+
+  return {
+    ...e,
+    meta: {
+      accountsByAmount,
+    },
+  };
+};
+
 export const fetchExpenses = query => dispatch => {
   dispatch(fetchExpensesRequest(query));
   return fetch('/api/expenses/query', {
@@ -94,6 +120,7 @@ export const fetchExpenses = query => dispatch => {
     .then(res => {
       if (res.error) throw res.error;
 
+      res.records = map(res.records, preprocessExpense);
       dispatch(fetchExpensesSuccess(query, res));
     })
     .catch(e => dispatch(fetchExpensesError(query, e)));

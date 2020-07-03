@@ -2,6 +2,7 @@ import { combineReducers } from 'redux';
 import { connectRouter } from 'connected-react-router';
 
 import balances from './balances';
+import users from './users';
 import accounts from './accounts';
 import categories from './categories';
 import expenses from './expenses';
@@ -17,6 +18,7 @@ const root = history =>
     balances,
     categories,
     expenses,
+    users,
   });
 
 export default root;

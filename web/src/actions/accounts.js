@@ -75,7 +75,6 @@ export const fetchAccounts = () => dispatch => {
       if (res.error) throw res.error;
 
       const items = map(res, preprocessAccount);
-      console.log(items);
       dispatch(fetchAccountsSuccess(items));
     })
     .catch(e => dispatch(fetchAccountsError(e)));

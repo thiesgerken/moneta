@@ -15,19 +15,22 @@ import {
 import AddIcon from '@material-ui/icons/Add';
 import { useLocation, useHistory } from 'react-router';
 import * as moment from 'moment';
-import { forEach, map, sortBy, uniqBy, zip } from 'lodash';
+import { forEach, map, sortBy, uniqBy } from 'lodash';
+import tinycolor from 'tinycolor2';
 
 import {
   updateExpenses as updateExpensesAction,
   updateExpenseInfo as updateExpenseInfoAction,
 } from '../actions/expenses';
 import { updateAccounts as updateAccountsAction } from '../actions/accounts';
+import { updateUsers as updateUsersAction } from '../actions/users';
 import { updateCategories as updateCategoriesAction } from '../actions/categories';
 import ExpenseDialog from './ExpenseDialog';
 import { muiDatatablesLang } from '../lang';
 import { findExpenseQueryData } from '../selectors/expenses';
 import { findAccount } from '../selectors/accounts';
 import { findCategory } from '../selectors/categories';
+import { findUserName } from '../selectors/users';
 
 function useQuery(key) {
   const location = useLocation();
@@ -46,6 +49,8 @@ function useQuery(key) {
 }
 
 const Expenses = ({
+  users,
+  updateUsers,
   expenses,
   updateExpenses,
   updateExpenseInfo,
@@ -126,6 +131,7 @@ const Expenses = ({
     });
 
   useEffect(() => {
+    updateUsers();
     updateAccounts();
     updateCategories();
     updateExpenseInfo();
@@ -147,7 +153,7 @@ const Expenses = ({
     },
     {
       name: 'info.bookingEnd',
-      label: 'Buchungszeitraum',
+      label: mdUp ? 'Buchungszeitraum' : 'Datum',
       options: {
         filter: false, // TODO: one could integrate from-to filtering here!
         customBodyRenderLite: i => {
@@ -172,7 +178,6 @@ const Expenses = ({
       },
     },
     {
-      // TODO: rendering of categories: set background color to gradient
       // TODO: filter values for categories
       name: 'categories',
       label: 'Kategorien',
@@ -185,90 +190,154 @@ const Expenses = ({
             t => t.categoryId
           );
 
-          return map(cs, c => {
-            const cat = findCategory(categories, c.categoryId);
-            if (!cat) return `[${c.categoryId}]`;
+          return (
+            <div style={{ padding: theme.spacing(2) }}>
+              {map(cs, c => {
+                const cat = findCategory(categories, c.categoryId);
+                if (!cat) return `[${c.categoryId}]`;
 
-            // TODO: find out username of the other user
-            if (userInfo && cat.info.userId === userInfo.id)
-              return cat.info.name;
-            return `${cat.info.userId}/${cat.info.name}`;
-          }).join(', ');
+                if (userInfo && cat.info.userId === userInfo.id)
+                  return cat.info.name;
+
+                const userName = findUserName(users, cat.info.userId);
+                return `${userName}/${cat.info.name}`;
+              }).join(', ')}
+            </div>
+          );
         },
         sort: false,
+        setCellProps: (_, i) => {
+          const data = map(displayedResponse.records[i].categories, x => ({
+            ...x,
+            color:
+              findCategory(categories, x.categoryId).info.color || '#00FFFFFF',
+          }));
+
+          const style = { padding: 0 };
+          if (data.length === 0) return { style };
+
+          if (
+            tinycolor(data[0].color).isValid() &&
+            tinycolor(data[0].color).getBrightness() <= 120
+          )
+            style.color = '#F7F7F7';
+
+          if (data.length === 1) {
+            style.backgroundColor = data[0].color;
+          } else {
+            const colors = [];
+            const weights = [];
+            const sums = [0];
+
+            data.forEach(d => {
+              const w = Math.abs(d.amount);
+              colors.push(d.color);
+              weights.push(w);
+              sums.push(sums[sums.length - 1] + w);
+            });
+
+            const totalWeight = weights.reduce((a, b) => a + b, 0);
+            const segments = [];
+
+            for (let j = 0; j < colors.length; j += 1) {
+              let s = colors[j];
+              if (j !== 0)
+                s += ` ${((sums[j] / totalWeight) * 100).toFixed(0)}%`;
+              if (j !== colors.length - 1) {
+                s += `, ${colors[j]} ${(
+                  (sums[j + 1] / totalWeight) *
+                  100
+                ).toFixed(0)}%`;
+              }
+              segments.push(s);
+            }
+
+            style.backgroundImage = `linear-gradient(to right, ${segments.join(
+              ', '
+            )})`;
+          }
+          return { style };
+        },
       },
     },
     {
-      // TODO: rendering of accounts: set background color to gradient
       // TODO: filter values for accounts
       name: 'transactions',
       label: 'Konten',
       options: {
         customBodyRenderLite: i => {
-          // TODO: first sort by accountId, sum the calculatedAmounts of transactions belonging to the same account id
-          // (do something similar in setCellProps)
-          const ts = uniqBy(
-            sortBy(
-              zip(
-                displayedResponse.records[i].transactions,
-                displayedResponse.records[i].calculatedAmounts
-              ),
-              [t => Math.abs(t[1])]
-            ),
-            t => t[0].accountId
+          return (
+            <div style={{ padding: theme.spacing(2) }}>
+              {map(
+                displayedResponse.records[i].meta.accountsByAmount,
+                ({ accountId }) => {
+                  const acc = findAccount(accounts, accountId);
+                  if (!acc) return `[${accountId}]`;
+
+                  if (userInfo && acc.info.userId === userInfo.id)
+                    return acc.info.name;
+
+                  const userName = findUserName(users, acc.info.userId);
+                  return `${userName}/${acc.info.name}`;
+                }
+              ).join(', ')}
+            </div>
           );
-
-          return map(ts, t => {
-            const acc = findAccount(accounts, t[0].accountId);
-            if (!acc) return `[${t[0].accountId}]`;
-
-            // TODO: find out username of the other user
-            if (userInfo && acc.info.userId === userInfo.id)
-              return acc.info.name;
-            return `${acc.info.userId}/${acc.info.name}`;
-          }).join(', ');
         },
         sort: false,
         setCellProps: (_, i) => {
-          console.log(i);
-          return {};
-          // if (data.sharing.length == 0) {
-          //   Util.setBackgroundColor(rowjq.find('td:nth-child(4)'), data.account.color, false);
-          // } else {
-          //   let colors = [data.account.color];
-          //   let w1 = Math.abs(data.amount);
-          //   if (w1 == 0) w1 = 1;
-          //   let weights = [w1];
-          //   let sums = [0, w1];
+          const data = map(
+            displayedResponse.records[i].meta.accountsByAmount,
+            x => ({
+              ...x,
+              color:
+                findAccount(accounts, x.accountId).info.color || '#00FFFFFF',
+            })
+          );
 
-          //   for (let j = 0; j < data.sharing.length; j++) {
-          //     let w = Math.abs(data.sharing[j].calculatedAmount);
-          //     if (w == 0) w = 1;
+          const style = { padding: 0 };
+          if (data.length === 0) return { style };
 
-          //     colors.push(data.sharing[j].account.color);
-          //     weights.push(w);
-          //     sums.push(sums[sums.length - 1] + weights[weights.length - 1]);
-          //   }
+          if (
+            tinycolor(data[0].color).isValid() &&
+            tinycolor(data[0].color).getBrightness() <= 120
+          )
+            style.color = '#F7F7F7';
 
-          //   let totalWeight = weights.reduce((a, b) => a + b, 0);
-          //   let s = 'border-style: none; background-image: linear-gradient(to right, ';
+          if (data.length === 1) {
+            style.backgroundColor = data[0].color;
+          } else {
+            const colors = [];
+            const weights = [];
+            const sums = [0];
 
-          //   for (let i = 0; i < colors.length; i++) {
-          //     if (i != 0) s += ',';
-          //     s += colors[i];
+            data.forEach(d => {
+              const w = Math.abs(d.amount);
+              colors.push(d.color);
+              weights.push(w);
+              sums.push(sums[sums.length - 1] + w);
+            });
 
-          //     if (i != 0) {
-          //       s += ' ' + (sums[i] / totalWeight * 100).toFixed(0) + '%';
-          //     }
+            const totalWeight = weights.reduce((a, b) => a + b, 0);
+            const segments = [];
+            for (let j = 0; j < colors.length; j += 1) {
+              let s = colors[j];
+              if (j !== 0)
+                s += ` ${((sums[j] / totalWeight) * 100).toFixed(0)}%`;
+              if (j !== colors.length - 1) {
+                s += `, ${colors[j]} ${(
+                  (sums[j + 1] / totalWeight) *
+                  100
+                ).toFixed(0)}%`;
+              }
+              segments.push(s);
+            }
 
-          //     if (i != colors.length - 1) {
-          //       s += ', ' + colors[i] + ' ' + (sums[i + 1] / totalWeight * 100).toFixed(0) + '%';
-          //     }
-          //   }
-          //   s += ');';
-
-          //   rowjq.find('td:nth-child(4)').attr('style', s);
-          // }
+            style.backgroundImage = `linear-gradient(to right, ${segments.join(
+              ', '
+            )})`;
+          }
+          return { style };
         },
       },
     },
@@ -287,6 +356,7 @@ const Expenses = ({
       name: 'info.store',
       label: 'Geschäft',
       options: {
+        display: mdUp,
         filter: true,
         filterOptions: {
           names: expenses.info.data ? expenses.info.data.filterHints.store : [],
@@ -297,6 +367,7 @@ const Expenses = ({
       name: 'info.description',
       label: 'Beschreibung',
       options: {
+        display: mdUp,
         filter: false,
       },
     },
@@ -304,6 +375,7 @@ const Expenses = ({
       name: 'info.comments',
       label: 'Kommentare',
       options: {
+        display: mdUp,
         filter: false,
       },
     },
@@ -353,7 +425,6 @@ const Expenses = ({
   }
 
   const options = {
-    resizableColumns: true,
     selectableRows: 'single',
     selectableRowsOnClick: true,
     selectToolbarPlacement: 'none',
@@ -377,11 +448,11 @@ const Expenses = ({
         const column = tableState.sortOrder.name;
 
         newQuery.sortBy.push({
+          column,
           direction:
             tableState.sortOrder.direction === 'asc'
               ? 'ascending'
               : 'descending',
-          column,
         });
       }
 
@@ -405,7 +476,7 @@ const Expenses = ({
     rowsPerPageOptions: mdUp ? [10, 25, 50] : [10],
     rowsPerPage: currentQuery.rowsPerPage,
     page: currentQuery.page,
-    count: currentQueryResponse.filteredRecordCount,
+    count: displayedResponse.filteredRecordCount,
     sortOrder: currentSortOrder,
     filterType: 'multiselect',
     responsive: 'standard',
@@ -476,6 +547,7 @@ Expenses.defaultProps = { userInfo: null };
 
 Expenses.propTypes = {
   updateExpenses: PropTypes.func.isRequired,
+  updateUsers: PropTypes.func.isRequired,
   updateExpenseInfo: PropTypes.func.isRequired,
   updateCategories: PropTypes.func.isRequired,
   updateAccounts: PropTypes.func.isRequired,
@@ -502,6 +574,10 @@ Expenses.propTypes = {
     isFetching: PropTypes.bool.isRequired,
     items: PropTypes.arrayOf(PropTypes.object),
   }).isRequired,
+  users: PropTypes.shape({
+    isFetching: PropTypes.bool.isRequired,
+    items: PropTypes.arrayOf(PropTypes.object),
+  }).isRequired,
   categories: PropTypes.shape({
     isFetching: PropTypes.bool.isRequired,
     items: PropTypes.arrayOf(PropTypes.object),
@@ -516,10 +592,11 @@ const mapDispatchToProps = dispatch => ({
   updateExpenseInfo: () => dispatch(updateExpenseInfoAction()),
   updateAccounts: () => dispatch(updateAccountsAction()),
   updateCategories: () => dispatch(updateCategoriesAction()),
+  updateUsers: () => dispatch(updateUsersAction()),
 });
 
 const mapStateToProps = state => {
-  const { expenses, accounts, categories, authentication } = state;
+  const { expenses, accounts, categories, authentication, users } = state;
   const { userInfo } = authentication;
 
   return {
@@ -527,6 +604,7 @@ const mapStateToProps = state => {
     accounts,
     categories,
     userInfo,
+    users,
   };
 };
 

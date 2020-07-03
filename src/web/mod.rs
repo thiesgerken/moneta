@@ -53,6 +53,7 @@ pub fn handle(config: Config) {
                 user::login,
                 user::logout,
                 user::info,
+                user::list,
                 accounts::list,
                 accounts::get,
                 // accounts::delete,
