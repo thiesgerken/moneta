@@ -21,7 +21,7 @@ impl Deref for UserId {
     }
 }
 
-pub struct UserId(i32);
+pub struct UserId(pub i32);
 
 impl<'a, 'r> FromRequest<'a, 'r> for UserId {
     type Error = ();
@@ -113,4 +113,16 @@ pub fn login(
             Err(Status::Unauthorized)
         }
     }
+}
+
+#[get("/user/list")]
+pub fn list(_uid: UserId, connection: DbConn) -> Option<Json<Vec<UserInfo>>> {
+    Some(Json(
+        users::table
+            .load::<User>(&*connection)
+            .ok()?
+            .into_iter()
+            .map(|u| UserInfo::new(u))
+            .collect::<Vec<_>>(),
+    ))
 }

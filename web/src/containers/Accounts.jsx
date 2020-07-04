@@ -2,7 +2,8 @@ import { connect } from 'react-redux';
 import React, { useEffect } from 'react';
 import PropTypes from 'prop-types';
 import MUIDataTable from 'mui-datatables';
-import { find } from 'lodash';
+import { find, filter } from 'lodash';
+import tinycolor from 'tinycolor2';
 import {
   ThemeProvider,
   createMuiTheme,
@@ -18,6 +19,7 @@ import { useLocation, useHistory } from 'react-router';
 
 import { updateAccounts as updateAccountsAction } from '../actions/accounts';
 import AccountDialog from './AccountDialog';
+import { muiDatatablesLang } from '../lang';
 
 function useQuery(key) {
   const location = useLocation();
@@ -35,7 +37,7 @@ function useQuery(key) {
   return [query.get(key), set];
 }
 
-const Accounts = ({ accounts, updateAccounts }) => {
+const Accounts = ({ userId, accounts, updateAccounts }) => {
   const [accountId, setAccountId] = useQuery('id');
   const [page, setPage] = useQuery('page');
 
@@ -78,84 +80,110 @@ const Accounts = ({ accounts, updateAccounts }) => {
 
   const columns = [
     {
-      name: 'id',
-      label: 'ID',
+      name: 'info.color',
       options: {
+        filter: false,
+        sort: false,
+        viewColumns: false,
         display: false,
       },
     },
     {
-      name: 'name',
-      label: 'Name',
+      name: 'info.id',
+      label: 'ID',
       options: {
-        sortDirection: 'asc',
+        display: false,
+        filter: false,
       },
     },
     {
-      name: 'iban',
+      name: 'info.name',
+      label: 'Name',
+      options: {
+        sortOrder: 'asc',
+        filter: false,
+        // customBodyRender: (v, { rowData }) => {
+        //   const color = rowData[0];
+        //   if (color === null || color === '') return v;
+
+        //   return <ColorboxLabel color={color}>{v}</ColorboxLabel>;
+        // },
+      },
+    },
+    {
+      name: 'info.color',
+      label: 'Farbe',
+      options: {
+        sort: false,
+        filter: false,
+        setCellProps: v => {
+          const c = tinycolor(v);
+          if (!c.isValid()) return {};
+
+          if (c.getBrightness() >= 120)
+            return { style: { backgroundColor: v } };
+
+          return { style: { backgroundColor: v, color: '#F7F7F7' } };
+        },
+      },
+    },
+    {
+      name: 'info.description',
+      label: 'Beschreibung',
+      options: {
+        sort: false,
+        filter: false,
+      },
+    },
+    {
+      name: 'info.iban',
       label: 'IBAN',
+      options: {
+        filter: false,
+      },
+    },
+    {
+      name: 'meta.kind',
+      label: 'Art',
+    },
+    {
+      name: 'meta.availability',
+      label: 'Verfügbarkeit',
+    },
+    {
+      name: 'meta.risk',
+      label: 'Risiko',
     },
   ];
 
   const options = {
     selectableRows: 'single',
     selectableRowsOnClick: true,
-    disableToolbarSelect: true,
+    selectToolbarPlacement: 'none',
+    enableNestedDataAccess: '.',
     print: false,
     page: page === null ? 0 : parseInt(page, 10), // https://github.com/gregnb/mui-datatables/issues/957
     onChangePage: p => {
       setPage(p === 0 ? null : p);
     },
-    onRowsSelect: (_, rows) => {
+    onRowSelectionChange: (_, rows) => {
       if (rows.length > 0 && rows[0].dataIndex < accounts.items.length)
-        setAccountId(accounts.items[rows[0].dataIndex].id);
+        setAccountId(accounts.items[rows[0].dataIndex].info.id);
       else setAccountId(null);
     },
     download: false,
-    filter: false,
     rowsPerPageOptions: mdUp ? [10, 25, 50] : [10],
-    responsive: 'scrollFullHeight',
+    responsive: 'standard',
     customToolbar: () => (
       <>
-        <Tooltip title="Neues Depot">
+        <Tooltip title="Neues Konto">
           <IconButton onClick={() => setAccountId(-1)}>
             <AddIcon />
           </IconButton>
         </Tooltip>
       </>
     ),
-    textLabels: {
-      body: {
-        noMatch: 'Keine Depots vorhanden.',
-        toolTip: 'Sortieren',
-        columnHeaderTooltip: column => `Sortiere nach ${column.label}`,
-      },
-      pagination: {
-        next: 'Nächste Seite',
-        previous: 'Vorherige Seite',
-        rowsPerPage: 'Zeilen pro Seite:',
-        displayRows: 'von',
-      },
-      toolbar: {
-        search: 'Suchen',
-        viewColumns: 'Spalten',
-        filterTable: 'Filter',
-      },
-      filter: {
-        all: 'Alle',
-        title: 'FILTER',
-        reset: 'RESET',
-      },
-      viewColumns: {
-        title: 'Angezeigte Spalten',
-        titleAria: 'Zeigen/Ausblenden von Tabellenspalten',
-      },
-      selectedRows: {
-        text: 'Zeile(n) ausgewählt',
-        delete: 'Löschen',
-        deleteAria: 'ausgewählte Zeilen löschen',
-      },
-    },
+    textLabels: muiDatatablesLang,
   };
   return (
     <div style={{ margin: '-4px' }}>
@@ -189,8 +217,8 @@ const Accounts = ({ accounts, updateAccounts }) => {
           >
             <ThemeProvider theme={myTheme}>
               <MUIDataTable
-                title="Depots"
-                data={accounts.items}
+                title="Konten"
+                data={filter(accounts.items, c => c.info.userId === userId)}
                 columns={columns}
                 options={options}
               />
@@ -210,6 +238,7 @@ const Accounts = ({ accounts, updateAccounts }) => {
 };
 
 Accounts.propTypes = {
+  userId: PropTypes.number.isRequired,
   updateAccounts: PropTypes.func.isRequired,
   accounts: PropTypes.shape({
     items: PropTypes.arrayOf(PropTypes.object),
@@ -222,10 +251,11 @@ const mapDispatchToProps = dispatch => ({
 });
 
 const mapStateToProps = state => {
-  const { accounts } = state;
+  const { accounts, authentication } = state;
 
   return {
     accounts,
+    userId: authentication.userInfo.id,
   };
 };
 

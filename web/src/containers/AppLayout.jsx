@@ -18,7 +18,10 @@ import Toolbar from '@material-ui/core/Toolbar';
 import Typography from '@material-ui/core/Typography';
 import AccountCircle from '@material-ui/icons/AccountCircle';
 import CreditCardIcon from '@material-ui/icons/CreditCard';
+import CategoryIcon from '@material-ui/icons/Category';
+import ReceiptIcon from '@material-ui/icons/Receipt';
 import DashboardIcon from '@material-ui/icons/Dashboard';
+import AccountBalanceIcon from '@material-ui/icons/AccountBalance';
 import MenuIcon from '@material-ui/icons/Menu';
 import SettingsIcon from '@material-ui/icons/Settings';
 import Alert from '@material-ui/lab/Alert';
@@ -117,9 +120,24 @@ function ResponsiveDrawer(props) {
       <List>
         {[
           {
+            key: 'expenses',
+            text: 'Ausgaben',
+            icon: <ReceiptIcon />,
+          },
+          {
+            key: 'balances',
+            text: 'Kontostände',
+            icon: <AccountBalanceIcon />,
+          },
+          {
             key: 'accounts',
             text: 'Konten',
             icon: <CreditCardIcon />,
+          },
+          {
+            key: 'categories',
+            text: 'Kategorien',
+            icon: <CategoryIcon />,
           },
         ].map(makeMenuItem)}
       </List>

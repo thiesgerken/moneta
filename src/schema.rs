@@ -7,6 +7,8 @@ table! {
     account_synchronizations (account1) {
         account1 -> Int4,
         account2 -> Int4,
+        user1 -> Int4,
+        user2 -> Int4,
         invert -> Bool,
     }
 }
@@ -33,7 +35,8 @@ table! {
     use diesel::sql_types::*;
     use crate::enums::*;
 
-    balances (account_id, date) {
+    balances (id) {
+        id -> Int4,
         account_id -> Int4,
         date -> Timestamptz,
         amount -> Int8,
@@ -147,14 +150,13 @@ table! {
         description -> Text,
         store -> Text,
         comments -> Text,
-        booking_start -> Nullable<Timestamptz>,
-        booking_end -> Nullable<Timestamptz>,
-        booking_month_offset -> Nullable<Int4>,
-        booking_month_count -> Nullable<Int4>,
+        booking_start -> Timestamptz,
+        booking_end -> Timestamptz,
         is_deleted -> Bool,
         is_template -> Bool,
         is_preliminary -> Bool,
         is_tax_relevant -> Bool,
+        is_unchecked -> Bool,
     }
 }
 

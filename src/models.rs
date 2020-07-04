@@ -69,6 +69,7 @@ pub struct NewAccount {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -119,12 +120,15 @@ pub struct AccountSynchronization {
     // also (not checked by db: each account can only be synced to at most one other account)
     pub account1: i32,
     pub account2: i32,
+    pub user1: i32, // owner of account1. Workaround because otherwise a lot of queries would not be representable using diesel
+    pub user2: i32, // owner of account2
     pub invert: bool,
 }
 #[derive(
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -134,6 +138,7 @@ pub struct AccountSynchronization {
 )]
 #[serde(rename_all = "camelCase")]
 #[primary_key("user_id", "original")]
+#[table_name = "category_replacements"]
 #[belongs_to(User, foreign_key = "user_id")]
 pub struct CategoryReplacement {
     pub user_id: i32,
@@ -145,6 +150,7 @@ pub struct CategoryReplacement {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -154,8 +160,20 @@ pub struct CategoryReplacement {
 )]
 #[belongs_to(Account, foreign_key = "account_id")]
 #[serde(rename_all = "camelCase")]
-#[primary_key("account_id", "date")]
+#[primary_key("id")]
+#[table_name = "balances"]
 pub struct Balance {
+    pub id: i32,
+    pub account_id: i32,
+    pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
+    pub amount: i64,         // cents
+    pub comment: String,
+}
+
+#[derive(Debug, Clone, Insertable, Serialize, Deserialize)]
+#[table_name = "balances"]
+#[serde(rename_all = "camelCase")]
+pub struct NewBalance {
     pub account_id: i32,
     pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
     pub amount: i64,         // cents
@@ -182,15 +200,13 @@ pub struct Expense {
     pub description: String,
     pub store: String,
     pub comments: String,
-    // constraint: either booking_start and booking_end != null OR booking_month_offset and booking_month_count != null
-    pub booking_start: Option<DateTime<Utc>>,
-    pub booking_end: Option<DateTime<Utc>>,
-    pub booking_month_offset: Option<i32>,
-    pub booking_month_count: Option<i32>,
+    pub booking_start: DateTime<Utc>,
+    pub booking_end: DateTime<Utc>,
     pub is_deleted: bool,
     pub is_template: bool,
     pub is_preliminary: bool,
     pub is_tax_relevant: bool,
+    pub is_unchecked: bool,
 }
 
 #[derive(Debug, Clone, Insertable, Serialize, Deserialize)]
@@ -201,14 +217,13 @@ pub struct NewExpense {
     pub description: String,
     pub store: String,
     pub comments: String,
-    pub booking_start: Option<DateTime<Utc>>,
-    pub booking_end: Option<DateTime<Utc>>,
-    pub booking_month_offset: Option<i32>,
-    pub booking_month_count: Option<i32>,
+    pub booking_start: DateTime<Utc>,
+    pub booking_end: DateTime<Utc>,
     pub is_deleted: bool,
     pub is_template: bool,
     pub is_preliminary: bool,
     pub is_tax_relevant: bool,
+    pub is_unchecked: bool,
 }
 
 #[derive(
@@ -256,6 +271,7 @@ pub struct NewExpenseTransaction {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -264,6 +280,7 @@ pub struct NewExpenseTransaction {
     AsChangeset,
 )]
 #[belongs_to(Expense, foreign_key = "expense_id")]
+#[table_name = "expense_events"]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseEvent {
     pub id: i32,
@@ -295,6 +312,7 @@ pub struct NewExpenseEvent {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -317,6 +335,7 @@ pub struct ExpenseCategory {
     Debug,
     Clone,
     Queryable,
+    QueryableByName,
     Insertable,
     Associations,
     Identifiable,
@@ -325,6 +344,7 @@ pub struct ExpenseCategory {
     AsChangeset,
 )]
 #[belongs_to(Expense, foreign_key = "expense_id")]
+#[table_name = "expense_receipts"]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseReceipt {
     pub id: i32,

@@ -1,3 +1,10 @@
+import { map } from 'lodash';
+import {
+  accountRiskToString,
+  accountAvailabilityToString,
+  accountKindToString,
+} from '../lang';
+
 export const FETCH_ACCOUNTS_REQUEST = 'FETCH_ACCOUNTS_REQUEST';
 export const fetchAccountsRequest = () => ({
   type: FETCH_ACCOUNTS_REQUEST,
@@ -46,6 +53,17 @@ export const modifyAccountError = (id, method, error) => ({
   receivedAt: Date.now(),
 });
 
+const preprocessAccount = a => {
+  const x = a;
+  x.meta = {
+    risk: accountRiskToString(a.info.risk),
+    availability: accountAvailabilityToString(a.info.availability),
+    kind: accountKindToString(a.info.kind),
+  };
+
+  return x;
+};
+
 export const fetchAccounts = () => dispatch => {
   dispatch(fetchAccountsRequest());
   return fetch('/api/accounts')
@@ -56,7 +74,8 @@ export const fetchAccounts = () => dispatch => {
     .then(res => {
       if (res.error) throw res.error;
 
-      dispatch(fetchAccountsSuccess(res));
+      const items = map(res, preprocessAccount);
+      dispatch(fetchAccountsSuccess(items));
     })
     .catch(e => dispatch(fetchAccountsError(e)));
 };
