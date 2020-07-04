@@ -86,7 +86,6 @@ const preprocessExpense = e => {
   let accountsByAmount = {};
 
   zip(e.transactions, e.calculatedAmounts).forEach(([t, amount]) => {
-    if (amount === 0) return;
     if (!(t.accountId in accountsByAmount)) accountsByAmount[t.accountId] = 0;
     accountsByAmount[t.accountId] += amount;
   });

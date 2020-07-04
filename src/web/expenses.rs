@@ -91,6 +91,12 @@ pub fn query(
                 .or(account_synchronizations::user1.eq(*uid))
                 .or(account_synchronizations::user2.eq(*uid)),
         )
+        .left_join(expense_categories::table.on(expense_categories::expense_id.eq(expenses::id)))
+        .left_join(
+            category_replacements::table.on(category_replacements::replacement
+                .eq(expense_categories::category_id)
+                .and(category_replacements::user_id.eq(*uid))),
+        )
         .filter(expenses::is_deleted.eq(false))
         .into_boxed();
 
@@ -193,6 +199,32 @@ pub fn query(
         // TODO: filtering by account and category
 
         match column.as_ref() {
+            "transactions" => {
+                let values_parsed = values
+                    .into_iter()
+                    .map(|s| s.parse().ok())
+                    .collect::<Option<Vec<i32>>>()
+                    .ok_or(Status::BadRequest)?;
+                query = query.filter(
+                    expense_transactions::account_id
+                        .eq_any(values_parsed.clone())
+                        .or(account_synchronizations::account1
+                            .eq_any(values_parsed.clone())
+                            .or(account_synchronizations::account2.eq_any(values_parsed))),
+                );
+            }
+            "categories" => {
+                let values_parsed = values
+                    .into_iter()
+                    .map(|s| s.parse().ok())
+                    .collect::<Option<Vec<i32>>>()
+                    .ok_or(Status::BadRequest)?;
+                query = query.filter(
+                    expense_categories::category_id
+                        .eq_any(values_parsed.clone())
+                        .or(category_replacements::original.eq_any(values_parsed.clone())),
+                );
+            }
             "info.title" => {
                 query = query.filter(expenses::title.eq_any(values));
             }

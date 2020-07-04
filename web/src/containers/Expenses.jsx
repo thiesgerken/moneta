@@ -15,7 +15,7 @@ import {
 import AddIcon from '@material-ui/icons/Add';
 import { useLocation, useHistory } from 'react-router';
 import * as moment from 'moment';
-import { forEach, map, sortBy, uniqBy } from 'lodash';
+import { forEach, map, sortBy, uniqBy, filter } from 'lodash';
 import tinycolor from 'tinycolor2';
 
 import {
@@ -28,8 +28,8 @@ import { updateCategories as updateCategoriesAction } from '../actions/categorie
 import ExpenseDialog from './ExpenseDialog';
 import { muiDatatablesLang } from '../lang';
 import { findExpenseQueryData } from '../selectors/expenses';
-import { findAccount } from '../selectors/accounts';
-import { findCategory } from '../selectors/categories';
+import { findAccount, findAccountByName } from '../selectors/accounts';
+import { findCategory, findCategoryByName } from '../selectors/categories';
 import { findUserName } from '../selectors/users';
 
 function useQuery(key) {
@@ -48,6 +48,14 @@ function useQuery(key) {
   return [query.get(key), set];
 }
 
+const cellStyle = {
+  textOverflow: 'ellipsis',
+  overflow: 'hidden',
+  display: '-webkit-box',
+  WebkitLineClamp: 1,
+  WebkitBoxOrient: 'vertical',
+};
+
 const Expenses = ({
   users,
   updateUsers,
@@ -65,7 +73,7 @@ const Expenses = ({
     null,
     {
       page: 0,
-      rowsPerPage: 10,
+      rowsPerPage: 15,
       filterBy: {},
       sortBy: [{ column: 'info.bookingEnd', direction: 'descending' }],
       needle: null,
@@ -122,6 +130,40 @@ const Expenses = ({
       ...th,
       overrides: {
         ...th.overrides,
+        MUIDataTableHeadCell: {
+          root: {
+            '&:nth-child(1)': {
+              width: '0%',
+            },
+            '&:nth-child(2)': {
+              width: '10%',
+            },
+            '&:nth-child(3)': {
+              width: '15%',
+            },
+            '&:nth-child(4)': {
+              width: '12%',
+            },
+            '&:nth-child(5)': {
+              width: '15%',
+            },
+            '&:nth-child(6)': {
+              width: '8%',
+            },
+            '&:nth-child(7)': {
+              width: '10%',
+            },
+            '&:nth-child(8)': {
+              width: '20%',
+            },
+            '&:nth-child(9)': {
+              width: '10%',
+            },
+          },
+        },
+        MUIDataTableBodyCell: {
+          root: { '& div': cellStyle },
+        },
         MUIDataTableSelectCell: {
           root: {
             display: 'none',
@@ -178,7 +220,6 @@ const Expenses = ({
       },
     },
     {
-      // TODO: filter values for categories
       name: 'categories',
       label: 'Kategorien',
       options: {
@@ -191,7 +232,7 @@ const Expenses = ({
           );
 
           return (
-            <div style={{ padding: theme.spacing(2) }}>
+            <div style={{ margin: theme.spacing(2) }}>
               {map(cs, c => {
                 const cat = findCategory(categories, c.categoryId);
                 if (!cat) return `[${c.categoryId}]`;
@@ -205,12 +246,21 @@ const Expenses = ({
             </div>
           );
         },
+        filterOptions: {
+          names: map(
+            userInfo
+              ? filter(categories.items, c => c.info.userId === userInfo.id)
+              : [],
+            c => c.info.name
+          ),
+        },
         sort: false,
         setCellProps: (_, i) => {
           const data = map(displayedResponse.records[i].categories, x => ({
             ...x,
             color:
-              findCategory(categories, x.categoryId).info.color || '#00FFFFFF',
+              findCategory(categories, x.categoryId)?.info?.color ||
+              '#00FFFFFF',
           }));
 
           const style = { padding: 0 };
@@ -261,13 +311,12 @@ const Expenses = ({
       },
     },
     {
-      // TODO: filter values for accounts
       name: 'transactions',
       label: 'Konten',
       options: {
         customBodyRenderLite: i => {
           return (
-            <div style={{ padding: theme.spacing(2) }}>
+            <div style={{ margin: theme.spacing(2) }}>
               {map(
                 displayedResponse.records[i].meta.accountsByAmount,
                 ({ accountId }) => {
@@ -285,13 +334,24 @@ const Expenses = ({
           );
         },
         sort: false,
+        filterOptions: {
+          names: map(
+            userInfo
+              ? filter(
+                  accounts.items,
+                  a => a.info.userId === userInfo.id && !a.info.hidden
+                )
+              : [],
+            a => a.info.name
+          ),
+        },
         setCellProps: (_, i) => {
           const data = map(
             displayedResponse.records[i].meta.accountsByAmount,
             x => ({
               ...x,
               color:
-                findAccount(accounts, x.accountId).info.color || '#00FFFFFF',
+                findAccount(accounts, x.accountId)?.info?.color || '#00FFFFFF',
             })
           );
 
@@ -432,8 +492,6 @@ const Expenses = ({
     serverSide: true,
     print: false,
     onTableChange: (action, tableState) => {
-      console.log(action, tableState);
-
       const newQuery = {
         page: tableState.page,
         rowsPerPage: tableState.rowsPerPage,
@@ -458,9 +516,19 @@ const Expenses = ({
 
       forEach(tableState.filterList, (v, i) => {
         if (v.length > 0) {
-          newQuery.filterBy[columns[i].name] = map(v, x =>
-            typeof x === 'boolean' ? (!x).toString() : x
-          );
+          newQuery.filterBy[columns[i].name] = map(v, x => {
+            // flags
+            if (typeof x === 'boolean') return (!x).toString();
+
+            if (columns[i].name === 'transactions')
+              return findAccountByName(accounts, x).info.id.toString();
+
+            if (columns[i].name === 'categories')
+              return findCategoryByName(categories, x).info.id.toString();
+
+            return x;
+          });
+          newQuery.filterBy[columns[i].name].sort();
         }
       });
 
@@ -473,7 +541,7 @@ const Expenses = ({
     //   else setExpenseId(null);
     // },
     download: false,
-    rowsPerPageOptions: mdUp ? [10, 25, 50] : [10],
+    rowsPerPageOptions: mdUp ? [10, 15, 20, 50] : [15],
     rowsPerPage: currentQuery.rowsPerPage,
     page: currentQuery.page,
     count: displayedResponse.filteredRecordCount,

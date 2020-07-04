@@ -23,7 +23,14 @@ fn run_filter_and_render_naive(connection: &PgConnection) -> Option<Vec<Rendered
     let rexps = exps
         .into_iter()
         .map(|e| {
-            RenderedExpense::filter_and_render(e, &transactions, &categories, &receipts, &events)
+            RenderedExpense::filter_and_render(
+                uid,
+                e,
+                &transactions,
+                &categories,
+                &receipts,
+                &events,
+            )
         })
         .collect::<Vec<RenderedExpense>>();
 
@@ -49,7 +56,7 @@ fn run_filter_and_render_optim(connection: &PgConnection) -> Option<Vec<Rendered
     for e in exps.into_iter() {
         while transactions
             .get(t_i)
-            .map(|(t, _)| e.id > t.expense_id)
+            .map(|(t, _, _)| e.id > t.expense_id)
             .unwrap_or(false)
         {
             t_i += 1;
@@ -77,6 +84,7 @@ fn run_filter_and_render_optim(connection: &PgConnection) -> Option<Vec<Rendered
         }
 
         rexps.push(RenderedExpense::filter_and_render(
+            uid,
             e,
             &transactions[t_i..],
             &categories[c_i..],
@@ -132,7 +140,6 @@ fn count_all_expenses(connection: &PgConnection) -> Option<usize> {
             ),
         );
 
-    // let all = diesel::debug_query::<diesel::pg::Pg, _>(&q);
     let all = q.load::<i64>(connection).ok()?;
     Some(all.len())
 }
@@ -152,15 +159,15 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let connection = moneta::connect(&config.database).unwrap();
     debug!("config={:?}", &config);
 
-    // c.bench_function("RenderedExpense::filter_and_render (optim)", |b| {
-    //     b.iter(|| run_filter_and_render_optim(&connection))
-    // });
-    // c.bench_function("RenderedExpense::filter_and_render (naive)", |b| {
-    //     b.iter(|| run_filter_and_render_naive(&connection))
-    // });
-    // c.bench_function("RenderedExpense::filter_and_render (queries only)", |b| {
-    //     b.iter(|| run_filter_and_render_queries(&connection))
-    // });
+    c.bench_function("RenderedExpense::filter_and_render (optim)", |b| {
+        b.iter(|| run_filter_and_render_optim(&connection))
+    });
+    c.bench_function("RenderedExpense::filter_and_render (naive)", |b| {
+        b.iter(|| run_filter_and_render_naive(&connection))
+    });
+    c.bench_function("RenderedExpense::filter_and_render (queries only)", |b| {
+        b.iter(|| run_filter_and_render_queries(&connection))
+    });
     c.bench_function("count all expenses", |b| {
         b.iter(|| count_all_expenses(&connection))
     });
