@@ -444,8 +444,13 @@ const Expenses = ({
       label: 'Vorläufig',
       options: {
         display: false,
-        filterType: 'checkbox',
-        customFilterListOptions: { render: () => 'Vorläufig' },
+        filterType: 'dropdown',
+        customFilterListOptions: {
+          render: v => (v === 'Ja' ? 'vorläufig' : 'nicht vorläufig'),
+        },
+        filterOptions: {
+          names: ['Ja', 'Nein'],
+        },
       },
     },
     {
@@ -453,26 +458,41 @@ const Expenses = ({
       label: 'Steuerrelevant',
       options: {
         display: false,
-        filterType: 'checkbox',
-        customFilterListOptions: { render: () => 'Steuerrelevant' },
+        filterType: 'dropdown',
+        customFilterListOptions: {
+          render: v => (v === 'Ja' ? 'steuerrelevant' : 'nicht steuerrelevant'),
+        },
+        filterOptions: {
+          names: ['Ja', 'Nein'],
+        },
       },
     },
     {
       name: 'info.isTemplate',
       label: 'Vorlage',
       options: {
+        filterType: 'dropdown',
         display: false,
-        filterType: 'checkbox',
-        customFilterListOptions: { render: () => 'Vorlage' },
+        customFilterListOptions: {
+          render: v => (v === 'Ja' ? 'Vorlage' : 'keine Vorlage'),
+        },
+        filterOptions: {
+          names: ['Ja', 'Nein'],
+        },
       },
     },
     {
       name: 'info.isUnchecked',
       label: 'Unüberprüft',
       options: {
+        filterType: 'dropdown',
         display: false,
-        filterType: 'checkbox',
-        customFilterListOptions: { render: () => `nicht überprüft` },
+        customFilterListOptions: {
+          render: v => (v === 'Ja' ? 'überprüft' : 'nicht überprüft'),
+        },
+        filterOptions: {
+          names: ['Ja', 'Nein'],
+        },
       },
     },
   ];
@@ -517,14 +537,14 @@ const Expenses = ({
       forEach(tableState.filterList, (v, i) => {
         if (v.length > 0) {
           newQuery.filterBy[columns[i].name] = map(v, x => {
-            // flags
-            if (typeof x === 'boolean') return (!x).toString();
-
             if (columns[i].name === 'transactions')
               return findAccountByName(accounts, x).info.id.toString();
 
             if (columns[i].name === 'categories')
               return findCategoryByName(categories, x).info.id.toString();
+
+            if (columns[i].name.startsWith('info.is'))
+              return x === 'Ja' ? 'true' : 'false';
 
             return x;
           });

@@ -18,7 +18,7 @@ export const muiDatatablesLang = {
   filter: {
     all: 'Alle',
     title: 'FILTER',
-    reset: 'RESET',
+    reset: 'ZURÜCKSETZEN',
   },
   viewColumns: {
     title: 'Angezeigte Spalten',
