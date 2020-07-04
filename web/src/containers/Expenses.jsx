@@ -180,8 +180,7 @@ const Expenses = ({
     updateExpenses(currentQuery);
   });
 
-  // TODO: how to control column widths?
-  // TODO: add ellipses in text fields
+  // TODO: highlight rows with unchecked expenses
 
   const columns = [
     {
@@ -445,6 +444,7 @@ const Expenses = ({
       options: {
         display: false,
         filterType: 'dropdown',
+        customBodyRender: v => (v ? 'Ja' : 'Nein'),
         customFilterListOptions: {
           render: v => (v === 'Ja' ? 'vorläufig' : 'nicht vorläufig'),
         },
@@ -459,6 +459,7 @@ const Expenses = ({
       options: {
         display: false,
         filterType: 'dropdown',
+        customBodyRender: v => (v ? 'Ja' : 'Nein'),
         customFilterListOptions: {
           render: v => (v === 'Ja' ? 'steuerrelevant' : 'nicht steuerrelevant'),
         },
@@ -473,6 +474,7 @@ const Expenses = ({
       options: {
         filterType: 'dropdown',
         display: false,
+        customBodyRender: v => (v ? 'Ja' : 'Nein'),
         customFilterListOptions: {
           render: v => (v === 'Ja' ? 'Vorlage' : 'keine Vorlage'),
         },
@@ -487,6 +489,7 @@ const Expenses = ({
       options: {
         filterType: 'dropdown',
         display: false,
+        customBodyRender: v => (v ? 'Ja' : 'Nein'),
         customFilterListOptions: {
           render: v => (v === 'Ja' ? 'überprüft' : 'nicht überprüft'),
         },

@@ -1,6 +1,7 @@
 use crate::queries;
 use crate::rendering::RenderedBalance;
 use crate::web::user::UserId;
+use crate::web::util::log_error_and_500;
 use crate::web::DbConn;
 
 use rocket::http::Status;
@@ -14,7 +15,7 @@ pub fn list(
     count: Option<i32>,
 ) -> Result<Json<Vec<RenderedBalance>>, Status> {
     let bals = queries::relevant_balances(&*connection, *uid, offset, count)
-        .map_err(|_| Status::InternalServerError)?
+        .map_err(|e| log_error_and_500(Box::new(e)))?
         .into_iter()
         .map(|(balance, syncing)| RenderedBalance::render(balance, syncing))
         .collect();
@@ -25,7 +26,7 @@ pub fn list(
 #[get("/balances/<id>")]
 pub fn get(uid: UserId, connection: DbConn, id: i32) -> Result<Json<RenderedBalance>, Status> {
     let (balance, syncing) = queries::relevant_balance_by_id(&*connection, *uid, id)
-        .map_err(|_| Status::InternalServerError)?
+        .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
 
     Ok(Json(RenderedBalance::render(balance, syncing)))

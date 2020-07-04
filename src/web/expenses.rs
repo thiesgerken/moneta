@@ -4,6 +4,7 @@ use crate::rendering::RenderedExpense;
 use crate::schema::*;
 use crate::web::pagination::*;
 use crate::web::user::UserId;
+use crate::web::util::log_error_and_500;
 use crate::web::DbConn;
 
 use chrono::{DateTime, Duration, Utc};
@@ -107,6 +108,10 @@ pub fn query(
         query = query.filter(expenses::booking_start.le(to));
     }
 
+    query = query
+        .then_order_by(expenses::is_template.asc())
+        .then_order_by(expenses::is_unchecked.desc());
+
     for sb in request.sort_by.iter() {
         let asc = sb.direction.to_lowercase() == "ascending";
         // TODO: sorting by amount would be nice
@@ -194,6 +199,8 @@ pub fn query(
             }
         }
     }
+
+    query = query.then_order_by(expenses::id.asc());
 
     for (column, values) in request.filter_by.iter() {
         // TODO: filtering by account and category
@@ -304,13 +311,13 @@ pub fn query(
     //     .per_page(request.rows_per_page)
     //     .load_and_count::<Expense>(&connection);
     // info!("{:?}", res);
-    // let (expenses, row_count) = res.map_err(|_| Status::InternalServerError)?;
+    // let (expenses, row_count) = res.map_err(|e| log_error_and_500(Box::new(e)))?;
 
     let (expenses, row_count) = query
         .paginate(request.page)
         .per_page(request.rows_per_page)
         .load_and_count::<Expense>(&connection)
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
 
     let exp_ids = expenses.iter().map(|e| e.id).collect::<Vec<_>>();
 
@@ -328,7 +335,7 @@ pub fn query(
             expense_transactions::expense_id.eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
         )
         .load::<(ExpenseTransaction, Account, Option<AccountSynchronization>)>(&*connection)
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
 
     let categories = expense_categories::table
         .left_join(
@@ -338,16 +345,16 @@ pub fn query(
         )
         .filter(expense_categories::expense_id.eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()))
         .load::<(ExpenseCategory, Option<CategoryReplacement>)>(&*connection)
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
 
     let receipts = expense_receipts::table
         .filter(expense_receipts::expense_id.eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()))
         .load::<ExpenseReceipt>(&*connection)
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
     let events = expense_events::table
         .filter(expense_events::expense_id.eq_any(exp_ids))
         .load::<ExpenseEvent>(&*connection)
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
 
     let rexps = expenses
         .into_iter()
@@ -408,7 +415,7 @@ pub fn info(uid: UserId, connection: DbConn) -> Result<Json<InfoResponse>, Statu
             ),
         )
         .get_result::<i64>(&*connection)
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
 
     let mut filter_hints = HashMap::<String, Vec<String>>::new();
 
@@ -448,7 +455,7 @@ pub fn info(uid: UserId, connection: DbConn) -> Result<Json<InfoResponse>, Statu
         .filter(sql("TRUE GROUP BY expenses.store"))
         .limit(25)
         .load::<(String, i64)>(&*connection)
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
 
     filter_hints.insert(
         "store".to_owned(),
@@ -469,17 +476,17 @@ pub fn list(
     count: Option<i32>,
 ) -> Result<Json<Vec<RenderedExpense>>, Status> {
     let exps = queries::relevant_expenses(&*connection, *uid, offset, count)
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
     let transactions =
         queries::expense_transactions_by_expense_range(&*connection, *uid, offset, count)
-            .map_err(|_| Status::InternalServerError)?;
+            .map_err(|e| log_error_and_500(Box::new(e)))?;
     let categories =
         queries::expense_categories_by_expense_range(&*connection, *uid, offset, count)
-            .map_err(|_| Status::InternalServerError)?;
+            .map_err(|e| log_error_and_500(Box::new(e)))?;
     let receipts = queries::expense_receipts_by_expense_range(&*connection, *uid, offset, count)
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
     let events = queries::expense_events_by_expense_range(&*connection, *uid, offset, count)
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
 
     let mut rexps = Vec::with_capacity(exps.len());
 
@@ -543,21 +550,21 @@ pub fn list(
 #[get("/expenses/<id>")]
 pub fn get(uid: UserId, connection: DbConn, id: i32) -> Result<Json<RenderedExpense>, Status> {
     let exp = queries::relevant_expense_by_id(&*connection, *uid, id)
-        .map_err(|_| Status::InternalServerError)?
+        .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
 
     let transactions = queries::expense_transactions_by_expense_id(&*connection, *uid, id)
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
     let categories = queries::expense_categories_by_expense_id(&*connection, *uid, id)
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
     let receipts = expense_receipts::table
         .filter(expense_receipts::expense_id.eq(id))
         .load::<ExpenseReceipt>(&*connection)
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
     let events = expense_events::table
         .filter(expense_events::expense_id.eq(id))
         .load::<ExpenseEvent>(&*connection)
-        .map_err(|_| Status::InternalServerError)?;
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
 
     let rexp = RenderedExpense::render(*uid, exp, transactions, categories, receipts, events);
     Ok(Json(rexp))
