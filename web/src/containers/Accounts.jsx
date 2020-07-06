@@ -172,7 +172,7 @@ const Accounts = ({ userId, accounts, updateAccounts }) => {
       else setAccountId(null);
     },
     download: false,
-    rowsPerPageOptions: mdUp ? [10, 25, 50] : [10],
+    rowsPerPageOptions: mdUp ? [15, 25, 50] : [15],
     responsive: 'standard',
     customToolbar: () => (
       <>

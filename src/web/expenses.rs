@@ -472,8 +472,8 @@ pub fn info(uid: UserId, connection: DbConn) -> Result<Json<InfoResponse>, Statu
 pub fn list(
     uid: UserId,
     connection: DbConn,
-    offset: Option<i32>,
-    count: Option<i32>,
+    offset: Option<i64>,
+    count: Option<i64>,
 ) -> Result<Json<Vec<RenderedExpense>>, Status> {
     let exps = queries::relevant_expenses(&*connection, *uid, offset, count)
         .map_err(|e| log_error_and_500(Box::new(e)))?;

@@ -2,6 +2,7 @@ import { connect } from 'react-redux';
 import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import MUIDataTable from 'mui-datatables';
+import WarningIcon from '@material-ui/icons/Warning';
 import {
   ThemeProvider,
   createMuiTheme,
@@ -11,12 +12,15 @@ import {
   CircularProgress,
   Tooltip,
   IconButton,
+  Typography,
 } from '@material-ui/core';
 import AddIcon from '@material-ui/icons/Add';
 import { useLocation, useHistory } from 'react-router';
 import * as moment from 'moment';
 import { forEach, map, sortBy, uniqBy, filter } from 'lodash';
 import tinycolor from 'tinycolor2';
+import green from '@material-ui/core/colors/green';
+import deepOrange from '@material-ui/core/colors/deepOrange';
 
 import {
   updateExpenses as updateExpensesAction,
@@ -47,14 +51,6 @@ function useQuery(key) {
 
   return [query.get(key), set];
 }
-
-const cellStyle = {
-  textOverflow: 'ellipsis',
-  overflow: 'hidden',
-  display: '-webkit-box',
-  WebkitLineClamp: 1,
-  WebkitBoxOrient: 'vertical',
-};
 
 const Expenses = ({
   users,
@@ -90,6 +86,7 @@ const Expenses = ({
       : { records: [], filteredRecordCount: 0, totalRecordCount: null };
 
   const isLoading = !currentQueryData || currentQueryData.isFetching;
+
   // let displayedQuery = currentQuery;
   let displayedResponse = currentQueryResponse;
 
@@ -125,6 +122,16 @@ const Expenses = ({
   const mdUp = useMediaQuery(theme.breakpoints.up('md'));
   const xsDown = useMediaQuery(theme.breakpoints.down('xs'));
 
+  const cellStyle = {
+    textOverflow: 'ellipsis',
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitLineClamp: xsDown ? 2 : 1,
+    WebkitBoxOrient: 'vertical',
+  };
+
+  // TODO: I don't like this way of fixing column widths!
+
   const myTheme = th =>
     createMuiTheme({
       ...th,
@@ -136,27 +143,30 @@ const Expenses = ({
               width: '0%',
             },
             '&:nth-child(2)': {
-              width: '10%',
+              width: '2%',
             },
             '&:nth-child(3)': {
-              width: '15%',
-            },
-            '&:nth-child(4)': {
-              width: '12%',
-            },
-            '&:nth-child(5)': {
-              width: '15%',
-            },
-            '&:nth-child(6)': {
               width: '8%',
             },
+            '&:nth-child(4)': {
+              width: '15%',
+            },
+            '&:nth-child(5)': {
+              width: '12%',
+            },
+            '&:nth-child(6)': {
+              width: '15%',
+            },
             '&:nth-child(7)': {
-              width: '10%',
+              width: '8%',
             },
             '&:nth-child(8)': {
-              width: '20%',
+              width: '10%',
             },
             '&:nth-child(9)': {
+              width: '20%',
+            },
+            '&:nth-child(10)': {
               width: '10%',
             },
           },
@@ -180,8 +190,6 @@ const Expenses = ({
     updateExpenses(currentQuery);
   });
 
-  // TODO: highlight rows with unchecked expenses
-
   const columns = [
     {
       name: 'info.id',
@@ -190,6 +198,21 @@ const Expenses = ({
         display: false,
         filterType: 'textField',
         customFilterListOptions: { render: v => `ID: ${v}` },
+      },
+    },
+    {
+      name: 'info',
+      label: ' ',
+      options: {
+        viewColumns: false,
+        sort: false,
+        filter: false,
+        customBodyRenderLite: i => {
+          const r = displayedResponse.records[i];
+          if (r.info.isUnchecked) return <WarningIcon color="secondary" />;
+
+          return '';
+        },
       },
     },
     {
@@ -259,7 +282,7 @@ const Expenses = ({
             ...x,
             color:
               findCategory(categories, x.categoryId)?.info?.color ||
-              '#00FFFFFF',
+              '#FFFFFF00',
           }));
 
           const style = { padding: 0 };
@@ -350,7 +373,7 @@ const Expenses = ({
             x => ({
               ...x,
               color:
-                findAccount(accounts, x.accountId)?.info?.color || '#00FFFFFF',
+                findAccount(accounts, x.accountId)?.info?.color || '#FFFFFF00',
             })
           );
 
@@ -404,9 +427,21 @@ const Expenses = ({
       name: 'totalAmount',
       label: 'Betrag',
       options: {
-        // TODO: highlight amount depending on sign
-        customBodyRenderLite: i =>
-          `${(displayedResponse.records[i].totalAmount / 100.0).toFixed(2)}€`,
+        customBodyRenderLite: i => {
+          const amount = displayedResponse.records[i].totalAmount;
+
+          let color = '';
+          // eslint-disable-next-line prefer-destructuring
+          if (amount < 0) color = deepOrange[800];
+          // eslint-disable-next-line prefer-destructuring
+          if (amount > 0) color = green[800];
+
+          return (
+            <Typography variant="inherit" fontWeight={1000} style={{ color }}>
+              {`${(amount / 100.0).toFixed(2)}€`}
+            </Typography>
+          );
+        },
         filter: false,
         sort: false,
       },

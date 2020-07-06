@@ -11,8 +11,8 @@ use rocket_contrib::json::Json;
 pub fn list(
     uid: UserId,
     connection: DbConn,
-    offset: Option<i32>,
-    count: Option<i32>,
+    offset: Option<i64>,
+    count: Option<i64>,
 ) -> Result<Json<Vec<RenderedBalance>>, Status> {
     let bals = queries::relevant_balances(&*connection, *uid, offset, count)
         .map_err(|e| log_error_and_500(Box::new(e)))?
