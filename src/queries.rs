@@ -71,9 +71,12 @@ pub fn relevant_balance_by_id(
 ) -> Result<Option<(Balance, Option<AccountSynchronization>)>, diesel::result::Error> {
     balances::table
         .left_join(
-            account_synchronizations::table.on(balances::account_id
-                .eq(account_synchronizations::account1)
-                .or(balances::account_id.eq(account_synchronizations::account2))),
+            account_synchronizations::table.on((account_synchronizations::account1
+                .eq(balances::account_id)
+                .and(account_synchronizations::user1.ne(user_id)))
+            .or(account_synchronizations::account2
+                .eq(balances::account_id)
+                .and(account_synchronizations::user2.ne(user_id)))),
         )
         .left_join(accounts::table.on(accounts::id.eq(balances::account_id)))
         .filter(
@@ -251,6 +254,7 @@ pub fn expense_transactions_by_expense_range(
                 .eq(expense_transactions::account_id)
                 .and(account_synchronizations::user2.ne(user_id)))),
         )
+        .order(expense_transactions::expense_id.asc())
         .filter(
             expense_transactions::expense_id
                 .eq_any(expenses.into_iter().map(|e| e.id).collect::<Vec<_>>()),

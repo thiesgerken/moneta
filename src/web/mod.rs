@@ -62,6 +62,8 @@ pub fn handle(config: Config) {
                 // accounts::create,
                 balances::list,
                 balances::get,
+                balances::query,
+                balances::info,
                 // balances::delete,
                 // balances::update,
                 // balances::create,

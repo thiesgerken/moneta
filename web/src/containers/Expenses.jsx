@@ -437,7 +437,7 @@ const Expenses = ({
           if (amount > 0) color = green[800];
 
           return (
-            <Typography variant="inherit" fontWeight={1000} style={{ color }}>
+            <Typography variant="inherit" style={{ color }}>
               {`${(amount / 100.0).toFixed(2)}€`}
             </Typography>
           );

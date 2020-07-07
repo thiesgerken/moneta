@@ -4,10 +4,10 @@ use crate::rendering::RenderedExpense;
 use crate::schema::*;
 use crate::web::pagination::*;
 use crate::web::user::UserId;
-use crate::web::util::log_error_and_500;
+use crate::web::util::{log_error_and_500, InfoResponse, QueryRequest, QueryResponse};
 use crate::web::DbConn;
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use diesel::dsl::sql;
 use diesel::prelude::*;
 use diesel::sql_types::BigInt;
@@ -15,50 +15,15 @@ use log::warn;
 use rocket::http::Status;
 use rocket_contrib::databases::diesel;
 use rocket_contrib::json::Json;
-use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SortBy {
-    pub direction: String, // ascending | descending
-    pub column: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryRequest {
-    pub page: i64,
-    pub rows_per_page: i64,
-    pub needle: Option<String>,
-    pub sort_by: Vec<SortBy>,
-    pub filter_by: HashMap<String, Vec<String>>, // column -> needles
-    pub from: Option<DateTime<Utc>>,
-    pub to: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryResponse {
-    pub records: Vec<RenderedExpense>,
-    pub filtered_record_count: i64,
-    pub total_record_count: Option<i64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InfoResponse {
-    pub total_record_count: i64,
-    pub filter_hints: HashMap<String, Vec<String>>, // lists of some possible filter values for some columns
-}
 
 #[post("/expenses/query", data = "<request>")]
 pub fn query(
     uid: UserId,
     connection: DbConn,
     request: Json<QueryRequest>,
-) -> Result<Json<QueryResponse>, Status> {
+) -> Result<Json<QueryResponse<RenderedExpense>>, Status> {
     let request = request.0;
 
     if request.rows_per_page > 100 {
@@ -203,8 +168,6 @@ pub fn query(
     query = query.then_order_by(expenses::id.asc());
 
     for (column, values) in request.filter_by.iter() {
-        // TODO: filtering by account and category
-
         match column.as_ref() {
             "transactions" => {
                 let values_parsed = values
@@ -305,13 +268,6 @@ pub fn query(
             );
         }
     }
-
-    // let res = query
-    //     .paginate(request.page)
-    //     .per_page(request.rows_per_page)
-    //     .load_and_count::<Expense>(&connection);
-    // info!("{:?}", res);
-    // let (expenses, row_count) = res.map_err(|e| log_error_and_500(Box::new(e)))?;
 
     let (expenses, row_count) = query
         .paginate(request.page)
