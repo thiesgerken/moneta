@@ -208,8 +208,19 @@ const Expenses = ({
         sort: false,
         filter: false,
         customBodyRenderLite: i => {
+          // TODO: I would like this Icon to be bigger without messing with the row height.
           const r = displayedResponse.records[i];
-          if (r.info.isUnchecked) return <WarningIcon color="secondary" />;
+          if (r.info.isUnchecked)
+            return (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <WarningIcon fontSize="inherit" color="secondary" />
+              </div>
+            );
 
           return '';
         },
