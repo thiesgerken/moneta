@@ -7,23 +7,14 @@
 - automation using templates and expense deliveries
 - conversion of prepayments to booking periods
 - Was ist mit Rückzahlungen?
-- expense and balances tables: sorted subqueries instead of fetching all data
-  - paging
-  - filtering by columns
-  - sorting
-  - searching
 - edit/create/delete expenses, balances, categories, accounts
 - analysis
+- push notifications
+- front page: stream of recent events
 
 ### Frontend
 
-- User infos, Accounts and Categories should be loaded at app start (and invalidated on change)
-- tables with expenses, balances, categories, accounts
-- tables for cats and accounts: filter by owner id first
-- augment received expenses with "meta" or "computed" or so field with information about
-  - total expense cost
-  - booking time end
-- include colors of accounts and categories in the table cells
+- on big screens: expandable rows for expense table?
 
 ### Backend
 
