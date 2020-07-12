@@ -13,8 +13,11 @@ import {
   Tooltip,
   IconButton,
   Typography,
+  TableRow,
+  TableCell,
 } from '@material-ui/core';
 import AddIcon from '@material-ui/icons/Add';
+import EditIcon from '@material-ui/icons/Edit';
 import { useLocation, useHistory } from 'react-router';
 import * as moment from 'moment';
 import { forEach, map, sortBy, uniqBy, filter } from 'lodash';
@@ -77,6 +80,8 @@ const Expenses = ({
       to: null,
     },
   ]);
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [selectedRow, setSelectedRow] = useState(null);
   const [prevQuery, currentQuery] = query;
 
   const currentQueryData = findExpenseQueryData(expenses, currentQuery);
@@ -560,7 +565,26 @@ const Expenses = ({
     enableNestedDataAccess: '.',
     serverSide: true,
     print: false,
-    onTableChange: (action, tableState) => {
+    expandableRowsHeader: false,
+    expandableRows: mdUp,
+    expandableRowsOnClick: true,
+    rowsExpanded: expandedRow !== null ? [expandedRow] : [],
+    onRowExpansionChange: (_curExpanded, allExpanded) => {
+      if (allExpanded.length === 0) setExpandedRow(null);
+      else setExpandedRow(allExpanded[allExpanded.length - 1].index);
+    },
+    renderExpandableRow: (rowData, rowMeta) => {
+      const colSpan = rowData.length + 1;
+      return (
+        <TableRow>
+          <TableCell colSpan={colSpan}>
+            Custom expandable row option. Data: {JSON.stringify(rowData)} Meta:{' '}
+            {JSON.stringify(rowMeta)}
+          </TableCell>
+        </TableRow>
+      );
+    },
+    onTableChange: (_action, tableState) => {
       const newQuery = {
         page: tableState.page,
         rowsPerPage: tableState.rowsPerPage,
@@ -617,12 +641,29 @@ const Expenses = ({
     sortOrder: currentSortOrder,
     filterType: 'multiselect',
     responsive: 'standard',
+    onRowSelectionChange: (_currentRowsSelected, allRowsSelected) => {
+      if (allRowsSelected.length === 0) setSelectedRow(null);
+      else setSelectedRow(allRowsSelected[0].index);
+    },
     customToolbar: () => (
       <>
         <Tooltip title="Neue Ausgabe">
           <IconButton onClick={() => setExpenseId(-1)}>
             <AddIcon />
           </IconButton>
+        </Tooltip>
+        <Tooltip title="Ausgabe bearbeiten">
+          <span>
+            <IconButton
+              onClick={() => {
+                const { id } = displayedResponse.records[selectedRow].info;
+                setExpenseId(id);
+              }}
+              disabled={selectedRow === null}
+            >
+              <EditIcon />
+            </IconButton>
+          </span>
         </Tooltip>
       </>
     ),
