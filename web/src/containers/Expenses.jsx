@@ -2,6 +2,7 @@ import { connect } from 'react-redux';
 import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import MUIDataTable from 'mui-datatables';
+import WarningIcon from '@material-ui/icons/Warning';
 import {
   ThemeProvider,
   createMuiTheme,
@@ -11,12 +12,24 @@ import {
   CircularProgress,
   Tooltip,
   IconButton,
+  Typography,
+  TableRow,
+  TableCell,
+  Paper,
+  TableContainer,
+  TableHead,
+  Table,
+  TableBody,
+  Grid,
 } from '@material-ui/core';
 import AddIcon from '@material-ui/icons/Add';
+import EditIcon from '@material-ui/icons/Edit';
 import { useLocation, useHistory } from 'react-router';
 import * as moment from 'moment';
-import { forEach, map, sortBy, uniqBy, filter } from 'lodash';
+import { forEach, map, sortBy, uniqBy, filter, zip, some } from 'lodash';
 import tinycolor from 'tinycolor2';
+import green from '@material-ui/core/colors/green';
+import deepOrange from '@material-ui/core/colors/deepOrange';
 
 import {
   updateExpenses as updateExpensesAction,
@@ -28,9 +41,18 @@ import { updateCategories as updateCategoriesAction } from '../actions/categorie
 import ExpenseDialog from './ExpenseDialog';
 import { muiDatatablesLang } from '../lang';
 import { findExpenseQueryData } from '../selectors/expenses';
-import { findAccount, findAccountByName } from '../selectors/accounts';
-import { findCategory, findCategoryByName } from '../selectors/categories';
-import { findUserName } from '../selectors/users';
+import {
+  findAccount,
+  findAccountByName,
+  displayAccountById,
+  displayAccount,
+} from '../selectors/accounts';
+import {
+  findCategory,
+  findCategoryByName,
+  displayCategory,
+  displayCategoryById,
+} from '../selectors/categories';
 
 function useQuery(key) {
   const location = useLocation();
@@ -47,14 +69,6 @@ function useQuery(key) {
 
   return [query.get(key), set];
 }
-
-const cellStyle = {
-  textOverflow: 'ellipsis',
-  overflow: 'hidden',
-  display: '-webkit-box',
-  WebkitLineClamp: 1,
-  WebkitBoxOrient: 'vertical',
-};
 
 const Expenses = ({
   users,
@@ -81,6 +95,8 @@ const Expenses = ({
       to: null,
     },
   ]);
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [selectedRow, setSelectedRow] = useState(null);
   const [prevQuery, currentQuery] = query;
 
   const currentQueryData = findExpenseQueryData(expenses, currentQuery);
@@ -90,6 +106,7 @@ const Expenses = ({
       : { records: [], filteredRecordCount: 0, totalRecordCount: null };
 
   const isLoading = !currentQueryData || currentQueryData.isFetching;
+
   // let displayedQuery = currentQuery;
   let displayedResponse = currentQueryResponse;
 
@@ -125,6 +142,16 @@ const Expenses = ({
   const mdUp = useMediaQuery(theme.breakpoints.up('md'));
   const xsDown = useMediaQuery(theme.breakpoints.down('xs'));
 
+  const cellStyle = {
+    textOverflow: 'ellipsis',
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitLineClamp: xsDown ? 2 : 1,
+    WebkitBoxOrient: 'vertical',
+  };
+
+  // TODO: I don't like this way of fixing column widths!
+
   const myTheme = th =>
     createMuiTheme({
       ...th,
@@ -136,27 +163,30 @@ const Expenses = ({
               width: '0%',
             },
             '&:nth-child(2)': {
-              width: '10%',
+              width: '2%',
             },
             '&:nth-child(3)': {
-              width: '15%',
-            },
-            '&:nth-child(4)': {
-              width: '12%',
-            },
-            '&:nth-child(5)': {
-              width: '15%',
-            },
-            '&:nth-child(6)': {
               width: '8%',
             },
+            '&:nth-child(4)': {
+              width: '15%',
+            },
+            '&:nth-child(5)': {
+              width: '12%',
+            },
+            '&:nth-child(6)': {
+              width: '15%',
+            },
             '&:nth-child(7)': {
-              width: '10%',
+              width: '8%',
             },
             '&:nth-child(8)': {
-              width: '20%',
+              width: '10%',
             },
             '&:nth-child(9)': {
+              width: '20%',
+            },
+            '&:nth-child(10)': {
               width: '10%',
             },
           },
@@ -180,9 +210,6 @@ const Expenses = ({
     updateExpenses(currentQuery);
   });
 
-  // TODO: how to control column widths?
-  // TODO: add ellipses in text fields
-
   const columns = [
     {
       name: 'info.id',
@@ -191,6 +218,32 @@ const Expenses = ({
         display: false,
         filterType: 'textField',
         customFilterListOptions: { render: v => `ID: ${v}` },
+      },
+    },
+    {
+      name: 'info',
+      label: ' ',
+      options: {
+        viewColumns: false,
+        sort: false,
+        filter: false,
+        customBodyRenderLite: i => {
+          // TODO: I would like this Icon to be bigger without messing with the row height.
+          const r = displayedResponse.records[i];
+          if (r.info.isUnchecked)
+            return (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <WarningIcon fontSize="inherit" color="secondary" />
+              </div>
+            );
+
+          return '';
+        },
       },
     },
     {
@@ -233,16 +286,9 @@ const Expenses = ({
 
           return (
             <div style={{ margin: theme.spacing(2) }}>
-              {map(cs, c => {
-                const cat = findCategory(categories, c.categoryId);
-                if (!cat) return `[${c.categoryId}]`;
-
-                if (userInfo && cat.info.userId === userInfo.id)
-                  return cat.info.name;
-
-                const userName = findUserName(users, cat.info.userId);
-                return `${userName}/${cat.info.name}`;
-              }).join(', ')}
+              {map(cs, c =>
+                displayCategoryById(categories, users, userInfo, c.categoryId)
+              ).join(', ')}
             </div>
           );
         },
@@ -260,7 +306,7 @@ const Expenses = ({
             ...x,
             color:
               findCategory(categories, x.categoryId)?.info?.color ||
-              '#00FFFFFF',
+              '#FFFFFF00',
           }));
 
           const style = { padding: 0 };
@@ -320,14 +366,12 @@ const Expenses = ({
               {map(
                 displayedResponse.records[i].meta.accountsByAmount,
                 ({ accountId }) => {
-                  const acc = findAccount(accounts, accountId);
-                  if (!acc) return `[${accountId}]`;
-
-                  if (userInfo && acc.info.userId === userInfo.id)
-                    return acc.info.name;
-
-                  const userName = findUserName(users, acc.info.userId);
-                  return `${userName}/${acc.info.name}`;
+                  return displayAccountById(
+                    accounts,
+                    users,
+                    userInfo,
+                    accountId
+                  );
                 }
               ).join(', ')}
             </div>
@@ -351,7 +395,7 @@ const Expenses = ({
             x => ({
               ...x,
               color:
-                findAccount(accounts, x.accountId)?.info?.color || '#00FFFFFF',
+                findAccount(accounts, x.accountId)?.info?.color || '#FFFFFF00',
             })
           );
 
@@ -405,9 +449,21 @@ const Expenses = ({
       name: 'totalAmount',
       label: 'Betrag',
       options: {
-        // TODO: highlight amount depending on sign
-        customBodyRenderLite: i =>
-          `${(displayedResponse.records[i].totalAmount / 100.0).toFixed(2)}€`,
+        customBodyRenderLite: i => {
+          const amount = displayedResponse.records[i].totalAmount;
+
+          let color = '';
+          // eslint-disable-next-line prefer-destructuring
+          if (amount < 0) color = deepOrange[800];
+          // eslint-disable-next-line prefer-destructuring
+          if (amount > 0) color = green[800];
+
+          return (
+            <Typography variant="inherit" style={{ color }}>
+              {`${(amount / 100.0).toFixed(2)}€`}
+            </Typography>
+          );
+        },
         filter: false,
         sort: false,
       },
@@ -445,6 +501,7 @@ const Expenses = ({
       options: {
         display: false,
         filterType: 'dropdown',
+        customBodyRender: v => (v ? 'Ja' : 'Nein'),
         customFilterListOptions: {
           render: v => (v === 'Ja' ? 'vorläufig' : 'nicht vorläufig'),
         },
@@ -459,6 +516,7 @@ const Expenses = ({
       options: {
         display: false,
         filterType: 'dropdown',
+        customBodyRender: v => (v ? 'Ja' : 'Nein'),
         customFilterListOptions: {
           render: v => (v === 'Ja' ? 'steuerrelevant' : 'nicht steuerrelevant'),
         },
@@ -473,6 +531,7 @@ const Expenses = ({
       options: {
         filterType: 'dropdown',
         display: false,
+        customBodyRender: v => (v ? 'Ja' : 'Nein'),
         customFilterListOptions: {
           render: v => (v === 'Ja' ? 'Vorlage' : 'keine Vorlage'),
         },
@@ -487,6 +546,7 @@ const Expenses = ({
       options: {
         filterType: 'dropdown',
         display: false,
+        customBodyRender: v => (v ? 'Ja' : 'Nein'),
         customFilterListOptions: {
           render: v => (v === 'Ja' ? 'überprüft' : 'nicht überprüft'),
         },
@@ -511,7 +571,179 @@ const Expenses = ({
     enableNestedDataAccess: '.',
     serverSide: true,
     print: false,
-    onTableChange: (action, tableState) => {
+    expandableRowsHeader: false,
+    expandableRows: mdUp,
+    expandableRowsOnClick: true,
+    rowsExpanded: expandedRow !== null ? [expandedRow] : [],
+    onRowExpansionChange: (_curExpanded, allExpanded) => {
+      if (allExpanded.length === 0) setExpandedRow(null);
+      else setExpandedRow(allExpanded[allExpanded.length - 1].index);
+    },
+    renderExpandableRow: (rowData, rowMeta) => {
+      const colSpan = rowData.length + 1;
+      const data = displayedResponse.records[rowMeta.dataIndex];
+      const transactionsWithComments = some(
+        data.transactions,
+        t => t.comments && t.comments.length > 0
+      );
+
+      // TODO: replace contents of TableCell with custom component
+
+      return (
+        <TableRow>
+          <TableCell colSpan={colSpan}>
+            {/* Data: {JSON.stringify(data)} */}
+            <Grid container spacing={4}>
+              <Grid item xs={10}>
+                <TableContainer component={Paper}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell style={{ width: '20rem' }}>Konto</TableCell>
+                        <TableCell style={{ width: '10rem' }} align="right">
+                          Datum
+                        </TableCell>
+                        <TableCell style={{ width: '15rem' }} align="right">
+                          Betrag
+                        </TableCell>
+                        <TableCell>Text</TableCell>
+                        {transactionsWithComments && (
+                          <TableCell>Kommentare</TableCell>
+                        )}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {zip(data.transactions, data.calculatedAmounts).map(
+                        ([t, amount]) => {
+                          const account = findAccount(accounts, t.accountId);
+
+                          let amountColor = '';
+                          // eslint-disable-next-line prefer-destructuring
+                          if (amount < 0) amountColor = deepOrange[800];
+                          // eslint-disable-next-line prefer-destructuring
+                          if (amount > 0) amountColor = green[800];
+
+                          let amountText = `${(amount / 100.0).toFixed(2)}€`;
+                          if (t.fraction !== null)
+                            amountText = `${(t.fraction * 100).toFixed(
+                              2
+                            )}%  (${amountText})`;
+
+                          let fgColor = '';
+                          if (
+                            tinycolor(account.info.color).isValid() &&
+                            tinycolor(account.info.color).getBrightness() <= 120
+                          )
+                            fgColor = '#F7F7F7';
+
+                          return (
+                            <TableRow key={t.id}>
+                              <TableCell
+                                component="th"
+                                scope="row"
+                                style={{
+                                  backgroundColor: account.info.color,
+                                  color: fgColor,
+                                }}
+                              >
+                                {displayAccount(
+                                  users,
+                                  userInfo,
+                                  t.accountId,
+                                  account
+                                )}
+                              </TableCell>
+                              <TableCell align="right">
+                                {moment(t.date).format('L LT')}
+                              </TableCell>
+                              <TableCell align="right">
+                                <span style={{ color: amountColor }}>
+                                  {amountText}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <span
+                                  style={{
+                                    fontFamily:
+                                      theme.typography.fontFamilyMonospaced,
+                                    fontSize: '0.75rem',
+                                  }}
+                                >
+                                  {t.statement}
+                                </span>
+                              </TableCell>
+                              {transactionsWithComments && (
+                                <TableCell>{t.comments}</TableCell>
+                              )}
+                            </TableRow>
+                          );
+                        }
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Grid>
+              {data.categories.length > 0 && (
+                <Grid item xs={3}>
+                  <TableContainer component={Paper}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell style={{ width: '20rem' }}>
+                            Kategorie
+                          </TableCell>
+                          <TableCell align="right">Gewicht</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {data.categories.map(c => {
+                          const category = findCategory(
+                            categories,
+                            c.categoryId
+                          );
+
+                          let fgColor = '';
+                          if (
+                            tinycolor(category.info.color).isValid() &&
+                            tinycolor(category.info.color).getBrightness() <=
+                              120
+                          )
+                            fgColor = '#F7F7F7';
+
+                          return (
+                            <TableRow key={c.id}>
+                              <TableCell
+                                component="th"
+                                scope="row"
+                                style={{
+                                  backgroundColor: category.info.color,
+                                  color: fgColor,
+                                }}
+                              >
+                                {displayCategory(
+                                  users,
+                                  userInfo,
+                                  c.categoryId,
+                                  category
+                                )}
+                              </TableCell>
+                              <TableCell align="right">
+                                {c.weight.toFixed(2)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Grid>
+              )}
+            </Grid>
+          </TableCell>
+        </TableRow>
+      );
+    },
+    onTableChange: (_action, tableState) => {
       const newQuery = {
         page: tableState.page,
         rowsPerPage: tableState.rowsPerPage,
@@ -552,14 +784,12 @@ const Expenses = ({
         }
       });
 
-      if (JSON.stringify(newQuery) !== JSON.stringify(currentQuery))
+      if (JSON.stringify(newQuery) !== JSON.stringify(currentQuery)) {
+        setExpandedRow(null);
+        setSelectedRow(null);
         setQuery([currentQuery, newQuery]);
+      }
     },
-    // onRowSelectionChange: (_, rows) => {
-    //   if (rows.length > 0 && rows[0].dataIndex < expenses.items.length)
-    //     setExpenseId(expenses.items[rows[0].dataIndex].info.id);
-    //   else setExpenseId(null);
-    // },
     download: false,
     rowsPerPageOptions: mdUp ? [10, 15, 20, 50] : [15],
     rowsPerPage: currentQuery.rowsPerPage,
@@ -568,8 +798,35 @@ const Expenses = ({
     sortOrder: currentSortOrder,
     filterType: 'multiselect',
     responsive: 'standard',
+    onRowSelectionChange: (_currentRowsSelected, allRowsSelected) => {
+      if (allRowsSelected.length === 0) setSelectedRow(null);
+      else setSelectedRow(allRowsSelected[0].index);
+
+      if (xsDown) {
+        if (allRowsSelected.length === 0) setExpenseId(null);
+        else {
+          const { id } = displayedResponse.records[
+            allRowsSelected[0].index
+          ].info;
+          setExpenseId(id);
+        }
+      }
+    },
     customToolbar: () => (
       <>
+        <Tooltip title="Ausgabe bearbeiten">
+          <span>
+            <IconButton
+              onClick={() => {
+                const { id } = displayedResponse.records[selectedRow].info;
+                setExpenseId(id);
+              }}
+              disabled={selectedRow === null}
+            >
+              <EditIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
         <Tooltip title="Neue Ausgabe">
           <IconButton onClick={() => setExpenseId(-1)}>
             <AddIcon />

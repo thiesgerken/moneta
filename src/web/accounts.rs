@@ -1,6 +1,7 @@
 use crate::queries;
 use crate::rendering::RenderedAccount;
 use crate::web::user::UserId;
+use crate::web::util::log_error_and_500;
 use crate::web::DbConn;
 
 use rocket::http::Status;
@@ -14,7 +15,7 @@ pub fn list(
     count: Option<i32>,
 ) -> Result<Json<Vec<RenderedAccount>>, Status> {
     let accs = queries::accounts(&*connection, offset, count)
-        .map_err(|_| Status::InternalServerError)?
+        .map_err(|e| log_error_and_500(Box::new(e)))?
         .into_iter()
         .map(|(account, syncing)| RenderedAccount {
             info: account,
@@ -28,7 +29,7 @@ pub fn list(
 #[get("/accounts/<id>")]
 pub fn get(_uid: UserId, connection: DbConn, id: i32) -> Result<Json<RenderedAccount>, Status> {
     let (account, syncing) = queries::account_by_id(&*connection, id)
-        .map_err(|_| Status::InternalServerError)?
+        .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
 
     Ok(Json(RenderedAccount {
@@ -45,7 +46,7 @@ pub fn get(_uid: UserId, connection: DbConn, id: i32) -> Result<Json<RenderedAcc
 //     //         .filter(accounts::id.eq(id)),
 //     // )
 //     // .execute(&*connection)
-//     // .map_err(|_| Status::InternalServerError)?;
+//     // .map_err(|e| log_error_and_500(Box::new(e)))?;
 
 //     // if row_count == 0 {
 //     //     Err(Status::NotFound)
@@ -74,7 +75,7 @@ pub fn get(_uid: UserId, connection: DbConn, id: i32) -> Result<Json<RenderedAcc
 //     // )
 //     // .set(acc)
 //     // .execute(&*connection)
-//     // .map_err(|_| Status::InternalServerError)?;
+//     // .map_err(|e| log_error_and_500(Box::new(e)))?;
 
 //     // if row_count == 0 {
 //     //     Err(Status::NotFound)
@@ -98,7 +99,7 @@ pub fn get(_uid: UserId, connection: DbConn, id: i32) -> Result<Json<RenderedAcc
 //     // let t: Account = diesel::insert_into(crate::schema::accounts::table)
 //     //     .values(&acc)
 //     //     .get_result(&*connection)
-//     //     .map_err(|_| Status::InternalServerError)?;
+//     //     .map_err(|e| log_error_and_500(Box::new(e)))?;
 
 //     // Ok(Json(t))
 

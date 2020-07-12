@@ -5,6 +5,7 @@ pub mod expenses;
 pub mod pagination;
 pub mod static_files;
 pub mod user;
+mod util;
 
 use rocket::config::{Environment, Limits, LoggingLevel, Value};
 use rocket_contrib::databases::diesel;
@@ -61,6 +62,8 @@ pub fn handle(config: Config) {
                 // accounts::create,
                 balances::list,
                 balances::get,
+                balances::query,
+                balances::info,
                 // balances::delete,
                 // balances::update,
                 // balances::create,
