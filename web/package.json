@@ -31,6 +31,7 @@
     "tinycolor2": "^1.4.1",
     "typeface-open-sans": "^0.0.75",
     "typeface-oxygen": "^0.0.72",
+    "typeface-oxygen-mono": "^0.0.72",
     "typeface-roboto": "^0.0.75"
   },
   "devDependencies": {

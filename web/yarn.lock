@@ -11780,6 +11780,11 @@ typeface-open-sans@^0.0.75:
   resolved "https://registry.yarnpkg.com/typeface-open-sans/-/typeface-open-sans-0.0.75.tgz#20d0c330f14c0c40463c334adbedd6005389abe4"
   integrity sha512-0lLmB7pfj113OP4T78SbpSmC4OCdFQ0vUxdSXQccsSb6qF76F92iEuC/DghFgmPswTyidk8+Hwf+PS/htiJoRQ==
 
+typeface-oxygen-mono@^0.0.72:
+  version "0.0.72"
+  resolved "https://registry.yarnpkg.com/typeface-oxygen-mono/-/typeface-oxygen-mono-0.0.72.tgz#cf058f8bfb32617a107abaf15e8ab99dae372185"
+  integrity sha512-SpKou26M5uX2xAE4ui78joQUIImJlZpARDRvzTbq+FJHqQXE4CWVi5HOOpBdZvg++9jBUs0sRAMebr3DDBu/Zw==
+
 typeface-oxygen@^0.0.72:
   version "0.0.72"
   resolved "https://registry.yarnpkg.com/typeface-oxygen/-/typeface-oxygen-0.0.72.tgz#7c3a187b45bb112ca53d2953ba10018af1eb270f"
@@ -11789,6 +11794,11 @@ typeface-roboto@^0.0.75:
   version "0.0.75"
   resolved "https://registry.yarnpkg.com/typeface-roboto/-/typeface-roboto-0.0.75.tgz#98d5ba35ec234bbc7172374c8297277099cc712b"
   integrity sha512-VrR/IiH00Z1tFP4vDGfwZ1esNqTiDMchBEXYY9kilT6wRGgFoCAlgkEUMHb1E3mB0FsfZhv756IF0+R+SFPfdg==
+
+typeface-share-tech-mono@^0.0.72:
+  version "0.0.72"
+  resolved "https://registry.yarnpkg.com/typeface-share-tech-mono/-/typeface-share-tech-mono-0.0.72.tgz#b3996dd774b1866f2bc94c82f098885d84842ef1"
+  integrity sha512-O1cMFKOLoR3M4q+urjkNGrxiYiPsUAYuKjLpt7OxxLNnEZnpR0xk7c0MB//19zhWv9nRCWVtzHo1sHPY2xEIdQ==
 
 typescript@^3.8.3:
   version "3.9.5"

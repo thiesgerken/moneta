@@ -8,6 +8,7 @@ import { createBrowserHistory } from 'history';
 import { ConnectedRouter, routerMiddleware } from 'connected-react-router';
 import { ThemeProvider, createMuiTheme } from '@material-ui/core';
 import 'typeface-oxygen';
+import 'typeface-oxygen-mono';
 import { LocalizationProvider } from '@material-ui/pickers';
 import MomentUtils from '@date-io/moment';
 import deepOrange from '@material-ui/core/colors/deepOrange';
@@ -39,6 +40,7 @@ const store = createStore(
 const theme = createMuiTheme({
   typography: {
     fontFamily: ['Oxygen'].join(','),
+    fontFamilyMonospaced: 'Oxygen Mono',
   },
   palette: {
     primary: orange,
