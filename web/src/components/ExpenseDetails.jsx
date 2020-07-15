@@ -42,6 +42,7 @@ const ExpenseDetails = ({ expense, accounts, categories, users, userInfo }) => {
   // TODO: (how to) display receipts
   // TODO: display events
   // TODO: display flags
+  // TODO: use two columns for info display?
 
   return (
     <Grid container spacing={4} style={{ margin: theme.spacing(1) }}>

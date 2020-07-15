@@ -19,7 +19,6 @@ import {
 import AddIcon from '@material-ui/icons/Add';
 import EditIcon from '@material-ui/icons/Edit';
 import { useLocation, useHistory } from 'react-router';
-import * as moment from 'moment';
 import { forEach, map, sortBy, uniqBy, filter } from 'lodash';
 import tinycolor from 'tinycolor2';
 import green from '@material-ui/core/colors/green';
