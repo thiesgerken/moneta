@@ -28,6 +28,7 @@ bundle:
 
 .build:
   stage: build
+  needs: ["bundle"]
   dependencies:
     - bundle
   script:
@@ -70,6 +71,7 @@ build-ubuntu:
 
 package-ubuntu:
   stage: package
+  needs: ["build-ubuntu"]
   tags:
     - docker
   image: git.thiesgerken.de:5005/thies/moneta/build-ubuntu
@@ -82,13 +84,15 @@ package-ubuntu:
     expire_in: 1 month
     paths:
       - moneta.deb
+
 # package-arch:
 #   stage: package
+#   needs: ["build-arch"]
 #   tags:
 #     - docker
 #   image: git.thiesgerken.de:5005/thies/moneta/build-arch
 #   dependencies:
-#     - build-seer-arch
+#     - build-arch
 #   script:
 #     - chmod -R 777 package/arch # makepkg must not be run as root
 #     - su nobody -s /usr/bin/bash -c "cd package/arch && ./package.sh"
@@ -100,6 +104,7 @@ package-ubuntu:
 
 .deploy-thiesgerken-de:
   stage: deploy
+  needs: ["package-ubuntu"]
   dependencies:
     - package-ubuntu
   script:
