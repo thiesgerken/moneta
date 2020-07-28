@@ -123,7 +123,7 @@ pub fn list(_uid: UserId, connection: DbConn) -> Option<Json<Vec<UserInfo>>> {
             .load::<User>(&*connection)
             .ok()?
             .into_iter()
-            .map(|u| UserInfo::new(u))
+            .map(UserInfo::new)
             .collect::<Vec<_>>(),
     ))
 }

@@ -11,7 +11,8 @@ use rocket::config::{Environment, Limits, LoggingLevel, Value};
 use rocket_contrib::databases::diesel;
 use std::collections::HashMap;
 
-pub struct Config {    pub port: u16,
+pub struct Config {
+    pub port: u16,
     pub address: String,
     pub secret_key: Option<String>,
     pub log_level: LoggingLevel,
@@ -83,7 +84,8 @@ pub async fn handle(config: Config) {
         )
         .mount("/", routes![static_files::serve, static_files::index])
         .launch()
-        .await.expect("server died");
+        .await
+        .expect("server died");
 }
 
 #[database("moneta")]
