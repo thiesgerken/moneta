@@ -393,7 +393,7 @@ impl MoneyDBFormat {
                     let other = accounts.iter().find(|a| a.id == other_id).unwrap();
                     return &other.user_id == uid;
                 } else {
-                    return false;
+                    false
                 }
             }) {
                 error!("expense {} (new id: {}) will not be accessible by its current owner {} (new id: {}). This is unsupported!", old_exp.id, new_exp.id, old_exp.owner_id, uid);

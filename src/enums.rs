@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, DbEnum)]
 #[DieselType = "Account_availability"]
 pub enum AccountAvailability {
-    Immediately ,
+    Immediately,
     Days,
     Weeks,
     Months,

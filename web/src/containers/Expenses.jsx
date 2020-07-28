@@ -15,18 +15,11 @@ import {
   Typography,
   TableRow,
   TableCell,
-  Paper,
-  TableContainer,
-  TableHead,
-  Table,
-  TableBody,
-  Grid,
 } from '@material-ui/core';
 import AddIcon from '@material-ui/icons/Add';
 import EditIcon from '@material-ui/icons/Edit';
 import { useLocation, useHistory } from 'react-router';
-import * as moment from 'moment';
-import { forEach, map, sortBy, uniqBy, filter, zip, some } from 'lodash';
+import { forEach, map, sortBy, uniqBy, filter } from 'lodash';
 import tinycolor from 'tinycolor2';
 import green from '@material-ui/core/colors/green';
 import deepOrange from '@material-ui/core/colors/deepOrange';
@@ -40,19 +33,18 @@ import { updateUsers as updateUsersAction } from '../actions/users';
 import { updateCategories as updateCategoriesAction } from '../actions/categories';
 import ExpenseDialog from './ExpenseDialog';
 import { muiDatatablesLang } from '../lang';
-import { findExpenseQueryData } from '../selectors/expenses';
+import { findExpenseQueryData, formatBooking } from '../selectors/expenses';
 import {
   findAccount,
   findAccountByName,
   displayAccountById,
-  displayAccount,
 } from '../selectors/accounts';
 import {
   findCategory,
   findCategoryByName,
-  displayCategory,
   displayCategoryById,
 } from '../selectors/categories';
+import ExpenseDetails from '../components/ExpenseDetails';
 
 function useQuery(key) {
   const location = useLocation();
@@ -252,16 +244,7 @@ const Expenses = ({
       options: {
         filter: false, // TODO: one could integrate from-to filtering here!
         customBodyRenderLite: i => {
-          const r = displayedResponse.records[i];
-          const st = moment(r.info.bookingStart);
-          const en = moment(r.info.bookingEnd);
-
-          if (xsDown) return st.format('L');
-
-          if (st.isSame(en)) return st.format('L LT');
-          if (st.isSame(en, 'day'))
-            return `${st.format('L LT')} - ${en.format('LT')}`;
-          return `${st.format('L')} - ${en.format('L')}`;
+          return formatBooking(displayedResponse.records[i], xsDown);
         },
       },
     },
@@ -581,164 +564,18 @@ const Expenses = ({
     },
     renderExpandableRow: (rowData, rowMeta) => {
       const colSpan = rowData.length + 1;
-      const data = displayedResponse.records[rowMeta.dataIndex];
-      const transactionsWithComments = some(
-        data.transactions,
-        t => t.comments && t.comments.length > 0
-      );
-
-      // TODO: replace contents of TableCell with custom component
+      const expense = displayedResponse.records[rowMeta.dataIndex];
 
       return (
         <TableRow>
           <TableCell colSpan={colSpan}>
-            {/* Data: {JSON.stringify(data)} */}
-            <Grid container spacing={4}>
-              <Grid item xs={10}>
-                <TableContainer component={Paper}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell style={{ width: '20rem' }}>Konto</TableCell>
-                        <TableCell style={{ width: '10rem' }} align="right">
-                          Datum
-                        </TableCell>
-                        <TableCell style={{ width: '15rem' }} align="right">
-                          Betrag
-                        </TableCell>
-                        <TableCell>Text</TableCell>
-                        {transactionsWithComments && (
-                          <TableCell>Kommentare</TableCell>
-                        )}
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {zip(data.transactions, data.calculatedAmounts).map(
-                        ([t, amount]) => {
-                          const account = findAccount(accounts, t.accountId);
-
-                          let amountColor = '';
-                          // eslint-disable-next-line prefer-destructuring
-                          if (amount < 0) amountColor = deepOrange[800];
-                          // eslint-disable-next-line prefer-destructuring
-                          if (amount > 0) amountColor = green[800];
-
-                          let amountText = `${(amount / 100.0).toFixed(2)}€`;
-                          if (t.fraction !== null)
-                            amountText = `${(t.fraction * 100).toFixed(
-                              2
-                            )}%  (${amountText})`;
-
-                          let fgColor = '';
-                          if (
-                            tinycolor(account.info.color).isValid() &&
-                            tinycolor(account.info.color).getBrightness() <= 120
-                          )
-                            fgColor = '#F7F7F7';
-
-                          return (
-                            <TableRow key={t.id}>
-                              <TableCell
-                                component="th"
-                                scope="row"
-                                style={{
-                                  backgroundColor: account.info.color,
-                                  color: fgColor,
-                                }}
-                              >
-                                {displayAccount(
-                                  users,
-                                  userInfo,
-                                  t.accountId,
-                                  account
-                                )}
-                              </TableCell>
-                              <TableCell align="right">
-                                {moment(t.date).format('L LT')}
-                              </TableCell>
-                              <TableCell align="right">
-                                <span style={{ color: amountColor }}>
-                                  {amountText}
-                                </span>
-                              </TableCell>
-                              <TableCell>
-                                <span
-                                  style={{
-                                    fontFamily:
-                                      theme.typography.fontFamilyMonospaced,
-                                    fontSize: '0.75rem',
-                                  }}
-                                >
-                                  {t.statement}
-                                </span>
-                              </TableCell>
-                              {transactionsWithComments && (
-                                <TableCell>{t.comments}</TableCell>
-                              )}
-                            </TableRow>
-                          );
-                        }
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Grid>
-              {data.categories.length > 0 && (
-                <Grid item xs={3}>
-                  <TableContainer component={Paper}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell style={{ width: '20rem' }}>
-                            Kategorie
-                          </TableCell>
-                          <TableCell align="right">Gewicht</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {data.categories.map(c => {
-                          const category = findCategory(
-                            categories,
-                            c.categoryId
-                          );
-
-                          let fgColor = '';
-                          if (
-                            tinycolor(category.info.color).isValid() &&
-                            tinycolor(category.info.color).getBrightness() <=
-                              120
-                          )
-                            fgColor = '#F7F7F7';
-
-                          return (
-                            <TableRow key={c.id}>
-                              <TableCell
-                                component="th"
-                                scope="row"
-                                style={{
-                                  backgroundColor: category.info.color,
-                                  color: fgColor,
-                                }}
-                              >
-                                {displayCategory(
-                                  users,
-                                  userInfo,
-                                  c.categoryId,
-                                  category
-                                )}
-                              </TableCell>
-                              <TableCell align="right">
-                                {c.weight.toFixed(2)}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Grid>
-              )}
-            </Grid>
+            <ExpenseDetails
+              expense={expense}
+              accounts={accounts}
+              categories={categories}
+              users={users}
+              userInfo={userInfo}
+            />
           </TableCell>
         </TableRow>
       );

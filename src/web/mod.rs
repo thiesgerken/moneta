@@ -19,7 +19,8 @@ pub struct Config {
     pub database_url: String,
 }
 
-pub fn handle(config: Config) {
+#[tokio::main]
+pub async fn handle(config: Config) {
     let mut database_config = HashMap::new();
     let mut databases = HashMap::new();
 
@@ -82,7 +83,9 @@ pub fn handle(config: Config) {
             ],
         )
         .mount("/", routes![static_files::serve, static_files::index])
-        .launch();
+        .launch()
+        .await
+        .expect("server died");
 }
 
 #[database("moneta")]

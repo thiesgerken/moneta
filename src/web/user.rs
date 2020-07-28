@@ -23,10 +23,11 @@ impl Deref for UserId {
 
 pub struct UserId(pub i32);
 
+#[rocket::async_trait]
 impl<'a, 'r> FromRequest<'a, 'r> for UserId {
     type Error = ();
 
-    fn from_request(request: &'a Request<'r>) -> Outcome<Self, Self::Error> {
+    async fn from_request(request: &'a Request<'r>) -> Outcome<Self, Self::Error> {
         let id = request
             .cookies()
             .get_private("user_id")
@@ -122,7 +123,7 @@ pub fn list(_uid: UserId, connection: DbConn) -> Option<Json<Vec<UserInfo>>> {
             .load::<User>(&*connection)
             .ok()?
             .into_iter()
-            .map(|u| UserInfo::new(u))
+            .map(UserInfo::new)
             .collect::<Vec<_>>(),
     ))
 }
