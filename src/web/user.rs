@@ -5,7 +5,7 @@ use crate::web::DbConn;
 
 use diesel::prelude::*;
 use log::{info, warn};
-use rocket::http::{Cookie, Cookies, Status};
+use rocket::http::{Cookie, CookieJar, Status};
 use rocket::request::{FromRequest, Outcome};
 use rocket::Request;
 use rocket_contrib::databases::diesel;
@@ -75,7 +75,7 @@ pub fn info(uid: UserId, connection: DbConn) -> Option<Json<UserInfo>> {
 }
 
 #[get("/user/logout")]
-pub fn logout(mut cookies: Cookies) -> Status {
+pub fn logout(cookies: &CookieJar) -> Status {
     cookies.remove_private(Cookie::named("user_id"));
     Status::Ok
 }
@@ -83,7 +83,7 @@ pub fn logout(mut cookies: Cookies) -> Status {
 #[post("/user/login", data = "<login>")]
 pub fn login(
     connection: DbConn,
-    mut cookies: Cookies,
+    cookies: &CookieJar,
     login: Json<LoginData>,
 ) -> Result<Json<UserInfo>, Status> {
     use crate::schema::users::dsl::*;
