@@ -47,7 +47,12 @@ impl Default for Config {
     }
 }
 
-pub fn handle(sub_matches: &ArgMatches<'_>, mut config: Config, database: String, verbosity: i64) {
+pub async fn handle(
+    sub_matches: &ArgMatches<'_>,
+    mut config: Config,
+    database: String,
+    verbosity: i64,
+) {
     if let Some(y) = sub_matches.value_of("port") {
         config.port = y.parse().expect("cannot parse port");
     }
@@ -76,5 +81,6 @@ pub fn handle(sub_matches: &ArgMatches<'_>, mut config: Config, database: String
         },
         log_level: level,
         database_url: database,
-    });
+    })
+    .await;
 }

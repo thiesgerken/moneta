@@ -4,7 +4,8 @@ use moneta::*;
 
 use log::debug;
 
-fn main() {
+#[rocket::main]
+async fn main() {
     let matches = cli::build(true).get_matches();
     initialize_logging(matches.occurrences_of("v") as u32);
 
@@ -31,7 +32,7 @@ fn main() {
         cli::export::handle(&connection, sub_matches);
     } else if let Some(sub_matches) = matches.subcommand_matches("serve") {
         std::mem::drop(connection); // `serve::handle` creates its own connections
-        cli::serve::handle(sub_matches, config.web, config.database, config.verbosity);
+        cli::serve::handle(sub_matches, config.web, config.database, config.verbosity).await;
     } else {
         cli::build(true)
             .print_long_help()
