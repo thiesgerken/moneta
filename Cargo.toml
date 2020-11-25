@@ -16,8 +16,8 @@ diesel-derive-enum = { version = "1.1", features = ["postgres"] }
 itertools = "0.9"
 log = "0.4"
 prettytable-rs = "0.8"
-rocket = { git = "https://github.com/SergioBenitez/Rocket", rev = "02b79e28f71ccbd1fce0e369469c92caedb38cd8" }
-rocket_contrib = { git = "https://github.com/SergioBenitez/Rocket",  rev = "02b79e28f71ccbd1fce0e369469c92caedb38cd8", features = ["diesel_postgres_pool"] }
+rocket = { git = "https://github.com/SergioBenitez/Rocket", rev = "1f1f44f336e5a172361fc1860461bb03667b1ed2", features=["secrets"] }
+rocket_contrib = { git = "https://github.com/SergioBenitez/Rocket",  rev = "1f1f44f336e5a172361fc1860461bb03667b1ed2", features = ["diesel_postgres_pool"] }
 # rocket = "0.4"
 # rocket_contrib = { version = "0.4", features = ["diesel_postgres_pool"] }
 rust-embed = "5.6"

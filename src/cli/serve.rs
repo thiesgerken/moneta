@@ -2,7 +2,7 @@ use crate::web;
 
 use clap::ArgMatches;
 use clap::{App, Arg, SubCommand};
-use rocket::config::LoggingLevel;
+use rocket::config::LogLevel;
 use serde::{Deserialize, Serialize};
 
 pub fn build() -> App<'static, 'static> {
@@ -66,9 +66,9 @@ pub async fn handle(
     }
 
     let level = match verbosity {
-        0 => LoggingLevel::Critical,
-        1 => LoggingLevel::Normal,
-        _ => LoggingLevel::Debug,
+        0 => LogLevel::Critical,
+        1 => LogLevel::Normal,
+        _ => LogLevel::Debug,
     };
 
     web::handle(web::Config {

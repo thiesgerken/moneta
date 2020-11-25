@@ -10,6 +10,7 @@
     "@material-ui/lab": "^4.0.0-alpha.56",
     "@material-ui/pickers": "^4.0.0-alpha.5",
     "connected-react-router": "^6.6.1",
+    "babel-loader": "8.1.0",
     "d3-shape": "^2.0.0",
     "history": "^4.6.0",
     "immutable": "^4.0.0-rc.12",
@@ -29,9 +30,9 @@
     "redux-thunk": "^2.3.0",
     "source-map-explorer": "^2.2.2",
     "tinycolor2": "^1.4.1",
-    "typeface-oxygen-mono": "^1.1.13",
     "typeface-open-sans": "^1.1.13",
     "typeface-oxygen": "^1.1.13",
+    "typeface-oxygen-mono": "^1.1.13",
     "typeface-roboto": "^1.1.13"
   },
   "devDependencies": {
