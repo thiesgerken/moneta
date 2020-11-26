@@ -42,7 +42,7 @@ impl Default for Config {
         Self {
             secret_key: String::new(),
             port: 8484,
-            address: "localhost".into(),
+            address: "127.0.0.1".into(),
         }
     }
 }
