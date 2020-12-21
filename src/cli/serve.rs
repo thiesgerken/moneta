@@ -2,7 +2,7 @@ use crate::web;
 
 use clap::ArgMatches;
 use clap::{App, Arg, SubCommand};
-use rocket::config::LoggingLevel;
+use rocket::config::LogLevel;
 use serde::{Deserialize, Serialize};
 
 pub fn build() -> App<'static, 'static> {
@@ -42,12 +42,17 @@ impl Default for Config {
         Self {
             secret_key: String::new(),
             port: 8484,
-            address: "localhost".into(),
+            address: "127.0.0.1".into(),
         }
     }
 }
 
-pub fn handle(sub_matches: &ArgMatches<'_>, mut config: Config, database: String, verbosity: i64) {
+pub async fn handle(
+    sub_matches: &ArgMatches<'_>,
+    mut config: Config,
+    database: String,
+    verbosity: i64,
+) {
     if let Some(y) = sub_matches.value_of("port") {
         config.port = y.parse().expect("cannot parse port");
     }
@@ -61,9 +66,9 @@ pub fn handle(sub_matches: &ArgMatches<'_>, mut config: Config, database: String
     }
 
     let level = match verbosity {
-        0 => LoggingLevel::Critical,
-        1 => LoggingLevel::Normal,
-        _ => LoggingLevel::Debug,
+        0 => LogLevel::Critical,
+        1 => LogLevel::Normal,
+        _ => LogLevel::Debug,
     };
 
     web::handle(web::Config {
@@ -76,5 +81,6 @@ pub fn handle(sub_matches: &ArgMatches<'_>, mut config: Config, database: String
         },
         log_level: level,
         database_url: database,
-    });
+    })
+    .await;
 }

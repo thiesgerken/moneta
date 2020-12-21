@@ -5,7 +5,7 @@ use crate::web::DbConn;
 
 use diesel::prelude::*;
 use log::{info, warn};
-use rocket::http::{Cookie, Cookies, Status};
+use rocket::http::{Cookie, CookieJar, Status};
 use rocket::request::{FromRequest, Outcome};
 use rocket::Request;
 use rocket_contrib::databases::diesel;
@@ -66,28 +66,35 @@ impl UserInfo {
 }
 
 #[get("/user")]
-pub fn info(uid: UserId, connection: DbConn) -> Option<Json<UserInfo>> {
-    users::table
-        .find(*uid)
-        .first(&*connection)
-        .map(|u| Json(UserInfo::new(u)))
-        .ok()
+pub async fn info(uid: UserId, connection: DbConn) -> Option<Json<UserInfo>> {
+    connection
+        .run(move |c| {
+            users::table
+                .find(*uid)
+                .first(c)
+                .map(|u| Json(UserInfo::new(u)))
+                .ok()
+        })
+        .await
 }
 
 #[get("/user/logout")]
-pub fn logout(mut cookies: Cookies) -> Status {
+pub fn logout(cookies: &CookieJar) -> Status {
     cookies.remove_private(Cookie::named("user_id"));
     Status::Ok
 }
 
 #[post("/user/login", data = "<login>")]
-pub fn login(
+pub async fn login(
     connection: DbConn,
-    mut cookies: Cookies,
+    cookies: &CookieJar<'_>,
     login: Json<LoginData>,
 ) -> Result<Json<UserInfo>, Status> {
     use crate::schema::users::dsl::*;
-    let u: Result<User, _> = users.filter(name.eq(&login.user_name)).first(&*connection);
+    let user_name = login.user_name.clone();
+    let u: Result<User, _> = connection
+        .run(move |c| users.filter(name.eq(user_name)).first(c))
+        .await;
 
     match u {
         Ok(u) => {
@@ -117,13 +124,17 @@ pub fn login(
 }
 
 #[get("/user/list")]
-pub fn list(_uid: UserId, connection: DbConn) -> Option<Json<Vec<UserInfo>>> {
-    Some(Json(
-        users::table
-            .load::<User>(&*connection)
-            .ok()?
-            .into_iter()
-            .map(UserInfo::new)
-            .collect::<Vec<_>>(),
-    ))
+pub async fn list(_uid: UserId, connection: DbConn) -> Option<Json<Vec<UserInfo>>> {
+    connection
+        .run(|c| {
+            Some(Json(
+                users::table
+                    .load::<User>(c)
+                    .ok()?
+                    .into_iter()
+                    .map(UserInfo::new)
+                    .collect::<Vec<_>>(),
+            ))
+        })
+        .await
 }

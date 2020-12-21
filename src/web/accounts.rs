@@ -8,34 +8,46 @@ use rocket::http::Status;
 use rocket_contrib::json::Json;
 
 #[get("/accounts?<offset>&<count>")]
-pub fn list(
+pub async fn list(
     _uid: UserId,
     connection: DbConn,
     offset: Option<i32>,
     count: Option<i32>,
 ) -> Result<Json<Vec<RenderedAccount>>, Status> {
-    let accs = queries::accounts(&*connection, offset, count)
-        .map_err(|e| log_error_and_500(Box::new(e)))?
-        .into_iter()
-        .map(|(account, syncing)| RenderedAccount {
-            info: account,
-            synchronization: syncing,
-        })
-        .collect();
+    connection
+        .run(move |c| {
+            let accs = queries::accounts(c, offset, count)
+                .map_err(|e| log_error_and_500(Box::new(e)))?
+                .into_iter()
+                .map(|(account, syncing)| RenderedAccount {
+                    info: account,
+                    synchronization: syncing,
+                })
+                .collect();
 
-    Ok(Json(accs))
+            Ok(Json(accs))
+        })
+        .await
 }
 
 #[get("/accounts/<id>")]
-pub fn get(_uid: UserId, connection: DbConn, id: i32) -> Result<Json<RenderedAccount>, Status> {
-    let (account, syncing) = queries::account_by_id(&*connection, id)
-        .map_err(|e| log_error_and_500(Box::new(e)))?
-        .ok_or(Status::NotFound)?;
+pub async fn get(
+    _uid: UserId,
+    connection: DbConn,
+    id: i32,
+) -> Result<Json<RenderedAccount>, Status> {
+    connection
+        .run(move |c| {
+            let (account, syncing) = queries::account_by_id(c, id)
+                .map_err(|e| log_error_and_500(Box::new(e)))?
+                .ok_or(Status::NotFound)?;
 
-    Ok(Json(RenderedAccount {
-        info: account,
-        synchronization: syncing,
-    }))
+            Ok(Json(RenderedAccount {
+                info: account,
+                synchronization: syncing,
+            }))
+        })
+        .await
 }
 
 // #[delete("/accounts/<id>")]

@@ -3,39 +3,48 @@ use moneta::initialize_logging;
 use moneta::*;
 
 use log::debug;
+use tokio::runtime::Builder;
 
 fn main() {
-    let matches = cli::build(true).get_matches();
-    initialize_logging(matches.occurrences_of("v") as u32);
+    let mut runtime = Builder::new()
+        .threaded_scheduler()
+        .enable_all()
+        .build()
+        .unwrap();
 
-    // setup default settings and parse overrides from config files
-    let mut settings = cli::initialize_settings(matches.value_of("config"))
-        .expect("unable to initialize settings");
+    runtime.block_on(async {
+        let matches = cli::build(true).get_matches();
+        initialize_logging(matches.occurrences_of("v") as u32);
 
-    // parse overrides from CLI and modify settings
-    cli::merge_settings(&matches, &mut settings).expect("unable to merge flags from CLI");
+        // setup default settings and parse overrides from config files
+        let mut settings = cli::initialize_settings(matches.value_of("config"))
+            .expect("unable to initialize settings");
 
-    let config = settings
-        .try_into::<Config>()
-        .expect("unable to parse settings into Config struct");
+        // parse overrides from CLI and modify settings
+        cli::merge_settings(&matches, &mut settings).expect("unable to merge flags from CLI");
 
-    debug!("config={:?}", &config);
+        let config = settings
+            .try_into::<Config>()
+            .expect("unable to parse settings into Config struct");
 
-    let connection = connect(&config.database).expect("error connecting and migrating to db");
+        debug!("config={:?}", &config);
 
-    if let Some(sub_matches) = matches.subcommand_matches("user") {
-        cli::user::handle(&connection, sub_matches);
-    } else if let Some(sub_matches) = matches.subcommand_matches("import") {
-        cli::import::handle(&connection, sub_matches);
-    } else if let Some(sub_matches) = matches.subcommand_matches("export") {
-        cli::export::handle(&connection, sub_matches);
-    } else if let Some(sub_matches) = matches.subcommand_matches("serve") {
-        std::mem::drop(connection); // `serve::handle` creates its own connections
-        cli::serve::handle(sub_matches, config.web, config.database, config.verbosity);
-    } else {
-        cli::build(true)
-            .print_long_help()
-            .expect("unable to print help");
-        println!();
-    }
+        let connection = connect(&config.database).expect("error connecting and migrating to db");
+
+        if let Some(sub_matches) = matches.subcommand_matches("user") {
+            cli::user::handle(&connection, sub_matches);
+        } else if let Some(sub_matches) = matches.subcommand_matches("import") {
+            cli::import::handle(&connection, sub_matches);
+        } else if let Some(sub_matches) = matches.subcommand_matches("export") {
+            cli::export::handle(&connection, sub_matches);
+        } else if let Some(sub_matches) = matches.subcommand_matches("serve") {
+            std::mem::drop(connection); // `serve::handle` creates its own connections
+            cli::serve::handle(sub_matches, config.web, config.database, config.verbosity).await;
+        } else {
+            cli::build(true)
+                .print_long_help()
+                .expect("unable to print help");
+            println!();
+        }
+    });
 }
