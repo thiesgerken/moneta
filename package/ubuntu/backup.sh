@@ -5,6 +5,6 @@ if [ -x /usr/bin/moneta ]; then
   DATE=$(date +%Y-%m-%d-%H%M%S)
 
   UF=/var/backups/moneta/$DATE.json.xz
-  sudo -u stockdb bash -c "moneta export" | xz -z > $UF
+  sudo -u moneta bash -c "moneta export" | xz -z > $UF
   echo "Exported database to $UF"
 fi
