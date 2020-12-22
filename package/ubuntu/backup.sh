@@ -6,5 +6,6 @@ if [ -x /usr/bin/moneta ]; then
 
   UF=/var/backups/moneta/$DATE.json.xz
   sudo -u moneta bash -c "moneta export" | xz -z > $UF
+  chmod 777 $UF
   echo "Exported database to $UF"
 fi
