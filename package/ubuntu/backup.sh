@@ -1,9 +1,10 @@
 #!/bin/bash
-mkdir -p /var/backups
+mkdir -p /var/backups/moneta
 
 if [ -x /usr/bin/moneta ]; then
   DATE=$(date +%Y-%m-%d-%H%M%S)
 
-  sudo -u moneta bash -c "moneta export" > /var/backups/moneta-$DATE.json
-  echo "Exported database to /var/backups/moneta-$DATE.json"
+  UF=/var/backups/moneta/$DATE.json.xz
+  sudo -u stockdb bash -c "moneta export" | xz -z > $UF
+  echo "Exported database to $UF"
 fi
