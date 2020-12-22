@@ -111,7 +111,8 @@ package-ubuntu:
     name: thiesgerken.de
     url: https://moneta.thiesgerken.de
   tags:
-    - build-tools
+    - docker
+  image: git.thiesgerken.de:5005/thies/moneta/build-ubuntu
 
 deploy-thiesgerken-de:
   extends: .deploy-thiesgerken-de
