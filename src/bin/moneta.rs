@@ -6,8 +6,8 @@ use log::debug;
 use tokio::runtime::Builder;
 
 fn main() {
-    let mut runtime = Builder::new()
-        .threaded_scheduler()
+    let runtime = Builder::new_multi_thread()
+        .thread_name("moneta-main")
         .enable_all()
         .build()
         .unwrap();
