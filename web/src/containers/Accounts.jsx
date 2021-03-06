@@ -100,7 +100,6 @@ const Accounts = ({ userId, accounts, updateAccounts }) => {
       name: 'info.name',
       label: 'Name',
       options: {
-        sortOrder: 'asc',
         filter: false,
         // customBodyRender: (v, { rowData }) => {
         //   const color = rowData[0];
@@ -170,6 +169,10 @@ const Accounts = ({ userId, accounts, updateAccounts }) => {
       if (rows.length > 0 && rows[0].dataIndex < accounts.items.length)
         setAccountId(accounts.items[rows[0].dataIndex].info.id);
       else setAccountId(null);
+    },
+    sortOrder: {
+      name: 'info.name',
+      direction: 'asc',
     },
     download: false,
     rowsPerPageOptions: mdUp ? [10, 15, 20, 50] : [15],
