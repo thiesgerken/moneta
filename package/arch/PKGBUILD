@@ -1,0 +1,28 @@
+# Maintainer: Thies Gerken <thies@thiesgerken.de>
+pkgname=moneta
+pkgver=3.0.0
+pkgrel=0
+pkgdesc="built from git commit #COMMIT"
+arch=(ARCH)
+depends=()
+url="https://git.thiesgerken.de/thies/moneta.git"
+license=('BSD3')
+source=("moneta.tar.gz")
+md5sums=(CHECKSUM)
+install=moneta.install
+
+package() {
+  mkdir -p ${pkgdir}/usr/bin
+  mkdir -p ${pkgdir}/etc/systemd/system
+  mkdir -p ${pkgdir}/etc/moneta
+  mkdir -p ${pkgdir}/usr/share/zsh/vendor-completions
+  mkdir -p ${pkgdir}/usr/share/bash-completion/completions
+	mkdir -p ${pkgdir}/usr/lib/sysusers.d/
+
+	install -Dm644 sysusers.d ${pkgdir}/usr/lib/sysusers.d/moneta.conf
+  install -m 755 moneta ${pkgdir}/usr/bin/moneta
+  install -m 644 config-dist.toml ${pkgdir}/etc/moneta/config-dist.toml
+  install -m 644 moneta.service ${pkgdir}/etc/systemd/system/moneta.service
+  install -m 644 zsh-completions ${pkgdir}/usr/share/zsh/vendor-completions/_moneta
+  install -m 644 bash-completions ${pkgdir}/usr/share/bash-completion/completions/moneta
+}

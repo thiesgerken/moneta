@@ -1,0 +1,8 @@
+CREATE TABLE categories (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  color TEXT,
+  parent INTEGER REFERENCES categories(id) ON DELETE CASCADE
+)

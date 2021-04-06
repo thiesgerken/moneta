@@ -1,0 +1,15 @@
+[Unit]
+Description=moneta daemon
+After=network.target postgresql.service
+
+[Service]
+ExecStart=/usr/bin/moneta serve
+ExecReload=/bin/kill -INT $MAINPID
+StandardOutput=syslog
+StandardError=syslog
+Restart=always
+RestartSec=5s
+User=moneta
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,38 @@
+[package]
+name = "moneta"
+version = "3.0.0"
+authors = ["Thies Gerken <thies@thiesgerken.de>"]
+edition = "2018"
+default-run = "moneta"
+
+[dependencies]
+argonautica = "0.2"
+chrono = { version = "0.4", features = ["serde"] }
+clap = "2.33"
+config = "0.10"
+diesel = { version = "1.4", features = ["postgres", "chrono"] }
+diesel_migrations = "1.4"
+diesel-derive-enum = { version = "1.1", features = ["postgres"] }
+itertools = "0.10"
+log = "0.4"
+prettytable-rs = "0.8"
+rocket = { git = "https://github.com/SergioBenitez/Rocket", rev = "e4c2324bab3141355f175e1ad11a6ed7cb5af234", features=["secrets"] }
+rocket_contrib = { git = "https://github.com/SergioBenitez/Rocket",  rev = "e4c2324bab3141355f175e1ad11a6ed7cb5af234", features = ["diesel_postgres_pool"] }
+# rocket = "0.4"
+# rocket_contrib = { version = "0.4", features = ["diesel_postgres_pool"] }
+rust-embed = "5.6"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+simplelog = "0.9"
+toml = "0.5"
+tokio = { version = "1.0", features= ["full"] } # needs to be synced to the version rocket uses!
+
+[dev-dependencies]
+criterion = "0.3"
+
+[profile.release]
+lto = true
+
+[[bench]]
+name = "rendering"
+harness = false
