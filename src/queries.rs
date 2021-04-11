@@ -229,6 +229,7 @@ pub fn expense_categories_by_expense_range(
             category_replacements::all_columns.nullable(),
         ))
         .distinct()
+        .order_by(expense_categories::expense_id.asc())
         .load::<(ExpenseCategory, Option<CategoryReplacement>)>(connection)
 }
 
@@ -259,6 +260,7 @@ pub fn expense_transactions_by_expense_range(
             expense_transactions::expense_id
                 .eq_any(expenses.into_iter().map(|e| e.id).collect::<Vec<_>>()),
         )
+        .order_by(expense_transactions::expense_id.asc())
         .load::<(ExpenseTransaction, Account, Option<AccountSynchronization>)>(connection)
 }
 
@@ -290,7 +292,40 @@ pub fn expense_events_by_expense_range(
         .inner_join(expense_events::table.on(expense_events::expense_id.eq(expenses::id)))
         .select(expense_events::all_columns)
         .distinct()
+        .order_by(expense_events::expense_id.asc())
         .load::<ExpenseEvent>(connection)
+}
+
+// needed data for expenses returned by `relevant_expenses`
+pub fn expense_items_by_expense_range(
+    connection: &PgConnection,
+    user_id: i32,
+    offset: Option<i64>,
+    limit: Option<i64>,
+) -> Result<Vec<ExpenseItem>, diesel::result::Error> {
+    expenses::table
+        .left_join(
+            expense_transactions::table.on(expense_transactions::expense_id.eq(expenses::id)),
+        )
+        .left_join(
+            account_synchronizations::table.on(expense_transactions::account_id
+                .eq(account_synchronizations::account1)
+                .or(expense_transactions::account_id.eq(account_synchronizations::account2))),
+        )
+        .left_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
+        .filter(
+            accounts::user_id
+                .eq(user_id)
+                .or(account_synchronizations::user1.eq(user_id))
+                .or(account_synchronizations::user2.eq(user_id)),
+        )
+        .limit(limit.unwrap_or(i64::MAX))
+        .offset(offset.unwrap_or(0))
+        .inner_join(expense_items::table.on(expense_items::expense_id.eq(expenses::id)))
+        .select(expense_items::all_columns)
+        .distinct()
+        .order_by(expense_items::expense_id.asc())
+        .load::<ExpenseItem>(connection)
 }
 
 // needed data for expenses returned by `relevant_expenses`
@@ -321,6 +356,7 @@ pub fn expense_receipts_by_expense_range(
         .inner_join(expense_receipts::table.on(expense_receipts::expense_id.eq(expenses::id)))
         .select(expense_receipts::all_columns)
         .distinct()
+        .order_by(expense_receipts::expense_id.asc())
         .load::<ExpenseReceipt>(connection)
 }
 
@@ -346,5 +382,6 @@ pub fn relevant_transactions(
         )
         .select(expense_transactions::all_columns)
         .distinct()
+        .order_by(expense_transactions::expense_id.asc())
         .load::<ExpenseTransaction>(connection)
 }

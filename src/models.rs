@@ -197,7 +197,6 @@ pub struct NewBalance {
 pub struct Expense {
     pub id: i32,
     pub title: String,
-    pub description: String,
     pub store: String,
     pub comments: String,
     pub booking_start: DateTime<Utc>,
@@ -214,7 +213,6 @@ pub struct Expense {
 #[serde(rename_all = "camelCase")]
 pub struct NewExpense {
     pub title: String,
-    pub description: String,
     pub store: String,
     pub comments: String,
     pub booking_start: DateTime<Utc>,
@@ -248,6 +246,8 @@ pub struct ExpenseTransaction {
     pub date: DateTime<Utc>,
     // constraint: amount is null OR fraction is null
     // constraint: fraction can only be used if the expense has exactly one transaction with an amount
+    // convention: amounts are _added_ to account balances, i.e. a negative amount is a expense
+    // convention: fractions are calculated relative to the sum of all transactions with a fixed amount
     pub amount: Option<i64>,
     pub fraction: Option<f64>,
     pub comments: String,
@@ -331,6 +331,41 @@ pub struct ExpenseCategory {
     pub weight: f64,
 }
 
+#[derive(
+    Debug,
+    Clone,
+    Queryable,
+    QueryableByName,
+    Insertable,
+    Associations,
+    Identifiable,
+    Serialize,
+    Deserialize,
+    AsChangeset,
+)]
+#[belongs_to(Expense, foreign_key = "expense_id")]
+#[serde(rename_all = "camelCase")]
+#[primary_key("id")]
+#[table_name = "expense_items"]
+pub struct ExpenseItem {
+    pub id: i32,
+    pub expense_id: i32,
+    pub amount: Option<i64>,
+    pub units: i32,
+    pub title: String,
+    pub comments: String,
+}
+
+#[derive(Debug, Clone, Insertable, Serialize, Deserialize)]
+#[table_name = "expense_items"]
+#[serde(rename_all = "camelCase")]
+pub struct NewExpenseItem {
+    pub expense_id: i32,
+    pub amount: Option<i64>,
+    pub units: i32,
+    pub title: String,
+    pub comments: String,
+}
 #[derive(
     Debug,
     Clone,

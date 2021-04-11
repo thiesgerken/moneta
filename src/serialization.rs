@@ -18,6 +18,7 @@ pub struct NativeFormat {
     categories: Vec<Category>,
     category_replacements: Vec<CategoryReplacement>,
     expenses: Vec<Expense>,
+    expense_items: Vec<ExpenseItem>,
     expense_categories: Vec<ExpenseCategory>,
     expense_transactions: Vec<ExpenseTransaction>,
     expense_receipts: Vec<ExpenseReceipt>,
@@ -56,6 +57,9 @@ impl NativeFormat {
         let expense_receipts = expense_receipts::table
             .load::<ExpenseReceipt>(connection)
             .expect("Error loading expense_receipts");
+        let expense_items = expense_items::table
+            .load::<ExpenseItem>(connection)
+            .expect("Error loading expense_items");
         let delivery_rules = delivery_rules::table
             .load::<DeliveryRule>(connection)
             .expect("Error loading delivery_rules");
@@ -68,6 +72,7 @@ impl NativeFormat {
             categories,
             category_replacements,
             expenses,
+            expense_items,
             expense_categories,
             expense_transactions,
             expense_receipts,
@@ -162,6 +167,17 @@ impl NativeFormat {
             "imported {} of {} expense_categories into the database",
             expense_categories_count,
             self.expense_categories.len()
+        );
+
+        let expense_items_count = diesel::insert_into(expense_items::table)
+            .values(&self.expense_items)
+            .on_conflict_do_nothing()
+            .execute(connection)
+            .expect("Error writing expense_items into the database");
+        info!(
+            "imported {} of {} expense_items into the database",
+            expense_items_count,
+            self.expense_items.len()
         );
 
         let expense_transactions_count = diesel::insert_into(expense_transactions::table)
@@ -326,6 +342,21 @@ impl MoneyDBFormat {
             .map(|(n, o)| (o.id, n.id))
             .collect::<HashMap<_, _>>();
         info!("imported {} expenses into the database", expenses.len());
+
+        let converted_items = self
+            .expenses
+            .iter()
+            .map(|a| a.convert_items(&expense_map))
+            .collect::<Vec<_>>();
+
+        let num_expense_items = diesel::insert_into(expense_items::table)
+            .values(converted_items.iter().flatten().collect::<Vec<_>>())
+            .execute(connection)
+            .expect("Error writing expense items into the database");
+        info!(
+            "imported {} expense items into the database",
+            num_expense_items
+        );
 
         let num_expense_categories = diesel::insert_into(expense_categories::table)
             .values(
@@ -622,7 +653,6 @@ impl MoneyDBExpense {
     fn convert(&self, flags: &[MoneyDBExpenseFlag]) -> NewExpense {
         NewExpense {
             title: self.title.clone(),
-            description: self.description.clone(),
             comments: self.comments.clone(),
             store: self.store.clone(),
             booking_start: self.booking_date.unwrap_or(self.value_date),
@@ -653,6 +683,25 @@ impl MoneyDBExpense {
             category_id: *category_map.get(&self.category_id).unwrap(),
             expense_id: *expense_map.get(&self.id).unwrap(),
         }
+    }
+
+    fn convert_items(&self, expense_map: &HashMap<i32, i32>) -> Vec<NewExpenseItem> {
+        let mut res = Vec::new();
+
+        for s in self.description.split(", ").into_iter() {
+            let t = NewExpenseItem {
+                expense_id: *expense_map.get(&self.id).unwrap(),
+                comments: String::new(),
+                title: s.to_owned(),
+                amount: None,
+                units: 1,
+            };
+
+            println!("{}", s);
+            res.push(t);
+        }
+
+        res
     }
 
     fn convert_transactions(
