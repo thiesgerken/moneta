@@ -167,7 +167,7 @@ pub struct Balance {
     pub account_id: i32,
     pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
     pub amount: i64,         // cents
-    pub comment: String,
+    pub comments: String,
 }
 
 #[derive(Debug, Clone, Insertable, Serialize, Deserialize)]
@@ -177,7 +177,7 @@ pub struct NewBalance {
     pub account_id: i32,
     pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
     pub amount: i64,         // cents
-    pub comment: String,
+    pub comments: String,
 }
 
 #[derive(
@@ -346,8 +346,8 @@ pub struct ExpenseCategory {
 #[belongs_to(Expense, foreign_key = "expense_id")]
 #[serde(rename_all = "camelCase")]
 #[primary_key("id")]
-#[table_name = "expense_items"]
-pub struct ExpenseItem {
+#[table_name = "expense_positions"]
+pub struct ExpensePosition {
     pub id: i32,
     pub expense_id: i32,
     pub amount: Option<i64>,
@@ -357,9 +357,9 @@ pub struct ExpenseItem {
 }
 
 #[derive(Debug, Clone, Insertable, Serialize, Deserialize)]
-#[table_name = "expense_items"]
+#[table_name = "expense_positions"]
 #[serde(rename_all = "camelCase")]
-pub struct NewExpenseItem {
+pub struct NewExpensePosition {
     pub expense_id: i32,
     pub amount: Option<i64>,
     pub units: i32,

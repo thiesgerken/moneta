@@ -1,1 +1,1 @@
-DROP TABLE expense_items
+DROP TABLE expense_positions

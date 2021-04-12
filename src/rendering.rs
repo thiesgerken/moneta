@@ -20,7 +20,7 @@ pub struct RenderedExpense {
     pub receipts: Vec<ExpenseReceipt>,
     pub categories: Vec<ExpenseCategory>,
     pub transactions: Vec<ExpenseTransaction>,
-    pub items: Vec<ExpenseItem>,
+    pub items: Vec<ExpensePosition>,
     pub total_amount: i64,
     pub calculated_amounts: Vec<i64>, // for each transaction
 }
@@ -119,7 +119,7 @@ impl RenderedExpense {
         transactions: Vec<(ExpenseTransaction, Account, Option<AccountSynchronization>)>,
         categories: Vec<(ExpenseCategory, Option<CategoryReplacement>)>,
         receipts: Vec<ExpenseReceipt>,
-        items: Vec<ExpenseItem>,
+        items: Vec<ExpensePosition>,
         events: Vec<ExpenseEvent>,
     ) -> RenderedExpense {
         let transactions = transactions
@@ -176,7 +176,7 @@ impl RenderedExpense {
         info: Expense,
         transactions: &[(ExpenseTransaction, Account, Option<AccountSynchronization>)],
         categories: &[(ExpenseCategory, Option<CategoryReplacement>)],
-        items: &[ExpenseItem],
+        items: &[ExpensePosition],
         receipts: &[ExpenseReceipt],
         events: &[ExpenseEvent],
     ) -> RenderedExpense {

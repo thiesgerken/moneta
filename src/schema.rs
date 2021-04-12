@@ -40,7 +40,7 @@ table! {
         account_id -> Int4,
         date -> Timestamptz,
         amount -> Int8,
-        comment -> Text,
+        comments -> Text,
     }
 }
 
@@ -117,7 +117,7 @@ table! {
     use diesel::sql_types::*;
     use crate::enums::*;
 
-    expense_items (id) {
+    expense_positions (id) {
         id -> Int4,
         expense_id -> Int4,
         amount -> Nullable<Int8>,
@@ -196,7 +196,7 @@ joinable!(expense_categories -> categories (category_id));
 joinable!(expense_categories -> expenses (expense_id));
 joinable!(expense_events -> expenses (expense_id));
 joinable!(expense_events -> users (user_id));
-joinable!(expense_items -> expenses (expense_id));
+joinable!(expense_positions -> expenses (expense_id));
 joinable!(expense_receipts -> expenses (expense_id));
 joinable!(expense_transactions -> accounts (account_id));
 joinable!(expense_transactions -> expenses (expense_id));
@@ -210,7 +210,7 @@ allow_tables_to_appear_in_same_query!(
     delivery_rules,
     expense_categories,
     expense_events,
-    expense_items,
+    expense_positions,
     expense_receipts,
     expense_transactions,
     expenses,

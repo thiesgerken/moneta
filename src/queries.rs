@@ -297,12 +297,12 @@ pub fn expense_events_by_expense_range(
 }
 
 // needed data for expenses returned by `relevant_expenses`
-pub fn expense_items_by_expense_range(
+pub fn expense_positions_by_expense_range(
     connection: &PgConnection,
     user_id: i32,
     offset: Option<i64>,
     limit: Option<i64>,
-) -> Result<Vec<ExpenseItem>, diesel::result::Error> {
+) -> Result<Vec<ExpensePosition>, diesel::result::Error> {
     expenses::table
         .left_join(
             expense_transactions::table.on(expense_transactions::expense_id.eq(expenses::id)),
@@ -321,11 +321,11 @@ pub fn expense_items_by_expense_range(
         )
         .limit(limit.unwrap_or(i64::MAX))
         .offset(offset.unwrap_or(0))
-        .inner_join(expense_items::table.on(expense_items::expense_id.eq(expenses::id)))
-        .select(expense_items::all_columns)
+        .inner_join(expense_positions::table.on(expense_positions::expense_id.eq(expenses::id)))
+        .select(expense_positions::all_columns)
         .distinct()
-        .order_by(expense_items::expense_id.asc())
-        .load::<ExpenseItem>(connection)
+        .order_by(expense_positions::expense_id.asc())
+        .load::<ExpensePosition>(connection)
 }
 
 // needed data for expenses returned by `relevant_expenses`

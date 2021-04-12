@@ -322,10 +322,10 @@ pub async fn query(
                 .load::<ExpenseEvent>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
 
-            let items = expense_items::table
-                .filter(expense_items::expense_id.eq_any(exp_ids))
-                .order_by(expense_items::expense_id.asc())
-                .load::<ExpenseItem>(c)
+            let items = expense_positions::table
+                .filter(expense_positions::expense_id.eq_any(exp_ids))
+                .order_by(expense_positions::expense_id.asc())
+                .load::<ExpensePosition>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
 
             let rexps = expenses
@@ -474,7 +474,7 @@ pub async fn list(
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
             let events = queries::expense_events_by_expense_range(c, *uid, offset, count)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
-            let items = queries::expense_items_by_expense_range(c, *uid, offset, count)
+            let items = queries::expense_positions_by_expense_range(c, *uid, offset, count)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
 
             let mut rexps = Vec::with_capacity(exps.len());
@@ -567,9 +567,9 @@ pub async fn get(
                 .filter(expense_events::expense_id.eq(id))
                 .load::<ExpenseEvent>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
-            let items = expense_items::table
-                .filter(expense_items::expense_id.eq(id))
-                .load::<ExpenseItem>(c)
+            let items = expense_positions::table
+                .filter(expense_positions::expense_id.eq(id))
+                .load::<ExpensePosition>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
 
             let rexp = RenderedExpense::render(

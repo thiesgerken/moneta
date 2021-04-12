@@ -18,7 +18,7 @@ pub struct NativeFormat {
     categories: Vec<Category>,
     category_replacements: Vec<CategoryReplacement>,
     expenses: Vec<Expense>,
-    expense_items: Vec<ExpenseItem>,
+    expense_positions: Vec<ExpensePosition>,
     expense_categories: Vec<ExpenseCategory>,
     expense_transactions: Vec<ExpenseTransaction>,
     expense_receipts: Vec<ExpenseReceipt>,
@@ -57,9 +57,9 @@ impl NativeFormat {
         let expense_receipts = expense_receipts::table
             .load::<ExpenseReceipt>(connection)
             .expect("Error loading expense_receipts");
-        let expense_items = expense_items::table
-            .load::<ExpenseItem>(connection)
-            .expect("Error loading expense_items");
+        let expense_positions = expense_positions::table
+            .load::<ExpensePosition>(connection)
+            .expect("Error loading expense_positions");
         let delivery_rules = delivery_rules::table
             .load::<DeliveryRule>(connection)
             .expect("Error loading delivery_rules");
@@ -72,7 +72,7 @@ impl NativeFormat {
             categories,
             category_replacements,
             expenses,
-            expense_items,
+            expense_positions,
             expense_categories,
             expense_transactions,
             expense_receipts,
@@ -169,15 +169,15 @@ impl NativeFormat {
             self.expense_categories.len()
         );
 
-        let expense_items_count = diesel::insert_into(expense_items::table)
-            .values(&self.expense_items)
+        let expense_positions_count = diesel::insert_into(expense_positions::table)
+            .values(&self.expense_positions)
             .on_conflict_do_nothing()
             .execute(connection)
-            .expect("Error writing expense_items into the database");
+            .expect("Error writing expense_positions into the database");
         info!(
-            "imported {} of {} expense_items into the database",
-            expense_items_count,
-            self.expense_items.len()
+            "imported {} of {} expense_positions into the database",
+            expense_positions_count,
+            self.expense_positions.len()
         );
 
         let expense_transactions_count = diesel::insert_into(expense_transactions::table)
@@ -343,19 +343,19 @@ impl MoneyDBFormat {
             .collect::<HashMap<_, _>>();
         info!("imported {} expenses into the database", expenses.len());
 
-        let converted_items = self
+        let converted_positions = self
             .expenses
             .iter()
-            .map(|a| a.convert_items(&expense_map))
+            .map(|a| a.convert_positions(&expense_map))
             .collect::<Vec<_>>();
 
-        let num_expense_items = diesel::insert_into(expense_items::table)
-            .values(converted_items.iter().flatten().collect::<Vec<_>>())
+        let num_expense_positions = diesel::insert_into(expense_positions::table)
+            .values(converted_positions.iter().flatten().collect::<Vec<_>>())
             .execute(connection)
             .expect("Error writing expense items into the database");
         info!(
             "imported {} expense items into the database",
-            num_expense_items
+            num_expense_positions
         );
 
         let num_expense_categories = diesel::insert_into(expense_categories::table)
@@ -601,7 +601,7 @@ impl MoneyDBBalance {
             account_id: *account_map.get(&self.account_id).unwrap(),
             date: self.date,
             amount: (self.amount * 100.0) as i64,
-            comment: String::new(),
+            comments: String::new(),
         }
     }
 }
@@ -685,11 +685,23 @@ impl MoneyDBExpense {
         }
     }
 
-    fn convert_items(&self, expense_map: &HashMap<i32, i32>) -> Vec<NewExpenseItem> {
+    fn convert_positions(&self, expense_map: &HashMap<i32, i32>) -> Vec<NewExpensePosition> {
         let mut res = Vec::new();
 
-        for s in self.description.split(", ").into_iter() {
-            let t = NewExpenseItem {
+        // TODO: look for " x\d$", " \dx$", "^\dx " and use as unit count
+        // TODO: heuristic for amounts in parentheses?
+        // TODO: Only put in positions if the remaining text consists only of [\w ], otherwise issue a warning and use as comment
+        // TODO: heuristics for descriptions vs. comment for entries with only a single position
+        // TODO: combine positions that appear multiple times with the same (or both null) amount to a single position with more units
+
+        for s in self
+            .description
+            .split(", ")
+            .map(|t| t.trim())
+            .filter(|t| !t.is_empty())
+            .into_iter()
+        {
+            let t = NewExpensePosition {
                 expense_id: *expense_map.get(&self.id).unwrap(),
                 comments: String::new(),
                 title: s.to_owned(),
@@ -730,11 +742,6 @@ impl MoneyDBExpense {
             .collect::<Vec<_>>()
             .len();
 
-        // in the new version percentage is only allowed if exactly one transaction has an amount
-        let any_fixed_amount = sharings.iter().any(|s| {
-            s.sharing_type == MoneyDBExpenseSharingType::FixedAmount && s.expense_id == self.id
-        });
-
         for s in sharings.into_iter().filter(|s| s.expense_id == self.id) {
             let mut t = NewExpenseTransaction {
                 expense_id: *expense_map.get(&self.id).unwrap(),
@@ -749,19 +756,9 @@ impl MoneyDBExpense {
             if s.sharing_type == MoneyDBExpenseSharingType::FixedAmount {
                 t.amount = Some((s.param * 100.0) as i64)
             } else if s.sharing_type == MoneyDBExpenseSharingType::Equal {
-                if !any_fixed_amount {
-                    t.fraction = Some(-1.0 / (num_equal + 1) as f64);
-                } else {
-                    // warn!("expense {}: converting equal to fixed amount", &self.id);
-                    t.amount = Some((self.amount / (num_equal + 1) as f64 * -100.0) as i64);
-                }
+                t.fraction = Some(-1.0 / (num_equal + 1) as f64);
             } else if s.sharing_type == MoneyDBExpenseSharingType::FixedFraction {
-                if !any_fixed_amount {
-                    t.fraction = Some(-1.0 * s.param);
-                } else {
-                    // warn!("expense {}: converting fixed fraction to fixed amount", &self.id);
-                    t.amount = Some((self.amount * s.param * -100.0) as i64);
-                }
+                t.fraction = Some(-1.0 * s.param);
             }
 
             res.push(t);
