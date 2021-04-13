@@ -198,6 +198,7 @@ pub struct Expense {
     pub id: i32,
     pub title: String,
     pub store: String,
+    pub description: String,
     pub comments: String,
     pub booking_start: DateTime<Utc>,
     pub booking_end: DateTime<Utc>,
@@ -214,6 +215,7 @@ pub struct Expense {
 pub struct NewExpense {
     pub title: String,
     pub store: String,
+    pub description: String,
     pub comments: String,
     pub booking_start: DateTime<Utc>,
     pub booking_end: DateTime<Utc>,

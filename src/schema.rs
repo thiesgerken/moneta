@@ -162,6 +162,7 @@ table! {
         id -> Int4,
         title -> Text,
         store -> Text,
+        description -> Text,
         comments -> Text,
         booking_start -> Timestamptz,
         booking_end -> Timestamptz,

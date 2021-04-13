@@ -26,7 +26,7 @@ use argonautica::{Hasher, Verifier};
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use log::info;
-use simplelog::{LevelFilter, SimpleLogger, TermLogger, TerminalMode};
+use simplelog::{ColorChoice, LevelFilter, SimpleLogger, TermLogger, TerminalMode};
 use std::error::Error;
 
 embed_migrations!();
@@ -72,7 +72,12 @@ pub fn initialize_logging(verbosity: u32) {
 
     // log_config.add_filter_allow_str("moneta");
 
-    if let Err(e) = TermLogger::init(level, log_config.build(), TerminalMode::Mixed) {
+    if let Err(e) = TermLogger::init(
+        level,
+        log_config.build(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    ) {
         SimpleLogger::init(level, log_config.build())
             .expect("TermLogger and SimpleLogger failed to init!?");
         info!(

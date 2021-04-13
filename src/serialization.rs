@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use itertools::izip;
 use log::{error, info, warn};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -653,8 +654,15 @@ impl MoneyDBExpense {
     fn convert(&self, flags: &[MoneyDBExpenseFlag]) -> NewExpense {
         NewExpense {
             title: self.title.clone(),
-            comments: self.comments.clone(),
             store: self.store.clone(),
+            comments: self.comments.clone(),
+            description: if self.description.chars().any(|c| "()[]{}.€+/:".contains(c))
+                || !self.description.contains(", ")
+            {
+                self.description.clone()
+            } else {
+                String::new()
+            },
             booking_start: self.booking_date.unwrap_or(self.value_date),
             booking_end: self.booking_date.unwrap_or(self.value_date),
             is_deleted: false,
@@ -686,34 +694,46 @@ impl MoneyDBExpense {
     }
 
     fn convert_positions(&self, expense_map: &HashMap<i32, i32>) -> Vec<NewExpensePosition> {
-        let mut res = Vec::new();
+        if self.description.chars().any(|c| "()[]{}.€+/:".contains(c))
+            || !self.description.contains(", ")
+        {
+            return Vec::new();
+        }
 
-        // TODO: look for " x\d$", " \dx$", "^\dx " and use as unit count
-        // TODO: heuristic for amounts in parentheses?
-        // TODO: Only put in positions if the remaining text consists only of [\w ], otherwise issue a warning and use as comment
-        // TODO: heuristics for descriptions vs. comment for entries with only a single position
-        // TODO: combine positions that appear multiple times with the same (or both null) amount to a single position with more units
+        // precompile regexes for slighty increased speed (would be even better to re-use them between expenses)
+        let units_re1 = Regex::new(r"(.*) x(\d+)$").unwrap();
+        let units_re2 = Regex::new(r"(.*) (\d+)x$").unwrap();
+        let units_re3 = Regex::new(r"(\d+)x? (.*)").unwrap();
 
-        for s in self
-            .description
+        self.description
             .split(", ")
             .map(|t| t.trim())
             .filter(|t| !t.is_empty())
             .into_iter()
-        {
-            let t = NewExpensePosition {
-                expense_id: *expense_map.get(&self.id).unwrap(),
-                comments: String::new(),
-                title: s.to_owned(),
-                amount: None,
-                units: 1,
-            };
+            .map(|s| {
+                let mut remaining_text = s.to_owned();
+                let mut units = 1;
 
-            println!("{}", s);
-            res.push(t);
-        }
+                if let Some(c) = units_re1.captures_iter(&s).next() {
+                    remaining_text = c[1].to_owned();
+                    units = c[2].parse().unwrap();
+                } else if let Some(c) = units_re2.captures_iter(&s).next() {
+                    remaining_text = c[1].to_owned();
+                    units = c[2].parse().unwrap();
+                } else if let Some(c) = units_re3.captures_iter(&s).next() {
+                    remaining_text = c[2].to_owned();
+                    units = c[1].parse().unwrap();
+                }
 
-        res
+                NewExpensePosition {
+                    expense_id: *expense_map.get(&self.id).unwrap(),
+                    comments: String::new(),
+                    title: remaining_text,
+                    amount: None,
+                    units,
+                }
+            })
+            .collect()
     }
 
     fn convert_transactions(

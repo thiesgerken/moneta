@@ -110,6 +110,13 @@ pub async fn query(
                             query = query.then_order_by(expenses::store.desc());
                         }
                     }
+                    "info.description" => {
+                        if asc {
+                            query = query.then_order_by(expenses::description.asc());
+                        } else {
+                            query = query.then_order_by(expenses::description.desc());
+                        }
+                    }
                     "info.comments" => {
                         if asc {
                             query = query.then_order_by(expenses::comments.asc());
@@ -210,6 +217,9 @@ pub async fn query(
                     "info.store" => {
                         query = query.filter(expenses::store.eq_any(values));
                     }
+                    "info.description" => {
+                        query = query.filter(expenses::description.eq_any(values));
+                    }
                     "info.comments" => {
                         query = query.filter(expenses::comments.eq_any(values));
                     }
@@ -260,7 +270,8 @@ pub async fn query(
                         expenses::store
                             .ilike(s.clone())
                             .or(expenses::title.ilike(s.clone()))
-                            .or(expenses::comments.ilike(s)),
+                            .or(expenses::comments.ilike(s.clone()))
+                            .or(expenses::description.ilike(s)),
                     );
                 }
             }

@@ -2,13 +2,15 @@
 
 ## Frontend+Backend
 
-- conversion of prepayments to booking periods
+- importer: batch insert_many
+- importer: heuristic for automatic conversion of prepayments to booking periods?
+
 - Was ist mit Rückzahlungen?
 - Miete sind zwei Transaktionen, die automatisch kommen + müssen auf den nächsten Monat gebucht werden ...
-- automation using templates and expense deliveries
-- Heuristiken für Moneydb Description -> Items oder Comment
+  -> Der User muss irgendwie die Möglichkeit haben, Ausgaben zu kombinieren oder zu gruppieren, dies muss auch durch Regeln möglich sein => Gruppierungs-Key?
 
 - edit/create/delete expenses, balances, categories, accounts
+- automation using templates and expense deliveries
 - analysis
 - push notifications
 - front page: stream of recent events
