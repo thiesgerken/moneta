@@ -5,6 +5,7 @@ use crate::schema::*;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use itertools::izip;
+use itertools::Itertools;
 use log::{error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -328,15 +329,19 @@ impl MoneyDBFormat {
             .expect("Error writing balances into the database");
         info!("imported {} balances into the database", num_balances);
 
-        let expenses = diesel::insert_into(expenses::table)
-            .values(
-                self.expenses
-                    .iter()
-                    .map(|a| a.convert(&self.expense_flags))
-                    .collect::<Vec<_>>(),
-            )
-            .load::<Expense>(connection)
-            .expect("Error writing expenses into the database");
+        let expenses = self
+            .expenses
+            .iter()
+            .map(|a| a.convert(&self.expense_flags))
+            .chunks(512)
+            .into_iter()
+            .flat_map(|chunk| {
+                diesel::insert_into(expenses::table)
+                    .values(chunk.collect::<Vec<_>>())
+                    .load::<Expense>(connection)
+                    .expect("Error writing expenses into the database")
+            })
+            .collect::<Vec<_>>();
         let expense_map = expenses
             .iter()
             .zip(&self.expenses)
@@ -344,18 +349,21 @@ impl MoneyDBFormat {
             .collect::<HashMap<_, _>>();
         info!("imported {} expenses into the database", expenses.len());
 
-        let converted_positions = self
+        let num_expense_positions = self
             .expenses
             .iter()
-            .map(|a| a.convert_positions(&expense_map))
-            .collect::<Vec<_>>();
-
-        let num_expense_positions = diesel::insert_into(expense_positions::table)
-            .values(converted_positions.iter().flatten().collect::<Vec<_>>())
-            .execute(connection)
-            .expect("Error writing expense items into the database");
+            .flat_map(|a| a.convert_positions(&expense_map))
+            .chunks(512)
+            .into_iter()
+            .map(|chunk| {
+                diesel::insert_into(expense_positions::table)
+                    .values(chunk.collect::<Vec<_>>())
+                    .execute(connection)
+                    .expect("Error writing expense positions into the database")
+            })
+            .sum::<usize>();
         info!(
-            "imported {} expense items into the database",
+            "imported {} expense positions into the database",
             num_expense_positions
         );
 
@@ -392,11 +400,19 @@ impl MoneyDBFormat {
             .iter()
             .map(|a| a.convert_transactions(&expense_map, &account_map, &self.expense_sharings))
             .collect::<Vec<_>>();
-
-        let num_expense_transactions = diesel::insert_into(expense_transactions::table)
-            .values(converted_transactions.iter().flatten().collect::<Vec<_>>())
-            .execute(connection)
-            .expect("Error writing expense transactions into the database");
+        let num_expense_transactions = converted_transactions
+            .iter()
+            .cloned()
+            .flatten()
+            .chunks(512)
+            .into_iter()
+            .map(|chunk| {
+                diesel::insert_into(expense_transactions::table)
+                    .values(chunk.collect::<Vec<_>>())
+                    .execute(connection)
+                    .expect("Error writing expense transactions into the database")
+            })
+            .sum::<usize>();
         info!(
             "imported {} expense transactions into the database",
             num_expense_transactions

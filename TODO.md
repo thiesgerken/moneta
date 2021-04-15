@@ -2,7 +2,6 @@
 
 ## Frontend+Backend
 
-- importer: batch insert_many
 - importer: heuristic for automatic conversion of prepayments to booking periods?
 
 - Was ist mit Rückzahlungen?
