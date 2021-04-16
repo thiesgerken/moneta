@@ -6,7 +6,7 @@ use moneta::schema::*;
 use criterion::{criterion_group, criterion_main, Criterion};
 use diesel::prelude::*;
 use log::debug;
-use simplelog::{LevelFilter, SimpleLogger, TermLogger, TerminalMode};
+use simplelog::{ColorChoice, LevelFilter, SimpleLogger, TermLogger, TerminalMode};
 use std::time::Duration;
 
 fn run_filter_and_render_naive(connection: &PgConnection) -> Option<Vec<RenderedExpense>> {
@@ -19,6 +19,8 @@ fn run_filter_and_render_naive(connection: &PgConnection) -> Option<Vec<Rendered
         queries::expense_categories_by_expense_range(connection, uid, None, None).ok()?;
     let receipts = queries::expense_receipts_by_expense_range(connection, uid, None, None).ok()?;
     let events = queries::expense_events_by_expense_range(connection, uid, None, None).ok()?;
+    let positions =
+        queries::expense_positions_by_expense_range(connection, uid, None, None).ok()?;
 
     let rexps = exps
         .into_iter()
@@ -28,6 +30,7 @@ fn run_filter_and_render_naive(connection: &PgConnection) -> Option<Vec<Rendered
                 e,
                 &transactions,
                 &categories,
+                &positions,
                 &receipts,
                 &events,
             )
@@ -47,12 +50,15 @@ fn run_filter_and_render_optim(connection: &PgConnection) -> Option<Vec<Rendered
         queries::expense_categories_by_expense_range(connection, uid, None, None).ok()?;
     let receipts = queries::expense_receipts_by_expense_range(connection, uid, None, None).ok()?;
     let events = queries::expense_events_by_expense_range(connection, uid, None, None).ok()?;
+    let positions =
+        queries::expense_positions_by_expense_range(connection, uid, None, None).ok()?;
 
     let mut rexps = Vec::with_capacity(exps.len());
     let mut t_i = 0;
     let mut c_i = 0;
     let mut r_i = 0;
     let mut e_i = 0;
+    let mut p_i = 0;
     for e in exps.into_iter() {
         while transactions
             .get(t_i)
@@ -82,12 +88,20 @@ fn run_filter_and_render_optim(connection: &PgConnection) -> Option<Vec<Rendered
         {
             e_i += 1;
         }
+        while positions
+            .get(p_i)
+            .map(|p| e.id > p.expense_id)
+            .unwrap_or(false)
+        {
+            p_i += 1;
+        }
 
         rexps.push(RenderedExpense::filter_and_render(
             uid,
             e,
             &transactions[t_i..],
             &categories[c_i..],
+            &positions[p_i..],
             &receipts[r_i..],
             &events[e_i..],
         ));
@@ -149,10 +163,15 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     log_config.set_time_format_str("");
 
     let level = LevelFilter::Info;
-    TermLogger::init(level, log_config.build(), TerminalMode::Mixed)
-        .ok()
-        .or_else(|| SimpleLogger::init(level, log_config.build()).ok())
-        .unwrap();
+    TermLogger::init(
+        level,
+        log_config.build(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )
+    .ok()
+    .or_else(|| SimpleLogger::init(level, log_config.build()).ok())
+    .unwrap();
 
     let settings = cli::initialize_settings(Some("moneta.toml")).unwrap();
     let config = settings.try_into::<cli::Config>().unwrap();

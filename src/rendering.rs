@@ -20,7 +20,7 @@ pub struct RenderedExpense {
     pub receipts: Vec<ExpenseReceipt>,
     pub categories: Vec<ExpenseCategory>,
     pub transactions: Vec<ExpenseTransaction>,
-    pub items: Vec<ExpensePosition>,
+    pub positions: Vec<ExpensePosition>,
     pub total_amount: i64,
     pub calculated_amounts: Vec<i64>, // for each transaction
 }
@@ -119,7 +119,7 @@ impl RenderedExpense {
         transactions: Vec<(ExpenseTransaction, Account, Option<AccountSynchronization>)>,
         categories: Vec<(ExpenseCategory, Option<CategoryReplacement>)>,
         receipts: Vec<ExpenseReceipt>,
-        items: Vec<ExpensePosition>,
+        positions: Vec<ExpensePosition>,
         events: Vec<ExpenseEvent>,
     ) -> RenderedExpense {
         let transactions = transactions
@@ -163,7 +163,7 @@ impl RenderedExpense {
             categories,
             events,
             transactions,
-            items,
+            positions,
             receipts,
             total_amount,
             calculated_amounts,
@@ -176,7 +176,7 @@ impl RenderedExpense {
         info: Expense,
         transactions: &[(ExpenseTransaction, Account, Option<AccountSynchronization>)],
         categories: &[(ExpenseCategory, Option<CategoryReplacement>)],
-        items: &[ExpensePosition],
+        positions: &[ExpensePosition],
         receipts: &[ExpenseReceipt],
         events: &[ExpenseEvent],
     ) -> RenderedExpense {
@@ -241,7 +241,7 @@ impl RenderedExpense {
             .map(|(t, _, _)| t)
             .collect::<Vec<_>>();
 
-        let items = items
+        let positions = positions
             .iter()
             .skip_while(|t| t.expense_id != info.id)
             .take_while(|t| t.expense_id == info.id)
@@ -253,7 +253,7 @@ impl RenderedExpense {
             categories,
             events,
             transactions,
-            items,
+            positions,
             receipts,
             total_amount,
             calculated_amounts,

@@ -234,6 +234,7 @@ pub fn expense_categories_by_expense_range(
 }
 
 // needed data for expenses returned by `relevant_expenses`
+// NOTE: this works for small counts, but might not work when requesting all expense transactions!
 pub fn expense_transactions_by_expense_range(
     connection: &PgConnection,
     user_id: i32,
@@ -241,8 +242,6 @@ pub fn expense_transactions_by_expense_range(
     limit: Option<i64>,
 ) -> Result<Vec<(ExpenseTransaction, Account, Option<AccountSynchronization>)>, diesel::result::Error>
 {
-    // TODO: this works for small counts, but might not work when requesting all expense transactions!
-
     let expenses = relevant_expenses(connection, user_id, offset, limit)?;
 
     expense_transactions::table
