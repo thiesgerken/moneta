@@ -21,6 +21,7 @@ pub struct RenderedExpense {
     pub categories: Vec<ExpenseCategory>,
     pub transactions: Vec<ExpenseTransaction>,
     pub positions: Vec<ExpensePosition>,
+    pub group: Option<ExpenseGroup>,
     pub total_amount: i64,
     pub calculated_amounts: Vec<i64>, // for each transaction
 }
@@ -121,7 +122,10 @@ impl RenderedExpense {
         receipts: Vec<ExpenseReceipt>,
         positions: Vec<ExpensePosition>,
         events: Vec<ExpenseEvent>,
+        group: Option<ExpenseGroup>,
     ) -> RenderedExpense {
+        assert!(info.group_id.is_none() == group.is_none());
+
         let transactions = transactions
             .into_iter()
             .map(|(mut t, a, acs)| {
@@ -165,6 +169,7 @@ impl RenderedExpense {
             transactions,
             positions,
             receipts,
+            group,
             total_amount,
             calculated_amounts,
         }
@@ -179,6 +184,7 @@ impl RenderedExpense {
         positions: &[ExpensePosition],
         receipts: &[ExpenseReceipt],
         events: &[ExpenseEvent],
+        groups: &[ExpenseGroup],
     ) -> RenderedExpense {
         let transactions = transactions
             .iter()
@@ -248,6 +254,12 @@ impl RenderedExpense {
             .cloned()
             .collect();
 
+        let group = if let Some(g_id) = info.group_id {
+            groups.iter().find(|g| g.id == g_id).map(|g| g.clone())
+        } else {
+            None
+        };
+
         RenderedExpense {
             info,
             categories,
@@ -255,6 +267,7 @@ impl RenderedExpense {
             transactions,
             positions,
             receipts,
+            group,
             total_amount,
             calculated_amounts,
         }

@@ -339,6 +339,19 @@ pub async fn query(
                 .load::<ExpensePosition>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
 
+            let group_ids = expenses
+                .iter()
+                .filter_map(|e| e.group_id)
+                .collect::<Vec<_>>();
+            let groups = if group_ids.is_empty() {
+                Vec::new()
+            } else {
+                expense_groups::table
+                    .filter(expense_groups::id.eq_any(group_ids))
+                    .load::<ExpenseGroup>(c)
+                    .map_err(|e| log_error_and_500(Box::new(e)))?
+            };
+
             let rexps = expenses
                 .into_iter()
                 .map(|e| {
@@ -350,6 +363,7 @@ pub async fn query(
                         &items,
                         &receipts,
                         &events,
+                        &groups,
                     )
                 })
                 .collect::<Vec<_>>();
@@ -487,6 +501,8 @@ pub async fn list(
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
             let items = queries::expense_positions_by_expense_range(c, *uid, offset, count)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
+            let groups = queries::expense_groups_by_expense_range(c, *uid, offset, count)
+                .map_err(|e| log_error_and_500(Box::new(e)))?;
 
             let mut rexps = Vec::with_capacity(exps.len());
 
@@ -538,6 +554,7 @@ pub async fn list(
                     &items[i_i..],
                     &receipts[r_i..],
                     &events[e_i..],
+                    &groups,
                 ));
             }
 
@@ -582,6 +599,15 @@ pub async fn get(
                 .filter(expense_positions::expense_id.eq(id))
                 .load::<ExpensePosition>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
+            let group = if let Some(g_id) = exp.group_id {
+                expense_groups::table
+                    .filter(expense_groups::id.eq(g_id))
+                    .get_result::<ExpenseGroup>(c)
+                    .optional()
+                    .map_err(|e| log_error_and_500(Box::new(e)))?
+            } else {
+                None
+            };
 
             let rexp = RenderedExpense::render(
                 *uid,
@@ -591,6 +617,7 @@ pub async fn get(
                 receipts,
                 items,
                 events,
+                group,
             );
             Ok(Json(rexp))
         })

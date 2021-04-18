@@ -21,6 +21,7 @@ pub struct NativeFormat {
     category_replacements: Vec<CategoryReplacement>,
     expenses: Vec<Expense>,
     expense_positions: Vec<ExpensePosition>,
+    expense_groups: Vec<ExpenseGroup>,
     expense_categories: Vec<ExpenseCategory>,
     expense_transactions: Vec<ExpenseTransaction>,
     expense_receipts: Vec<ExpenseReceipt>,
@@ -62,6 +63,9 @@ impl NativeFormat {
         let expense_positions = expense_positions::table
             .load::<ExpensePosition>(connection)
             .expect("Error loading expense_positions");
+        let expense_groups = expense_groups::table
+            .load::<ExpenseGroup>(connection)
+            .expect("Error loading expense_groups");
         let delivery_rules = delivery_rules::table
             .load::<DeliveryRule>(connection)
             .expect("Error loading delivery_rules");
@@ -75,6 +79,7 @@ impl NativeFormat {
             category_replacements,
             expenses,
             expense_positions,
+            expense_groups,
             expense_categories,
             expense_transactions,
             expense_receipts,
@@ -180,6 +185,17 @@ impl NativeFormat {
             "imported {} of {} expense_positions into the database",
             expense_positions_count,
             self.expense_positions.len()
+        );
+
+        let expense_groups_count = diesel::insert_into(expense_groups::table)
+            .values(&self.expense_groups)
+            .on_conflict_do_nothing()
+            .execute(connection)
+            .expect("Error writing expense_groups into the database");
+        info!(
+            "imported {} of {} expense_groups into the database",
+            expense_groups_count,
+            self.expense_groups.len()
         );
 
         let expense_transactions_count = diesel::insert_into(expense_transactions::table)
@@ -681,6 +697,7 @@ impl MoneyDBExpense {
             },
             booking_start: self.booking_date.unwrap_or(self.value_date),
             booking_end: self.booking_date.unwrap_or(self.value_date),
+            group_id: None,
             is_deleted: false,
             is_template: flags
                 .iter()

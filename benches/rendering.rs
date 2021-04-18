@@ -11,16 +11,20 @@ use std::time::Duration;
 
 fn run_filter_and_render_naive(connection: &PgConnection) -> Option<Vec<RenderedExpense>> {
     let uid = 1;
+    let offset = Some(0);
+    let limit = Some(20);
 
-    let exps = queries::relevant_expenses(connection, uid, None, None).ok()?;
+    let exps = queries::relevant_expenses(connection, uid, offset, limit).ok()?;
     let transactions =
-        queries::expense_transactions_by_expense_range(connection, uid, None, None).ok()?;
+        queries::expense_transactions_by_expense_range(connection, uid, offset, limit).ok()?;
     let categories =
-        queries::expense_categories_by_expense_range(connection, uid, None, None).ok()?;
-    let receipts = queries::expense_receipts_by_expense_range(connection, uid, None, None).ok()?;
-    let events = queries::expense_events_by_expense_range(connection, uid, None, None).ok()?;
+        queries::expense_categories_by_expense_range(connection, uid, offset, limit).ok()?;
+    let receipts =
+        queries::expense_receipts_by_expense_range(connection, uid, offset, limit).ok()?;
+    let events = queries::expense_events_by_expense_range(connection, uid, offset, limit).ok()?;
     let positions =
-        queries::expense_positions_by_expense_range(connection, uid, None, None).ok()?;
+        queries::expense_positions_by_expense_range(connection, uid, offset, limit).ok()?;
+    let groups = queries::expense_groups_by_expense_range(connection, uid, offset, limit).ok()?;
 
     let rexps = exps
         .into_iter()
@@ -33,6 +37,7 @@ fn run_filter_and_render_naive(connection: &PgConnection) -> Option<Vec<Rendered
                 &positions,
                 &receipts,
                 &events,
+                &groups,
             )
         })
         .collect::<Vec<RenderedExpense>>();
@@ -42,16 +47,20 @@ fn run_filter_and_render_naive(connection: &PgConnection) -> Option<Vec<Rendered
 
 fn run_filter_and_render_optim(connection: &PgConnection) -> Option<Vec<RenderedExpense>> {
     let uid = 1;
+    let offset = Some(0);
+    let limit = Some(20);
 
-    let exps = queries::relevant_expenses(connection, uid, None, None).ok()?;
+    let exps = queries::relevant_expenses(connection, uid, offset, limit).ok()?;
     let transactions =
-        queries::expense_transactions_by_expense_range(connection, uid, None, None).ok()?;
+        queries::expense_transactions_by_expense_range(connection, uid, offset, limit).ok()?;
     let categories =
-        queries::expense_categories_by_expense_range(connection, uid, None, None).ok()?;
-    let receipts = queries::expense_receipts_by_expense_range(connection, uid, None, None).ok()?;
-    let events = queries::expense_events_by_expense_range(connection, uid, None, None).ok()?;
+        queries::expense_categories_by_expense_range(connection, uid, offset, limit).ok()?;
+    let receipts =
+        queries::expense_receipts_by_expense_range(connection, uid, offset, limit).ok()?;
+    let events = queries::expense_events_by_expense_range(connection, uid, offset, limit).ok()?;
     let positions =
-        queries::expense_positions_by_expense_range(connection, uid, None, None).ok()?;
+        queries::expense_positions_by_expense_range(connection, uid, offset, limit).ok()?;
+    let groups = queries::expense_groups_by_expense_range(connection, uid, offset, limit).ok()?;
 
     let mut rexps = Vec::with_capacity(exps.len());
     let mut t_i = 0;
@@ -104,6 +113,7 @@ fn run_filter_and_render_optim(connection: &PgConnection) -> Option<Vec<Rendered
             &positions[p_i..],
             &receipts[r_i..],
             &events[e_i..],
+            &groups,
         ));
     }
 
@@ -112,14 +122,20 @@ fn run_filter_and_render_optim(connection: &PgConnection) -> Option<Vec<Rendered
 
 fn run_filter_and_render_queries(connection: &PgConnection) -> Option<()> {
     let uid = 1;
+    let offset = Some(0);
+    let limit = Some(20);
 
-    let _exps = queries::relevant_expenses(connection, uid, None, None).ok()?;
+    let _exps = queries::relevant_expenses(connection, uid, offset, limit).ok()?;
     let _transactions =
-        queries::expense_transactions_by_expense_range(connection, uid, None, None).ok()?;
+        queries::expense_transactions_by_expense_range(connection, uid, offset, limit).ok()?;
     let _categories =
-        queries::expense_categories_by_expense_range(connection, uid, None, None).ok()?;
-    let _receipts = queries::expense_receipts_by_expense_range(connection, uid, None, None).ok()?;
-    let _events = queries::expense_events_by_expense_range(connection, uid, None, None).ok()?;
+        queries::expense_categories_by_expense_range(connection, uid, offset, limit).ok()?;
+    let _receipts =
+        queries::expense_receipts_by_expense_range(connection, uid, offset, limit).ok()?;
+    let _events = queries::expense_events_by_expense_range(connection, uid, offset, limit).ok()?;
+    let _positions =
+        queries::expense_positions_by_expense_range(connection, uid, offset, limit).ok()?;
+    let _groups = queries::expense_groups_by_expense_range(connection, uid, offset, limit).ok()?;
 
     Some(())
 }

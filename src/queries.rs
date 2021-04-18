@@ -328,6 +328,38 @@ pub fn expense_positions_by_expense_range(
 }
 
 // needed data for expenses returned by `relevant_expenses`
+pub fn expense_groups_by_expense_range(
+    connection: &PgConnection,
+    user_id: i32,
+    offset: Option<i64>,
+    limit: Option<i64>,
+) -> Result<Vec<ExpenseGroup>, diesel::result::Error> {
+    expenses::table
+        .left_join(
+            expense_transactions::table.on(expense_transactions::expense_id.eq(expenses::id)),
+        )
+        .left_join(
+            account_synchronizations::table.on(expense_transactions::account_id
+                .eq(account_synchronizations::account1)
+                .or(expense_transactions::account_id.eq(account_synchronizations::account2))),
+        )
+        .left_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
+        .filter(
+            accounts::user_id
+                .eq(user_id)
+                .or(account_synchronizations::user1.eq(user_id))
+                .or(account_synchronizations::user2.eq(user_id)),
+        )
+        .limit(limit.unwrap_or(i64::MAX))
+        .offset(offset.unwrap_or(0))
+        .inner_join(expense_groups::table.on(expense_groups::id.nullable().eq(expenses::group_id)))
+        .select(expense_groups::all_columns)
+        .distinct()
+        .order_by(expense_groups::id.asc())
+        .load::<ExpenseGroup>(connection)
+}
+
+// needed data for expenses returned by `relevant_expenses`
 pub fn expense_receipts_by_expense_range(
     connection: &PgConnection,
     user_id: i32,

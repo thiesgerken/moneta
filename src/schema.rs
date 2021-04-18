@@ -117,6 +117,17 @@ table! {
     use diesel::sql_types::*;
     use crate::enums::*;
 
+    expense_groups (id) {
+        id -> Int4,
+        title -> Text,
+        expected_member_count -> Int4,
+    }
+}
+
+table! {
+    use diesel::sql_types::*;
+    use crate::enums::*;
+
     expense_positions (id) {
         id -> Int4,
         expense_id -> Int4,
@@ -166,6 +177,7 @@ table! {
         comments -> Text,
         booking_start -> Timestamptz,
         booking_end -> Timestamptz,
+        group_id -> Nullable<Int4>,
         is_deleted -> Bool,
         is_template -> Bool,
         is_preliminary -> Bool,
@@ -201,6 +213,7 @@ joinable!(expense_positions -> expenses (expense_id));
 joinable!(expense_receipts -> expenses (expense_id));
 joinable!(expense_transactions -> accounts (account_id));
 joinable!(expense_transactions -> expenses (expense_id));
+joinable!(expenses -> expense_groups (group_id));
 
 allow_tables_to_appear_in_same_query!(
     account_synchronizations,
@@ -211,6 +224,7 @@ allow_tables_to_appear_in_same_query!(
     delivery_rules,
     expense_categories,
     expense_events,
+    expense_groups,
     expense_positions,
     expense_receipts,
     expense_transactions,

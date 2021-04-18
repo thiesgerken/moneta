@@ -6,6 +6,7 @@ CREATE TABLE expenses (
   comments TEXT NOT NULL,
   booking_start TIMESTAMPTZ NOT NULL,
   booking_end TIMESTAMPTZ NOT NULL,
+  group_id INTEGER REFERENCES expense_groups(id) ON DELETE CASCADE,
   is_deleted BOOL NOT NULL,
   is_template BOOL NOT NULL,
   is_preliminary BOOL NOT NULL,

@@ -193,7 +193,36 @@ pub struct NewBalance {
     AsChangeset,
 )]
 #[serde(rename_all = "camelCase")]
+#[table_name = "expense_groups"]
+pub struct ExpenseGroup {
+    pub id: i32,
+    pub title: String,
+    pub expected_member_count: i32,
+}
+
+#[derive(Debug, Clone, Insertable, Serialize, Deserialize)]
+#[table_name = "expense_groups"]
+#[serde(rename_all = "camelCase")]
+pub struct NewExpenseGroup {
+    pub title: String,
+    pub expected_member_count: i32,
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Queryable,
+    QueryableByName,
+    Insertable,
+    Associations,
+    Identifiable,
+    Serialize,
+    Deserialize,
+    AsChangeset,
+)]
+#[serde(rename_all = "camelCase")]
 #[table_name = "expenses"]
+#[belongs_to(ExpenseGroup, foreign_key = "group_id")]
 pub struct Expense {
     pub id: i32,
     pub title: String,
@@ -202,6 +231,7 @@ pub struct Expense {
     pub comments: String,
     pub booking_start: DateTime<Utc>,
     pub booking_end: DateTime<Utc>,
+    pub group_id: Option<i32>,
     pub is_deleted: bool,
     pub is_template: bool,
     pub is_preliminary: bool,
@@ -219,6 +249,7 @@ pub struct NewExpense {
     pub comments: String,
     pub booking_start: DateTime<Utc>,
     pub booking_end: DateTime<Utc>,
+    pub group_id: Option<i32>,
     pub is_deleted: bool,
     pub is_template: bool,
     pub is_preliminary: bool,
