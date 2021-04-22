@@ -795,6 +795,11 @@ impl MoneyDBExpense {
             .collect::<Vec<_>>()
             .len();
 
+        // in the new version percentage is only allowed if exactly one transaction has an amount
+        let any_fixed_amount = sharings.iter().any(|s| {
+            s.sharing_type == MoneyDBExpenseSharingType::FixedAmount && s.expense_id == self.id
+        });
+
         for s in sharings.into_iter().filter(|s| s.expense_id == self.id) {
             let mut t = NewExpenseTransaction {
                 expense_id: *expense_map.get(&self.id).unwrap(),
@@ -809,9 +814,19 @@ impl MoneyDBExpense {
             if s.sharing_type == MoneyDBExpenseSharingType::FixedAmount {
                 t.amount = Some((s.param * 100.0) as i64)
             } else if s.sharing_type == MoneyDBExpenseSharingType::Equal {
-                t.fraction = Some(-1.0 / (num_equal + 1) as f64);
+                if !any_fixed_amount {
+                    t.fraction = Some(-1.0 / (num_equal + 1) as f64);
+                } else {
+                    // warn!("expense {}: converting equal to fixed amount", &self.id);
+                    t.amount = Some((self.amount / (num_equal + 1) as f64 * -100.0) as i64);
+                }
             } else if s.sharing_type == MoneyDBExpenseSharingType::FixedFraction {
-                t.fraction = Some(-1.0 * s.param);
+                if !any_fixed_amount {
+                    t.fraction = Some(-1.0 * s.param);
+                } else {
+                    // warn!("expense {}: converting fixed fraction to fixed amount", &self.id);
+                    t.amount = Some((self.amount * s.param * -100.0) as i64);
+                }
             }
 
             res.push(t);
