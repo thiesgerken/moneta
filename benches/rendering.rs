@@ -210,7 +210,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
 criterion_group!(
   name = benches;
-  config = Criterion::default().sample_size(20).measurement_time(Duration::from_secs(15));
+  config = Criterion::default().sample_size(10).measurement_time(Duration::from_secs(5));
   targets = criterion_benchmark
 );
 criterion_main!(benches);
