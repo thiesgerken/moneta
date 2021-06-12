@@ -10,8 +10,8 @@ use crate::web::DbConn;
 use diesel::prelude::*;
 use log::warn;
 use rocket::http::Status;
-use rocket_contrib::databases::diesel;
-use rocket_contrib::json::Json;
+use rocket::serde::json::Json;
+use rocket_sync_db_pools::diesel;
 
 use std::collections::HashMap;
 

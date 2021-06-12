@@ -5,7 +5,7 @@ use crate::web::util::log_error_and_500;
 use crate::web::DbConn;
 
 use rocket::http::Status;
-use rocket_contrib::json::Json;
+use rocket::serde::json::Json;
 
 #[get("/accounts?<offset>&<count>")]
 pub async fn list(
