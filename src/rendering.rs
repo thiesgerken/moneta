@@ -20,6 +20,8 @@ pub struct RenderedExpense {
     pub receipts: Vec<ExpenseReceipt>,
     pub categories: Vec<ExpenseCategory>,
     pub transactions: Vec<ExpenseTransaction>,
+    pub positions: Vec<ExpensePosition>,
+    pub group: Option<ExpenseGroup>,
     pub total_amount: i64,
     pub calculated_amounts: Vec<i64>, // for each transaction
 }
@@ -118,8 +120,12 @@ impl RenderedExpense {
         transactions: Vec<(ExpenseTransaction, Account, Option<AccountSynchronization>)>,
         categories: Vec<(ExpenseCategory, Option<CategoryReplacement>)>,
         receipts: Vec<ExpenseReceipt>,
+        positions: Vec<ExpensePosition>,
         events: Vec<ExpenseEvent>,
+        group: Option<ExpenseGroup>,
     ) -> RenderedExpense {
+        assert!(info.group_id.is_none() == group.is_none());
+
         let transactions = transactions
             .into_iter()
             .map(|(mut t, a, acs)| {
@@ -161,7 +167,9 @@ impl RenderedExpense {
             categories,
             events,
             transactions,
+            positions,
             receipts,
+            group,
             total_amount,
             calculated_amounts,
         }
@@ -173,8 +181,10 @@ impl RenderedExpense {
         info: Expense,
         transactions: &[(ExpenseTransaction, Account, Option<AccountSynchronization>)],
         categories: &[(ExpenseCategory, Option<CategoryReplacement>)],
+        positions: &[ExpensePosition],
         receipts: &[ExpenseReceipt],
         events: &[ExpenseEvent],
+        groups: &[ExpenseGroup],
     ) -> RenderedExpense {
         let transactions = transactions
             .iter()
@@ -237,12 +247,27 @@ impl RenderedExpense {
             .map(|(t, _, _)| t)
             .collect::<Vec<_>>();
 
+        let positions = positions
+            .iter()
+            .skip_while(|t| t.expense_id != info.id)
+            .take_while(|t| t.expense_id == info.id)
+            .cloned()
+            .collect();
+
+        let group = if let Some(g_id) = info.group_id {
+            groups.iter().find(|g| g.id == g_id).map(|g| g.clone())
+        } else {
+            None
+        };
+
         RenderedExpense {
             info,
             categories,
             events,
             transactions,
+            positions,
             receipts,
+            group,
             total_amount,
             calculated_amounts,
         }

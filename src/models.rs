@@ -167,7 +167,7 @@ pub struct Balance {
     pub account_id: i32,
     pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
     pub amount: i64,         // cents
-    pub comment: String,
+    pub comments: String,
 }
 
 #[derive(Debug, Clone, Insertable, Serialize, Deserialize)]
@@ -177,7 +177,35 @@ pub struct NewBalance {
     pub account_id: i32,
     pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
     pub amount: i64,         // cents
-    pub comment: String,
+    pub comments: String,
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Queryable,
+    QueryableByName,
+    Insertable,
+    Associations,
+    Identifiable,
+    Serialize,
+    Deserialize,
+    AsChangeset,
+)]
+#[serde(rename_all = "camelCase")]
+#[table_name = "expense_groups"]
+pub struct ExpenseGroup {
+    pub id: i32,
+    pub title: String,
+    pub expected_member_count: i32,
+}
+
+#[derive(Debug, Clone, Insertable, Serialize, Deserialize)]
+#[table_name = "expense_groups"]
+#[serde(rename_all = "camelCase")]
+pub struct NewExpenseGroup {
+    pub title: String,
+    pub expected_member_count: i32,
 }
 
 #[derive(
@@ -194,14 +222,16 @@ pub struct NewBalance {
 )]
 #[serde(rename_all = "camelCase")]
 #[table_name = "expenses"]
+#[belongs_to(ExpenseGroup, foreign_key = "group_id")]
 pub struct Expense {
     pub id: i32,
     pub title: String,
-    pub description: String,
     pub store: String,
+    pub description: String,
     pub comments: String,
     pub booking_start: DateTime<Utc>,
     pub booking_end: DateTime<Utc>,
+    pub group_id: Option<i32>,
     pub is_deleted: bool,
     pub is_template: bool,
     pub is_preliminary: bool,
@@ -214,11 +244,12 @@ pub struct Expense {
 #[serde(rename_all = "camelCase")]
 pub struct NewExpense {
     pub title: String,
-    pub description: String,
     pub store: String,
+    pub description: String,
     pub comments: String,
     pub booking_start: DateTime<Utc>,
     pub booking_end: DateTime<Utc>,
+    pub group_id: Option<i32>,
     pub is_deleted: bool,
     pub is_template: bool,
     pub is_preliminary: bool,
@@ -248,6 +279,8 @@ pub struct ExpenseTransaction {
     pub date: DateTime<Utc>,
     // constraint: amount is null OR fraction is null
     // constraint: fraction can only be used if the expense has exactly one transaction with an amount
+    // convention: amounts are _added_ to account balances, i.e. a negative amount is a expense
+    // convention: fractions are calculated relative to the sum of all transactions with a fixed amount
     pub amount: Option<i64>,
     pub fraction: Option<f64>,
     pub comments: String,
@@ -331,6 +364,41 @@ pub struct ExpenseCategory {
     pub weight: f64,
 }
 
+#[derive(
+    Debug,
+    Clone,
+    Queryable,
+    QueryableByName,
+    Insertable,
+    Associations,
+    Identifiable,
+    Serialize,
+    Deserialize,
+    AsChangeset,
+)]
+#[belongs_to(Expense, foreign_key = "expense_id")]
+#[serde(rename_all = "camelCase")]
+#[primary_key("id")]
+#[table_name = "expense_positions"]
+pub struct ExpensePosition {
+    pub id: i32,
+    pub expense_id: i32,
+    pub amount: Option<i64>,
+    pub units: i32,
+    pub title: String,
+    pub comments: String,
+}
+
+#[derive(Debug, Clone, Insertable, Serialize, Deserialize)]
+#[table_name = "expense_positions"]
+#[serde(rename_all = "camelCase")]
+pub struct NewExpensePosition {
+    pub expense_id: i32,
+    pub amount: Option<i64>,
+    pub units: i32,
+    pub title: String,
+    pub comments: String,
+}
 #[derive(
     Debug,
     Clone,

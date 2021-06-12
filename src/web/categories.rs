@@ -7,8 +7,8 @@ use crate::web::DbConn;
 use crate::web::util::log_error_and_500;
 use diesel::prelude::*;
 use rocket::http::Status;
-use rocket_contrib::databases::diesel;
-use rocket_contrib::json::Json;
+use rocket::serde::json::Json;
+use rocket_sync_db_pools::diesel;
 
 #[get("/categories")]
 pub async fn list(_uid: UserId, connection: DbConn) -> Result<Json<Vec<RenderedCategory>>, Status> {

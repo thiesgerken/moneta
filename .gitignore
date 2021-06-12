@@ -1,3 +1,5 @@
 /target
 /src/schema.rs.orig
 /.vscode
+moneta.toml
+vapid.pem

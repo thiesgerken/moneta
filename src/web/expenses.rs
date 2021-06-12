@@ -13,8 +13,8 @@ use diesel::prelude::*;
 use diesel::sql_types::BigInt;
 use log::warn;
 use rocket::http::Status;
-use rocket_contrib::databases::diesel;
-use rocket_contrib::json::Json;
+use rocket::serde::json::Json;
+use rocket_sync_db_pools::diesel;
 
 use std::collections::HashMap;
 
@@ -262,16 +262,16 @@ pub async fn query(
             }
 
             if let Some(s) = request.needle {
-                // TODO: more fields to search in (amount would be nice ...)
+                // TODO: more fields to search in (amount would be nice ..., items as well)
 
                 let s = format!("%{}%", s.trim());
                 if !s.is_empty() {
                     query = query.filter(
                         expenses::store
                             .ilike(s.clone())
-                            .or(expenses::description.ilike(s.clone()))
                             .or(expenses::title.ilike(s.clone()))
-                            .or(expenses::comments.ilike(s)),
+                            .or(expenses::comments.ilike(s.clone()))
+                            .or(expenses::description.ilike(s)),
                     );
                 }
             }
@@ -298,6 +298,7 @@ pub async fn query(
                     expense_transactions::expense_id
                         .eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
                 )
+                .order_by(expense_transactions::expense_id.asc())
                 .load::<(ExpenseTransaction, Account, Option<AccountSynchronization>)>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
 
@@ -311,6 +312,7 @@ pub async fn query(
                     expense_categories::expense_id
                         .eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
                 )
+                .order_by(expense_categories::expense_id.asc())
                 .load::<(ExpenseCategory, Option<CategoryReplacement>)>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
 
@@ -319,12 +321,36 @@ pub async fn query(
                     expense_receipts::expense_id
                         .eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
                 )
+                .order_by(expense_receipts::expense_id.asc())
                 .load::<ExpenseReceipt>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
+
             let events = expense_events::table
-                .filter(expense_events::expense_id.eq_any(exp_ids))
+                .filter(
+                    expense_events::expense_id.eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
+                )
+                .order_by(expense_events::expense_id.asc())
                 .load::<ExpenseEvent>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+            let items = expense_positions::table
+                .filter(expense_positions::expense_id.eq_any(exp_ids))
+                .order_by(expense_positions::expense_id.asc())
+                .load::<ExpensePosition>(c)
+                .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+            let group_ids = expenses
+                .iter()
+                .filter_map(|e| e.group_id)
+                .collect::<Vec<_>>();
+            let groups = if group_ids.is_empty() {
+                Vec::new()
+            } else {
+                expense_groups::table
+                    .filter(expense_groups::id.eq_any(group_ids))
+                    .load::<ExpenseGroup>(c)
+                    .map_err(|e| log_error_and_500(Box::new(e)))?
+            };
 
             let rexps = expenses
                 .into_iter()
@@ -332,10 +358,12 @@ pub async fn query(
                     RenderedExpense::filter_and_render(
                         *uid,
                         e,
-                        &transactions[..],
+                        &transactions,
                         &categories,
+                        &items,
                         &receipts,
                         &events,
+                        &groups,
                     )
                 })
                 .collect::<Vec<_>>();
@@ -471,6 +499,10 @@ pub async fn list(
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
             let events = queries::expense_events_by_expense_range(c, *uid, offset, count)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
+            let items = queries::expense_positions_by_expense_range(c, *uid, offset, count)
+                .map_err(|e| log_error_and_500(Box::new(e)))?;
+            let groups = queries::expense_groups_by_expense_range(c, *uid, offset, count)
+                .map_err(|e| log_error_and_500(Box::new(e)))?;
 
             let mut rexps = Vec::with_capacity(exps.len());
 
@@ -479,6 +511,7 @@ pub async fn list(
             let mut c_i = 0;
             let mut r_i = 0;
             let mut e_i = 0;
+            let mut i_i = 0;
 
             for e in exps.into_iter() {
                 while transactions
@@ -509,14 +542,19 @@ pub async fn list(
                 {
                     e_i += 1;
                 }
+                while items.get(i_i).map(|t| e.id > t.expense_id).unwrap_or(false) {
+                    i_i += 1;
+                }
 
                 rexps.push(RenderedExpense::filter_and_render(
                     *uid,
                     e,
                     &transactions[t_i..],
                     &categories[c_i..],
+                    &items[i_i..],
                     &receipts[r_i..],
                     &events[e_i..],
+                    &groups,
                 ));
             }
 
@@ -557,9 +595,30 @@ pub async fn get(
                 .filter(expense_events::expense_id.eq(id))
                 .load::<ExpenseEvent>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
+            let items = expense_positions::table
+                .filter(expense_positions::expense_id.eq(id))
+                .load::<ExpensePosition>(c)
+                .map_err(|e| log_error_and_500(Box::new(e)))?;
+            let group = if let Some(g_id) = exp.group_id {
+                expense_groups::table
+                    .filter(expense_groups::id.eq(g_id))
+                    .get_result::<ExpenseGroup>(c)
+                    .optional()
+                    .map_err(|e| log_error_and_500(Box::new(e)))?
+            } else {
+                None
+            };
 
-            let rexp =
-                RenderedExpense::render(*uid, exp, transactions, categories, receipts, events);
+            let rexp = RenderedExpense::render(
+                *uid,
+                exp,
+                transactions,
+                categories,
+                receipts,
+                items,
+                events,
+                group,
+            );
             Ok(Json(rexp))
         })
         .await

@@ -10,8 +10,8 @@ use crate::web::DbConn;
 use diesel::prelude::*;
 use log::warn;
 use rocket::http::Status;
-use rocket_contrib::databases::diesel;
-use rocket_contrib::json::Json;
+use rocket::serde::json::Json;
+use rocket_sync_db_pools::diesel;
 
 use std::collections::HashMap;
 
@@ -86,11 +86,11 @@ pub async fn query(
                             query = query.then_order_by(balances::id.desc());
                         }
                     }
-                    "comment" => {
+                    "comments" => {
                         if asc {
-                            query = query.then_order_by(balances::comment.asc());
+                            query = query.then_order_by(balances::comments.asc());
                         } else {
-                            query = query.then_order_by(balances::comment.desc());
+                            query = query.then_order_by(balances::comments.desc());
                         }
                     }
                     "date" => {
@@ -144,8 +144,8 @@ pub async fn query(
 
                         query = query.filter(balances::amount.eq_any(values_parsed));
                     }
-                    "comment" => {
-                        query = query.filter(balances::comment.eq_any(values));
+                    "comments" => {
+                        query = query.filter(balances::comments.eq_any(values));
                     }
                     _ => {
                         return Err(Status::BadRequest);
@@ -158,7 +158,7 @@ pub async fn query(
 
                 let s = format!("%{}%", s.trim());
                 if !s.is_empty() {
-                    query = query.filter(balances::comment.ilike(s.clone()));
+                    query = query.filter(balances::comments.ilike(s.clone()));
                 }
             }
 

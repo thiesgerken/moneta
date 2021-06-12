@@ -7,9 +7,9 @@ use diesel::prelude::*;
 use log::{info, warn};
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::request::{FromRequest, Outcome};
+use rocket::serde::json::Json;
 use rocket::Request;
-use rocket_contrib::databases::diesel;
-use rocket_contrib::json::Json;
+use rocket_sync_db_pools::diesel;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
@@ -24,10 +24,10 @@ impl Deref for UserId {
 pub struct UserId(pub i32);
 
 #[rocket::async_trait]
-impl<'a, 'r> FromRequest<'a, 'r> for UserId {
+impl<'r> FromRequest<'r> for UserId {
     type Error = ();
 
-    async fn from_request(request: &'a Request<'r>) -> Outcome<Self, Self::Error> {
+    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         let id = request
             .cookies()
             .get_private("user_id")

@@ -5,7 +5,9 @@ use crate::schema::*;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use itertools::izip;
+use itertools::Itertools;
 use log::{error, info, warn};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -18,6 +20,8 @@ pub struct NativeFormat {
     categories: Vec<Category>,
     category_replacements: Vec<CategoryReplacement>,
     expenses: Vec<Expense>,
+    expense_positions: Vec<ExpensePosition>,
+    expense_groups: Vec<ExpenseGroup>,
     expense_categories: Vec<ExpenseCategory>,
     expense_transactions: Vec<ExpenseTransaction>,
     expense_receipts: Vec<ExpenseReceipt>,
@@ -56,6 +60,12 @@ impl NativeFormat {
         let expense_receipts = expense_receipts::table
             .load::<ExpenseReceipt>(connection)
             .expect("Error loading expense_receipts");
+        let expense_positions = expense_positions::table
+            .load::<ExpensePosition>(connection)
+            .expect("Error loading expense_positions");
+        let expense_groups = expense_groups::table
+            .load::<ExpenseGroup>(connection)
+            .expect("Error loading expense_groups");
         let delivery_rules = delivery_rules::table
             .load::<DeliveryRule>(connection)
             .expect("Error loading delivery_rules");
@@ -68,6 +78,8 @@ impl NativeFormat {
             categories,
             category_replacements,
             expenses,
+            expense_positions,
+            expense_groups,
             expense_categories,
             expense_transactions,
             expense_receipts,
@@ -162,6 +174,28 @@ impl NativeFormat {
             "imported {} of {} expense_categories into the database",
             expense_categories_count,
             self.expense_categories.len()
+        );
+
+        let expense_positions_count = diesel::insert_into(expense_positions::table)
+            .values(&self.expense_positions)
+            .on_conflict_do_nothing()
+            .execute(connection)
+            .expect("Error writing expense_positions into the database");
+        info!(
+            "imported {} of {} expense_positions into the database",
+            expense_positions_count,
+            self.expense_positions.len()
+        );
+
+        let expense_groups_count = diesel::insert_into(expense_groups::table)
+            .values(&self.expense_groups)
+            .on_conflict_do_nothing()
+            .execute(connection)
+            .expect("Error writing expense_groups into the database");
+        info!(
+            "imported {} of {} expense_groups into the database",
+            expense_groups_count,
+            self.expense_groups.len()
         );
 
         let expense_transactions_count = diesel::insert_into(expense_transactions::table)
@@ -311,21 +345,43 @@ impl MoneyDBFormat {
             .expect("Error writing balances into the database");
         info!("imported {} balances into the database", num_balances);
 
-        let expenses = diesel::insert_into(expenses::table)
-            .values(
-                self.expenses
-                    .iter()
-                    .map(|a| a.convert(&self.expense_flags))
-                    .collect::<Vec<_>>(),
-            )
-            .load::<Expense>(connection)
-            .expect("Error writing expenses into the database");
+        let expenses = self
+            .expenses
+            .iter()
+            .map(|a| a.convert(&self.expense_flags))
+            .chunks(512)
+            .into_iter()
+            .flat_map(|chunk| {
+                diesel::insert_into(expenses::table)
+                    .values(chunk.collect::<Vec<_>>())
+                    .load::<Expense>(connection)
+                    .expect("Error writing expenses into the database")
+            })
+            .collect::<Vec<_>>();
         let expense_map = expenses
             .iter()
             .zip(&self.expenses)
             .map(|(n, o)| (o.id, n.id))
             .collect::<HashMap<_, _>>();
         info!("imported {} expenses into the database", expenses.len());
+
+        let num_expense_positions = self
+            .expenses
+            .iter()
+            .flat_map(|a| a.convert_positions(&expense_map))
+            .chunks(512)
+            .into_iter()
+            .map(|chunk| {
+                diesel::insert_into(expense_positions::table)
+                    .values(chunk.collect::<Vec<_>>())
+                    .execute(connection)
+                    .expect("Error writing expense positions into the database")
+            })
+            .sum::<usize>();
+        info!(
+            "imported {} expense positions into the database",
+            num_expense_positions
+        );
 
         let num_expense_categories = diesel::insert_into(expense_categories::table)
             .values(
@@ -360,11 +416,19 @@ impl MoneyDBFormat {
             .iter()
             .map(|a| a.convert_transactions(&expense_map, &account_map, &self.expense_sharings))
             .collect::<Vec<_>>();
-
-        let num_expense_transactions = diesel::insert_into(expense_transactions::table)
-            .values(converted_transactions.iter().flatten().collect::<Vec<_>>())
-            .execute(connection)
-            .expect("Error writing expense transactions into the database");
+        let num_expense_transactions = converted_transactions
+            .iter()
+            .cloned()
+            .flatten()
+            .chunks(512)
+            .into_iter()
+            .map(|chunk| {
+                diesel::insert_into(expense_transactions::table)
+                    .values(chunk.collect::<Vec<_>>())
+                    .execute(connection)
+                    .expect("Error writing expense transactions into the database")
+            })
+            .sum::<usize>();
         info!(
             "imported {} expense transactions into the database",
             num_expense_transactions
@@ -570,7 +634,7 @@ impl MoneyDBBalance {
             account_id: *account_map.get(&self.account_id).unwrap(),
             date: self.date,
             amount: (self.amount * 100.0) as i64,
-            comment: String::new(),
+            comments: String::new(),
         }
     }
 }
@@ -622,11 +686,18 @@ impl MoneyDBExpense {
     fn convert(&self, flags: &[MoneyDBExpenseFlag]) -> NewExpense {
         NewExpense {
             title: self.title.clone(),
-            description: self.description.clone(),
-            comments: self.comments.clone(),
             store: self.store.clone(),
+            comments: self.comments.clone(),
+            description: if self.description.chars().any(|c| "()[]{}.€+/:".contains(c))
+                || !self.description.contains(", ")
+            {
+                self.description.clone()
+            } else {
+                String::new()
+            },
             booking_start: self.booking_date.unwrap_or(self.value_date),
             booking_end: self.booking_date.unwrap_or(self.value_date),
+            group_id: None,
             is_deleted: false,
             is_template: flags
                 .iter()
@@ -653,6 +724,49 @@ impl MoneyDBExpense {
             category_id: *category_map.get(&self.category_id).unwrap(),
             expense_id: *expense_map.get(&self.id).unwrap(),
         }
+    }
+
+    fn convert_positions(&self, expense_map: &HashMap<i32, i32>) -> Vec<NewExpensePosition> {
+        if self.description.chars().any(|c| "()[]{}.€+/:".contains(c))
+            || !self.description.contains(", ")
+        {
+            return Vec::new();
+        }
+
+        // precompile regexes for slighty increased speed (would be even better to re-use them between expenses)
+        let units_re1 = Regex::new(r"(.*) x(\d+)$").unwrap();
+        let units_re2 = Regex::new(r"(.*) (\d+)x$").unwrap();
+        let units_re3 = Regex::new(r"(\d+)x? (.*)").unwrap();
+
+        self.description
+            .split(", ")
+            .map(|t| t.trim())
+            .filter(|t| !t.is_empty())
+            .into_iter()
+            .map(|s| {
+                let mut remaining_text = s.to_owned();
+                let mut units = 1;
+
+                if let Some(c) = units_re1.captures_iter(&s).next() {
+                    remaining_text = c[1].to_owned();
+                    units = c[2].parse().unwrap();
+                } else if let Some(c) = units_re2.captures_iter(&s).next() {
+                    remaining_text = c[1].to_owned();
+                    units = c[2].parse().unwrap();
+                } else if let Some(c) = units_re3.captures_iter(&s).next() {
+                    remaining_text = c[2].to_owned();
+                    units = c[1].parse().unwrap();
+                }
+
+                NewExpensePosition {
+                    expense_id: *expense_map.get(&self.id).unwrap(),
+                    comments: String::new(),
+                    title: remaining_text,
+                    amount: None,
+                    units,
+                }
+            })
+            .collect()
     }
 
     fn convert_transactions(
