@@ -563,7 +563,8 @@ const Expenses = ({
       else setExpandedRow(allExpanded[allExpanded.length - 1].index);
     },
     renderExpandableRow: (rowData, rowMeta) => {
-      const colSpan = rowData.length + 1;
+      const { rowLength } = rowData;
+      const colSpan = rowLength + 1;
       const expense = displayedResponse.records[rowMeta.dataIndex];
 
       return (
