@@ -114,7 +114,7 @@ pub async fn query(
                 match column.as_ref() {
                     "accountId" | "account_id" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<i32>>>()
                             .ok_or(Status::BadRequest)?;
@@ -128,7 +128,7 @@ pub async fn query(
                     }
                     "id" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<i32>>>()
                             .ok_or(Status::BadRequest)?;
@@ -137,7 +137,7 @@ pub async fn query(
                     }
                     "amount" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<i64>>>()
                             .ok_or(Status::BadRequest)?;
@@ -158,7 +158,7 @@ pub async fn query(
 
                 let s = format!("%{}%", s.trim());
                 if !s.is_empty() {
-                    query = query.filter(balances::comments.ilike(s.clone()));
+                    query = query.filter(balances::comments.ilike(s));
                 }
             }
 

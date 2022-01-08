@@ -297,7 +297,7 @@ impl MoneyDBFormat {
             .map(|s| vec![s.account1, s.account2])
             .flatten()
             .collect::<Vec<_>>();
-        synced_accounts.sort();
+        synced_accounts.sort_unstable();
         synced_accounts.dedup();
 
         if synced_accounts.len() != 2 * account_syncs.len() {
@@ -455,7 +455,7 @@ impl MoneyDBFormat {
                         sync.account1
                     };
                     let other = accounts.iter().find(|a| a.id == other_id).unwrap();
-                    return &other.user_id == uid;
+                    &other.user_id == uid
                 } else {
                     false
                 }
@@ -747,13 +747,13 @@ impl MoneyDBExpense {
                 let mut remaining_text = s.to_owned();
                 let mut units = 1;
 
-                if let Some(c) = units_re1.captures_iter(&s).next() {
+                if let Some(c) = units_re1.captures_iter(s).next() {
                     remaining_text = c[1].to_owned();
                     units = c[2].parse().unwrap();
-                } else if let Some(c) = units_re2.captures_iter(&s).next() {
+                } else if let Some(c) = units_re2.captures_iter(s).next() {
                     remaining_text = c[1].to_owned();
                     units = c[2].parse().unwrap();
-                } else if let Some(c) = units_re3.captures_iter(&s).next() {
+                } else if let Some(c) = units_re3.captures_iter(s).next() {
                     remaining_text = c[2].to_owned();
                     units = c[1].parse().unwrap();
                 }
@@ -775,9 +775,7 @@ impl MoneyDBExpense {
         account_map: &HashMap<i32, i32>,
         sharings: &[MoneyDBExpenseSharing],
     ) -> Vec<NewExpenseTransaction> {
-        let mut res = Vec::new();
-
-        res.push(NewExpenseTransaction {
+        let mut res = vec![NewExpenseTransaction {
             expense_id: *expense_map.get(&self.id).unwrap(),
             account_id: *account_map.get(&self.account_id).unwrap(),
             statement: self.transaction.clone(),
@@ -785,22 +783,21 @@ impl MoneyDBExpense {
             date: self.value_date,
             amount: Some((self.amount * -100.0) as i64),
             fraction: None,
-        });
+        }];
 
         let num_equal = sharings
             .iter()
             .filter(|s| {
                 s.sharing_type == MoneyDBExpenseSharingType::Equal && s.expense_id == self.id
             })
-            .collect::<Vec<_>>()
-            .len();
+            .count();
 
         // in the new version percentage is only allowed if exactly one transaction has an amount
         let any_fixed_amount = sharings.iter().any(|s| {
             s.sharing_type == MoneyDBExpenseSharingType::FixedAmount && s.expense_id == self.id
         });
 
-        for s in sharings.into_iter().filter(|s| s.expense_id == self.id) {
+        for s in sharings.iter().filter(|s| s.expense_id == self.id) {
             let mut t = NewExpenseTransaction {
                 expense_id: *expense_map.get(&self.id).unwrap(),
                 account_id: *account_map.get(&s.account_id).unwrap(),

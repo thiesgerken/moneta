@@ -178,7 +178,7 @@ pub async fn query(
                 match column.as_ref() {
                     "transactions" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<i32>>>()
                             .ok_or(Status::BadRequest)?;
@@ -192,7 +192,7 @@ pub async fn query(
                     }
                     "categories" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<i32>>>()
                             .ok_or(Status::BadRequest)?;
@@ -207,7 +207,7 @@ pub async fn query(
                     }
                     "info.id" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<i32>>>()
                             .ok_or(Status::BadRequest)?;
@@ -225,7 +225,7 @@ pub async fn query(
                     }
                     "info.isTemplate" | "info.is_template" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<bool>>>()
                             .ok_or(Status::BadRequest)?;
@@ -233,7 +233,7 @@ pub async fn query(
                     }
                     "info.isPreliminary" | "info.is_preliminary" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<bool>>>()
                             .ok_or(Status::BadRequest)?;
@@ -241,7 +241,7 @@ pub async fn query(
                     }
                     "info.isTaxRelevant" | "info.is_tax_relevant" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<bool>>>()
                             .ok_or(Status::BadRequest)?;
@@ -249,7 +249,7 @@ pub async fn query(
                     }
                     "info.isUnchecked" | "info.is_unchecked" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<bool>>>()
                             .ok_or(Status::BadRequest)?;
@@ -294,10 +294,7 @@ pub async fn query(
                         .eq(expense_transactions::account_id)
                         .and(account_synchronizations::user2.ne(*uid)))),
                 )
-                .filter(
-                    expense_transactions::expense_id
-                        .eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
-                )
+                .filter(expense_transactions::expense_id.eq_any(exp_ids.to_vec()))
                 .order_by(expense_transactions::expense_id.asc())
                 .load::<(ExpenseTransaction, Account, Option<AccountSynchronization>)>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
@@ -308,27 +305,19 @@ pub async fn query(
                         .eq(expense_categories::category_id)
                         .and(category_replacements::user_id.eq(*uid))),
                 )
-                .filter(
-                    expense_categories::expense_id
-                        .eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
-                )
+                .filter(expense_categories::expense_id.eq_any(exp_ids.to_vec()))
                 .order_by(expense_categories::expense_id.asc())
                 .load::<(ExpenseCategory, Option<CategoryReplacement>)>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
 
             let receipts = expense_receipts::table
-                .filter(
-                    expense_receipts::expense_id
-                        .eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
-                )
+                .filter(expense_receipts::expense_id.eq_any(exp_ids.to_vec()))
                 .order_by(expense_receipts::expense_id.asc())
                 .load::<ExpenseReceipt>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
 
             let events = expense_events::table
-                .filter(
-                    expense_events::expense_id.eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
-                )
+                .filter(expense_events::expense_id.eq_any(exp_ids.to_vec()))
                 .order_by(expense_events::expense_id.asc())
                 .load::<ExpenseEvent>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;

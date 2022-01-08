@@ -35,7 +35,7 @@ impl<'r> Responder<'r, 'static> for FileResponder {
             response::Response::build()
                 .header(content_type)
                 .raw_header("Cache-control", caching)
-                .sized_body(None, Cursor::new(d))
+                .sized_body(None, Cursor::new(d.data))
                 .ok()
         } else if filename != "index.html" {
             // Routing is done client-side;
@@ -51,11 +51,11 @@ impl<'r> Responder<'r, 'static> for FileResponder {
 }
 
 #[get("/<file..>", rank = 0)]
-pub fn serve<'r>(file: PathBuf) -> FileResponder {
+pub fn serve(file: PathBuf) -> FileResponder {
     FileResponder { file }
 }
 
 #[get("/")]
-pub fn index<'r>() -> FileResponder {
+pub fn index() -> FileResponder {
     serve(PathBuf::from("index.html"))
 }
