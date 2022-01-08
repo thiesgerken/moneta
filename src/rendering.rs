@@ -255,7 +255,7 @@ impl RenderedExpense {
             .collect();
 
         let group = if let Some(g_id) = info.group_id {
-            groups.iter().find(|g| g.id == g_id).map(|g| g.clone())
+            groups.iter().find(|g| g.id == g_id).cloned()
         } else {
             None
         };

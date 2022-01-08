@@ -178,7 +178,7 @@ pub async fn query(
                 match column.as_ref() {
                     "transactions" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<i32>>>()
                             .ok_or(Status::BadRequest)?;
@@ -192,7 +192,7 @@ pub async fn query(
                     }
                     "categories" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<i32>>>()
                             .ok_or(Status::BadRequest)?;
@@ -207,7 +207,7 @@ pub async fn query(
                     }
                     "info.id" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<i32>>>()
                             .ok_or(Status::BadRequest)?;
@@ -225,7 +225,7 @@ pub async fn query(
                     }
                     "info.isTemplate" | "info.is_template" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<bool>>>()
                             .ok_or(Status::BadRequest)?;
@@ -233,7 +233,7 @@ pub async fn query(
                     }
                     "info.isPreliminary" | "info.is_preliminary" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<bool>>>()
                             .ok_or(Status::BadRequest)?;
@@ -241,7 +241,7 @@ pub async fn query(
                     }
                     "info.isTaxRelevant" | "info.is_tax_relevant" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<bool>>>()
                             .ok_or(Status::BadRequest)?;
@@ -249,7 +249,7 @@ pub async fn query(
                     }
                     "info.isUnchecked" | "info.is_unchecked" => {
                         let values_parsed = values
-                            .into_iter()
+                            .iter()
                             .map(|s| s.parse().ok())
                             .collect::<Option<Vec<bool>>>()
                             .ok_or(Status::BadRequest)?;
@@ -296,7 +296,7 @@ pub async fn query(
                 )
                 .filter(
                     expense_transactions::expense_id
-                        .eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
+                        .eq_any(exp_ids.to_vec()),
                 )
                 .order_by(expense_transactions::expense_id.asc())
                 .load::<(ExpenseTransaction, Account, Option<AccountSynchronization>)>(c)
@@ -310,7 +310,7 @@ pub async fn query(
                 )
                 .filter(
                     expense_categories::expense_id
-                        .eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
+                        .eq_any(exp_ids.to_vec()),
                 )
                 .order_by(expense_categories::expense_id.asc())
                 .load::<(ExpenseCategory, Option<CategoryReplacement>)>(c)
@@ -319,7 +319,7 @@ pub async fn query(
             let receipts = expense_receipts::table
                 .filter(
                     expense_receipts::expense_id
-                        .eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
+                        .eq_any(exp_ids.to_vec()),
                 )
                 .order_by(expense_receipts::expense_id.asc())
                 .load::<ExpenseReceipt>(c)
@@ -327,7 +327,7 @@ pub async fn query(
 
             let events = expense_events::table
                 .filter(
-                    expense_events::expense_id.eq_any(exp_ids.iter().cloned().collect::<Vec<_>>()),
+                    expense_events::expense_id.eq_any(exp_ids.to_vec()),
                 )
                 .order_by(expense_events::expense_id.asc())
                 .load::<ExpenseEvent>(c)
