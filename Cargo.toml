@@ -8,7 +8,7 @@ default-run = "moneta"
 [dependencies]
 argonautica = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
-clap = "2.33"
+clap = "2.34"
 config = "0.11"
 diesel = { version = "1.4", features = ["postgres", "chrono"] }
 diesel_migrations = "1.4"
@@ -22,7 +22,7 @@ rocket_sync_db_pools = { version = "0.1.0-rc.1", features = ["diesel_postgres_po
 rust-embed = "6.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-simplelog = "0.10"
+simplelog = "0.11"
 toml = "0.5"
 tokio = { version = "1.0", features= ["full"] } # needs to be synced to the version rocket uses!
 
