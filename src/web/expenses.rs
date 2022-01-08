@@ -294,10 +294,7 @@ pub async fn query(
                         .eq(expense_transactions::account_id)
                         .and(account_synchronizations::user2.ne(*uid)))),
                 )
-                .filter(
-                    expense_transactions::expense_id
-                        .eq_any(exp_ids.to_vec()),
-                )
+                .filter(expense_transactions::expense_id.eq_any(exp_ids.to_vec()))
                 .order_by(expense_transactions::expense_id.asc())
                 .load::<(ExpenseTransaction, Account, Option<AccountSynchronization>)>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
@@ -308,27 +305,19 @@ pub async fn query(
                         .eq(expense_categories::category_id)
                         .and(category_replacements::user_id.eq(*uid))),
                 )
-                .filter(
-                    expense_categories::expense_id
-                        .eq_any(exp_ids.to_vec()),
-                )
+                .filter(expense_categories::expense_id.eq_any(exp_ids.to_vec()))
                 .order_by(expense_categories::expense_id.asc())
                 .load::<(ExpenseCategory, Option<CategoryReplacement>)>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
 
             let receipts = expense_receipts::table
-                .filter(
-                    expense_receipts::expense_id
-                        .eq_any(exp_ids.to_vec()),
-                )
+                .filter(expense_receipts::expense_id.eq_any(exp_ids.to_vec()))
                 .order_by(expense_receipts::expense_id.asc())
                 .load::<ExpenseReceipt>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;
 
             let events = expense_events::table
-                .filter(
-                    expense_events::expense_id.eq_any(exp_ids.to_vec()),
-                )
+                .filter(expense_events::expense_id.eq_any(exp_ids.to_vec()))
                 .order_by(expense_events::expense_id.asc())
                 .load::<ExpenseEvent>(c)
                 .map_err(|e| log_error_and_500(Box::new(e)))?;

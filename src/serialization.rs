@@ -775,9 +775,7 @@ impl MoneyDBExpense {
         account_map: &HashMap<i32, i32>,
         sharings: &[MoneyDBExpenseSharing],
     ) -> Vec<NewExpenseTransaction> {
-        let mut res = Vec::new();
-
-        res.push(NewExpenseTransaction {
+        let mut res = vec![NewExpenseTransaction {
             expense_id: *expense_map.get(&self.id).unwrap(),
             account_id: *account_map.get(&self.account_id).unwrap(),
             statement: self.transaction.clone(),
@@ -785,15 +783,14 @@ impl MoneyDBExpense {
             date: self.value_date,
             amount: Some((self.amount * -100.0) as i64),
             fraction: None,
-        });
+        }];
 
         let num_equal = sharings
             .iter()
             .filter(|s| {
                 s.sharing_type == MoneyDBExpenseSharingType::Equal && s.expense_id == self.id
             })
-            .collect::<Vec<_>>()
-            .len();
+            .count();
 
         // in the new version percentage is only allowed if exactly one transaction has an amount
         let any_fixed_amount = sharings.iter().any(|s| {
