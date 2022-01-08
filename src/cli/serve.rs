@@ -1,28 +1,28 @@
 use crate::web;
 
 use clap::ArgMatches;
-use clap::{App, Arg, SubCommand};
+use clap::{App, Arg};
 use rocket::config::LogLevel;
 use serde::{Deserialize, Serialize};
 
-pub fn build() -> App<'static, 'static> {
-    SubCommand::with_name("serve")
+pub fn build() -> App<'static> {
+    App::new("serve")
     .about("serve web interface")
     .arg(
-      Arg::with_name("port")
+      Arg::new("port")
         .long("port")
-        .short("p")
+        .short('p')
         .value_name("port")
         .help("customize listening port [default: 8484]"),
     )
     .arg(
-      Arg::with_name("address")
+      Arg::new("address")
         .long("address")
         .value_name("address")
         .help("customize listening address [default: 'localhost']"),
     )
     .arg(
-      Arg::with_name("secret")
+      Arg::new("secret")
         .long("secret")
         .value_name("key")
         .help("secret key for cookie encryption [default: randomly generated]; use `openssl rand -base64 32` to create one"),
@@ -48,7 +48,7 @@ impl Default for Config {
 }
 
 pub async fn handle(
-    sub_matches: &ArgMatches<'_>,
+    sub_matches: &ArgMatches,
     mut config: Config,
     database: String,
     verbosity: i64,
