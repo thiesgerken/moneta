@@ -17,3 +17,21 @@
 ## Performance
 
 - expense rendering in web could be improved: run the queries are done in parallel
+
+// TODO: Expense Delivery by API
+// SeenExpense json sql=seen_expenses
+// valueDate UTCTime
+// bookingDate UTCTime Maybe
+// amount Decimal
+// accountId AccountId
+// preliminary Bool
+// transaction String
+// deriving Show Generic
+// |]
+
+something to track recurring expenses (to show if they are missing / have been deducted twice or something like that)
+...
+
+category budgets to remember how much one is allowed to spend?
+
+authentication via access tokens (instead of cookies)? these should be tracked as well

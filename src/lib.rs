@@ -1,17 +1,8 @@
 pub mod cli;
-pub mod enums;
 pub mod models;
-pub mod queries;
 pub mod rendering;
-pub mod schema;
 pub mod serialization;
 pub mod web;
-
-#[macro_use]
-extern crate diesel;
-
-#[macro_use]
-extern crate diesel_migrations;
 
 #[macro_use]
 extern crate rocket;
@@ -20,19 +11,7 @@ extern crate rocket;
 extern crate rust_embed;
 
 use argonautica::{Hasher, Verifier};
-use diesel::pg::PgConnection;
-use diesel::prelude::*;
-use log::info;
 use simplelog::{ColorChoice, LevelFilter, SimpleLogger, TermLogger, TerminalMode};
-use std::error::Error;
-
-embed_migrations!();
-
-pub fn connect(database_url: &str) -> Result<PgConnection, Box<dyn Error>> {
-    let conn = PgConnection::establish(database_url)?;
-    embedded_migrations::run_with_output(&conn, &mut std::io::stdout())?;
-    Ok(conn)
-}
 
 pub fn verify_password(pw: &str, hash: &str) -> bool {
     Verifier::default()
@@ -66,7 +45,6 @@ pub fn initialize_logging(verbosity: u32) {
     // log_config.add_filter_ignore_str("hyper");
     // log_config.add_filter_ignore_str("reqwest");
     // log_config.add_filter_ignore_str("selectors");
-
     // log_config.add_filter_allow_str("moneta");
 
     if let Err(e) = TermLogger::init(
