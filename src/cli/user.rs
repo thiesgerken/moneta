@@ -1,16 +1,14 @@
 use crate::hash_password;
 use crate::models::*;
-use crate::schema::users::dsl::*;
 
 use clap::ArgMatches;
-use clap::{App, Arg, ArgGroup};
-use diesel::prelude::*;
+use clap::{Arg, ArgGroup, Command};
 use log::info;
 use prettytable::{cell, row, Table};
 use std::io;
 
-pub fn build() -> App<'static> {
-    App::new("user")
+pub fn build() -> Command<'static> {
+    Command::new("user")
         .about("User Management")
         .arg(
             Arg::new("add")

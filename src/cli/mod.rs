@@ -1,16 +1,15 @@
-pub mod export;
 pub mod import;
 pub mod serve;
 pub mod user;
 
-use clap::{crate_authors, crate_name, crate_version, App, Arg};
+use clap::{crate_authors, crate_name, crate_version, Arg, Command};
 use config::ConfigError;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-// build a clap::App interface
-pub fn build() -> App<'static> {
-    App::new(crate_name!())
+// build a clap::Command interface
+pub fn build() -> Command<'static> {
+    Command::new(crate_name!())
         .version(crate_version!())
         .author(crate_authors!())
         .about("Personal expense management and analysis")
@@ -30,7 +29,6 @@ pub fn build() -> App<'static> {
                 .value_name("url"))
         .subcommand(user::build())
         .subcommand(import::build())
-        .subcommand(export::build())
         .subcommand(serve::build())
 }
 

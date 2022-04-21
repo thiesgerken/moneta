@@ -1,12 +1,12 @@
 use crate::web;
 
 use clap::ArgMatches;
-use clap::{App, Arg};
+use clap::{Arg, Command};
 use rocket::config::LogLevel;
 use serde::{Deserialize, Serialize};
 
-pub fn build() -> App<'static> {
-    App::new("serve")
+pub fn build() -> Command<'static> {
+    Command::new("serve")
     .about("serve web interface")
     .arg(
       Arg::new("port")
