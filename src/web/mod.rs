@@ -3,7 +3,7 @@
 // pub mod categories;
 // pub mod expenses;
 pub mod static_files;
-// pub mod user;
+pub mod user;
 mod util;
 
 use rocket::config::LogLevel;
@@ -37,10 +37,10 @@ pub async fn handle(config: Config, connection: mongodb::Database) {
         .mount(
             "/api/",
             routes![
-                // user::login,
-                // user::logout,
-                // user::info,
-                // user::list,
+                user::login,
+                user::logout,
+                user::info,
+                user::list,
                 // accounts::list,
                 // accounts::get,
                 // accounts::delete,
