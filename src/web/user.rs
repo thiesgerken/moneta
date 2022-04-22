@@ -1,15 +1,10 @@
-use crate::models::*;
-use crate::schema::*;
 use crate::verify_password;
-use crate::web::DbConn;
 
-use diesel::prelude::*;
 use log::{info, warn};
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::request::{FromRequest, Outcome};
 use rocket::serde::json::Json;
 use rocket::Request;
-use rocket_sync_db_pools::diesel;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 

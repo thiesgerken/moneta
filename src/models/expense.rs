@@ -1,17 +1,19 @@
 use chrono::{DateTime, Utc};
+use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Expense {
-    pub id: i32,
+    #[serde(rename = "_id")]
+    pub id: ObjectId,
     pub title: String,
     pub store: String,
     pub description: String,
     pub comments: String,
     pub booking_start: DateTime<Utc>,
     pub booking_end: DateTime<Utc>,
-    pub group_id: Option<i32>,
+    pub group_id: Option<ObjectId>,
     pub is_template: bool,
     pub is_preliminary: bool,
     pub is_tax_relevant: bool,
@@ -25,7 +27,7 @@ pub struct Expense {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseTransaction {
-    pub account_id: i32,
+    pub account_id: ObjectId,
     pub date: DateTime<Utc>,
 
     // constraint: amount is null OR fraction is null
@@ -41,7 +43,7 @@ pub struct ExpenseTransaction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseCategorization {
-    pub category_id: i32,
+    pub category_id: ObjectId,
     // constraint: weight > 0
     pub weight: f64,
 }

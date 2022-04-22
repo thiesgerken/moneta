@@ -1,34 +1,27 @@
-pub mod accounts;
-pub mod balances;
-pub mod categories;
-pub mod expenses;
-pub mod pagination;
+// pub mod accounts;
+// pub mod balances;
+// pub mod categories;
+// pub mod expenses;
 pub mod static_files;
-pub mod user;
+// pub mod user;
 mod util;
 
 use rocket::config::LogLevel;
 use rocket::data::{Limits, ToByteUnit};
-use rocket::figment::util::map;
-use rocket_sync_db_pools::{database, diesel};
 
 pub struct Config {
     pub port: u16,
     pub address: String,
     pub secret_key: Option<String>,
     pub log_level: LogLevel,
-    pub database_url: String,
 }
 
-pub async fn handle(config: Config) {
-    let database_config = map! {"url" => config.database_url.clone()};
-
+pub async fn handle(config: Config, connection: mongodb::Database) {
     let limits = Limits::new()
         .limit("forms", 64.kibibytes())
         .limit("json", 10.mebibytes());
 
     let mut rocket_config = rocket::config::Config::figment()
-        .merge(("databases", map!["moneta" => database_config]))
         .merge(("port", config.port))
         .merge(("address", config.address.clone()))
         .merge(("limits", limits))
@@ -39,36 +32,36 @@ pub async fn handle(config: Config) {
     }
 
     rocket::custom(rocket_config)
-        .attach(DbConn::fairing())
         .manage(config)
+        .manage(connection)
         .mount(
             "/api/",
             routes![
-                user::login,
-                user::logout,
-                user::info,
-                user::list,
-                accounts::list,
-                accounts::get,
+                // user::login,
+                // user::logout,
+                // user::info,
+                // user::list,
+                // accounts::list,
+                // accounts::get,
                 // accounts::delete,
                 // accounts::update,
                 // accounts::create,
-                balances::list,
-                balances::get,
-                balances::query,
-                balances::info,
+                // balances::list,
+                // balances::get,
+                // balances::query,
+                // balances::info,
                 // balances::delete,
                 // balances::update,
                 // balances::create,
-                categories::list,
-                categories::get,
+                // categories::list,
+                // categories::get,
                 // categories::delete,
                 // categories::update,
                 // categories::create,
-                expenses::list,
-                expenses::get,
-                expenses::query,
-                expenses::info,
+                // expenses::list,
+                // expenses::get,
+                // expenses::query,
+                // expenses::info,
                 // categories::delete,
                 // categories::update,
                 // categories::create,
@@ -79,6 +72,3 @@ pub async fn handle(config: Config) {
         .await
         .expect("server died");
 }
-
-#[database("moneta")]
-pub struct DbConn(diesel::PgConnection);

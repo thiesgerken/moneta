@@ -1,13 +1,9 @@
-use chrono::{DateTime, Utc};
-use moneta::models::Balance;
-// use moneta::schema::*;
-use moneta::initialize_logging;
-use tokio::runtime::Builder;
-
+use chrono::Utc;
 use futures::stream::TryStreamExt;
-use mongodb::{bson::oid::ObjectId, options::ClientOptions, Client};
-use uuid::Uuid;
-// use log::info;
+use moneta::models::Balance;
+use mongodb::bson::oid::ObjectId;
+use mongodb::bson::{doc, Document};
+use tokio::runtime::Builder;
 
 fn main() {
     let runtime = Builder::new_multi_thread()
@@ -17,33 +13,20 @@ fn main() {
         .unwrap();
 
     runtime.block_on(async {
-        initialize_logging(1);
+        moneta::initialize_logging(1);
 
-        // Parse a connection string into an options struct.
-        let mut client_options = ClientOptions::parse("mongodb://localhost:27017")
-            .await
-            .unwrap();
-
-        // Manually set an option.
-        client_options.app_name = Some("My App".to_string());
-
-        // Get a handle to the deployment.
-        let client = Client::with_options(client_options).unwrap();
-
-        // List the names of the databases in that deployment.
-        for db_name in client.list_database_names(None, None).await.unwrap() {
-            println!("{}", db_name);
-        }
-
-        // Get a handle to a database.
-        let db = client.database("mydb");
+        let db = moneta::connect(
+            "mongodb://localhost:27017",
+            "moneta_sandbox",
+            "moneta-sandbox",
+        )
+        .await
+        .unwrap();
 
         // List the names of the collections in that database.
         for collection_name in db.list_collection_names(None).await.unwrap() {
             println!("{}", collection_name);
         }
-
-        use mongodb::bson::{doc, Document};
 
         // Get a handle to a collection in the database.
         let collection = db.collection::<Document>("books");
@@ -61,13 +44,22 @@ fn main() {
         // Get a handle to a collection of `Book`.
         let typed_collection = db.collection::<Balance>("balances");
 
-        let balances = vec![Balance {
-            account_id: 24,
-            id: ObjectId::new(),
-            date: Utc::now(),
-            amount: 1234,
-            comments: "".to_string(),
-        }];
+        let balances = vec![
+            Balance {
+                account_id: ObjectId::new(),
+                id: ObjectId::new(),
+                date: Utc::now(),
+                amount: 1234,
+                comments: "".to_string(),
+            },
+            Balance {
+                account_id: ObjectId::new(),
+                id: ObjectId::new(),
+                date: Utc::now(),
+                amount: 1234,
+                comments: "".to_string(),
+            },
+        ];
         println!("to insert: {:?}", balances);
 
         // Insert the books into "mydb.books" collection, no manual conversion to BSON necessary.

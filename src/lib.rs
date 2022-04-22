@@ -1,8 +1,8 @@
-// pub mod cli;
+pub mod cli;
 pub mod models;
+pub mod web;
 // pub mod rendering;
 // pub mod serialization;
-// pub mod web;
 
 #[macro_use]
 extern crate rocket;
@@ -59,4 +59,16 @@ pub fn initialize_logging(verbosity: u32) {
             e
         );
     }
+}
+
+pub async fn connect(
+    database_url: &str,
+    database_name: &str,
+    app_name: &str,
+) -> Result<mongodb::Database, mongodb::error::Error> {
+    let mut client_options = mongodb::options::ClientOptions::parse(database_url).await?;
+    client_options.app_name = Some(app_name.to_owned());
+
+    let client = mongodb::Client::with_options(client_options)?;
+    Ok(client.database(database_name))
 }
