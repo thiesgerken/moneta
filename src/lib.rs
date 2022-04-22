@@ -1,8 +1,8 @@
-pub mod cli;
+// pub mod cli;
 pub mod models;
-pub mod rendering;
-pub mod serialization;
-pub mod web;
+// pub mod rendering;
+// pub mod serialization;
+// pub mod web;
 
 #[macro_use]
 extern crate rocket;
@@ -39,7 +39,6 @@ pub fn initialize_logging(verbosity: u32) {
     };
 
     let mut log_config = simplelog::ConfigBuilder::new();
-    log_config.set_time_format_str("");
 
     // log_config.add_filter_ignore_str("html5ever");
     // log_config.add_filter_ignore_str("hyper");

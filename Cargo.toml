@@ -7,8 +7,9 @@ default-run = "moneta"
 
 [dependencies]
 argonautica = "0.2"
+futures = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
-clap ={ version = "3.0", features = ["cargo"] }
+clap = { version = "3.0", features = ["cargo"] }
 clap_complete = "3.0"
 config = "0.13"
 itertools = "0.10"
@@ -21,7 +22,15 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 simplelog = "0.12"
 toml = "0.5"
-tokio = { version = "1.0", features= ["full"] } # needs to be synced to the version rocket uses!
+tokio = { version = "1.0", features = [
+    "full"
+] } # needs to be synced to the version rocket uses!
+mongodb = { version = "2.2.0", features = [
+    "bson-chrono-0_4",
+    "bson-uuid-0_8",
+    "bson-serde_with"
+] }
+uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
 criterion = "0.3"

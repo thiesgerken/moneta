@@ -27,12 +27,14 @@ pub struct Expense {
 pub struct ExpenseTransaction {
     pub account_id: i32,
     pub date: DateTime<Utc>,
+
     // constraint: amount is null OR fraction is null
     // constraint: fraction can only be used if the expense has exactly one transaction with an amount
     // convention: amounts are _added_ to account balances, i.e. a negative amount is a expense
     // convention: fractions are calculated relative to the sum of all transactions with a fixed amount
     pub amount: Option<i64>,
     pub fraction: Option<f64>,
+
     pub comments: String,
     pub statement: String,
 }

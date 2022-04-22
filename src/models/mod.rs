@@ -7,7 +7,9 @@ pub use expense::{
 };
 
 use chrono::{DateTime, Utc};
+use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,15 +30,20 @@ pub struct Category {
     pub color: Option<String>,
     pub parent: Option<i32>,
     pub replaces: Vec<i32>, // list of category ids from other users
+
+    // desired max spending in this category per month. In the future this could become a list of limits and timespans (to accomodate for varying spending limits over time without changing past data)
+    pub monthly_limit: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Balance {
-    pub id: i32,
+    #[serde(rename = "_id")]
+    pub id: Option<ObjectId>,
     pub account_id: i32,
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
-    pub amount: i64,         // cents
+    pub amount: i64, // cents
     pub comments: String,
 }
 
