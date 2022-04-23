@@ -34,10 +34,9 @@ fn main() {
 
         if let Some(sub_matches) = matches.subcommand_matches("user") {
             cli::user::handle(connection, sub_matches).await;
-        } else if let Some(sub_matches) = matches.subcommand_matches("import") {
+            // } else if let Some(sub_matches) = matches.subcommand_matches("import") {
+            // TODO: moneydb import
             // cli::import::handle(&connection, sub_matches);
-        } else if let Some(sub_matches) = matches.subcommand_matches("export") {
-            // cli::export::handle(&connection, sub_matches);
         } else if let Some(sub_matches) = matches.subcommand_matches("serve") {
             cli::serve::handle(connection, sub_matches, config.web, config.verbosity).await;
         } else {

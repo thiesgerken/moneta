@@ -27,7 +27,7 @@ pub fn build() -> Command<'static> {
                 .long("database_url")
                 .help("database url [default: 'localhost:27017']")
                 .value_name("url"))
-                .arg(Arg::new("database_url")
+        .arg(Arg::new("database_name")
                 .long("database_name")
                 .help("database name [default: 'moneta']")
                 .value_name("name"))
@@ -79,7 +79,7 @@ pub fn merge_settings(
     opts: &clap::ArgMatches,
     mut settings: config::ConfigBuilder<config::builder::DefaultState>,
 ) -> Result<config::ConfigBuilder<config::builder::DefaultState>, ConfigError> {
-    let ov = vec!["database"];
+    let ov = vec!["database_url", "database_name"];
 
     for x in ov.iter() {
         settings = settings.set_override_option(x, opts.value_of(x))?;
