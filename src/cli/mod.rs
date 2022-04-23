@@ -1,6 +1,6 @@
 // pub mod import;
 pub mod serve;
-// pub mod user;
+pub mod user;
 
 use clap::{crate_authors, crate_name, crate_version, Arg, Command};
 use config::ConfigError;
@@ -31,7 +31,7 @@ pub fn build() -> Command<'static> {
                 .long("database_name")
                 .help("database name [default: 'moneta']")
                 .value_name("name"))
-        // .subcommand(user::build())
+        .subcommand(user::build())
         // .subcommand(import::build())
         .subcommand(serve::build())
 }

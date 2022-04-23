@@ -30,12 +30,6 @@ mongodb = { version = "2.2.0", features = [
     "bson-serde_with"
 ] }
 
-[dev-dependencies]
-criterion = "0.3"
-
 [profile.release]
 lto = true
 
-[[bench]]
-name = "rendering"
-harness = false

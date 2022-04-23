@@ -1,5 +1,5 @@
 use crate::models::User;
-use crate::verify_password;
+use crate::{verify_password, queries};
 
 use futures::{StreamExt, TryStreamExt};
 use log::{info, warn};
@@ -9,7 +9,7 @@ use rocket::http::{Cookie, CookieJar, Status};
 use rocket::request::{FromRequest, Outcome};
 use rocket::serde::json::Json;
 use rocket::{Request, State};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{ Deserialize, Serialize};
 use std::ops::Deref;
 
 use super::util::log_error_and_500;
@@ -67,34 +67,13 @@ impl UserInfo {
     }
 }
 
-pub async fn query_element_by_id<T>(
-    connection: &mongodb::Database,
-    collection: &str,
-    id: ObjectId,
-) -> Result<Option<T>, mongodb::error::Error>
-where
-    T: DeserializeOwned + Unpin + Send + Sync,
-{
-    let collection = connection.collection::<T>(collection);
-    let filter = doc! {"_id":id};
-    collection.find_one(filter, None).await
-}
-
-pub async fn query_user_by_name(
-    connection: &mongodb::Database,
-    user_name: &str,
-) -> Result<Option<User>, mongodb::error::Error> {
-    let collection = connection.collection::<User>("users");
-    let filter = doc! {"name":user_name};
-    collection.find_one(filter, None).await
-}
 
 #[get("/user")]
 pub async fn info(
     uid: UserId,
     connection: &State<mongodb::Database>,
 ) -> Result<Json<UserInfo>, Status> {
-    let user = query_element_by_id(connection, "users", *uid)
+    let user = queries::query_element_by_id(connection, "users", *uid)
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::InternalServerError)?;
@@ -114,7 +93,7 @@ pub async fn login(
     cookies: &CookieJar<'_>,
     login: Json<LoginData>,
 ) -> Result<Json<UserInfo>, Status> {
-    if let Some(user) = query_user_by_name(connection, &login.user)
+    if let Some(user) = queries::query_user_by_name(connection, &login.user)
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?
     {

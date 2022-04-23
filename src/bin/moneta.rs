@@ -33,7 +33,7 @@ fn main() {
             .expect("error connecting and migrating to db");
 
         if let Some(sub_matches) = matches.subcommand_matches("user") {
-            // cli::user::handle(&connection, sub_matches);
+            cli::user::handle(connection, sub_matches).await;
         } else if let Some(sub_matches) = matches.subcommand_matches("import") {
             // cli::import::handle(&connection, sub_matches);
         } else if let Some(sub_matches) = matches.subcommand_matches("export") {

@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct RenderedExpense {
     pub info: Expense,
+    pub user_id: ObjectId,
     pub events: Vec<ExpenseChangelogEntry>,
     pub categories: Vec<ExpenseCategorization>,
     pub transactions: Vec<ExpenseTransaction>,

@@ -1,9 +1,13 @@
 use crate::hash_password;
 use crate::models::*;
+use crate::queries;
 
 use clap::ArgMatches;
 use clap::{Arg, ArgGroup, Command};
+use futures::TryStreamExt;
 use log::info;
+use mongodb::bson::doc;
+use mongodb::bson::oid::ObjectId;
 use prettytable::{cell, row, Table};
 use std::io;
 
@@ -36,18 +40,20 @@ pub fn build() -> Command<'static> {
         )
 }
 
-pub fn handle(connection: &PgConnection, sub_matches: &ArgMatches) {
+pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
+    let user_collection = connection.collection::<User>("users");
+
     if let Some(uname) = sub_matches.value_of("add") {
         // check if this username is taken
-        assert!(
-            users
-                .filter(name.eq(uname))
-                .execute(connection)
-                .expect("Error loading users")
-                == 0,
-            "there is already a user with name '{}'!",
-            uname
-        );
+        if let Some(user) = queries::query_user_by_name(&connection, uname)
+            .await
+            .expect("Cannot query users")
+        {
+            panic!(
+                "there is already a user (_id: {}) with name '{}'!",
+                user.id, uname
+            );
+        }
 
         let mut fname = String::new();
         println!("Please enter the full name of the new user");
@@ -64,26 +70,35 @@ pub fn handle(connection: &PgConnection, sub_matches: &ArgMatches) {
             "Password has to be at least 8 characters long!"
         );
 
-        let u = NewUser {
+        let u = User {
+            id: ObjectId::new(),
             name: uname.to_string(),
             full_name: fname.to_string(),
-            hash: hash_password(password),
+            password_hash: hash_password(password),
         };
 
-        let u: User = diesel::insert_into(crate::schema::users::table)
-            .values(&u)
-            .get_result(connection)
+        user_collection
+            .insert_one(&u, None)
+            .await
             .expect("Error saving new user");
-
         info!("Created user {:?}", u);
     } else if let Some(uname) = sub_matches.value_of("update") {
+        // check if this user even exists
+        let user = queries::query_user_by_name(&connection, uname)
+            .await
+            .expect("Error loading users")
+            .expect("User does not exist!");
+
         let mut fname = String::new();
-        println!("Please enter a new full name of the user");
+        println!(
+            "Please enter a new full name for the user {} (current: {})",
+            user.name, user.full_name
+        );
         io::stdin().read_line(&mut fname).unwrap();
         let fname = fname.trim_end(); // Remove the trailing newline
 
         let mut password = String::new();
-        println!("Please enter a new password for the user");
+        println!("Please enter a new password for the user {}", user.name);
         io::stdin().read_line(&mut password).unwrap();
         let password = password.trim_end(); // Remove the trailing newline
 
@@ -92,50 +107,56 @@ pub fn handle(connection: &PgConnection, sub_matches: &ArgMatches) {
             "Password has to be at least 8 characters long!"
         );
 
-        let u = diesel::update(users.filter(name.eq(uname)))
-            .set((full_name.eq(fname), hash.eq(hash_password(password))))
-            .get_result::<User>(connection)
-            .unwrap_or_else(|_| panic!("Unable to find user {}", uname));
-
-        info!("Updated user {:?}", u);
+        user_collection
+            .update_one(
+                doc! {"_id": user.id},
+                doc! {"$set": {"full_name":fname, "password_hash": hash_password(password)}},
+                None,
+            )
+            .await
+            .expect("Could not update user");
+        info!("Updated user {}", uname);
     } else if let Some(uname) = sub_matches.value_of("remove") {
         // check if this user even exists
-        assert!(
-            users
-                .filter(name.eq(uname))
-                .execute(connection)
-                .expect("Error loading users")
-                > 0,
-            "User does not exist"
-        );
+        let user = queries::query_user_by_name(&connection, uname)
+            .await
+            .expect("Error loading users")
+            .expect("User does not exist!");
 
         let mut confirmation = String::new();
         println!(
           "Do you really want to delete this user? If so, enter '{}'.\n Note that this will also delete relevant accounts and expenses!",
           uname
-      );
+              );
         io::stdin().read_line(&mut confirmation).unwrap();
         let confirmation = confirmation.trim_end(); // Remove the trailing newline
         assert_eq!(confirmation, uname, "Confirmation failed");
 
-        diesel::delete(users.filter(name.eq(uname)))
-            .execute(connection)
-            .unwrap_or_else(|_| panic!("Unable to delete user {}", uname));
+        // TODO: also need to remove orphaned accounts, expenses, ..., re-render stuff, ...
+        let delete_res = user_collection
+            .delete_one(doc! {"_id": user.id}, None)
+            .await
+            .expect("Could not delete user");
 
+        assert!(delete_res.deleted_count == 1);
         info!("deleted user '{}'", uname);
     } else if sub_matches.is_present("list") {
-        let us = users.load::<User>(connection).expect("Error loading users");
+        let mut user_cursor = user_collection
+            .find(None, None)
+            .await
+            .expect("Could not obtain users");
 
         let mut table = Table::new();
         table.add_row(row!["ID", "Name", "Full Name", "# Accounts", "# Expenses"]);
 
-        for u in us.iter() {
-            let expense_count = crate::queries::relevant_expenses(connection, u.id, None, None)
-                .expect("Could not obtain expenses of user")
-                .len();
-            let account_count: i64 = Account::belonging_to(u)
-                .select(diesel::dsl::count(crate::schema::accounts::dsl::id))
-                .first(connection)
+        while let Some(u) = user_cursor.try_next().await.expect("error loading user") {
+            // TODO: as soon as we have rendered expenses in the database: find all expenses for this user and print the count
+            let expense_count = "??";
+
+            let account_collection = connection.collection::<Account>("accounts");
+            let account_count = account_collection
+                .count_documents(doc! {"user_id": u.id}, None)
+                .await
                 .expect("Could not obtain accounts of user");
 
             table.add_row(row![
