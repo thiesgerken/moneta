@@ -1,6 +1,7 @@
 use crate::models::User;
 use crate::verify_password;
 
+use futures::{StreamExt, TryStreamExt};
 use log::{info, warn};
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
@@ -140,9 +141,6 @@ pub async fn login(
     }
 }
 
-use futures::stream::StreamExt;
-
-// TODO: implement & use pagination on the cursor through limit and skip
 #[get("/user/list?<skip>&<limit>")]
 pub async fn list(
     _uid: UserId,
@@ -151,17 +149,18 @@ pub async fn list(
     skip: Option<usize>,
 ) -> Result<Json<Vec<UserInfo>>, Status> {
     let collection = connection.collection::<User>("users");
-    let mut cursor = collection
+    let cursor = collection
         .find(None, None)
         .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .skip(skip.unwrap_or(0))
+        .take(limit.unwrap_or(usize::MAX));
+
+    let users = cursor
+        .and_then(|u| async { Ok(UserInfo::new(u)) })
+        .try_collect::<Vec<_>>()
+        .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
-    if let Some(skip) = skip {
-        cursor = cursor.skip(skip);
-    }
 
-    if let Some(limit) = limit {
-        cursor = cursor.take(limit);
-    }
-
-    Err(Status::Accepted)
+    Ok(Json(users))
 }
