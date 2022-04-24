@@ -2,6 +2,7 @@
 // pub mod balances;
 // pub mod categories;
 // pub mod expenses;
+pub mod authentication;
 pub mod static_files;
 pub mod user;
 mod util;
