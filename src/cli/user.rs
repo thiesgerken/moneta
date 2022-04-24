@@ -51,7 +51,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         {
             panic!(
                 "there is already a user (_id: {}) with name '{}'!",
-                user.id, uname
+                *user.id, uname
             );
         }
 
@@ -71,7 +71,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         );
 
         let u = User {
-            id: ObjectId::new(),
+            id: ObjectIdWrapper(ObjectId::new()),
             name: uname.to_string(),
             full_name: fname.to_string(),
             password_hash: hash_password(password),
@@ -109,7 +109,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
 
         user_collection
             .update_one(
-                doc! {"_id": user.id},
+                doc! {"_id": *user.id},
                 doc! {"$set": {"full_name":fname, "password_hash": hash_password(password)}},
                 None,
             )
@@ -134,7 +134,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
 
         // TODO: also need to remove orphaned accounts, expenses, ..., re-render stuff, ...
         let delete_res = user_collection
-            .delete_one(doc! {"_id": user.id}, None)
+            .delete_one(doc! {"_id": *user.id}, None)
             .await
             .expect("Could not delete user");
 
@@ -155,7 +155,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
 
             let account_collection = connection.collection::<Account>("accounts");
             let account_count = account_collection
-                .count_documents(doc! {"user_id": u.id}, None)
+                .count_documents(doc! {"user_id": *u.id}, None)
                 .await
                 .expect("Could not obtain accounts of user");
 

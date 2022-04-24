@@ -1,5 +1,5 @@
-use crate::models::User;
-use crate::{verify_password, queries};
+use crate::models::{ObjectIdWrapper, User};
+use crate::{queries, verify_password};
 
 use futures::{StreamExt, TryStreamExt};
 use log::{info, warn};
@@ -9,12 +9,17 @@ use rocket::http::{Cookie, CookieJar, Status};
 use rocket::request::{FromRequest, Outcome};
 use rocket::serde::json::Json;
 use rocket::{Request, State};
-use serde::{ Deserialize, Serialize};
+use rocket_okapi::gen::OpenApiGenerator;
+use rocket_okapi::okapi::openapi3::{Object, Parameter, ParameterValue};
+use rocket_okapi::request::OpenApiFromRequest;
+use rocket_okapi::request::RequestHeaderInput;
+use rocket_okapi::{openapi, JsonSchema};
+use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
 use super::util::log_error_and_500;
 
-impl Deref for UserId {
+impl Deref for CookieUserId {
     type Target = ObjectId;
 
     fn deref(&self) -> &Self::Target {
@@ -22,10 +27,37 @@ impl Deref for UserId {
     }
 }
 
-pub struct UserId(pub ObjectId);
+impl<'a> OpenApiFromRequest<'a> for CookieUserId {
+    fn from_request_input(
+        gen: &mut OpenApiGenerator,
+        _name: String,
+        required: bool,
+    ) -> rocket_okapi::Result<RequestHeaderInput> {
+        let schema = gen.json_schema::<String>();
+        Ok(RequestHeaderInput::Parameter(Parameter {
+            name: "user_id".to_owned(),
+            location: "cookie".to_owned(),
+            description: None,
+            required,
+            deprecated: false,
+            allow_empty_value: true,
+            value: ParameterValue::Schema {
+                style: None,
+                explode: None,
+                allow_reserved: false,
+                schema,
+                example: None,
+                examples: None,
+            },
+            extensions: Object::default(),
+        }))
+    }
+}
+
+pub struct CookieUserId(pub ObjectId);
 
 #[rocket::async_trait]
-impl<'r> FromRequest<'r> for UserId {
+impl<'r> FromRequest<'r> for CookieUserId {
     type Error = ();
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
@@ -35,22 +67,22 @@ impl<'r> FromRequest<'r> for UserId {
             .and_then(|c| c.value().parse().ok());
 
         match id {
-            Some(id) => Outcome::Success(UserId(id)),
+            Some(id) => Outcome::Success(CookieUserId(id)),
             None => Outcome::Failure((Status::Unauthorized, ())),
         }
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInfo {
     #[serde(rename = "_id")]
-    id: ObjectId,
+    id: ObjectIdWrapper,
     name: String,
     full_name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginData {
     user: String,
@@ -67,10 +99,10 @@ impl UserInfo {
     }
 }
 
-
+#[openapi]
 #[get("/user")]
 pub async fn info(
-    uid: UserId,
+    uid: CookieUserId,
     connection: &State<mongodb::Database>,
 ) -> Result<Json<UserInfo>, Status> {
     let user = queries::query_element_by_id(connection, "users", *uid)
@@ -81,12 +113,14 @@ pub async fn info(
     Ok(Json(UserInfo::new(user)))
 }
 
+#[openapi]
 #[get("/user/logout")]
 pub fn logout(cookies: &CookieJar) -> Status {
     cookies.remove_private(Cookie::named("user_id"));
     Status::Ok
 }
 
+#[openapi]
 #[post("/user/login", data = "<login>")]
 pub async fn login(
     connection: &State<mongodb::Database>,
@@ -120,9 +154,10 @@ pub async fn login(
     }
 }
 
+#[openapi]
 #[get("/user/list?<skip>&<limit>")]
 pub async fn list(
-    _uid: UserId,
+    _uid: CookieUserId,
     connection: &State<mongodb::Database>,
     limit: Option<usize>,
     skip: Option<usize>,

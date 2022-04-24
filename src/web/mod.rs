@@ -8,6 +8,7 @@ mod util;
 
 use rocket::config::LogLevel;
 use rocket::data::{Limits, ToByteUnit};
+use rocket_okapi::{ openapi_get_routes, swagger_ui::make_swagger_ui, swagger_ui::SwaggerUIConfig};
 
 pub struct Config {
     pub port: u16,
@@ -18,8 +19,8 @@ pub struct Config {
 
 pub async fn handle(config: Config, connection: mongodb::Database) {
     let limits = Limits::new()
-        .limit("forms", 64.kibibytes())
-        .limit("json", 10.mebibytes());
+        .limit("forms", (64 as i32).kibibytes())
+        .limit("json", (10 as i32).mebibytes());
 
     let mut rocket_config = rocket::config::Config::figment()
         .merge(("port", config.port))
@@ -36,7 +37,7 @@ pub async fn handle(config: Config, connection: mongodb::Database) {
         .manage(connection)
         .mount(
             "/api/",
-            routes![
+            openapi_get_routes![
                 user::login,
                 user::logout,
                 user::info,
@@ -66,6 +67,12 @@ pub async fn handle(config: Config, connection: mongodb::Database) {
                 // categories::update,
                 // categories::create,
             ],
+        ) .mount(
+            "/api/doc/",
+            make_swagger_ui(&SwaggerUIConfig {
+                url: "../openapi.json".to_owned(),
+                ..Default::default()
+            }),
         )
         .mount("/", routes![static_files::serve, static_files::index])
         .launch()

@@ -1,6 +1,8 @@
 mod account;
 mod expense;
 
+use std::ops::Deref;
+
 pub use account::{Account, AccountSynchronization};
 pub use expense::{
     Expense, ExpenseCategorization, ExpensePosition, ExpenseReceipt, ExpenseTransaction,
@@ -8,13 +10,42 @@ pub use expense::{
 
 use chrono::{DateTime, Utc};
 use mongodb::bson::oid::ObjectId;
+use rocket_okapi::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ObjectIdWrapper(pub ObjectId);
+
+impl Deref for ObjectIdWrapper {
+    type Target = ObjectId;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl JsonSchema for ObjectIdWrapper {
+    fn schema_name() -> String {
+        "MongoDB ObjectId".to_owned()
+    }
+
+    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        #[derive(JsonSchema)]
+        struct ExtendedObjectId {
+            #[serde(rename = "$oid")]
+            _id: String,
+        }
+
+        ExtendedObjectId::json_schema(gen)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct User {
     #[serde(rename = "_id")]
-    pub id: ObjectId,
+    pub id: ObjectIdWrapper,
 
     pub name: String,
     pub full_name: String,
