@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
-use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
+
+use super::ObjectIdWrapper;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum AccountAvailability {
@@ -38,9 +39,9 @@ pub enum AccountKind {
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     #[serde(rename = "_id")]
-    pub id: ObjectId,
+    pub id: ObjectIdWrapper,
 
-    pub user_id: ObjectId,
+    pub user_id: ObjectIdWrapper,
     pub name: String,
     pub description: String,
     pub color: Option<String>,
@@ -66,6 +67,6 @@ pub struct Account {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountSynchronization {
-    pub account_id: ObjectId, // id of the other account
+    pub account_id: ObjectIdWrapper, // id of the other account
     pub invert: bool, // whether to count income in the original account as an expense in the synchronized account (and vice versa) or not
 }
