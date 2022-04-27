@@ -25,6 +25,18 @@ impl Deref for ObjectIdWrapper {
     }
 }
 
+impl Into<ObjectId> for ObjectIdWrapper {
+    fn into(self) -> ObjectId {
+        self.0
+    }
+}
+
+impl From<ObjectId> for ObjectIdWrapper {
+    fn from(o: ObjectId) -> Self {
+        ObjectIdWrapper(o)
+    }
+}
+
 impl JsonSchema for ObjectIdWrapper {
     fn schema_name() -> String {
         "MongoDB ObjectId".to_owned()
