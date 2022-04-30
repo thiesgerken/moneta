@@ -46,15 +46,15 @@ fn main() {
 
         let balances = vec![
             Balance {
-                account_id: ObjectId::new(),
-                id: ObjectId::new(),
+                account_id: ObjectId::new().into(),
+                id: ObjectId::new().into(),
                 date: Utc::now(),
                 amount: 1234,
                 comments: "".to_string(),
             },
             Balance {
-                account_id: ObjectId::new(),
-                id: ObjectId::new(),
+                account_id: ObjectId::new().into(),
+                id: ObjectId::new().into(),
                 date: Utc::now(),
                 amount: 1234,
                 comments: "".to_string(),
