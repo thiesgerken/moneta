@@ -7,8 +7,11 @@ use super::{ExpenseCategorization, ExpensePosition, ExpenseReceipt, ObjectIdWrap
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderedExpense {
-    #[serde(rename = "_id")]
+    #[serde(rename = "_id", default)]
     pub id: ObjectIdWrapper,
+
+    #[serde(default)]
+    pub user_id: ObjectIdWrapper,
 
     pub title: String,
     pub store: String,

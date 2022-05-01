@@ -1,12 +1,15 @@
+use std::str::FromStr;
+
 use crate::models::Category;
 use crate::web::authentication::CookieUserId;
 
-
 use crate::web::util::log_error_and_500;
 use futures::{StreamExt, TryStreamExt};
-use rocket::State;
+use mongodb::bson::oid::ObjectId;
+use mongodb::bson::{self, doc};
 use rocket::http::Status;
 use rocket::serde::json::Json;
+use rocket::State;
 use rocket_okapi::openapi;
 
 #[openapi]
@@ -33,55 +36,103 @@ pub async fn list(
     Ok(Json(entries))
 }
 
-// #[get("/categories/<id>")]
-// pub async fn get(
-//     _uid: UserId,
-//     connection: DbConn,
-//     id: i32,
-// ) -> Result<Json<RenderedCategory>, Status> {
-//     connection
-//         .run(move |c| {
-//             let cs = categories::table
-//                 .filter(categories::id.eq(id))
-//                 .left_join(
-//                     category_replacements::table
-//                         .on(categories::id.eq(category_replacements::original)),
-//                 )
-//                 .load::<(Category, Option<CategoryReplacement>)>(c)
-//                 .map_err(|e| log_error_and_500(Box::new(e)))?;
+#[openapi]
+#[get("/categories/<id>")]
+pub async fn get(
+    _uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    id: String,
+) -> Result<Json<Category>, Status> {
+    let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
+    let collection = connection.collection::<Category>("categories");
+    let entry = collection
+        .find_one(doc! {"_id":id}, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .ok_or(Status::NotFound)?;
 
-//             if let Some((cat, _)) = cs.get(0) {
-//                 let cat = cat.clone();
-//                 let repl = cs.into_iter().filter_map(|(_, r)| r).collect::<Vec<_>>();
+    Ok(Json(entry))
+}
 
-//                 Ok(Json(RenderedCategory::render(cat, &repl)))
-//             } else {
-//                 Err(Status::NotFound)
-//             }
-//         })
-//         .await
-// }
+#[openapi]
+#[delete("/categories/<id>")]
+pub async fn delete(
+    uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    id: String,
+) -> Result<(), Status> {
+    let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
+    let collection = connection.collection::<Category>("categories");
+    let entry = collection
+        .find_one(doc! {"_id":id}, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .ok_or(Status::NotFound)?;
 
-// #[delete("/balances/<id>")]
-// pub fn delete(uid: UserId, connection: DbConn, id: i32) -> Result<(), Status> {
-//     todo!() // TODO
-// }
+    if *uid != *entry.id {
+        return Err(Status::Forbidden);
+    }
 
-// #[put("/balances/<id>", data = "<balances>")]
-// pub fn update(
-//     uid: UserId,
-//     connection: DbConn,
-//     id: i32,
-//     account: Json<RenderedBalance>,
-// ) -> Result<(), Status> {
-//     todo!() // TODO
-// }
+    collection
+        .delete_one(doc! {"_id":id}, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
 
-// #[post("/balances", data = "<balances>")]
-// pub fn create(
-//     uid: UserId,
-//     connection: DbConn,
-//     account: Json<NewBalance>,
-// ) -> Result<Json<RenderedBalance>, Status> {
-//     todo!() // TODO
-// }
+    Ok(())
+}
+
+#[openapi]
+#[post("/categories", data = "<category>")]
+pub async fn create(
+    uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    category: Json<Category>,
+) -> Result<Json<Category>, Status> {
+    let mut entry = category.clone();
+    entry.id = ObjectId::new().into();
+    entry.user_id = (*uid).into();
+
+    let collection = connection.collection::<Category>("categories");
+    collection
+        .insert_one(&entry, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    Ok(Json(entry))
+}
+
+#[openapi]
+#[put("/categories/<id>", data = "<category>")]
+pub async fn update(
+    uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    id: String,
+    category: Json<Category>,
+) -> Result<Json<Category>, Status> {
+    let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
+    let collection = connection.collection::<Category>("categories");
+    let original_entry = collection
+        .find_one(doc! {"_id":id}, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .ok_or(Status::NotFound)?;
+
+    if *uid != *original_entry.id {
+        return Err(Status::Forbidden);
+    }
+
+    let mut entry = category.clone();
+    entry.id = original_entry.id;
+    entry.user_id = original_entry.user_id;
+
+    collection
+        .update_one(
+            doc! {"_id":id},
+            doc! {"$set":  bson::to_bson(&entry).unwrap()},
+            None,
+        )
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    Ok(Json(entry))
+}

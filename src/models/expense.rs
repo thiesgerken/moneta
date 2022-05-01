@@ -7,7 +7,7 @@ use super::ObjectIdWrapper;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Expense {
-    #[serde(rename = "_id")]
+    #[serde(rename = "_id", default)]
     pub id: ObjectIdWrapper,
 
     pub title: String,

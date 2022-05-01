@@ -39,10 +39,12 @@ pub enum AccountKind {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
-    #[serde(rename = "_id")]
+    #[serde(rename = "_id", default)]
     pub id: ObjectIdWrapper,
 
+    #[serde(default)]
     pub user_id: ObjectIdWrapper,
+
     pub name: String,
     pub description: String,
     pub color: Option<String>,
