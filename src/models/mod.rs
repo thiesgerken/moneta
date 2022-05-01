@@ -1,5 +1,6 @@
 mod account;
 mod expense;
+pub mod rendering;
 
 use std::ops::Deref;
 
@@ -64,7 +65,7 @@ pub struct User {
     pub password_hash: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Category {
     #[serde(rename = "_id")]
@@ -85,13 +86,14 @@ pub struct Category {
     pub monthly_limit: Option<f32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Balance {
     #[serde(rename = "_id")]
     pub id: ObjectIdWrapper,
 
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[schemars(with = "DateTime<Utc>")]
     pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
 
     pub account_id: ObjectIdWrapper,
@@ -99,12 +101,12 @@ pub struct Balance {
     pub comments: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangelogEntry<T> {
     pub user_id: Option<ObjectIdWrapper>,
 
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    // #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub date: DateTime<Utc>,
 
     /// name of the program that was used to make the change (e.g. web app, CLI, ...)

@@ -1,6 +1,6 @@
 // pub mod accounts;
 // pub mod balances;
-// pub mod categories;
+pub mod categories;
 // pub mod expenses;
 pub mod authentication;
 pub mod static_files;
@@ -9,7 +9,7 @@ mod util;
 
 use rocket::config::LogLevel;
 use rocket::data::{Limits, ToByteUnit};
-use rocket_okapi::{ openapi_get_routes, swagger_ui::make_swagger_ui, swagger_ui::SwaggerUIConfig};
+use rocket_okapi::{openapi_get_routes, swagger_ui::make_swagger_ui, swagger_ui::SwaggerUIConfig};
 
 pub struct Config {
     pub port: u16,
@@ -68,7 +68,8 @@ pub async fn handle(config: Config, connection: mongodb::Database) {
                 // categories::update,
                 // categories::create,
             ],
-        ) .mount(
+        )
+        .mount(
             "/api/doc/",
             make_swagger_ui(&SwaggerUIConfig {
                 url: "../openapi.json".to_owned(),

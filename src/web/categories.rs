@@ -1,63 +1,66 @@
-use crate::models::*;
-use crate::rendering::RenderedCategory;
-use crate::schema::*;
-use crate::web::user::UserId;
-use crate::web::DbConn;
+use crate::models::Category;
+use crate::web::authentication::CookieUserId;
+
 
 use crate::web::util::log_error_and_500;
-use diesel::prelude::*;
+use futures::{StreamExt, TryStreamExt};
+use rocket::State;
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket_sync_db_pools::diesel;
+use rocket_okapi::openapi;
 
-#[get("/categories")]
-pub async fn list(_uid: UserId, connection: DbConn) -> Result<Json<Vec<RenderedCategory>>, Status> {
-    connection
-        .run(move |c| {
-            let cs = categories::table
-                .load::<Category>(c)
-                .map_err(|e| log_error_and_500(Box::new(e)))?;
-            let repl = category_replacements::table
-                .load::<CategoryReplacement>(c)
-                .map_err(|e| log_error_and_500(Box::new(e)))?;
-
-            Ok(Json(
-                cs.into_iter()
-                    .map(|c| RenderedCategory::render(c, &repl))
-                    .collect(),
-            ))
-        })
+#[openapi]
+#[get("/categories/list?<skip>&<limit>")]
+pub async fn list(
+    _uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    limit: Option<usize>,
+    skip: Option<usize>,
+) -> Result<Json<Vec<Category>>, Status> {
+    let collection = connection.collection::<Category>("categories");
+    let cursor = collection
+        .find(None, None)
         .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .skip(skip.unwrap_or(0))
+        .take(limit.unwrap_or(usize::MAX));
+
+    let entries = cursor
+        .try_collect::<Vec<_>>()
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    Ok(Json(entries))
 }
 
-#[get("/categories/<id>")]
-pub async fn get(
-    _uid: UserId,
-    connection: DbConn,
-    id: i32,
-) -> Result<Json<RenderedCategory>, Status> {
-    connection
-        .run(move |c| {
-            let cs = categories::table
-                .filter(categories::id.eq(id))
-                .left_join(
-                    category_replacements::table
-                        .on(categories::id.eq(category_replacements::original)),
-                )
-                .load::<(Category, Option<CategoryReplacement>)>(c)
-                .map_err(|e| log_error_and_500(Box::new(e)))?;
+// #[get("/categories/<id>")]
+// pub async fn get(
+//     _uid: UserId,
+//     connection: DbConn,
+//     id: i32,
+// ) -> Result<Json<RenderedCategory>, Status> {
+//     connection
+//         .run(move |c| {
+//             let cs = categories::table
+//                 .filter(categories::id.eq(id))
+//                 .left_join(
+//                     category_replacements::table
+//                         .on(categories::id.eq(category_replacements::original)),
+//                 )
+//                 .load::<(Category, Option<CategoryReplacement>)>(c)
+//                 .map_err(|e| log_error_and_500(Box::new(e)))?;
 
-            if let Some((cat, _)) = cs.get(0) {
-                let cat = cat.clone();
-                let repl = cs.into_iter().filter_map(|(_, r)| r).collect::<Vec<_>>();
+//             if let Some((cat, _)) = cs.get(0) {
+//                 let cat = cat.clone();
+//                 let repl = cs.into_iter().filter_map(|(_, r)| r).collect::<Vec<_>>();
 
-                Ok(Json(RenderedCategory::render(cat, &repl)))
-            } else {
-                Err(Status::NotFound)
-            }
-        })
-        .await
-}
+//                 Ok(Json(RenderedCategory::render(cat, &repl)))
+//             } else {
+//                 Err(Status::NotFound)
+//             }
+//         })
+//         .await
+// }
 
 // #[delete("/balances/<id>")]
 // pub fn delete(uid: UserId, connection: DbConn, id: i32) -> Result<(), Status> {

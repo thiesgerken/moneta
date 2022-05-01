@@ -61,6 +61,7 @@ fn main() {
             },
         ];
         println!("to insert: {:?}", balances);
+        println!("to insert: {:?}", serde_json::to_string(&balances[0]));
 
         // Insert the books into "mydb.books" collection, no manual conversion to BSON necessary.
         let res = typed_collection.insert_many(balances, None).await.unwrap();

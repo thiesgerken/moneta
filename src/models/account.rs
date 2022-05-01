@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
+use rocket_okapi::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::ObjectIdWrapper;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 pub enum AccountAvailability {
     Immediately,
     Days,
@@ -13,7 +14,7 @@ pub enum AccountAvailability {
     Decades,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 pub enum AccountRisk {
     None,
     Slight,
@@ -23,7 +24,7 @@ pub enum AccountRisk {
     Huge,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 pub enum AccountKind {
     Cash,
     Debit,
@@ -35,7 +36,7 @@ pub enum AccountKind {
     Other,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     #[serde(rename = "_id")]
@@ -52,9 +53,9 @@ pub struct Account {
 
     // when the account was opened and possibly closed. Used to determine whether to hide the account or not.
     // at its opening, it is implicitly assumed that the account had a balance of zero.
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    // #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub opened: DateTime<Utc>,
-    #[serde(with = "crate::queries::optional_chrono_datetime_as_bson_datetime")]
+    // #[serde(with = "crate::queries::optional_chrono_datetime_as_bson_datetime")]
     pub closed: Option<DateTime<Utc>>,
 
     // how to add balances of this account to the total balance, must be >0 and <=1
@@ -64,7 +65,7 @@ pub struct Account {
     pub synchronization: Option<AccountSynchronization>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountSynchronization {
     pub account_id: ObjectIdWrapper, // id of the other account
