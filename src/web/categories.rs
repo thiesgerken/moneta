@@ -4,7 +4,6 @@ use crate::models::Category;
 use crate::web::authentication::CookieUserId;
 
 use crate::web::util::log_error_and_500;
-use futures::{StreamExt, TryStreamExt};
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
 use rocket::http::Status;
@@ -12,28 +11,19 @@ use rocket::serde::json::Json;
 use rocket::State;
 use rocket_okapi::openapi;
 
+use super::util;
+
 #[openapi]
-#[get("/categories/list?<skip>&<limit>")]
+#[get("/categories/list?<skip>&<limit>&<filter>&<sort>")]
 pub async fn list(
     _uid: CookieUserId,
     connection: &State<mongodb::Database>,
     limit: Option<usize>,
     skip: Option<usize>,
+    filter: Option<String>,
+    sort: Option<String>,
 ) -> Result<Json<Vec<Category>>, Status> {
-    let collection = connection.collection::<Category>("categories");
-    let cursor = collection
-        .find(None, None)
-        .await
-        .map_err(|e| log_error_and_500(Box::new(e)))?
-        .skip(skip.unwrap_or(0))
-        .take(limit.unwrap_or(usize::MAX));
-
-    let entries = cursor
-        .try_collect::<Vec<_>>()
-        .await
-        .map_err(|e| log_error_and_500(Box::new(e)))?;
-
-    Ok(Json(entries))
+    util::list_query::<Category>("categories", connection, limit, skip, filter, sort).await
 }
 
 #[openapi]
@@ -61,6 +51,8 @@ pub async fn delete(
     connection: &State<mongodb::Database>,
     id: String,
 ) -> Result<(), Status> {
+    // TODO: check that no rendered expenses reference this entry
+
     let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
     let collection = connection.collection::<Category>("categories");
     let entry = collection
@@ -77,6 +69,8 @@ pub async fn delete(
         .delete_one(doc! {"_id":id}, None)
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    // TODO: retrigger re-rendering (in another thread) due to "replaces" field
 
     Ok(())
 }
@@ -97,6 +91,8 @@ pub async fn create(
         .insert_one(&entry, None)
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    // TODO: retrigger re-rendering (in another thread) due to "replaces" field
 
     Ok(Json(entry))
 }
@@ -133,6 +129,8 @@ pub async fn update(
         )
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    // TODO: retrigger re-rendering (in another thread) due to "replaces" field
 
     Ok(Json(entry))
 }
