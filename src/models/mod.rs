@@ -14,7 +14,7 @@ use mongodb::bson::oid::ObjectId;
 use rocket_okapi::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(transparent)]
 pub struct ObjectIdWrapper(pub ObjectId);
 
@@ -26,15 +26,9 @@ impl Deref for ObjectIdWrapper {
     }
 }
 
-impl Default for ObjectIdWrapper {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}
-
-impl Into<ObjectId> for ObjectIdWrapper {
-    fn into(self) -> ObjectId {
-        self.0
+impl From<ObjectIdWrapper> for ObjectId {
+    fn from(o: ObjectIdWrapper) -> Self {
+        o.0
     }
 }
 

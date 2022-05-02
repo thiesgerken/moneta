@@ -1,7 +1,7 @@
 pub mod cli;
 pub mod models;
-pub mod web;
 pub mod queries;
+pub mod web;
 // pub mod rendering;
 // pub mod serialization;
 

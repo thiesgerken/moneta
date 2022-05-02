@@ -3,7 +3,7 @@ use rocket::http::Status;
 use std::error::Error;
 
 use futures::{StreamExt, TryStreamExt};
-use mongodb::bson::{self, doc, Document};
+use mongodb::bson::{self, Document};
 use mongodb::options::FindOptions;
 use rocket::serde::json::Json;
 use serde::de::DeserializeOwned;
@@ -39,7 +39,7 @@ where
         })?;
 
     let filter = if let Some(ov) = filter_overrides {
-        let mut f = filter.unwrap_or(doc!());
+        let mut f = filter.unwrap_or_default();
         f.extend(ov.into_iter());
         Some(f)
     } else {

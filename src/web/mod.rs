@@ -20,8 +20,8 @@ pub struct Config {
 
 pub async fn handle(config: Config, connection: mongodb::Database) {
     let limits = Limits::new()
-        .limit("forms", (64 as i32).kibibytes())
-        .limit("json", (10 as i32).mebibytes());
+        .limit("forms", 64_i32.kibibytes())
+        .limit("json", 10_i32.mebibytes());
 
     let mut rocket_config = rocket::config::Config::figment()
         .merge(("port", config.port))
