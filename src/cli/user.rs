@@ -1,4 +1,6 @@
 use crate::hash_password;
+use crate::models::rendering::RenderedBalance;
+use crate::models::rendering::RenderedExpense;
 use crate::models::*;
 use crate::queries;
 
@@ -147,11 +149,28 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             .expect("Could not obtain users");
 
         let mut table = Table::new();
-        table.add_row(row!["ID", "Name", "Full Name", "# Accounts", "# Expenses"]);
+        table.add_row(row![
+            "ID",
+            "Name",
+            "Full Name",
+            "# Accounts",
+            "# Categories",
+            "# Expenses",
+            "# Balances"
+        ]);
 
         while let Some(u) = user_cursor.try_next().await.expect("error loading user") {
-            // TODO: as soon as we have rendered expenses in the database: find all expenses for this user and print the count
-            let expense_count = "??";
+            let rexpense_collection = connection.collection::<RenderedExpense>("expenses_rendered");
+            let rexpense_count = rexpense_collection
+                .count_documents(doc! {"user_id": *u.id}, None)
+                .await
+                .expect("Could not obtain expenses of user");
+
+            let rbalance_collection = connection.collection::<RenderedBalance>("balances_rendered");
+            let rbalance_count = rbalance_collection
+                .count_documents(doc! {"user_id": *u.id}, None)
+                .await
+                .expect("Could not obtain balances of user");
 
             let account_collection = connection.collection::<Account>("accounts");
             let account_count = account_collection
@@ -159,12 +178,20 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
                 .await
                 .expect("Could not obtain accounts of user");
 
+            let category_collection = connection.collection::<Category>("categories");
+            let category_count = category_collection
+                .count_documents(doc! {"user_id": *u.id}, None)
+                .await
+                .expect("Could not obtain categories of user");
+
             table.add_row(row![
                 u.id,
                 u.name,
                 u.full_name,
                 account_count,
-                expense_count
+                category_count,
+                rexpense_count,
+                rbalance_count
             ]);
         }
 

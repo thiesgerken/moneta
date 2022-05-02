@@ -1,4 +1,4 @@
-// pub mod import;
+// pub mod import; // TODO: reintegrate importing
 pub mod serve;
 pub mod user;
 
@@ -7,7 +7,6 @@ use config::ConfigError;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-// build a clap::Command interface
 pub fn build() -> Command<'static> {
     Command::new(crate_name!())
         .version(crate_version!())
@@ -58,7 +57,7 @@ impl Default for Config {
 }
 
 // set default settings and load overrides from config files
-// files that are considered: basenames /etc/moneta/config and ./moneta
+// files that are considered: base names /etc/moneta/config and ./moneta
 // fails, if additional_file does not exist or cannot be read
 pub fn initialize_settings(
     additional_file: Option<&str>,
