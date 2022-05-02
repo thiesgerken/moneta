@@ -1,8 +1,8 @@
 pub mod accounts;
-pub mod categories;
-// pub mod balances;
-// pub mod expenses;
 pub mod authentication;
+pub mod balances;
+pub mod categories;
+pub mod expenses;
 pub mod static_files;
 pub mod user;
 mod util;
@@ -53,16 +53,16 @@ pub async fn handle(config: Config, connection: mongodb::Database) {
                 categories::delete,
                 categories::update,
                 categories::create,
-                // balances::list,
-                // balances::get,
-                // balances::delete,
-                // balances::update,
-                // balances::create,
-                // expenses::list,
-                // expenses::get,
-                // expenses::delete,
-                // expenses::update,
-                // expenses::create,
+                balances::list,
+                balances::get,
+                balances::delete,
+                balances::update,
+                balances::create,
+                expenses::list,
+                expenses::get,
+                expenses::delete,
+                expenses::update,
+                expenses::create,
             ],
         )
         .mount(

@@ -22,7 +22,7 @@ pub async fn list(
     filter: Option<String>,
     sort: Option<String>,
 ) -> Result<Json<Vec<Account>>, Status> {
-    util::list_query::<Account>("accounts", connection, limit, skip, filter, sort).await
+    util::list_query::<Account>("accounts", connection, limit, skip, filter, sort, None).await
 }
 
 #[openapi]

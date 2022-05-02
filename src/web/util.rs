@@ -3,7 +3,7 @@ use rocket::http::Status;
 use std::error::Error;
 
 use futures::{StreamExt, TryStreamExt};
-use mongodb::bson::{self, Document};
+use mongodb::bson::{self, doc, Document};
 use mongodb::options::FindOptions;
 use rocket::serde::json::Json;
 use serde::de::DeserializeOwned;
@@ -25,12 +25,11 @@ pub async fn list_query<T>(
     skip: Option<usize>,
     filter: Option<String>,
     sort: Option<String>,
+    filter_overrides: Option<Document>,
 ) -> Result<Json<Vec<T>>, Status>
 where
     T: DeserializeOwned + Unpin + Send + Sync,
 {
-    // TODO: some elements might need mandatory filtering by user id (expenses & balances)
-
     let filter = filter
         .map(|f| string_to_document(&f))
         .transpose()
@@ -38,6 +37,14 @@ where
             error!("Unable to parse filtering options: {}", e);
             Status::UnprocessableEntity
         })?;
+
+    let filter = if let Some(ov) = filter_overrides {
+        let mut f = filter.unwrap_or(doc!());
+        f.extend(ov.into_iter());
+        Some(f)
+    } else {
+        filter
+    };
 
     let sort = sort
         .map(|s| string_to_document(&s))

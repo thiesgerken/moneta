@@ -59,3 +59,21 @@ pub struct RenderedExpenseTransaction {
 
     pub calculated_amount: f64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderedBalance {
+    #[serde(rename = "_id", default)]
+    pub id: ObjectIdWrapper,
+
+    #[serde(default)]
+    pub user_id: ObjectIdWrapper,
+
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[schemars(with = "DateTime<Utc>")]
+    pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
+
+    pub account_id: ObjectIdWrapper,
+    pub amount: i64, // cents
+    pub comments: String,
+}
