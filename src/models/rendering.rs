@@ -18,9 +18,11 @@ pub struct RenderedExpense {
     pub description: String,
     pub comments: String,
 
-    // #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[schemars(with = "DateTime<Utc>")]
     pub booking_start: DateTime<Utc>,
-    // #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[schemars(with = "DateTime<Utc>")]
     pub booking_end: DateTime<Utc>,
 
     /// TODO: (not implemented yet)
@@ -48,7 +50,8 @@ pub struct RenderedExpense {
 #[serde(rename_all = "camelCase")]
 pub struct RenderedExpenseTransaction {
     pub account_id: ObjectIdWrapper,
-    // #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[schemars(with = "DateTime<Utc>")]
     pub date: DateTime<Utc>,
 
     pub amount: Option<i64>,

@@ -1,4 +1,4 @@
-// pub mod import; // TODO: reintegrate importing
+pub mod import;
 pub mod serve;
 pub mod user;
 
@@ -31,7 +31,7 @@ pub fn build() -> Command<'static> {
                 .help("database name [default: 'moneta']")
                 .value_name("name"))
         .subcommand(user::build())
-        // .subcommand(import::build())
+        .subcommand(import::build())
         .subcommand(serve::build())
 }
 

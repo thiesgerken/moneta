@@ -4,7 +4,7 @@ pub mod rendering;
 
 use std::ops::Deref;
 
-pub use account::{Account, AccountSynchronization};
+pub use account::{Account, AccountAvailability, AccountKind, AccountRisk, AccountSynchronization};
 pub use expense::{
     Expense, ExpenseCategorization, ExpensePosition, ExpenseReceipt, ExpenseTransaction,
 };
@@ -14,7 +14,7 @@ use mongodb::bson::oid::ObjectId;
 use rocket_okapi::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(transparent)]
 pub struct ObjectIdWrapper(pub ObjectId);
 
@@ -108,7 +108,8 @@ pub struct Balance {
 pub struct ChangelogEntry<T> {
     pub user_id: Option<ObjectIdWrapper>,
 
-    // #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[schemars(with = "DateTime<Utc>")]
     pub date: DateTime<Utc>,
 
     /// name of the program that was used to make the change (e.g. web app, CLI, ...)

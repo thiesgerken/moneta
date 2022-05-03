@@ -55,9 +55,11 @@ pub struct Account {
 
     // when the account was opened and possibly closed. Used to determine whether to hide the account or not.
     // at its opening, it is implicitly assumed that the account had a balance of zero.
-    // #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[schemars(with = "DateTime<Utc>")]
     pub opened: DateTime<Utc>,
-    // #[serde(with = "crate::queries::optional_chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::optional_chrono_datetime_as_bson_datetime")]
+    #[schemars(with = "Option<DateTime<Utc>>")]
     pub closed: Option<DateTime<Utc>>,
 
     // how to add balances of this account to the total balance, must be >0 and <=1
