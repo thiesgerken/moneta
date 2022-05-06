@@ -106,6 +106,7 @@ pub struct Balance {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangelogEntry<T> {
+    pub target_id: ObjectIdWrapper,
     pub user_id: Option<ObjectIdWrapper>,
 
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
