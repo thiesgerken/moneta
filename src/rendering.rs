@@ -1,4 +1,7 @@
-use crate::models::*;
+use crate::models::{
+    Account, AccountSynchronization, Balance, BalanceChangelogEntry, Expense,
+    ExpenseCategorization, ExpenseChangelogEntry, ExpenseTransaction,
+};
 
 use log::error;
 use serde::{Deserialize, Serialize};
@@ -7,33 +10,20 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RenderedAccount {
-    pub info: Account,
-    pub synchronization: Option<AccountSynchronization>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct RenderedExpense {
     pub info: Expense,
-    pub events: Vec<ExpenseEvent>,
-    pub receipts: Vec<ExpenseReceipt>,
-    pub categories: Vec<ExpenseCategory>,
+    pub user_id: ObjectId,
+    pub events: Vec<ExpenseChangelogEntry>,
+    pub categories: Vec<ExpenseCategorization>,
     pub transactions: Vec<ExpenseTransaction>,
-    pub positions: Vec<ExpensePosition>,
-    pub group: Option<ExpenseGroup>,
     pub total_amount: i64,
     pub calculated_amounts: Vec<i64>, // for each transaction
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RenderedCategory {
-    pub info: Category,
-    pub replaces: Vec<i32>,
+pub struct RenderedBalance {
+    pub info: Balance,
+    pub events: Vec<BalanceChangelogEntry>,
 }
-
-pub type RenderedBalance = Balance;
 
 impl RenderedBalance {
     pub fn render(
@@ -50,19 +40,6 @@ impl RenderedBalance {
         }
 
         balance
-    }
-}
-
-impl RenderedCategory {
-    pub fn render(category: Category, replaces: &[CategoryReplacement]) -> RenderedCategory {
-        RenderedCategory {
-            replaces: replaces
-                .iter()
-                .filter(|c| c.replacement == category.id)
-                .map(|c| c.original)
-                .collect(),
-            info: category,
-        }
     }
 }
 

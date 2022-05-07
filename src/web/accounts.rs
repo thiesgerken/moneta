@@ -1,119 +1,133 @@
-use crate::queries;
-use crate::rendering::RenderedAccount;
-use crate::web::user::UserId;
-use crate::web::util::log_error_and_500;
-use crate::web::DbConn;
+use std::str::FromStr;
 
+use crate::models::Account;
+use crate::web::authentication::CookieUserId;
+
+use super::util;
+use crate::web::util::log_error_and_500;
+use mongodb::bson::oid::ObjectId;
+use mongodb::bson::{self, doc};
 use rocket::http::Status;
 use rocket::serde::json::Json;
+use rocket::State;
+use rocket_okapi::openapi;
 
-#[get("/accounts?<offset>&<count>")]
+#[openapi]
+#[get("/accounts/list?<skip>&<limit>&<filter>&<sort>")]
 pub async fn list(
-    _uid: UserId,
-    connection: DbConn,
-    offset: Option<i32>,
-    count: Option<i32>,
-) -> Result<Json<Vec<RenderedAccount>>, Status> {
-    connection
-        .run(move |c| {
-            let accs = queries::accounts(c, offset, count)
-                .map_err(|e| log_error_and_500(Box::new(e)))?
-                .into_iter()
-                .map(|(account, syncing)| RenderedAccount {
-                    info: account,
-                    synchronization: syncing,
-                })
-                .collect();
-
-            Ok(Json(accs))
-        })
-        .await
+    _uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    limit: Option<usize>,
+    skip: Option<usize>,
+    filter: Option<String>,
+    sort: Option<String>,
+) -> Result<Json<Vec<Account>>, Status> {
+    util::list_query::<Account>("accounts", connection, limit, skip, filter, sort, None).await
 }
 
+#[openapi]
 #[get("/accounts/<id>")]
 pub async fn get(
-    _uid: UserId,
-    connection: DbConn,
-    id: i32,
-) -> Result<Json<RenderedAccount>, Status> {
-    connection
-        .run(move |c| {
-            let (account, syncing) = queries::account_by_id(c, id)
-                .map_err(|e| log_error_and_500(Box::new(e)))?
-                .ok_or(Status::NotFound)?;
-
-            Ok(Json(RenderedAccount {
-                info: account,
-                synchronization: syncing,
-            }))
-        })
+    _uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    id: String,
+) -> Result<Json<Account>, Status> {
+    let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
+    let collection = connection.collection::<Account>("accounts");
+    let entry = collection
+        .find_one(doc! {"_id":id}, None)
         .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .ok_or(Status::NotFound)?;
+
+    Ok(Json(entry))
 }
 
-// #[delete("/accounts/<id>")]
-// pub fn delete(uid: UserId, connection: DbConn, id: i32) -> Result<(), Status> {
-//     // let row_count = diesel::delete(
-//     //     accounts::table
-//     //         .filter(accounts::user_id.eq(*uid))
-//     //         .filter(accounts::id.eq(id)),
-//     // )
-//     // .execute(&*connection)
-//     // .map_err(|e| log_error_and_500(Box::new(e)))?;
+#[openapi]
+#[delete("/accounts/<id>")]
+pub async fn delete(
+    uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    id: String,
+) -> Result<(), Status> {
+    // TODO: check that no rendered expenses reference this entry (and that it is not synced)
 
-//     // if row_count == 0 {
-//     //     Err(Status::NotFound)
-//     // } else {
-//     //     info!("Deleted record {} from the account table", id);
-//     //     Ok(())
-//     // }
+    let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
+    let collection = connection.collection::<Account>("accounts");
+    let entry = collection
+        .find_one(doc! {"_id":id}, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .ok_or(Status::NotFound)?;
 
-//     todo!() // TODO
-// }
+    if *uid != *entry.id {
+        return Err(Status::Forbidden);
+    }
 
-// #[put("/accounts/<id>", data = "<account>")]
-// pub fn update(
-//     uid: UserId,
-//     connection: DbConn,
-//     id: i32,
-//     account: Json<Account>,
-// ) -> Result<(), Status> {
-//     // let mut acc = account.0;
-//     // acc.user_id = *uid;
+    collection
+        .delete_one(doc! {"_id":id}, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
 
-//     // let row_count = diesel::update(
-//     //     accounts::table
-//     //         .filter(accounts::id.eq(id))
-//     //         .filter(accounts::user_id.eq(*uid)),
-//     // )
-//     // .set(acc)
-//     // .execute(&*connection)
-//     // .map_err(|e| log_error_and_500(Box::new(e)))?;
+    Ok(())
+}
 
-//     // if row_count == 0 {
-//     //     Err(Status::NotFound)
-//     // } else {
-//     //     info!("updated record {} from the account table", id);
-//     //     Ok(())
-//     // }
+#[openapi]
+#[post("/accounts", data = "<account>")]
+pub async fn create(
+    uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    account: Json<Account>,
+) -> Result<Json<Account>, Status> {
+    let mut entry = account.clone();
+    entry.id = ObjectId::new().into();
+    entry.user_id = (*uid).into();
+    entry.synchronization = None;
 
-//     todo!() // TODO
-// }
+    let collection = connection.collection::<Account>("accounts");
+    collection
+        .insert_one(&entry, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
 
-// #[post("/accounts", data = "<account>")]
-// pub fn create(
-//     uid: UserId,
-//     connection: DbConn,
-//     account: Json<NewAccount>,
-// ) -> Result<Json<Account>, Status> {
-//     // let mut acc = account.0;
-//     // acc.user_id = *uid;
+    Ok(Json(entry))
+}
 
-//     // let t: Account = diesel::insert_into(crate::schema::accounts::table)
-//     //     .values(&acc)
-//     //     .get_result(&*connection)
-//     //     .map_err(|e| log_error_and_500(Box::new(e)))?;
+#[openapi]
+#[put("/accounts/<id>", data = "<account>")]
+pub async fn update(
+    uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    id: String,
+    account: Json<Account>,
+) -> Result<Json<Account>, Status> {
+    let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
+    let collection = connection.collection::<Account>("accounts");
+    let original_entry = collection
+        .find_one(doc! {"_id":id}, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .ok_or(Status::NotFound)?;
 
-//     // Ok(Json(t))
+    if *uid != *original_entry.id {
+        return Err(Status::Forbidden);
+    }
 
-//     todo!() // TODO
-// }
+    // TODO: need to update the CLI for CRUD on account synchronizations
+
+    let mut entry = account.clone();
+    entry.id = original_entry.id;
+    entry.user_id = original_entry.user_id;
+    entry.synchronization = original_entry.synchronization;
+
+    collection
+        .update_one(
+            doc! {"_id":id},
+            doc! {"$set":  bson::to_bson(&entry).unwrap()},
+            None,
+        )
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    Ok(Json(entry))
+}

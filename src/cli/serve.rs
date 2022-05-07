@@ -1,12 +1,12 @@
 use crate::web;
 
 use clap::ArgMatches;
-use clap::{App, Arg};
+use clap::{Arg, Command};
 use rocket::config::LogLevel;
 use serde::{Deserialize, Serialize};
 
-pub fn build() -> App<'static> {
-    App::new("serve")
+pub fn build() -> Command<'static> {
+    Command::new("serve")
     .about("serve web interface")
     .arg(
       Arg::new("port")
@@ -48,9 +48,9 @@ impl Default for Config {
 }
 
 pub async fn handle(
+    connection: mongodb::Database,
     sub_matches: &ArgMatches,
     mut config: Config,
-    database: String,
     verbosity: i64,
 ) {
     if let Some(y) = sub_matches.value_of("port") {
@@ -71,16 +71,18 @@ pub async fn handle(
         _ => LogLevel::Debug,
     };
 
-    web::handle(web::Config {
-        port: config.port as u16,
-        address: config.address,
-        secret_key: if config.secret_key.is_empty() {
-            None
-        } else {
-            Some(config.secret_key)
+    web::handle(
+        web::Config {
+            port: config.port as u16,
+            address: config.address,
+            secret_key: if config.secret_key.is_empty() {
+                None
+            } else {
+                Some(config.secret_key)
+            },
+            log_level: level,
         },
-        log_level: level,
-        database_url: database,
-    })
+        connection,
+    )
     .await;
 }

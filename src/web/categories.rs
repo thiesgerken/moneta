@@ -1,84 +1,136 @@
-use crate::models::*;
-use crate::rendering::RenderedCategory;
-use crate::schema::*;
-use crate::web::user::UserId;
-use crate::web::DbConn;
+use std::str::FromStr;
+
+use crate::models::Category;
+use crate::web::authentication::CookieUserId;
 
 use crate::web::util::log_error_and_500;
-use diesel::prelude::*;
+use mongodb::bson::oid::ObjectId;
+use mongodb::bson::{self, doc};
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket_sync_db_pools::diesel;
+use rocket::State;
+use rocket_okapi::openapi;
 
-#[get("/categories")]
-pub async fn list(_uid: UserId, connection: DbConn) -> Result<Json<Vec<RenderedCategory>>, Status> {
-    connection
-        .run(move |c| {
-            let cs = categories::table
-                .load::<Category>(c)
-                .map_err(|e| log_error_and_500(Box::new(e)))?;
-            let repl = category_replacements::table
-                .load::<CategoryReplacement>(c)
-                .map_err(|e| log_error_and_500(Box::new(e)))?;
+use super::util;
 
-            Ok(Json(
-                cs.into_iter()
-                    .map(|c| RenderedCategory::render(c, &repl))
-                    .collect(),
-            ))
-        })
-        .await
+#[openapi]
+#[get("/categories/list?<skip>&<limit>&<filter>&<sort>")]
+pub async fn list(
+    _uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    limit: Option<usize>,
+    skip: Option<usize>,
+    filter: Option<String>,
+    sort: Option<String>,
+) -> Result<Json<Vec<Category>>, Status> {
+    util::list_query::<Category>("categories", connection, limit, skip, filter, sort, None).await
 }
 
+#[openapi]
 #[get("/categories/<id>")]
 pub async fn get(
-    _uid: UserId,
-    connection: DbConn,
-    id: i32,
-) -> Result<Json<RenderedCategory>, Status> {
-    connection
-        .run(move |c| {
-            let cs = categories::table
-                .filter(categories::id.eq(id))
-                .left_join(
-                    category_replacements::table
-                        .on(categories::id.eq(category_replacements::original)),
-                )
-                .load::<(Category, Option<CategoryReplacement>)>(c)
-                .map_err(|e| log_error_and_500(Box::new(e)))?;
-
-            if let Some((cat, _)) = cs.get(0) {
-                let cat = cat.clone();
-                let repl = cs.into_iter().filter_map(|(_, r)| r).collect::<Vec<_>>();
-
-                Ok(Json(RenderedCategory::render(cat, &repl)))
-            } else {
-                Err(Status::NotFound)
-            }
-        })
+    _uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    id: String,
+) -> Result<Json<Category>, Status> {
+    let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
+    let collection = connection.collection::<Category>("categories");
+    let entry = collection
+        .find_one(doc! {"_id":id}, None)
         .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .ok_or(Status::NotFound)?;
+
+    Ok(Json(entry))
 }
 
-// #[delete("/balances/<id>")]
-// pub fn delete(uid: UserId, connection: DbConn, id: i32) -> Result<(), Status> {
-//     todo!() // TODO
-// }
+#[openapi]
+#[delete("/categories/<id>")]
+pub async fn delete(
+    uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    id: String,
+) -> Result<(), Status> {
+    // TODO: check that no rendered expenses reference this entry
 
-// #[put("/balances/<id>", data = "<balances>")]
-// pub fn update(
-//     uid: UserId,
-//     connection: DbConn,
-//     id: i32,
-//     account: Json<RenderedBalance>,
-// ) -> Result<(), Status> {
-//     todo!() // TODO
-// }
+    let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
+    let collection = connection.collection::<Category>("categories");
+    let entry = collection
+        .find_one(doc! {"_id":id}, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .ok_or(Status::NotFound)?;
 
-// #[post("/balances", data = "<balances>")]
-// pub fn create(
-//     uid: UserId,
-//     connection: DbConn,
-//     account: Json<NewBalance>,
-// ) -> Result<Json<RenderedBalance>, Status> {
-//     todo!() // TODO
-// }
+    if *uid != *entry.id {
+        return Err(Status::Forbidden);
+    }
+
+    collection
+        .delete_one(doc! {"_id":id}, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    // TODO: retrigger re-rendering (in another thread) due to "replaces" field
+
+    Ok(())
+}
+
+#[openapi]
+#[post("/categories", data = "<category>")]
+pub async fn create(
+    uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    category: Json<Category>,
+) -> Result<Json<Category>, Status> {
+    let mut entry = category.clone();
+    entry.id = ObjectId::new().into();
+    entry.user_id = (*uid).into();
+
+    let collection = connection.collection::<Category>("categories");
+    collection
+        .insert_one(&entry, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    // TODO: retrigger re-rendering (in another thread) due to "replaces" field
+
+    Ok(Json(entry))
+}
+
+#[openapi]
+#[put("/categories/<id>", data = "<category>")]
+pub async fn update(
+    uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    id: String,
+    category: Json<Category>,
+) -> Result<Json<Category>, Status> {
+    let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
+    let collection = connection.collection::<Category>("categories");
+    let original_entry = collection
+        .find_one(doc! {"_id":id}, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .ok_or(Status::NotFound)?;
+
+    if *uid != *original_entry.id {
+        return Err(Status::Forbidden);
+    }
+
+    let mut entry = category.clone();
+    entry.id = original_entry.id;
+    entry.user_id = original_entry.user_id;
+
+    collection
+        .update_one(
+            doc! {"_id":id},
+            doc! {"$set":  bson::to_bson(&entry).unwrap()},
+            None,
+        )
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    // TODO: retrigger re-rendering (in another thread) due to "replaces" field
+
+    Ok(Json(entry))
+}

@@ -3,3 +3,4 @@
 /.vscode
 moneta.toml
 vapid.pem
+moneydb-export.json

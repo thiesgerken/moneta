@@ -1,15 +1,15 @@
 use moneta::cli;
 
-use clap::{crate_authors, crate_name, crate_version, App, Arg, ArgGroup};
+use clap::{crate_authors, crate_name, crate_version, Arg, ArgGroup, Command};
 use clap_complete::{generate, Generator, Shell};
 use std::io;
 
-fn print_completions<G: Generator>(gen: G, app: &mut App) {
+fn print_completions<G: Generator>(gen: G, app: &mut Command) {
     generate(gen, app, app.get_name().to_string(), &mut io::stdout());
 }
 
 fn main() {
-    let matches = App::new(crate_name!())
+    let matches = Command::new(crate_name!())
         .version(crate_version!())
         .author(crate_authors!())
         .about("Generator of useful files for the distribution of moneta")

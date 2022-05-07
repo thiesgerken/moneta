@@ -1,57 +1,32 @@
-use crate::models::*;
-use crate::schema::*;
-use crate::verify_password;
-use crate::web::DbConn;
+use crate::models::{ObjectIdWrapper, User};
+use crate::web::authentication;
+use crate::{queries, verify_password};
 
-use diesel::prelude::*;
+use futures::{StreamExt, TryStreamExt};
 use log::{info, warn};
-use rocket::http::{Cookie, CookieJar, Status};
-use rocket::request::{FromRequest, Outcome};
+use mongodb::bson::doc;
+use rocket::http::{CookieJar, Status};
 use rocket::serde::json::Json;
-use rocket::Request;
-use rocket_sync_db_pools::diesel;
+use rocket::State;
+use rocket_okapi::{openapi, JsonSchema};
 use serde::{Deserialize, Serialize};
-use std::ops::Deref;
 
-impl Deref for UserId {
-    type Target = i32;
+use super::authentication::CookieUserId;
+use super::util::log_error_and_500;
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-pub struct UserId(pub i32);
-
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for UserId {
-    type Error = ();
-
-    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        let id = request
-            .cookies()
-            .get_private("user_id")
-            .and_then(|c| c.value().parse().ok());
-
-        match id {
-            Some(id) => Outcome::Success(UserId(id)),
-            None => Outcome::Failure((Status::Unauthorized, ())),
-        }
-    }
-}
-
-#[derive(Serialize)]
+#[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInfo {
-    id: i32,
+    #[serde(rename = "_id")]
+    id: ObjectIdWrapper,
     name: String,
     full_name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginData {
-    user_name: String,
+    user: String,
     password: String,
 }
 
@@ -65,76 +40,81 @@ impl UserInfo {
     }
 }
 
+#[openapi]
 #[get("/user")]
-pub async fn info(uid: UserId, connection: DbConn) -> Option<Json<UserInfo>> {
-    connection
-        .run(move |c| {
-            users::table
-                .find(*uid)
-                .first(c)
-                .map(|u| Json(UserInfo::new(u)))
-                .ok()
-        })
+pub async fn info(
+    uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+) -> Result<Json<UserInfo>, Status> {
+    let user = queries::query_element_by_id(connection, "users", *uid)
         .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .ok_or(Status::InternalServerError)?;
+
+    Ok(Json(UserInfo::new(user)))
 }
 
+#[openapi]
 #[get("/user/logout")]
 pub fn logout(cookies: &CookieJar) -> Status {
-    cookies.remove_private(Cookie::named("user_id"));
+    authentication::remove_cookie(cookies);
     Status::Ok
 }
 
+#[openapi]
 #[post("/user/login", data = "<login>")]
 pub async fn login(
-    connection: DbConn,
+    connection: &State<mongodb::Database>,
     cookies: &CookieJar<'_>,
     login: Json<LoginData>,
 ) -> Result<Json<UserInfo>, Status> {
-    use crate::schema::users::dsl::*;
-    let user_name = login.user_name.clone();
-    let u: Result<User, _> = connection
-        .run(move |c| users.filter(name.eq(user_name)).first(c))
-        .await;
-
-    match u {
-        Ok(u) => {
-            if verify_password(&login.password, &u.hash) {
-                info!("Successful login with username '{}'", &login.user_name);
-                cookies.add_private(Cookie::new("user_id", u.id.to_string()));
-
-                Ok(Json(UserInfo::new(u)))
-            } else {
-                warn!(
-                    "Attempt to login with wrong password for user '{}'",
-                    &login.user_name
-                );
-
-                Err(Status::Unauthorized)
-            }
-        }
-        _ => {
+    if let Some(user) = queries::query_user_by_name(connection, &login.user)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+    {
+        if verify_password(&login.password, &user.password_hash) {
+            info!("Successful login with username '{}'", &login.user);
+            authentication::add_cookie(cookies, &user);
+            Ok(Json(UserInfo::new(user)))
+        } else {
             warn!(
-                "Attempt to login with non-existing username '{}'",
-                &login.user_name
+                "Attempt to login with wrong password for user '{}'",
+                &login.user
             );
 
             Err(Status::Unauthorized)
         }
+    } else {
+        warn!(
+            "Attempt to login with non-existing username '{}'",
+            &login.user
+        );
+
+        Err(Status::Unauthorized)
     }
 }
 
-#[get("/user/list")]
-pub async fn list(_uid: UserId, connection: DbConn) -> Option<Json<Vec<UserInfo>>> {
-    connection
-        .run(|c| {
-            Some(Json(
-                users::table
-                    .load::<User>(c)
-                    .ok()?
-                    .into_iter()
-                    .map(UserInfo::new)
-                    .collect::<Vec<_>>(),
-            ))
-        })
+#[openapi]
+#[get("/user/list?<skip>&<limit>")]
+pub async fn list(
+    _uid: CookieUserId,
+    connection: &State<mongodb::Database>,
+    limit: Option<usize>,
+    skip: Option<usize>,
+) -> Result<Json<Vec<UserInfo>>, Status> {
+    let collection = connection.collection::<User>("users");
+    let cursor = collection
+        .find(None, None)
         .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .skip(skip.unwrap_or(0))
+        .take(limit.unwrap_or(usize::MAX));
+
+    let users = cursor
+        .and_then(|u| async { Ok(UserInfo::new(u)) })
+        .try_collect::<Vec<_>>()
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    Ok(Json(users))
 }

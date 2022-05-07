@@ -1,418 +1,60 @@
-use crate::models::*;
-use crate::schema::*;
+use mongodb::bson::{doc, oid::ObjectId};
+use serde::de::DeserializeOwned;
 
-use diesel::prelude::*;
+use crate::models::User;
 
-pub fn accounts(
-    connection: &PgConnection,
-    offset: Option<i32>,
-    limit: Option<i32>,
-) -> Result<Vec<(Account, Option<AccountSynchronization>)>, diesel::result::Error> {
-    accounts::table
-        .left_join(
-            account_synchronizations::table.on(accounts::id
-                .eq(account_synchronizations::account1)
-                .or(accounts::id.eq(account_synchronizations::account2))),
-        )
-        .order(accounts::id)
-        .limit(limit.unwrap_or(i32::MAX) as i64)
-        .offset(offset.unwrap_or(0) as i64)
-        .load::<(Account, Option<AccountSynchronization>)>(connection)
+pub mod optional_chrono_datetime_as_bson_datetime {
+    use chrono::Utc;
+    use mongodb::bson;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::result::Result;
+
+    /// Deserializes a [`Option<chrono::DateTime>`] from a [`Option<crate::DateTime>`].
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<chrono::DateTime<Utc>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if let Ok(datetime) = bson::DateTime::deserialize(deserializer) {
+            Ok(Some(datetime.to_chrono()))
+        } else {
+            // NOTE: this implementation simply returns `None` whenever the value present
+            // cannot be parsed as a datetime; this might not be the best behavior
+            Ok(None)
+        }
+    }
+
+    /// Serializes a [`Option<chrono::DateTime>`] as a [`Option<crate::DateTime>`].
+    pub fn serialize<S: Serializer>(
+        val: &Option<chrono::DateTime<Utc>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        if let Some(val) = val {
+            let datetime = bson::DateTime::from_chrono(val.to_owned());
+            datetime.serialize(serializer)
+        } else {
+            bson::Bson::Null.serialize(serializer)
+        }
+    }
 }
 
-pub fn account_by_id(
-    connection: &PgConnection,
-    id: i32,
-) -> Result<Option<(Account, Option<AccountSynchronization>)>, diesel::result::Error> {
-    accounts::table
-        .filter(accounts::id.eq(id))
-        .left_join(
-            account_synchronizations::table.on(accounts::id
-                .eq(account_synchronizations::account1)
-                .or(accounts::id.eq(account_synchronizations::account2))),
-        )
-        .get_result::<(Account, Option<AccountSynchronization>)>(connection)
-        .optional()
-}
-
-pub fn relevant_balances(
-    connection: &PgConnection,
-    user_id: i32,
-    offset: Option<i64>,
-    limit: Option<i64>,
-) -> Result<Vec<(Balance, Option<AccountSynchronization>)>, diesel::result::Error> {
-    balances::table
-        .left_join(
-            account_synchronizations::table.on(balances::account_id
-                .eq(account_synchronizations::account1)
-                .or(balances::account_id.eq(account_synchronizations::account2))),
-        )
-        .left_join(accounts::table.on(accounts::id.eq(balances::account_id)))
-        .filter(
-            accounts::user_id
-                .eq(user_id)
-                .or(account_synchronizations::user1.eq(user_id))
-                .or(account_synchronizations::user2.eq(user_id)),
-        )
-        .distinct()
-        .select((
-            balances::all_columns,
-            account_synchronizations::all_columns.nullable(),
-        ))
-        .limit(limit.unwrap_or(i64::MAX))
-        .offset(offset.unwrap_or(0))
-        .load::<(Balance, Option<AccountSynchronization>)>(connection)
-}
-
-pub fn relevant_balance_by_id(
-    connection: &PgConnection,
-    user_id: i32,
-    id: i32,
-) -> Result<Option<(Balance, Option<AccountSynchronization>)>, diesel::result::Error> {
-    balances::table
-        .left_join(
-            account_synchronizations::table.on((account_synchronizations::account1
-                .eq(balances::account_id)
-                .and(account_synchronizations::user1.ne(user_id)))
-            .or(account_synchronizations::account2
-                .eq(balances::account_id)
-                .and(account_synchronizations::user2.ne(user_id)))),
-        )
-        .left_join(accounts::table.on(accounts::id.eq(balances::account_id)))
-        .filter(
-            accounts::user_id
-                .eq(user_id)
-                .or(account_synchronizations::user1.eq(user_id))
-                .or(account_synchronizations::user2.eq(user_id)),
-        )
-        .filter(balances::id.eq(id))
-        .distinct()
-        .select((
-            balances::all_columns,
-            account_synchronizations::all_columns.nullable(),
-        ))
-        .get_result::<(Balance, Option<AccountSynchronization>)>(connection)
-        .optional()
-}
-
-pub fn relevant_expenses(
-    connection: &PgConnection,
-    user_id: i32,
-    offset: Option<i64>,
-    limit: Option<i64>,
-) -> Result<Vec<Expense>, diesel::result::Error> {
-    expenses::table
-        .select(expenses::all_columns)
-        .distinct()
-        .left_join(
-            expense_transactions::table.on(expense_transactions::expense_id.eq(expenses::id)),
-        )
-        .left_join(
-            account_synchronizations::table.on(expense_transactions::account_id
-                .eq(account_synchronizations::account1)
-                .or(expense_transactions::account_id.eq(account_synchronizations::account2))),
-        )
-        .left_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
-        .filter(
-            accounts::user_id
-                .eq(user_id)
-                .or(account_synchronizations::user1.eq(user_id))
-                .or(account_synchronizations::user2.eq(user_id)),
-        )
-        .limit(limit.unwrap_or(i64::MAX))
-        .offset(offset.unwrap_or(0))
-        .load::<Expense>(connection)
-}
-
-pub fn relevant_expense_by_id(
-    connection: &PgConnection,
-    user_id: i32,
-    id: i32,
-) -> Result<Option<Expense>, diesel::result::Error> {
-    expenses::table
-        .select(expenses::all_columns)
-        .distinct()
-        .left_join(
-            expense_transactions::table.on(expense_transactions::expense_id.eq(expenses::id)),
-        )
-        .left_join(
-            account_synchronizations::table.on(expense_transactions::account_id
-                .eq(account_synchronizations::account1)
-                .or(expense_transactions::account_id.eq(account_synchronizations::account2))),
-        )
-        .left_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
-        .filter(
-            accounts::user_id
-                .eq(user_id)
-                .or(account_synchronizations::user1.eq(user_id))
-                .or(account_synchronizations::user2.eq(user_id)),
-        )
-        .filter(expenses::id.eq(id))
-        .get_result::<Expense>(connection)
-        .optional()
-}
-
-pub fn expense_transactions_by_expense_id(
-    connection: &PgConnection,
-    user_id: i32,
-    expense_id: i32,
-) -> Result<Vec<(ExpenseTransaction, Account, Option<AccountSynchronization>)>, diesel::result::Error>
+pub async fn query_element_by_id<T>(
+    connection: &mongodb::Database,
+    collection: &str,
+    id: ObjectId,
+) -> Result<Option<T>, mongodb::error::Error>
+where
+    T: DeserializeOwned + Unpin + Send + Sync,
 {
-    expense_transactions::table
-        .inner_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
-        .left_join(
-            account_synchronizations::table.on((account_synchronizations::account1
-                .eq(expense_transactions::account_id)
-                .and(account_synchronizations::user1.ne(user_id)))
-            .or(account_synchronizations::account2
-                .eq(expense_transactions::account_id)
-                .and(account_synchronizations::user2.ne(user_id)))),
-        )
-        .filter(expense_transactions::expense_id.eq(expense_id))
-        .load::<(ExpenseTransaction, Account, Option<AccountSynchronization>)>(connection)
+    let collection = connection.collection::<T>(collection);
+    let filter = doc! {"_id":id};
+    collection.find_one(filter, None).await
 }
 
-pub fn expense_categories_by_expense_id(
-    connection: &PgConnection,
-    user_id: i32,
-    expense_id: i32,
-) -> Result<Vec<(ExpenseCategory, Option<CategoryReplacement>)>, diesel::result::Error> {
-    expense_categories::table
-        .inner_join(categories::table.on(categories::id.eq(expense_categories::category_id)))
-        .left_join(
-            category_replacements::table.on(category_replacements::original
-                .eq(categories::id)
-                .and(category_replacements::user_id.eq(user_id))),
-        )
-        .filter(expense_categories::expense_id.eq(expense_id))
-        .select((
-            expense_categories::all_columns,
-            category_replacements::all_columns.nullable(),
-        ))
-        .load::<(ExpenseCategory, Option<CategoryReplacement>)>(connection)
-}
-
-// needed data for expenses returned by `relevant_expenses`
-pub fn expense_categories_by_expense_range(
-    connection: &PgConnection,
-    user_id: i32,
-    offset: Option<i64>,
-    limit: Option<i64>,
-) -> Result<Vec<(ExpenseCategory, Option<CategoryReplacement>)>, diesel::result::Error> {
-    expenses::table
-        .left_join(
-            expense_transactions::table.on(expense_transactions::expense_id.eq(expenses::id)),
-        )
-        .left_join(
-            account_synchronizations::table.on(expense_transactions::account_id
-                .eq(account_synchronizations::account1)
-                .or(expense_transactions::account_id.eq(account_synchronizations::account2))),
-        )
-        .left_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
-        .filter(
-            accounts::user_id
-                .eq(user_id)
-                .or(account_synchronizations::user1.eq(user_id))
-                .or(account_synchronizations::user2.eq(user_id)),
-        )
-        .limit(limit.unwrap_or(i64::MAX))
-        .offset(offset.unwrap_or(0))
-        .inner_join(expense_categories::table.on(expense_categories::expense_id.eq(expenses::id)))
-        .inner_join(categories::table.on(categories::id.eq(expense_categories::category_id)))
-        .left_join(
-            category_replacements::table.on(category_replacements::original
-                .eq(categories::id)
-                .and(category_replacements::user_id.eq(user_id))),
-        )
-        .select((
-            expense_categories::all_columns,
-            category_replacements::all_columns.nullable(),
-        ))
-        .distinct()
-        .order_by(expense_categories::expense_id.asc())
-        .load::<(ExpenseCategory, Option<CategoryReplacement>)>(connection)
-}
-
-// needed data for expenses returned by `relevant_expenses`
-// NOTE: this works for small counts, but might not work when requesting all expense transactions!
-pub fn expense_transactions_by_expense_range(
-    connection: &PgConnection,
-    user_id: i32,
-    offset: Option<i64>,
-    limit: Option<i64>,
-) -> Result<Vec<(ExpenseTransaction, Account, Option<AccountSynchronization>)>, diesel::result::Error>
-{
-    let expenses = relevant_expenses(connection, user_id, offset, limit)?;
-
-    expense_transactions::table
-        .inner_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
-        .left_join(
-            account_synchronizations::table.on((account_synchronizations::account1
-                .eq(expense_transactions::account_id)
-                .and(account_synchronizations::user1.ne(user_id)))
-            .or(account_synchronizations::account2
-                .eq(expense_transactions::account_id)
-                .and(account_synchronizations::user2.ne(user_id)))),
-        )
-        .order(expense_transactions::expense_id.asc())
-        .filter(
-            expense_transactions::expense_id
-                .eq_any(expenses.into_iter().map(|e| e.id).collect::<Vec<_>>()),
-        )
-        .order_by(expense_transactions::expense_id.asc())
-        .load::<(ExpenseTransaction, Account, Option<AccountSynchronization>)>(connection)
-}
-
-// needed data for expenses returned by `relevant_expenses`
-pub fn expense_events_by_expense_range(
-    connection: &PgConnection,
-    user_id: i32,
-    offset: Option<i64>,
-    limit: Option<i64>,
-) -> Result<Vec<ExpenseEvent>, diesel::result::Error> {
-    expenses::table
-        .left_join(
-            expense_transactions::table.on(expense_transactions::expense_id.eq(expenses::id)),
-        )
-        .left_join(
-            account_synchronizations::table.on(expense_transactions::account_id
-                .eq(account_synchronizations::account1)
-                .or(expense_transactions::account_id.eq(account_synchronizations::account2))),
-        )
-        .left_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
-        .filter(
-            accounts::user_id
-                .eq(user_id)
-                .or(account_synchronizations::user1.eq(user_id))
-                .or(account_synchronizations::user2.eq(user_id)),
-        )
-        .limit(limit.unwrap_or(i64::MAX))
-        .offset(offset.unwrap_or(0))
-        .inner_join(expense_events::table.on(expense_events::expense_id.eq(expenses::id)))
-        .select(expense_events::all_columns)
-        .distinct()
-        .order_by(expense_events::expense_id.asc())
-        .load::<ExpenseEvent>(connection)
-}
-
-// needed data for expenses returned by `relevant_expenses`
-pub fn expense_positions_by_expense_range(
-    connection: &PgConnection,
-    user_id: i32,
-    offset: Option<i64>,
-    limit: Option<i64>,
-) -> Result<Vec<ExpensePosition>, diesel::result::Error> {
-    expenses::table
-        .left_join(
-            expense_transactions::table.on(expense_transactions::expense_id.eq(expenses::id)),
-        )
-        .left_join(
-            account_synchronizations::table.on(expense_transactions::account_id
-                .eq(account_synchronizations::account1)
-                .or(expense_transactions::account_id.eq(account_synchronizations::account2))),
-        )
-        .left_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
-        .filter(
-            accounts::user_id
-                .eq(user_id)
-                .or(account_synchronizations::user1.eq(user_id))
-                .or(account_synchronizations::user2.eq(user_id)),
-        )
-        .limit(limit.unwrap_or(i64::MAX))
-        .offset(offset.unwrap_or(0))
-        .inner_join(expense_positions::table.on(expense_positions::expense_id.eq(expenses::id)))
-        .select(expense_positions::all_columns)
-        .distinct()
-        .order_by(expense_positions::expense_id.asc())
-        .load::<ExpensePosition>(connection)
-}
-
-// needed data for expenses returned by `relevant_expenses`
-pub fn expense_groups_by_expense_range(
-    connection: &PgConnection,
-    user_id: i32,
-    offset: Option<i64>,
-    limit: Option<i64>,
-) -> Result<Vec<ExpenseGroup>, diesel::result::Error> {
-    expenses::table
-        .left_join(
-            expense_transactions::table.on(expense_transactions::expense_id.eq(expenses::id)),
-        )
-        .left_join(
-            account_synchronizations::table.on(expense_transactions::account_id
-                .eq(account_synchronizations::account1)
-                .or(expense_transactions::account_id.eq(account_synchronizations::account2))),
-        )
-        .left_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
-        .filter(
-            accounts::user_id
-                .eq(user_id)
-                .or(account_synchronizations::user1.eq(user_id))
-                .or(account_synchronizations::user2.eq(user_id)),
-        )
-        .limit(limit.unwrap_or(i64::MAX))
-        .offset(offset.unwrap_or(0))
-        .inner_join(expense_groups::table.on(expense_groups::id.nullable().eq(expenses::group_id)))
-        .select(expense_groups::all_columns)
-        .distinct()
-        .order_by(expense_groups::id.asc())
-        .load::<ExpenseGroup>(connection)
-}
-
-// needed data for expenses returned by `relevant_expenses`
-pub fn expense_receipts_by_expense_range(
-    connection: &PgConnection,
-    user_id: i32,
-    offset: Option<i64>,
-    limit: Option<i64>,
-) -> Result<Vec<ExpenseReceipt>, diesel::result::Error> {
-    expenses::table
-        .left_join(
-            expense_transactions::table.on(expense_transactions::expense_id.eq(expenses::id)),
-        )
-        .left_join(
-            account_synchronizations::table.on(expense_transactions::account_id
-                .eq(account_synchronizations::account1)
-                .or(expense_transactions::account_id.eq(account_synchronizations::account2))),
-        )
-        .left_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
-        .filter(
-            accounts::user_id
-                .eq(user_id)
-                .or(account_synchronizations::user1.eq(user_id))
-                .or(account_synchronizations::user2.eq(user_id)),
-        )
-        .limit(limit.unwrap_or(i64::MAX))
-        .offset(offset.unwrap_or(0))
-        .inner_join(expense_receipts::table.on(expense_receipts::expense_id.eq(expenses::id)))
-        .select(expense_receipts::all_columns)
-        .distinct()
-        .order_by(expense_receipts::expense_id.asc())
-        .load::<ExpenseReceipt>(connection)
-}
-
-pub fn relevant_transactions(
-    connection: &PgConnection,
-    user_id: i32,
-) -> Result<Vec<ExpenseTransaction>, diesel::result::Error> {
-    expenses::table
-        .left_join(
-            expense_transactions::table.on(expense_transactions::expense_id.eq(expenses::id)),
-        )
-        .left_join(
-            account_synchronizations::table.on(expense_transactions::account_id
-                .eq(account_synchronizations::account1)
-                .or(expense_transactions::account_id.eq(account_synchronizations::account2))),
-        )
-        .left_join(accounts::table.on(accounts::id.eq(expense_transactions::account_id)))
-        .filter(
-            accounts::user_id
-                .eq(user_id)
-                .or(account_synchronizations::user1.eq(user_id))
-                .or(account_synchronizations::user2.eq(user_id)),
-        )
-        .select(expense_transactions::all_columns)
-        .distinct()
-        .order_by(expense_transactions::expense_id.asc())
-        .load::<ExpenseTransaction>(connection)
+pub async fn query_user_by_name(
+    connection: &mongodb::Database,
+    user_name: &str,
+) -> Result<Option<User>, mongodb::error::Error> {
+    let collection = connection.collection::<User>("users");
+    let filter = doc! {"name":user_name};
+    collection.find_one(filter, None).await
 }

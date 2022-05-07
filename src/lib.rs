@@ -1,17 +1,9 @@
 pub mod cli;
-pub mod enums;
+pub mod import;
 pub mod models;
 pub mod queries;
-pub mod rendering;
-pub mod schema;
-pub mod serialization;
 pub mod web;
-
-#[macro_use]
-extern crate diesel;
-
-#[macro_use]
-extern crate diesel_migrations;
+// pub mod rendering;
 
 #[macro_use]
 extern crate rocket;
@@ -20,19 +12,7 @@ extern crate rocket;
 extern crate rust_embed;
 
 use argonautica::{Hasher, Verifier};
-use diesel::pg::PgConnection;
-use diesel::prelude::*;
-use log::info;
 use simplelog::{ColorChoice, LevelFilter, SimpleLogger, TermLogger, TerminalMode};
-use std::error::Error;
-
-embed_migrations!();
-
-pub fn connect(database_url: &str) -> Result<PgConnection, Box<dyn Error>> {
-    let conn = PgConnection::establish(database_url)?;
-    embedded_migrations::run_with_output(&conn, &mut std::io::stdout())?;
-    Ok(conn)
-}
 
 pub fn verify_password(pw: &str, hash: &str) -> bool {
     Verifier::default()
@@ -60,13 +40,11 @@ pub fn initialize_logging(verbosity: u32) {
     };
 
     let mut log_config = simplelog::ConfigBuilder::new();
-    log_config.set_time_format_str("");
 
     // log_config.add_filter_ignore_str("html5ever");
     // log_config.add_filter_ignore_str("hyper");
     // log_config.add_filter_ignore_str("reqwest");
     // log_config.add_filter_ignore_str("selectors");
-
     // log_config.add_filter_allow_str("moneta");
 
     if let Err(e) = TermLogger::init(
@@ -82,4 +60,16 @@ pub fn initialize_logging(verbosity: u32) {
             e
         );
     }
+}
+
+pub async fn connect(
+    database_url: &str,
+    database_name: &str,
+    app_name: &str,
+) -> Result<mongodb::Database, mongodb::error::Error> {
+    let mut client_options = mongodb::options::ClientOptions::parse(database_url).await?;
+    client_options.app_name = Some(app_name.to_owned());
+
+    let client = mongodb::Client::with_options(client_options)?;
+    Ok(client.database(database_name))
 }

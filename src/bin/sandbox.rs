@@ -1,13 +1,79 @@
-// use moneta::models::*;
-// use moneta::schema::*;
-// use moneta::{connect, initialize_logging};
-
-// use diesel::prelude::*;
-// use log::info;
+use chrono::Utc;
+use futures::stream::TryStreamExt;
+use moneta::models::Balance;
+use mongodb::bson::oid::ObjectId;
+use mongodb::bson::{doc, Document};
+use tokio::runtime::Builder;
 
 fn main() {
-    // initialize_logging(2);
+    let runtime = Builder::new_multi_thread()
+        .thread_name("moneta-sandbox")
+        .enable_all()
+        .build()
+        .unwrap();
 
-    // let connection =
-    //     connect("postgres://localhost/moneta").expect("error connecting and migrating to db");
+    runtime.block_on(async {
+        moneta::initialize_logging(1);
+
+        let db = moneta::connect(
+            "mongodb://localhost:27017",
+            "moneta_sandbox",
+            "moneta-sandbox",
+        )
+        .await
+        .unwrap();
+
+        // List the names of the collections in that database.
+        for collection_name in db.list_collection_names(None).await.unwrap() {
+            println!("{}", collection_name);
+        }
+
+        // Get a handle to a collection in the database.
+        let collection = db.collection::<Document>("books");
+
+        let docs = vec![
+            doc! { "title": "1984", "author": "George Orwell" },
+            doc! { "title": "Animal Farm", "author": "George Orwell" },
+            doc! { "title": "The Great Gatsby", "author": "F. Scott Fitzgerald" },
+        ];
+
+        // Insert some documents into the "mydb.books" collection.
+        let res = collection.insert_many(docs, None).await.unwrap();
+        println!("{:?}", res);
+
+        // Get a handle to a collection of `Book`.
+        let typed_collection = db.collection::<Balance>("balances");
+
+        let balances = vec![
+            Balance {
+                account_id: ObjectId::new().into(),
+                id: ObjectId::new().into(),
+                date: Utc::now(),
+                amount: 1234,
+                comments: "".to_string(),
+            },
+            Balance {
+                account_id: ObjectId::new().into(),
+                id: ObjectId::new().into(),
+                date: Utc::now(),
+                amount: 1234,
+                comments: "".to_string(),
+            },
+        ];
+        println!("to insert: {:?}", balances);
+        println!("to insert: {:?}", serde_json::to_string(&balances[0]));
+
+        // Insert the books into "mydb.books" collection, no manual conversion to BSON necessary.
+        let res = typed_collection.insert_many(balances, None).await.unwrap();
+        println!("insert result: {:?}", res);
+
+        // Query the books in the collection with a filter and an option.
+        let filter = doc! {};
+        let mut cursor = typed_collection.find(filter, None).await.unwrap();
+
+        // Iterate over the results of the cursor.
+        while let Some(balance) = cursor.try_next().await.unwrap() {
+            println!("balance: {:?}", balance);
+        }
+    });
 }
