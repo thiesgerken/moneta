@@ -83,7 +83,6 @@ pub fn merge_settings(
 
     for x in ov.iter() {
         settings = settings.set_override_option(x, opts.value_of(x))?;
-        println!("{:?} {:?}", x, opts.value_of(x));
     }
 
     settings.set_override("verbosity", opts.occurrences_of("v") as i64)
