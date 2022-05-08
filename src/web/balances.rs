@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use crate::models::rendering::RenderedBalance;
+use crate::models::Balance;
 use crate::web::authentication::CookieUserId;
 
 use super::util;
@@ -61,9 +62,39 @@ pub async fn get(
 pub async fn delete(
     uid: CookieUserId,
     connection: &State<mongodb::Database>,
-    id: String,
+    id: String, // id of the upstream balance
 ) -> Result<(), Status> {
-    todo!() // TODO: deletion of rendered balances
+    let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
+    let collection = connection.collection::<RenderedBalance>("balances_rendered");
+    let entry = collection
+        .find_one(doc! {"upstream_id":id}, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .ok_or(Status::NotFound)?;
+
+    if *uid != *entry.user_id {
+        return Err(Status::Forbidden);
+    }
+
+    let upstream_collection = connection.collection::<Balance>("balances");
+    let upstream_entry = upstream_collection
+        .find_one(doc! {"_id":id}, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .ok_or(Status::NotFound)?;
+
+    // remove rendered balances first ...
+    upstream_entry
+        .remove_rendered(&connection)
+        .await
+        .map_err(log_error_and_500)?;
+    // ... and then the upstream balance itself
+    upstream_collection
+        .delete_one(doc! {"_id":id}, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    Ok(())
 }
 
 #[openapi]
