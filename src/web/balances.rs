@@ -151,7 +151,7 @@ pub async fn create(
         .find(|b| *b.user_id == *uid)
         .unwrap_or_else(|| {
             panic!(
-                "rendering did not result in a balance for this user?? balance {:?}",
+                "rendering did not result in a balance for this user?! balance {:?}",
                 entry.id
             )
         });
@@ -166,5 +166,88 @@ pub async fn update(
     id: String,
     balance: Json<RenderedBalance>,
 ) -> Result<Json<RenderedBalance>, Status> {
-    todo!() // TODO: updating of rendered balances
+    let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
+    let collection = connection.collection::<RenderedBalance>("balances_rendered");
+    let original_entry = collection
+        .find_one(doc! {"_id":id}, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .ok_or(Status::NotFound)?;
+
+    if *original_entry.user_id != *uid {
+        return Err(Status::Forbidden);
+    }
+
+    let related_accounts = queries::query_associated_accounts(connection, &[*balance.account_id])
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    let account = related_accounts
+        .iter()
+        .find(|a| a.id == balance.account_id)
+        .ok_or_else(|| {
+            error!(
+                "user {:?} tried to create a balance with unknown account {:?}",
+                *uid, &balance.account_id
+            );
+            Status::NotFound
+        })?;
+
+    if *account.user_id != *uid {
+        error!(
+            "user {:?} tried to create a balance with foreign account {:?}",
+            *uid, &balance.account_id
+        );
+        return Err(Status::Forbidden);
+    }
+
+    // find the original upstream balance
+    let upstream_entry = Balance::from_rendered(balance.clone());
+    let collection = connection.collection::<Balance>("balances");
+    let mut upstream_entry = collection
+        .find_one(doc!("_id": *original_entry.upstream_id), None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .unwrap_or_else(|| {
+            panic!(
+                "cannot find upstream balance for rendered balance {:?}",
+                original_entry.id
+            )
+        });
+
+    // delete its rendered balances
+    upstream_entry
+        .remove_rendered(connection)
+        .await
+        .map_err(log_error_and_500)?;
+
+    // update the upstream balance with the changes
+    upstream_entry.apply_changes(&*balance);
+    collection
+        .update_one(doc!("_id": *upstream_entry.id), &upstream_entry, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    // create rendered balances and insert them into database
+    let rendered_balances = upstream_entry
+        .render(&related_accounts)
+        .map_err(log_error_and_500)?;
+    let rendered_balances_collection =
+        connection.collection::<RenderedBalance>("balances_rendered");
+    rendered_balances_collection
+        .insert_many(&rendered_balances, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    // find the rendered balance that was rendered for this user and return it
+    let entry = rendered_balances
+        .into_iter()
+        .find(|b| *b.user_id == *uid)
+        .unwrap_or_else(|| {
+            panic!(
+                "rendering did not result in a balance for this user?! balance {:?}",
+                upstream_entry.id
+            )
+        });
+    Ok(Json(entry))
 }
