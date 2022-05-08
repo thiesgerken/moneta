@@ -61,7 +61,7 @@ pub async fn delete(
         .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
 
-    if *uid != *entry.id {
+    if *uid != *entry.user_id {
         return Err(Status::Forbidden);
     }
 

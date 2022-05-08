@@ -67,7 +67,7 @@ pub async fn delete(
         return Err(Status::Forbidden);
     }
 
-    if *uid != *entry.id {
+    if *uid != *entry.user_id {
         return Err(Status::Forbidden);
     }
 
