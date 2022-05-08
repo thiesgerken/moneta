@@ -1,14 +1,14 @@
 use std::str::FromStr;
 
 use crate::models::rendering::RenderedBalance;
-use crate::models::{Account, Balance};
+use crate::models::Balance;
 use crate::queries;
 use crate::web::authentication::CookieUserId;
 
 use super::util;
 use crate::web::util::log_error_and_500;
-use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
+use mongodb::bson::{self, doc};
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::State;
@@ -202,9 +202,8 @@ pub async fn update(
     }
 
     // find the original upstream balance
-    let upstream_entry = Balance::from_rendered(balance.clone());
-    let collection = connection.collection::<Balance>("balances");
-    let mut upstream_entry = collection
+    let upstream_collection = connection.collection::<Balance>("balances");
+    let mut upstream_entry = upstream_collection
         .find_one(doc!("_id": *original_entry.upstream_id), None)
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?
@@ -223,8 +222,12 @@ pub async fn update(
 
     // update the upstream balance with the changes
     upstream_entry.apply_changes(&*balance);
-    collection
-        .update_one(doc!("_id": *upstream_entry.id), &upstream_entry, None)
+    upstream_collection
+        .update_one(
+            doc!("_id": *upstream_entry.id),
+            doc! {"$set":  bson::to_bson(&upstream_entry).unwrap()},
+            None,
+        )
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
 
@@ -232,9 +235,7 @@ pub async fn update(
     let rendered_balances = upstream_entry
         .render(&related_accounts)
         .map_err(log_error_and_500)?;
-    let rendered_balances_collection =
-        connection.collection::<RenderedBalance>("balances_rendered");
-    rendered_balances_collection
+    collection
         .insert_many(&rendered_balances, None)
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
