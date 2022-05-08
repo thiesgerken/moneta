@@ -69,7 +69,8 @@ pub async fn delete(
     let upstream_id =
         ObjectId::from_str(&upstream_id).map_err(|e| log_error_and_500(Box::new(e)))?;
     let collection = connection.collection::<RenderedBalance>("balances_rendered");
-    let entry = collection
+    // check if there is a rendered balance with the given upstream id belonging to this user
+    collection
         .find_one(doc! {"upstream_id":upstream_id, "user_id": *uid}, None)
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?
