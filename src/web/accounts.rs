@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use crate::models::rendering::{RenderedBalance, RenderedExpense};
 use crate::models::Account;
 use crate::web::authentication::CookieUserId;
 
@@ -50,8 +51,6 @@ pub async fn delete(
     connection: &State<mongodb::Database>,
     id: String,
 ) -> Result<(), Status> {
-    // TODO: check that no rendered expenses reference this entry (and that it is not synced)
-
     let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
     let collection = connection.collection::<Account>("accounts");
     let entry = collection
@@ -60,10 +59,51 @@ pub async fn delete(
         .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
 
+    if entry.synchronization.is_some() {
+        error!(
+            "Deletion of synchronized accounts is unsupported, tried to remove {:?}",
+            id
+        );
+        return Err(Status::Forbidden);
+    }
+
     if *uid != *entry.id {
         return Err(Status::Forbidden);
     }
 
+    //  check that no rendered balances reference this entry
+    let rendered_balances_collection =
+        connection.collection::<RenderedBalance>("balances_rendered");
+    let balance_count = rendered_balances_collection
+        .count_documents(doc!("account_id": *entry.id.clone()), None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    if balance_count > 0 {
+        error!(
+            "Tried to remove account {:?}, but it still has {} (rendered) balances attached to it",
+            id, balance_count
+        );
+        return Err(Status::Forbidden);
+    }
+
+    // check that no rendered expenses reference this entry
+    let rendered_expenses_collection =
+        connection.collection::<RenderedExpense>("expenses_rendered");
+    let expense_count = rendered_expenses_collection
+        .count_documents(doc!("account_id": *entry.id.clone()), None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    if expense_count > 0 {
+        error!(
+            "Tried to remove account {:?}, but it still has {} (rendered) expenses attached to it",
+            id, expense_count
+        );
+        return Err(Status::Forbidden);
+    }
+
+    // everything seems to be in order, proceed with the deletion
     collection
         .delete_one(doc! {"_id":id}, None)
         .await
@@ -82,7 +122,11 @@ pub async fn create(
     let mut entry = account.clone();
     entry.id = ObjectId::new().into();
     entry.user_id = (*uid).into();
-    entry.synchronization = None;
+
+    if entry.synchronization.is_some() {
+        error!("Creation of synchronized accounts is unsupported");
+        return Err(Status::Forbidden);
+    }
 
     let collection = connection.collection::<Account>("accounts");
     collection
@@ -110,6 +154,11 @@ pub async fn update(
         .ok_or(Status::NotFound)?;
 
     if *uid != *original_entry.id {
+        return Err(Status::Forbidden);
+    }
+
+    if account.synchronization != original_entry.synchronization {
+        error!("Modification of account synchronizations is unsupported");
         return Err(Status::Forbidden);
     }
 
