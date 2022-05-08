@@ -10,6 +10,10 @@ pub struct RenderedExpense {
     #[serde(rename = "_id", default)]
     pub id: ObjectIdWrapper,
 
+    /// id of the expense that was rendered
+    pub upstream_id: ObjectIdWrapper,
+
+    /// user for whom this expense was rendered
     #[serde(default)]
     pub user_id: ObjectIdWrapper,
 
@@ -69,6 +73,10 @@ pub struct RenderedBalance {
     #[serde(rename = "_id", default)]
     pub id: ObjectIdWrapper,
 
+    /// id of the balance that was rendered
+    pub upstream_id: ObjectIdWrapper,
+
+    /// user for whom this balance was rendered
     #[serde(default)]
     pub user_id: ObjectIdWrapper,
 

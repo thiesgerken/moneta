@@ -69,7 +69,7 @@ pub struct Account {
     pub synchronization: Option<AccountSynchronization>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountSynchronization {
     pub account_id: ObjectIdWrapper, // id of the other account
