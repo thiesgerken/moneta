@@ -38,7 +38,6 @@ pub fn build() -> Command<'static> {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct Config {
-    #[serde(skip)]
     pub verbosity: i64,
     pub database_url: String,
     pub database_name: String,
@@ -72,7 +71,7 @@ pub fn initialize_settings(
             .add_source(config::File::with_name("./moneta").required(false))
     };
 
-    settings_builder.add_source(config::Environment::with_prefix("moneta_").separator("__"))
+    settings_builder.add_source(config::Environment::with_prefix("moneta").separator("__"))
 }
 
 // parse the command line flags and add them as overrides to settings
@@ -84,6 +83,7 @@ pub fn merge_settings(
 
     for x in ov.iter() {
         settings = settings.set_override_option(x, opts.value_of(x))?;
+        println!("{:?} {:?}", x, opts.value_of(x));
     }
 
     settings.set_override("verbosity", opts.occurrences_of("v") as i64)
