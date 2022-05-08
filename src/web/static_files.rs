@@ -6,7 +6,7 @@ use std::io::Cursor;
 use std::path::PathBuf;
 
 #[derive(RustEmbed)]
-#[folder = "web/build/"]
+#[folder = "web/dist/"]
 struct Asset;
 
 pub struct FileResponder {
