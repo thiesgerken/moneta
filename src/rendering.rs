@@ -1,7 +1,4 @@
-use crate::models::{
-    rendering::RenderedBalance, Account, AccountSynchronization, Balance, BalanceChangelogEntry,
-    Expense, ExpenseCategorization, ExpenseChangelogEntry, ExpenseTransaction,
-};
+use crate::models::{rendering::RenderedBalance, Account, Balance};
 use mongodb::{
     bson::{doc, oid::ObjectId},
     results::DeleteResult,
@@ -9,26 +6,32 @@ use mongodb::{
 };
 use std::error::Error;
 
-use log::error;
-use serde::{Deserialize, Serialize};
-
 impl Balance {
+    pub fn from_rendered(balance: RenderedBalance) -> Self {
+        Self {
+            id: ObjectId::new().into(),
+            date: balance.date,
+            account_id: balance.account_id,
+            amount: balance.amount,
+            comments: balance.comments,
+        }
+    }
+
     pub fn render(&self, accounts: &[Account]) -> Result<Vec<RenderedBalance>, Box<dyn Error>> {
         let main_account = accounts
             .iter()
             .find(|a| a.id == self.account_id)
             .ok_or_else(|| format!("Cannot find main account of {:?}", &self))?;
 
-        let mut res = Vec::new();
-        res.push(RenderedBalance {
+        let mut res = vec![RenderedBalance {
             id: ObjectId::new().into(),
             upstream_id: self.id.clone(),
             user_id: main_account.user_id.clone(),
-            date: self.date.clone(),
+            date: self.date,
             account_id: main_account.id.clone(),
             amount: self.amount,
             comments: self.comments.clone(),
-        });
+        }];
 
         if let Some(sync) = &main_account.synchronization {
             let other_account = accounts
@@ -42,7 +45,7 @@ impl Balance {
                 id: ObjectId::new().into(),
                 upstream_id: self.id.clone(),
                 user_id: other_account.user_id.clone(),
-                date: self.date.clone(),
+                date: self.date,
                 account_id: other_account.id.clone(),
                 amount: self.amount * if sync.invert { -1 } else { 1 },
                 comments: self.comments.clone(),

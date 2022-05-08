@@ -119,7 +119,7 @@ pub async fn create(
     connection: &State<mongodb::Database>,
     account: Json<Account>,
 ) -> Result<Json<Account>, Status> {
-    let mut entry = account.clone();
+    let mut entry = account;
     entry.id = ObjectId::new().into();
     entry.user_id = (*uid).into();
 
@@ -130,11 +130,11 @@ pub async fn create(
 
     let collection = connection.collection::<Account>("accounts");
     collection
-        .insert_one(&entry, None)
+        .insert_one(&*entry, None)
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
 
-    Ok(Json(entry))
+    Ok(entry)
 }
 
 #[openapi]

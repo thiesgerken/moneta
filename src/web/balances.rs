@@ -1,7 +1,8 @@
 use std::str::FromStr;
 
 use crate::models::rendering::RenderedBalance;
-use crate::models::Balance;
+use crate::models::{Account, Balance};
+use crate::queries;
 use crate::web::authentication::CookieUserId;
 
 use super::util;
@@ -85,7 +86,7 @@ pub async fn delete(
 
     // remove rendered balances first ...
     upstream_entry
-        .remove_rendered(&connection)
+        .remove_rendered(connection)
         .await
         .map_err(log_error_and_500)?;
     // ... and then the upstream balance itself
@@ -104,7 +105,57 @@ pub async fn create(
     connection: &State<mongodb::Database>,
     balance: Json<RenderedBalance>,
 ) -> Result<Json<RenderedBalance>, Status> {
-    todo!() // TODO: creation of rendered balances
+    let related_accounts = queries::query_associated_accounts(connection, &[*balance.account_id])
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    let account = related_accounts
+        .iter()
+        .find(|a| a.id == balance.account_id)
+        .ok_or_else(|| {
+            error!(
+                "user {:?} tried to create a balance with unknown account {:?}",
+                *uid, &balance.account_id
+            );
+            Status::NotFound
+        })?;
+
+    if *account.user_id != *uid {
+        error!(
+            "user {:?} tried to create a balance with foreign account {:?}",
+            *uid, &balance.account_id
+        );
+        return Err(Status::Forbidden);
+    }
+
+    // cast to normal balance and insert into database
+    let entry = Balance::from_rendered(balance.clone());
+    let collection = connection.collection::<Balance>("balances");
+    collection
+        .insert_one(&entry, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    // create rendered balances and insert them into database
+    let rendered_balances = entry.render(&related_accounts).map_err(log_error_and_500)?;
+    let rendered_balances_collection =
+        connection.collection::<RenderedBalance>("balances_rendered");
+    rendered_balances_collection
+        .insert_many(&rendered_balances, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    // find the rendered balance that was rendered for this user and return it
+    let entry = rendered_balances
+        .into_iter()
+        .find(|b| *b.user_id == *uid)
+        .unwrap_or_else(|| {
+            panic!(
+                "rendering did not result in a balance for this user?? balance {:?}",
+                entry.id
+            )
+        });
+    Ok(Json(entry))
 }
 
 #[openapi]
