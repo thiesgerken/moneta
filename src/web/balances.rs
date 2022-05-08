@@ -163,13 +163,13 @@ pub async fn create(
 pub async fn update(
     uid: CookieUserId,
     connection: &State<mongodb::Database>,
-    id: String,
+    id: String,// id of the upstream balance
     balance: Json<RenderedBalance>,
 ) -> Result<Json<RenderedBalance>, Status> {
     let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
     let collection = connection.collection::<RenderedBalance>("balances_rendered");
     let original_entry = collection
-        .find_one(doc! {"_id":id}, None)
+        .find_one(doc! {"upstream_id":id}, None)
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
