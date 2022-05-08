@@ -64,13 +64,15 @@ pub fn initialize_settings(
 ) -> config::ConfigBuilder<config::builder::DefaultState> {
     let settings_builder = config::Config::builder();
 
-    if let Some(p) = additional_file {
+    let settings_builder = if let Some(p) = additional_file {
         settings_builder.add_source(config::File::from(Path::new(p)).required(true))
     } else {
         settings_builder
             .add_source(config::File::with_name("/etc/moneta/config").required(false))
             .add_source(config::File::with_name("./moneta").required(false))
-    }
+    };
+
+    settings_builder.add_source(config::Environment::with_prefix("moneta_").separator("__"))
 }
 
 // parse the command line flags and add them as overrides to settings
