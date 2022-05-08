@@ -75,10 +75,6 @@ pub async fn delete(
         .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
 
-    if *uid != *entry.user_id {
-        return Err(Status::Forbidden);
-    }
-
     let upstream_collection = connection.collection::<Balance>("balances");
     let upstream_entry = upstream_collection
         .find_one(doc! {"_id":upstream_id}, None)
@@ -176,10 +172,6 @@ pub async fn update(
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
-
-    if *original_entry.user_id != *uid {
-        return Err(Status::Forbidden);
-    }
 
     let related_accounts = queries::query_associated_accounts(connection, &[*balance.account_id])
         .await
