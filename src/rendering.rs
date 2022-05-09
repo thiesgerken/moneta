@@ -1,4 +1,7 @@
-use crate::models::{rendering::RenderedBalance, Account, Balance};
+use crate::models::{
+    rendering::{RenderedBalance, RenderedExpense, RenderedExpenseTransaction},
+    Account, Balance, Category, Expense, ExpenseTransaction,
+};
 use mongodb::{
     bson::{doc, oid::ObjectId},
     results::DeleteResult,
@@ -68,6 +71,124 @@ impl Balance {
 
         info!(
             "deleted {} rendered balances of balance {:?}",
+            r.deleted_count, &self.id
+        );
+        Ok(r)
+    }
+}
+impl ExpenseTransaction {
+    pub fn from_rendered(transaction: RenderedExpenseTransaction) -> Self {
+        Self {
+            account_id: transaction.account_id,
+            date: transaction.date,
+            amount: transaction.amount,
+            fraction: transaction.fraction,
+            comments: transaction.comments,
+            statement: transaction.statement,
+        }
+    }
+}
+
+impl Expense {
+    pub fn from_rendered(expense: RenderedExpense) -> Self {
+        Self {
+            id: ObjectId::new().into(),
+            title: expense.title,
+            store: expense.store,
+            description: expense.description,
+            comments: expense.comments,
+            booking_start: expense.booking_start,
+            booking_end: expense.booking_end,
+            recurring_expense_id: expense.recurring_expense_id,
+            is_template: expense.is_template,
+            is_tax_relevant: expense.is_tax_relevant,
+            is_unchecked: expense.is_unchecked,
+            is_incomplete: expense.is_incomplete,
+            receipts: expense.receipts,
+            categories: expense.categories,
+            transactions: expense
+                .transactions
+                .into_iter()
+                .map(ExpenseTransaction::from_rendered)
+                .collect(),
+            positions: expense.positions,
+        }
+    }
+
+    pub fn render(
+        &self,
+        accounts: &[Account],
+        categories: &[Category],
+    ) -> Result<Vec<RenderedExpense>, Box<dyn Error>> {
+        let main_accounts = accounts
+            .iter()
+            .find(|a| self.transactions.iter().any(|t| a.id == t.account_id))
+            .ok_or_else(|| format!("Cannot find main accounts of {:?}", &self))?;
+
+        // let mut res = vec![RenderedBalance {
+        //     id: ObjectId::new().into(),
+        //     upstream_id: self.id.clone(),
+        //     user_id: main_account.user_id.clone(),
+        //     date: self.date,
+        //     account_id: main_account.id.clone(),
+        //     amount: self.amount,
+        //     comments: self.comments.clone(),
+        // }];
+
+        // if let Some(sync) = &main_account.synchronization {
+        //     let other_account = accounts
+        //         .iter()
+        //         .find(|a| a.id == sync.account_id)
+        //         .ok_or_else(|| {
+        //             format!("Cannot find synchronized account of {:?}", &main_account)
+        //         })?;
+
+        //     res.push(RenderedBalance {
+        //         id: ObjectId::new().into(),
+        //         upstream_id: self.id.clone(),
+        //         user_id: other_account.user_id.clone(),
+        //         date: self.date,
+        //         account_id: other_account.id.clone(),
+        //         amount: self.amount * if sync.invert { -1 } else { 1 },
+        //         comments: self.comments.clone(),
+        //     });
+        // }
+
+        // Ok(res)
+        todo!()
+    }
+
+    pub fn apply_changes(&mut self, changes: &RenderedExpense) {
+        self.booking_start = changes.booking_start;
+        self.booking_end = changes.booking_end;
+        self.title = changes.title.clone();
+        self.store = changes.store.clone();
+        self.description = changes.description.clone();
+        self.comments = changes.comments.clone();
+        self.recurring_expense_id = changes.recurring_expense_id.clone();
+        self.is_template = changes.is_template;
+        self.is_tax_relevant = changes.is_tax_relevant;
+        self.is_unchecked = changes.is_unchecked;
+        self.is_incomplete = changes.is_incomplete;
+        self.receipts = changes.receipts.clone();
+        self.categories = changes.categories.clone();
+        self.transactions = changes
+            .transactions
+            .iter()
+            .cloned()
+            .map(ExpenseTransaction::from_rendered)
+            .collect();
+        self.positions = changes.positions.clone();
+    }
+
+    pub async fn remove_rendered(&self, db: &Database) -> Result<DeleteResult, Box<dyn Error>> {
+        let rendered_expenses_collection = db.collection::<RenderedExpense>("expenses_rendered");
+        let r = rendered_expenses_collection
+            .delete_many(doc!("upstream_id": *self.id.clone()), None)
+            .await?;
+
+        info!(
+            "deleted {} rendered expenses of expense {:?}",
             r.deleted_count, &self.id
         );
         Ok(r)
