@@ -1,8 +1,59 @@
+use std::error::Error;
+
 use chrono::{DateTime, Utc};
 use rocket_okapi::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::ObjectIdWrapper;
+
+impl Expense {
+    pub fn validate(&self) -> Result<(), Box<dyn Error>> {
+        if self.booking_start > self.booking_end {
+            return Err("Expense booking start date must not be after booking end".into());
+        }
+
+        if self.categories.iter().any(|cw| cw.weight <= 0.0) {
+            return Err("Expense categorizations must have positive weights".into());
+        }
+
+        if self.positions.iter().any(|p| p.units <= 0.0) {
+            return Err("Expense positions must have positive units".into());
+        }
+
+        if self.transactions.is_empty() {
+            return Err("Expense must have at least one transaction".into());
+        }
+
+        if self
+            .transactions
+            .iter()
+            .any(|p| !(p.amount.is_some() ^ p.fraction.is_some()))
+        {
+            return Err("Expense transactions must have amount xor fraction set".into());
+        }
+
+        if self
+            .transactions
+            .iter()
+            .any(|p| p.fraction.map(|x| x == 0.0).unwrap_or(false))
+        {
+            return Err("Expense transactions must not contain 0.0 as fraction".into());
+        }
+
+        if self.transactions.iter().any(|p| p.fraction.is_some())
+            && self
+                .transactions
+                .iter()
+                .filter(|p| p.amount.is_some())
+                .count()
+                != 1
+        {
+            return Err("Expenses with at least one fractional transaction must contain exactly one fixed amount transaction".into());
+        }
+
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,7 +88,7 @@ pub struct Expense {
 
     pub receipts: Vec<ExpenseReceipt>,
     pub categories: Vec<ExpenseCategorization>,
-    pub transactions: Vec<ExpenseTransaction>,
+    pub transactions: Vec<ExpenseTransaction>, // must not be empty
     pub positions: Vec<ExpensePosition>,
 }
 
@@ -71,7 +122,7 @@ pub struct ExpenseCategorization {
 #[serde(rename_all = "camelCase")]
 pub struct ExpensePosition {
     pub amount: Option<i64>,
-    pub units: i32,
+    pub units: f32,
     pub title: String,
     pub comments: String,
 }
