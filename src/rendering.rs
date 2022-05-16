@@ -2,6 +2,7 @@ use crate::models::{
     rendering::{RenderedBalance, RenderedExpense, RenderedExpenseTransaction},
     Account, Balance, Category, Expense, ExpenseTransaction,
 };
+use itertools::Itertools;
 use mongodb::{
     bson::{doc, oid::ObjectId},
     results::DeleteResult,
@@ -115,15 +116,51 @@ impl Expense {
         }
     }
 
+    pub fn render_for_user(
+        &self,
+        user_id: ObjectId,
+        accounts: &[Account],
+        categories: &[Category],
+    ) -> Result<RenderedExpense, Box<dyn Error>> {
+        todo!() // TODO:
+
+        // first: convert all transactions that have a fixed amount
+
+        // second: if necessary, i.e. there is at least one fractional transactions, then there should be exactly one rendered fixed amount transaction.
+        // use that amount to convert transactions with a fixed fraction? or should the amount used before rendering??
+    }
+
     pub fn render(
         &self,
         accounts: &[Account],
         categories: &[Category],
     ) -> Result<Vec<RenderedExpense>, Box<dyn Error>> {
-        let main_accounts = accounts
+        let main_accounts: Vec<_> = accounts
             .iter()
-            .find(|a| self.transactions.iter().any(|t| a.id == t.account_id))
-            .ok_or_else(|| format!("Cannot find main accounts of {:?}", &self))?;
+            .filter(|a| self.transactions.iter().any(|t| a.id == t.account_id))
+            .collect();
+
+        let synchronized_account_ids: Vec<_> = main_accounts
+            .iter()
+            .flat_map(|a| a.synchronization.as_ref().map(|ass| ass.account_id.clone()))
+            .collect();
+        let synchronized_accounts: Vec<_> = accounts
+            .iter()
+            .filter(|a| synchronized_account_ids.iter().any(|t| &a.id == t))
+            .collect();
+
+        let relevant_accounts: Vec<_> = synchronized_accounts
+            .iter()
+            .chain(main_accounts.iter())
+            .cloned()
+            .cloned()
+            .collect();
+        relevant_accounts
+            .iter()
+            .map(|a| *a.user_id.clone())
+            .unique()
+            .map(|uid| self.render_for_user(uid, &relevant_accounts, &categories))
+            .collect::<Result<Vec<_>, _>>()
 
         // let mut res = vec![RenderedBalance {
         //     id: ObjectId::new().into(),
@@ -155,7 +192,6 @@ impl Expense {
         // }
 
         // Ok(res)
-        todo!()
     }
 
     pub fn apply_changes(&mut self, changes: &RenderedExpense) {
@@ -218,7 +254,7 @@ impl Expense {
 //     let sum_of_amounts = ts_with_amount.iter().sum::<i64>();
 //     let mut total_amount: i64 = 0;
 
-//     // if there is an account syncing, then the synced account has to belong to the user anyway, no need to check uids in that case
+//     // if there is an account syncing, then the synced account has to belong to the user anyway, no need to check user ids in that case
 //     total_amount += transactions
 //         .iter()
 //         .filter(|(_, a, acs)| acs.is_some() || a.user_id == uid)
