@@ -48,6 +48,10 @@ pub struct RenderedExpense {
     pub categories: Vec<ExpenseCategorization>,
     pub transactions: Vec<RenderedExpenseTransaction>,
     pub positions: Vec<ExpensePosition>,
+
+    // how much the total wealth of the user this was rendered for changed by this expense
+    // (sum of the effective_amounts of all the rendered transactions of this rendered expense)
+    pub effective_amount: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -65,6 +69,10 @@ pub struct RenderedExpenseTransaction {
     pub statement: String,
 
     pub calculated_amount: f64,
+
+    // how much the total wealth of the user this was rendered for changed by this transaction
+    // (takes into account if the account belongs to the user and looks at the ownership fractions)
+    pub effective_amount: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

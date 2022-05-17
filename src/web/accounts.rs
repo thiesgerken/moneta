@@ -122,6 +122,7 @@ pub async fn create(
     let mut entry = account;
     entry.id = ObjectId::new().into();
     entry.user_id = (*uid).into();
+    entry.validate().map_err(|e| log_error_and_500(e))?;
 
     if entry.synchronization.is_some() {
         error!("Creation of synchronized accounts is unsupported");
@@ -168,6 +169,7 @@ pub async fn update(
     entry.id = original_entry.id;
     entry.user_id = original_entry.user_id;
     entry.synchronization = original_entry.synchronization;
+    entry.validate().map_err(|e| log_error_and_500(e))?;
 
     collection
         .update_one(

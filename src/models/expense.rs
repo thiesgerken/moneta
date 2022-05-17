@@ -122,7 +122,7 @@ pub struct ExpenseCategorization {
 #[serde(rename_all = "camelCase")]
 pub struct ExpensePosition {
     pub amount: Option<i64>,
-    pub units: f32,
+    pub units: f64,
     pub title: String,
     pub comments: String,
 }

@@ -86,3 +86,6 @@ pub async fn update(
 ) -> Result<Json<RenderedExpense>, Status> {
     todo!() // TODO: updating of rendered expenses
 }
+
+// TODO: implement changelogs for expenses
+// TODO: keep in mind to validate expenses
