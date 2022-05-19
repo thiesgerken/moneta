@@ -1,3 +1,4 @@
+pub mod account;
 pub mod import;
 pub mod serve;
 pub mod user;
@@ -32,6 +33,7 @@ pub fn build() -> Command<'static> {
                 .value_name("name"))
         .subcommand(user::build())
         .subcommand(import::build())
+        .subcommand(account::build())
         .subcommand(serve::build())
 }
 
