@@ -163,8 +163,6 @@ pub async fn update(
         return Err(Status::Forbidden);
     }
 
-    // TODO: need to update the CLI for CRUD on account synchronizations
-
     let mut entry = account.clone();
     entry.id = original_entry.id;
     entry.user_id = original_entry.user_id;
