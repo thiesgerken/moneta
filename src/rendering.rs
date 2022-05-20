@@ -10,6 +10,37 @@ use mongodb::{
 };
 use std::error::Error;
 
+pub fn rerender_all_balances(account_ids: &[ObjectId]) {
+    let rendered_balances = Vec::new();
+
+    // find the original upstream balance
+    let upstream_collection = connection.collection::<Balance>("balances");
+    let mut upstream_entry = upstream_collection
+        .find_one(doc!("_id": *original_entry.upstream_id), None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?
+        .unwrap_or_else(|| {
+            panic!(
+                "cannot find upstream balance for rendered balance {:?}",
+                original_entry.id
+            )
+        });
+
+    // delete its rendered balances
+    upstream_entry
+        .remove_rendered(connection)
+        .await
+        .map_err(log_error_and_500)?;
+
+    // create rendered balances and insert them into database
+    rendered_balances.append(upstream_entry.render(&related_accounts)?);
+
+    collection
+        .insert_many(&rendered_balances, None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+}
+
 impl Balance {
     pub fn from_rendered(balance: RenderedBalance) -> Self {
         Self {
