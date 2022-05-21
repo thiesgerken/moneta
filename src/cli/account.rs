@@ -1,4 +1,6 @@
+use crate::models::rendering::{RenderedBalance, RenderedExpense};
 use crate::models::*;
+use crate::rendering::rerender_multiple;
 
 use clap::ArgMatches;
 use clap::{Arg, ArgGroup, Command};
@@ -31,10 +33,15 @@ pub fn build() -> Command<'static> {
                 .long("invert")
                 .help("for --sync, make it so that the two accounts mirror each other"),
         )
+        .arg(
+            Arg::new("rerender")
+                .long("rerender")
+                .help("rerender balances and expenses"),
+        )
         .arg(Arg::new("list").long("list").help("list accounts"))
         .group(
             ArgGroup::new("action")
-                .args(&["sync", "list", "unsync"])
+                .args(&["sync", "list", "unsync", "rerender"])
                 .required(true),
         )
 }
@@ -46,17 +53,17 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         assert!(account_id_values.len() == 2);
         let account_ids: Vec<ObjectId> = account_id_values
             .into_iter()
-            .map(|id| ObjectId::from_str(id))
+            .map(ObjectId::from_str)
             .collect::<Result<_, _>>()
             .expect("error parsing object ids");
 
         let accounts: Vec<_> = account_collection
-            .find(doc!("_id": {"$in": account_ids}), None)
+            .find(doc!("_id": {"$in": &account_ids}), None)
             .await
             .expect("Error loading accounts")
             .try_collect()
             .await
-            .expect("accounts do not exist!");
+            .expect("Error loading accounts");
 
         assert!(accounts.len() == 2);
         assert!(accounts.iter().all(|a| a.synchronization.is_none()));
@@ -79,14 +86,16 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             accounts, invert
         );
 
-        // TODO: need to re-render all expenses and balances belonging to these accounts; maybe just provide a maintenance task that does that for all
+        rerender_multiple(connection, &account_ids)
+            .await
+            .expect("Could not rerender entities");
     } else if let Some(account_id_value) = sub_matches.value_of("unsync") {
         let account_id = ObjectId::from_str(account_id_value).expect("error parsing object id");
         let account = account_collection
             .find_one(doc!("_id": account_id), None)
             .await
             .expect("Error loading accounts")
-            .expect("account does not exist!");
+            .expect("Error loading accounts");
 
         assert!(account.synchronization.is_some());
         let account_ids = vec![account_id, *account.synchronization.unwrap().account_id];
@@ -102,7 +111,38 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
 
         info!("Removed the synchronization of accounts {:?}", account_ids);
 
-        // TODO: need to re-render all expenses and balances belonging to these accounts; maybe just provide a maintenance task that does that for all
+        rerender_multiple(connection, &account_ids)
+            .await
+            .expect("Could not rerender entities");
+    } else if sub_matches.is_present("rerender") {
+        let rendered_expenses_collection =
+            connection.collection::<RenderedExpense>("expenses_rendered");
+        let rendered_balances_collection =
+            connection.collection::<RenderedBalance>("balances_rendered");
+        let expense_count = rendered_expenses_collection
+            .count_documents(doc!(), None)
+            .await
+            .expect("Error counting rendered expenses");
+        let balance_count = rendered_balances_collection
+            .count_documents(doc!(), None)
+            .await
+            .expect("Error counting rendered balances");
+
+        info!("Database has {} rendered balances", balance_count);
+        info!("Database has {} rendered expenses", expense_count);
+
+        let accounts: Vec<_> = account_collection
+            .find(doc!(), None)
+            .await
+            .expect("Error loading accounts")
+            .try_collect()
+            .await
+            .expect("Error loading accounts");
+        let account_ids: Vec<_> = accounts.iter().map(|a| *a.id.clone()).collect();
+
+        rerender_multiple(connection, &account_ids)
+            .await
+            .expect("Could not rerender entities");
     } else if sub_matches.is_present("list") {
         let mut account_cursor = account_collection
             .find(None, None)

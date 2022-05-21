@@ -2,6 +2,7 @@ use crate::models::{
     rendering::{RenderedBalance, RenderedExpense, RenderedExpenseTransaction},
     Account, Balance, Category, Expense, ExpenseCategorization, ExpenseTransaction,
 };
+use futures::TryStreamExt;
 use itertools::Itertools;
 use mongodb::{
     bson::{doc, oid::ObjectId},
@@ -10,35 +11,104 @@ use mongodb::{
 };
 use std::error::Error;
 
-pub fn rerender_all_balances(account_ids: &[ObjectId]) {
-    let rendered_balances = Vec::new();
+pub async fn rerender_multiple(
+    connection: mongodb::Database,
+    account_ids: &[ObjectId],
+) -> Result<(), Box<dyn Error>> {
+    let b_count = rerender_multiple_balances(connection.clone(), account_ids).await?;
+    info!(
+        "Rerendered {} balances belonging to {} accounts",
+        b_count,
+        account_ids.len()
+    );
 
-    // find the original upstream balance
-    let upstream_collection = connection.collection::<Balance>("balances");
-    let mut upstream_entry = upstream_collection
-        .find_one(doc!("_id": *original_entry.upstream_id), None)
-        .await
-        .map_err(|e| log_error_and_500(Box::new(e)))?
-        .unwrap_or_else(|| {
-            panic!(
-                "cannot find upstream balance for rendered balance {:?}",
-                original_entry.id
-            )
-        });
+    let e_count = rerender_multiple_expenses(connection.clone(), account_ids).await?;
+    info!(
+        "Rerendered {} expenses belonging to {} accounts",
+        e_count,
+        account_ids.len()
+    );
 
-    // delete its rendered balances
-    upstream_entry
-        .remove_rendered(connection)
-        .await
-        .map_err(log_error_and_500)?;
+    Ok(())
+}
 
-    // create rendered balances and insert them into database
-    rendered_balances.append(upstream_entry.render(&related_accounts)?);
+/// account_ids must contain synchronized accounts as well
+pub async fn rerender_multiple_balances(
+    connection: mongodb::Database,
+    account_ids: &[ObjectId],
+) -> Result<usize, Box<dyn Error>> {
+    let account_collection = connection.collection::<Account>("accounts");
 
-    collection
+    let accounts = account_collection
+        .find(doc!("_id": {"$in": &account_ids}), None)
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    let rendered_balances_collection =
+        connection.collection::<RenderedBalance>("balances_rendered");
+    rendered_balances_collection
+        .delete_many(doc!("accountId": {"$in": &account_ids}), None)
+        .await?;
+
+    let balance_collection = connection.collection::<Balance>("balances");
+    let mut cursor = balance_collection
+        .find(doc!("accountId": {"$in": &account_ids}), None)
+        .await?;
+
+    let mut rendered_balances = Vec::new();
+    while let Some(b) = cursor.try_next().await? {
+        rendered_balances.extend(b.render(&accounts)?.into_iter());
+    }
+
+    let r = rendered_balances_collection
         .insert_many(&rendered_balances, None)
-        .await
-        .map_err(|e| log_error_and_500(Box::new(e)))?;
+        .await?;
+
+    Ok(r.inserted_ids.len())
+}
+
+/// account_ids must contain synchronized accounts as well
+pub async fn rerender_multiple_expenses(
+    connection: mongodb::Database,
+    account_ids: &[ObjectId],
+) -> Result<usize, Box<dyn Error>> {
+    // need to get all accounts, because the transactions could be linked to other accounts
+    let account_collection = connection.collection::<Account>("accounts");
+    let accounts = account_collection
+        .find(doc!(), None) // can't be that many, right?
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    let category_collection = connection.collection::<Category>("categories");
+    let categories = category_collection
+        .find(doc!(), None) // can't be that many, right?
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    let rendered_expenses_collection =
+        connection.collection::<RenderedExpense>("expenses_rendered");
+    rendered_expenses_collection
+        .delete_many(doc!("transactions.accountId": {"$in": &account_ids}), None)
+        .await?;
+
+    let expense_collection = connection.collection::<Expense>("expenses");
+    let mut cursor = expense_collection
+        .find(doc!("transactions.accountId": {"$in": &account_ids}), None)
+        .await?;
+
+    let mut rendered_expenses = Vec::new();
+    while let Some(e) = cursor.try_next().await? {
+        rendered_expenses.extend(e.render(&accounts, &categories)?.into_iter());
+    }
+
+    let r = rendered_expenses_collection
+        .insert_many(&rendered_expenses, None)
+        .await?;
+
+    Ok(r.inserted_ids.len())
 }
 
 impl Balance {
@@ -169,9 +239,12 @@ impl ExpenseTransaction {
 
             if *other_account.user_id == user_id {
                 res.account_id = other_account.id.clone();
-                res.amount = res.amount.map(|x| x * if sync.invert { -1 } else { 1 });
-                res.fraction = res.fraction.map(|x| x * if sync.invert { -1. } else { 1. });
-                res.calculated_amount = res.calculated_amount * if sync.invert { -1. } else { 1. };
+
+                if sync.invert {
+                    res.calculated_amount *= -1.;
+                    res.amount = res.amount.map(|x| -x);
+                    res.fraction = res.fraction.map(|x| -x);
+                }
 
                 res.effective_amount = other_account.ownership_fraction * res.calculated_amount;
             }
@@ -298,7 +371,7 @@ impl Expense {
             .iter()
             .map(|a| *a.user_id.clone())
             .unique()
-            .map(|uid| self.render_for_user(uid, &relevant_accounts, &categories))
+            .map(|uid| self.render_for_user(uid, &relevant_accounts, categories))
             .collect::<Result<Vec<_>, _>>()
     }
 
