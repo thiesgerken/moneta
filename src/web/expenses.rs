@@ -148,7 +148,7 @@ pub async fn delete(
     let collection = connection.collection::<RenderedExpense>("expenses_rendered");
     // check if there is a rendered expense with the given upstream id belonging to this user
     collection
-        .find_one(doc! {"upstream_id":upstream_id, "user_id": *uid}, None)
+        .find_one(doc! {"upstreamId":upstream_id, "userId": *uid}, None)
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
@@ -236,7 +236,7 @@ pub async fn update(
         ObjectId::from_str(&upstream_id).map_err(|e| log_error_and_500(Box::new(e)))?;
     let collection = connection.collection::<RenderedExpense>("expenses_rendered");
     let original_entry = collection
-        .find_one(doc! {"upstream_id":upstream_id, "user_id": *uid}, None)
+        .find_one(doc! {"upstreamId":upstream_id, "userId": *uid}, None)
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
