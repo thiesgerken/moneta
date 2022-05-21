@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use chrono::{DateTime, Utc};
 use rocket_okapi::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -63,15 +65,34 @@ pub struct Account {
     pub closed: Option<DateTime<Utc>>,
 
     // how to add balances of this account to the total balance, must be >0 and <=1
-    pub ownership_fraction: f32,
+    pub ownership_fraction: f64,
 
     // of course this needs to be mirrored in the other account
     pub synchronization: Option<AccountSynchronization>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountSynchronization {
     pub account_id: ObjectIdWrapper, // id of the other account
     pub invert: bool, // whether to count income in the original account as an expense in the synchronized account (and vice versa) or not
+}
+
+impl Account {
+    pub fn validate(&self) -> Result<(), Box<dyn Error>> {
+        if let Some(closed) = self.closed {
+            if closed <= self.opened {
+                return Err("Account opening date must not be after account close date".into());
+            }
+        }
+
+        if self.ownership_fraction <= 0.0 || self.ownership_fraction > 1.0 {
+            return Err(
+                "Account ownership fraction must be positive and less than (or equal to) 1.0"
+                    .into(),
+            );
+        }
+
+        Ok(())
+    }
 }

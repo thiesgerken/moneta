@@ -10,6 +10,10 @@ pub struct RenderedExpense {
     #[serde(rename = "_id", default)]
     pub id: ObjectIdWrapper,
 
+    /// id of the expense that was rendered
+    pub upstream_id: ObjectIdWrapper,
+
+    /// user for whom this expense was rendered
     #[serde(default)]
     pub user_id: ObjectIdWrapper,
 
@@ -17,6 +21,8 @@ pub struct RenderedExpense {
     pub store: String,
     pub description: String,
     pub comments: String,
+
+    pub reference_amount: Option<i64>,
 
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     #[schemars(with = "DateTime<Utc>")]
@@ -44,6 +50,10 @@ pub struct RenderedExpense {
     pub categories: Vec<ExpenseCategorization>,
     pub transactions: Vec<RenderedExpenseTransaction>,
     pub positions: Vec<ExpensePosition>,
+
+    // how much the total wealth of the user this was rendered for changed by this expense
+    // (sum of the effective_amounts of all the rendered transactions of this rendered expense)
+    pub effective_amount: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -61,6 +71,10 @@ pub struct RenderedExpenseTransaction {
     pub statement: String,
 
     pub calculated_amount: f64,
+
+    // how much the total wealth of the user this was rendered for changed by this transaction
+    // (takes into account if the account belongs to the user and looks at the ownership fractions)
+    pub effective_amount: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -69,6 +83,10 @@ pub struct RenderedBalance {
     #[serde(rename = "_id", default)]
     pub id: ObjectIdWrapper,
 
+    /// id of the balance that was rendered
+    pub upstream_id: ObjectIdWrapper,
+
+    /// user for whom this balance was rendered
     #[serde(default)]
     pub user_id: ObjectIdWrapper,
 

@@ -1,7 +1,8 @@
+use futures::TryStreamExt;
 use mongodb::bson::{doc, oid::ObjectId};
 use serde::de::DeserializeOwned;
 
-use crate::models::User;
+use crate::models::{Account, User};
 
 pub mod optional_chrono_datetime_as_bson_datetime {
     use chrono::Utc;
@@ -48,6 +49,16 @@ where
     let collection = connection.collection::<T>(collection);
     let filter = doc! {"_id":id};
     collection.find_one(filter, None).await
+}
+
+pub async fn query_associated_accounts(
+    connection: &mongodb::Database,
+    account_ids: &[ObjectId],
+) -> Result<Vec<Account>, mongodb::error::Error> {
+    let collection = connection.collection::<Account>("accounts");
+
+    collection.find(doc! { "$or": [ {"_id": {"$in": account_ids}}, {"synchronization.account_id": {"$in": account_ids}}] }, None).await?   .try_collect::<Vec<_>>()
+    .await
 }
 
 pub async fn query_user_by_name(

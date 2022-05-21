@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use crate::models::rendering::RenderedExpense;
 use crate::models::Category;
 use crate::web::authentication::CookieUserId;
 
@@ -51,8 +52,6 @@ pub async fn delete(
     connection: &State<mongodb::Database>,
     id: String,
 ) -> Result<(), Status> {
-    // TODO: check that no rendered expenses reference this entry
-
     let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
     let collection = connection.collection::<Category>("categories");
     let entry = collection
@@ -61,10 +60,27 @@ pub async fn delete(
         .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
 
-    if *uid != *entry.id {
+    if *uid != *entry.user_id {
         return Err(Status::Forbidden);
     }
 
+    // check that no rendered expenses reference this entry
+    let rendered_expenses_collection =
+        connection.collection::<RenderedExpense>("expenses_rendered");
+    let expense_count = rendered_expenses_collection
+        .count_documents(doc!("categories.category_id": *entry.id.clone()), None)
+        .await
+        .map_err(|e| log_error_and_500(Box::new(e)))?;
+
+    if expense_count > 0 {
+        error!(
+            "Tried to remove category {:?}, but it still has {} (rendered) expenses attached to it",
+            id, expense_count
+        );
+        return Err(Status::Forbidden);
+    }
+
+    // everything seems to be in order, proceed with the deletion
     collection
         .delete_one(doc! {"_id":id}, None)
         .await

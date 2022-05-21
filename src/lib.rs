@@ -2,8 +2,8 @@ pub mod cli;
 pub mod import;
 pub mod models;
 pub mod queries;
+pub mod rendering;
 pub mod web;
-// pub mod rendering;
 
 #[macro_use]
 extern crate rocket;
