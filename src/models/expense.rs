@@ -40,16 +40,16 @@ impl Expense {
             return Err("Expense transactions must not contain 0.0 as fraction".into());
         }
 
-        if self.transactions.iter().any(|p| p.fraction.is_some())
-            && self
-               .reference_amount.is_none()
+        if self.transactions.iter().any(|p| p.fraction.is_some()) && self.reference_amount.is_none()
         {
-            return Err("Expenses with at least one fractional transaction must contain a reference amount".into());
+            return Err(
+                "Expenses with at least one fractional transaction must contain a reference amount"
+                    .into(),
+            );
         }
 
         Ok(())
     }
-
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -16,7 +16,6 @@ use rocket_okapi::openapi;
 
 pub async fn validate_and_unrender(
     uid: &CookieUserId,
-    connection: &State<mongodb::Database>,
     balance: Json<RenderedBalance>,
     related_accounts: &[Account],
 ) -> Result<Balance, Status> {
@@ -49,7 +48,7 @@ pub async fn render(
     related_accounts: &[Account],
 ) -> Result<Json<RenderedBalance>, Status> {
     // create rendered balances and insert them into database
-    let rendered_balances = entry.render(&related_accounts).map_err(log_error_and_500)?;
+    let rendered_balances = entry.render(related_accounts).map_err(log_error_and_500)?;
     let collection = connection.collection::<RenderedBalance>("balances_rendered");
     collection
         .insert_many(&rendered_balances, None)
@@ -86,7 +85,7 @@ pub async fn list(
         skip,
         filter,
         sort,
-        Some(doc!("user_id": *uid)), // need to make sure that the balance was rendered for this user
+        Some(doc!("userId": *uid)), // need to make sure that the balance was rendered for this user
     )
     .await
 }
@@ -162,7 +161,7 @@ pub async fn create(
     let related_accounts = queries::query_associated_accounts(connection, &[*balance.account_id])
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
-    let entry = validate_and_unrender(&uid, connection, balance, &related_accounts).await?;
+    let entry = validate_and_unrender(&uid, balance, &related_accounts).await?;
 
     let collection = connection.collection::<Balance>("balances");
     collection
@@ -184,7 +183,7 @@ pub async fn update(
     let related_accounts = queries::query_associated_accounts(connection, &[*balance.account_id])
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
-    let mut entry = validate_and_unrender(&uid, connection, balance, &related_accounts).await?;
+    let mut entry = validate_and_unrender(&uid, balance, &related_accounts).await?;
 
     // check if the original rendered balance belongs to this user
     let upstream_id =

@@ -260,7 +260,7 @@ impl Expense {
             booking_start: expense.booking_start,
             booking_end: expense.booking_end,
             recurring_expense_id: expense.recurring_expense_id,
-            reference_amount:expense.reference_amount,
+            reference_amount: expense.reference_amount,
             is_template: expense.is_template,
             is_tax_relevant: expense.is_tax_relevant,
             is_unchecked: expense.is_unchecked,
