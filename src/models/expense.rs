@@ -42,17 +42,14 @@ impl Expense {
 
         if self.transactions.iter().any(|p| p.fraction.is_some())
             && self
-                .transactions
-                .iter()
-                .filter(|p| p.amount.is_some())
-                .count()
-                != 1
+               .reference_amount.is_none()
         {
-            return Err("Expenses with at least one fractional transaction must contain exactly one fixed amount transaction".into());
+            return Err("Expenses with at least one fractional transaction must contain a reference amount".into());
         }
 
         Ok(())
     }
+
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,6 +62,9 @@ pub struct Expense {
     pub store: String,
     pub description: String,
     pub comments: String,
+
+    /// reference for fractional transactions, can be None if only fixed transactions are used
+    pub reference_amount: Option<i64>,
 
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub booking_start: DateTime<Utc>,

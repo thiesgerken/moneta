@@ -22,6 +22,8 @@ pub struct RenderedExpense {
     pub description: String,
     pub comments: String,
 
+    pub reference_amount: Option<i64>,
+
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     #[schemars(with = "DateTime<Utc>")]
     pub booking_start: DateTime<Utc>,

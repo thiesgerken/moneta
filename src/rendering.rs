@@ -160,11 +160,6 @@ impl Balance {
         Ok(res)
     }
 
-    pub fn apply_changes(&mut self, changes: &RenderedBalance) {
-        self.account_id = changes.account_id.clone();
-        self.amount = changes.amount;
-    }
-
     pub async fn remove_rendered(&self, db: &Database) -> Result<DeleteResult, Box<dyn Error>> {
         let rendered_balances_collection = db.collection::<RenderedBalance>("balances_rendered");
         let r = rendered_balances_collection
@@ -194,7 +189,7 @@ impl ExpenseTransaction {
         &self,
         user_id: ObjectId,
         accounts: &[Account],
-        single_fixed_amount: Option<i64>,
+        reference_amount: Option<i64>,
     ) -> Result<RenderedExpenseTransaction, Box<dyn Error>> {
         let mut res = RenderedExpenseTransaction {
             date: self.date,
@@ -210,7 +205,7 @@ impl ExpenseTransaction {
         res.calculated_amount = if let Some(amount) = self.amount {
             amount as f64
         } else {
-            let total_amount = single_fixed_amount.ok_or("tried to convert a fractional transaction, but no fixed amount transaction available?! expense seems to be invalid")?;
+            let total_amount = reference_amount.ok_or("tried to convert a fractional transaction, but no reference amount available?! expense seems to be invalid")?;
 
             total_amount as f64
                 * self
@@ -265,6 +260,7 @@ impl Expense {
             booking_start: expense.booking_start,
             booking_end: expense.booking_end,
             recurring_expense_id: expense.recurring_expense_id,
+            reference_amount:expense.reference_amount,
             is_template: expense.is_template,
             is_tax_relevant: expense.is_tax_relevant,
             is_unchecked: expense.is_unchecked,
@@ -286,17 +282,10 @@ impl Expense {
         accounts: &[Account],
         categories: &[Category],
     ) -> Result<RenderedExpense, Box<dyn Error>> {
-        // of course this only works for valid expenses
-        let single_fixed_amount = self
-            .transactions
-            .iter()
-            .find(|t| t.amount.is_some())
-            .and_then(|t| t.amount);
-
         let rendered_ts: Vec<_> = self
             .transactions
             .iter()
-            .map(|t| t.render_for_user(user_id, accounts, single_fixed_amount))
+            .map(|t| t.render_for_user(user_id, accounts, self.reference_amount))
             .collect::<Result<_, _>>()?;
         let effective_amount = rendered_ts.iter().map(|t| t.effective_amount).sum();
 
@@ -326,6 +315,7 @@ impl Expense {
             title: self.title.clone(),
             store: self.store.clone(),
             description: self.description.clone(),
+            reference_amount: self.reference_amount,
             comments: self.comments.clone(),
             booking_start: self.booking_start,
             booking_end: self.booking_end,
@@ -373,29 +363,6 @@ impl Expense {
             .unique()
             .map(|uid| self.render_for_user(uid, &relevant_accounts, categories))
             .collect::<Result<Vec<_>, _>>()
-    }
-
-    pub fn apply_changes(&mut self, changes: &RenderedExpense) {
-        self.booking_start = changes.booking_start;
-        self.booking_end = changes.booking_end;
-        self.title = changes.title.clone();
-        self.store = changes.store.clone();
-        self.description = changes.description.clone();
-        self.comments = changes.comments.clone();
-        self.recurring_expense_id = changes.recurring_expense_id.clone();
-        self.is_template = changes.is_template;
-        self.is_tax_relevant = changes.is_tax_relevant;
-        self.is_unchecked = changes.is_unchecked;
-        self.is_incomplete = changes.is_incomplete;
-        self.receipts = changes.receipts.clone();
-        self.categories = changes.categories.clone();
-        self.transactions = changes
-            .transactions
-            .iter()
-            .cloned()
-            .map(ExpenseTransaction::from_rendered)
-            .collect();
-        self.positions = changes.positions.clone();
     }
 
     pub async fn remove_rendered(&self, db: &Database) -> Result<DeleteResult, Box<dyn Error>> {
