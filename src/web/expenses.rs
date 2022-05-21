@@ -114,16 +114,17 @@ pub async fn list(
 }
 
 #[openapi]
-#[get("/expenses/<id>")]
+#[get("/expenses/<upstream_id>")]
 pub async fn get(
     uid: CookieUserId,
     connection: &State<mongodb::Database>,
-    id: String,
+    upstream_id: String,
 ) -> Result<Json<RenderedExpense>, Status> {
-    let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
+    let upstream_id =
+        ObjectId::from_str(&upstream_id).map_err(|e| log_error_and_500(Box::new(e)))?;
     let collection = connection.collection::<RenderedExpense>("expenses_rendered");
     let entry = collection
-        .find_one(doc! {"_id":id}, None)
+        .find_one(doc! {"_id":upstream_id}, None)
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
