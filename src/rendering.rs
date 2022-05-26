@@ -1,6 +1,6 @@
 use crate::models::{
     rendering::{RenderedBalance, RenderedExpense, RenderedExpenseTransaction},
-    Account, Balance, Category, Expense, ExpenseCategorization, ExpenseTransaction,
+    Account, Balance, Expense, ExpenseTransaction,
 };
 use futures::TryStreamExt;
 use itertools::Itertools;
@@ -9,7 +9,7 @@ use mongodb::{
     results::DeleteResult,
     Database,
 };
-use std::{collections::HashMap, error::Error};
+use std::error::Error;
 
 pub async fn rerender_multiple(
     connection: mongodb::Database,
@@ -81,13 +81,6 @@ pub async fn rerender_multiple_expenses(
         .try_collect::<Vec<_>>()
         .await?;
 
-    let category_collection = connection.collection::<Category>("categories");
-    let categories = category_collection
-        .find(doc!(), None) // can't be that many, right?
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
-
     let rendered_expenses_collection =
         connection.collection::<RenderedExpense>("expenses_rendered");
     rendered_expenses_collection
@@ -101,7 +94,7 @@ pub async fn rerender_multiple_expenses(
 
     let mut rendered_expenses = Vec::new();
     while let Some(e) = cursor.try_next().await? {
-        rendered_expenses.extend(e.render(&accounts, &categories)?.into_iter());
+        rendered_expenses.extend(e.render(&accounts)?.into_iter());
     }
 
     let r = rendered_expenses_collection
@@ -280,7 +273,6 @@ impl Expense {
         &self,
         user_id: ObjectId,
         accounts: &[Account],
-        categories: &[Category],
     ) -> Result<RenderedExpense, Box<dyn Error>> {
         let rendered_ts: Vec<_> = self
             .transactions
@@ -288,31 +280,6 @@ impl Expense {
             .map(|t| t.render_for_user(user_id, accounts, self.reference_amount))
             .collect::<Result<_, _>>()?;
         let effective_amount = rendered_ts.iter().map(|t| t.effective_amount).sum();
-
-        let rendered_categorizations = self.categories.iter().map(|ec| {
-            if let Some(replacement) = categories
-                .iter()
-                .find(|c| *c.user_id == user_id && c.replaces.contains(&ec.category_id))
-            {
-                ExpenseCategorization {
-                    category_id: replacement.id.clone(),
-                    weight: ec.weight,
-                }
-            } else {
-                ec.clone()
-            }
-        });
-
-        // the rendered categories could have the same category appear multiple times; let's merge them
-        let mut merged_categorizations: HashMap<ObjectId, ExpenseCategorization> = HashMap::new();
-        for c in rendered_categorizations {
-            if let Some(entry) = merged_categorizations.get_mut(&*c.category_id) {
-                entry.weight += c.weight;
-            } else {
-                merged_categorizations.insert(*c.category_id, c);
-            }
-        }
-        let rendered_categorizations = merged_categorizations.into_values().collect_vec();
 
         Ok(RenderedExpense {
             id: ObjectId::new().into(),
@@ -331,18 +298,14 @@ impl Expense {
             is_unchecked: self.is_unchecked,
             is_incomplete: self.is_incomplete,
             receipts: self.receipts.clone(),
-            categories: rendered_categorizations,
+            categories: self.categories.clone(),
             transactions: rendered_ts,
             positions: self.positions.clone(),
             effective_amount,
         })
     }
 
-    pub fn render(
-        &self,
-        accounts: &[Account],
-        categories: &[Category],
-    ) -> Result<Vec<RenderedExpense>, Box<dyn Error>> {
+    pub fn render(&self, accounts: &[Account]) -> Result<Vec<RenderedExpense>, Box<dyn Error>> {
         let main_accounts: Vec<_> = accounts
             .iter()
             .filter(|a| self.transactions.iter().any(|t| a.id == t.account_id))
@@ -367,7 +330,7 @@ impl Expense {
             .iter()
             .map(|a| *a.user_id.clone())
             .unique()
-            .map(|uid| self.render_for_user(uid, &relevant_accounts, categories))
+            .map(|uid| self.render_for_user(uid, &relevant_accounts))
             .collect::<Result<Vec<_>, _>>()
     }
 

@@ -48,7 +48,7 @@ pub async fn get(
 #[openapi]
 #[delete("/categories/<id>")]
 pub async fn delete(
-    uid: CookieUserId,
+    _uid: CookieUserId,
     connection: &State<mongodb::Database>,
     id: String,
 ) -> Result<(), Status> {
@@ -59,10 +59,6 @@ pub async fn delete(
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
-
-    if *uid != *entry.user_id {
-        return Err(Status::Forbidden);
-    }
 
     // check that no rendered expenses reference this entry
     let rendered_expenses_collection =
@@ -86,21 +82,18 @@ pub async fn delete(
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
 
-    // TODO: retrigger re-rendering (in another thread) due to "replaces" field
-
     Ok(())
 }
 
 #[openapi]
 #[post("/categories", data = "<category>")]
 pub async fn create(
-    uid: CookieUserId,
+    _uid: CookieUserId,
     connection: &State<mongodb::Database>,
     category: Json<Category>,
 ) -> Result<Json<Category>, Status> {
     let mut entry = category.clone();
     entry.id = ObjectId::new().into();
-    entry.user_id = (*uid).into();
 
     let collection = connection.collection::<Category>("categories");
     collection
@@ -108,15 +101,13 @@ pub async fn create(
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
 
-    // TODO: retrigger re-rendering (in another thread) due to "replaces" field
-
     Ok(Json(entry))
 }
 
 #[openapi]
 #[put("/categories/<id>", data = "<category>")]
 pub async fn update(
-    uid: CookieUserId,
+    _uid: CookieUserId,
     connection: &State<mongodb::Database>,
     id: String,
     category: Json<Category>,
@@ -129,13 +120,8 @@ pub async fn update(
         .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
 
-    if *uid != *original_entry.id {
-        return Err(Status::Forbidden);
-    }
-
     let mut entry = category.clone();
     entry.id = original_entry.id;
-    entry.user_id = original_entry.user_id;
 
     collection
         .update_one(
@@ -145,8 +131,6 @@ pub async fn update(
         )
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
-
-    // TODO: retrigger re-rendering (in another thread) due to "replaces" field
 
     Ok(Json(entry))
 }
