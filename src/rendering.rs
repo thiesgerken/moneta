@@ -9,7 +9,7 @@ use mongodb::{
     results::DeleteResult,
     Database,
 };
-use std::error::Error;
+use std::{collections::HashMap, error::Error};
 
 pub async fn rerender_multiple(
     connection: mongodb::Database,
@@ -289,24 +289,30 @@ impl Expense {
             .collect::<Result<_, _>>()?;
         let effective_amount = rendered_ts.iter().map(|t| t.effective_amount).sum();
 
-        // TODO: the rendered categories could have the same category appear multiple times; could be merged
-        let rendered_categorizations = self
-            .categories
-            .iter()
-            .map(|ec| {
-                if let Some(replacement) = categories
-                    .iter()
-                    .find(|c| *c.user_id == user_id && c.replaces.contains(&ec.category_id))
-                {
-                    ExpenseCategorization {
-                        category_id: replacement.id.clone(),
-                        weight: ec.weight,
-                    }
-                } else {
-                    ec.clone()
+        let rendered_categorizations = self.categories.iter().map(|ec| {
+            if let Some(replacement) = categories
+                .iter()
+                .find(|c| *c.user_id == user_id && c.replaces.contains(&ec.category_id))
+            {
+                ExpenseCategorization {
+                    category_id: replacement.id.clone(),
+                    weight: ec.weight,
                 }
-            })
-            .collect();
+            } else {
+                ec.clone()
+            }
+        });
+
+        // the rendered categories could have the same category appear multiple times; let's merge them
+        let mut merged_categorizations: HashMap<ObjectId, ExpenseCategorization> = HashMap::new();
+        for c in rendered_categorizations {
+            if let Some(entry) = merged_categorizations.get_mut(&*c.category_id) {
+                entry.weight += c.weight;
+            } else {
+                merged_categorizations.insert(*c.category_id, c);
+            }
+        }
+        let rendered_categorizations = merged_categorizations.into_values().collect_vec();
 
         Ok(RenderedExpense {
             id: ObjectId::new().into(),
