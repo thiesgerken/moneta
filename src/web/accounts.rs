@@ -154,7 +154,7 @@ pub async fn update(
         .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
 
-    if *uid != *original_entry.id {
+    if *uid != *original_entry.user_id {
         return Err(Status::Forbidden);
     }
 

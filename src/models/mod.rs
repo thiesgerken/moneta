@@ -71,20 +71,14 @@ pub struct Category {
     #[serde(rename = "_id", default)]
     pub id: ObjectIdWrapper,
 
-    /// owner of this category
-    #[serde(default)]
-    pub user_id: ObjectIdWrapper,
-
     pub name: String,
     pub description: String,
     pub color: Option<String>,
     pub parent: Option<ObjectIdWrapper>,
 
-    /// list of category ids from other users
-    #[serde(default)]
-    pub replaces: Vec<ObjectIdWrapper>,
-
-    /// desired max spending in this category per month. In the future this could become a list of limits and timespans (to accomodate for varying spending limits over time without changing past data)
+    /// desired max spending in this category per month.
+    /// In the future this could become a list of limits and timespans
+    /// (to accommodate for varying spending limits over time without changing past data)
     pub monthly_limit: Option<f32>,
 }
 

@@ -1,13 +1,12 @@
 use std::str::FromStr;
 
 use crate::models::rendering::RenderedExpense;
-use crate::models::{Account, Category, Expense};
+use crate::models::{Account, Expense};
 use crate::queries;
 use crate::web::authentication::CookieUserId;
 
 use super::util;
 use crate::web::util::log_error_and_500;
-use futures::TryStreamExt;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
 use rocket::http::Status;
@@ -66,12 +65,9 @@ pub async fn render(
     connection: &State<mongodb::Database>,
     entry: Expense,
     related_accounts: &[Account],
-    categories: &[Category],
 ) -> Result<Json<RenderedExpense>, Status> {
     // create rendered expenses and insert them into database
-    let rendered_expenses = entry
-        .render(related_accounts, categories)
-        .map_err(log_error_and_500)?;
+    let rendered_expenses = entry.render(related_accounts).map_err(log_error_and_500)?;
     let collection = connection.collection::<RenderedExpense>("expenses_rendered");
     collection
         .insert_many(&rendered_expenses, None)
@@ -187,15 +183,6 @@ pub async fn create(
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
 
-    let category_collection = connection.collection::<Category>("categories");
-    let categories: Vec<_> = category_collection
-        .find(doc!(), None) // can't be that many, right?
-        .await
-        .map_err(|e| log_error_and_500(Box::new(e)))?
-        .try_collect::<Vec<_>>()
-        .await
-        .map_err(|e| log_error_and_500(Box::new(e)))?;
-
     let entry = validate_and_unrender(&uid, expense, &related_accounts).await?;
 
     let collection = connection.collection::<Expense>("expenses");
@@ -204,7 +191,7 @@ pub async fn create(
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
 
-    render(&uid, connection, entry, &related_accounts, &categories).await
+    render(&uid, connection, entry, &related_accounts).await
 }
 
 #[openapi]
@@ -221,14 +208,6 @@ pub async fn update(
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
 
-    let category_collection = connection.collection::<Category>("categories");
-    let categories: Vec<_> = category_collection
-        .find(doc!(), None) // can't be that many, right?
-        .await
-        .map_err(|e| log_error_and_500(Box::new(e)))?
-        .try_collect::<Vec<_>>()
-        .await
-        .map_err(|e| log_error_and_500(Box::new(e)))?;
     let mut entry = validate_and_unrender(&uid, expense, &related_accounts).await?;
 
     // check if the original rendered expense belongs to this user
@@ -271,7 +250,7 @@ pub async fn update(
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
 
-    render(&uid, connection, entry, &related_accounts, &categories).await
+    render(&uid, connection, entry, &related_accounts).await
 }
 
 // TODO: implement changelogs for expenses
