@@ -1,4 +1,4 @@
-FROM rust:1.63-bullseye as builder
+FROM rust:1.64-bullseye as builder
 
 RUN apt-get update -y && apt-get dist-upgrade -y \
   && apt-get update -y && apt-get install -y --no-install-recommends libc-dev libssl-dev pkg-config gcc clang \
@@ -10,12 +10,9 @@ COPY Cargo.toml .
 COPY Cargo.lock .
 RUN mkdir -p src/bin && touch src/lib.rs && touch src/bin/moneta.rs && touch src/bin/sandbox.rs && cargo build --lib --release
 
-COPY --from=builder-frontend /build/web/build ./web/build
-
 COPY src ./src
-COPY migrations ./migrations
 
-RUN touch src/lib.rs && touch src/bin/moneta.rs && touch src/bin/sandbox.rs && touch src/bin/generate.rs
+RUN touch src/lib.rs && touch src/bin/moneta.rs && touch src/bin/sandbox.rs
 RUN cargo build --release
 RUN strip -s target/release/moneta
 
