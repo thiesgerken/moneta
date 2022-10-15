@@ -9,7 +9,7 @@ use log::info;
 use mongodb::bson;
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
-use prettytable::{cell, row, Table};
+use prettytable::{row, Table};
 use std::str::FromStr;
 
 pub fn build() -> Command<'static> {

@@ -3,7 +3,6 @@ pub mod authentication;
 pub mod balances;
 pub mod categories;
 pub mod expenses;
-pub mod static_files;
 pub mod user;
 mod util;
 
@@ -72,7 +71,6 @@ pub async fn handle(config: Config, connection: mongodb::Database) {
                 ..Default::default()
             }),
         )
-        .mount("/", routes![static_files::serve, static_files::index])
         .launch()
         .await
         .expect("server died");

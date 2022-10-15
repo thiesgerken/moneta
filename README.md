@@ -12,4 +12,3 @@ Tool to manage personal finances.
 
 - `moneta serve` starts a web server on port 8484 (needs a running mongo), same happens when using `docker-compose up -d`
 - API is served on `/api` and documentation at `/api/doc`
-- All remaining files are served from the contents of `./web/dist`

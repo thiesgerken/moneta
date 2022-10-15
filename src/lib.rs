@@ -8,9 +8,6 @@ pub mod web;
 #[macro_use]
 extern crate rocket;
 
-#[macro_use]
-extern crate rust_embed;
-
 use argonautica::{Hasher, Verifier};
 use simplelog::{ColorChoice, LevelFilter, SimpleLogger, TermLogger, TerminalMode};
 
