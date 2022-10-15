@@ -40,7 +40,7 @@ impl From<ObjectId> for ObjectIdWrapper {
 
 impl JsonSchema for ObjectIdWrapper {
     fn schema_name() -> String {
-        "MongoDB ObjectId".to_owned()
+        "ObjectId".to_owned()
     }
 
     fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
