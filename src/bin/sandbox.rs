@@ -72,7 +72,7 @@ fn main() {
             doc! { "title": "The Great Gatsby", "author": "F. Scott Fitzgerald" },
         ];
 
-        // Insert some documents into the "mydb.books" collection.
+        // Insert some documents into the "my_db.books" collection.
         let res = collection.insert_many(docs, None).await.unwrap();
         println!("{:?}", res);
 
@@ -98,7 +98,7 @@ fn main() {
         println!("to insert: {:?}", balances);
         println!("to insert: {:?}", serde_json::to_string(&balances[0]));
 
-        // Insert the books into "mydb.books" collection, no manual conversion to BSON necessary.
+        // Insert the books into "my_db.books" collection, no manual conversion to BSON necessary.
         let res = typed_collection.insert_many(balances, None).await.unwrap();
         println!("insert result: {:?}", res);
 
