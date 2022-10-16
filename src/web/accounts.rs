@@ -163,7 +163,7 @@ pub async fn update(
         return Err(Status::Forbidden);
     }
 
-    let mut entry = account.clone();
+    let mut entry = account.0.clone();
     entry.id = original_entry.id;
     entry.user_id = original_entry.user_id;
     entry.synchronization = original_entry.synchronization;

@@ -54,7 +54,7 @@ pub async fn validate_and_unrender(
     };
 
     // cast to normal expense and insert into database
-    let entry = Expense::from_rendered(expense.clone());
+    let entry = Expense::from_rendered(expense.0.clone());
     entry.validate().map_err(log_error_and_500)?;
 
     Ok(entry)

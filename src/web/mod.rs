@@ -39,7 +39,7 @@ pub async fn handle(config: Config, connection: mongodb::Database) {
         rocket_config = rocket_config.merge(("secret_key", config.api.secret_key.clone()));
     }
 
-    rocket::custom(rocket_config)
+    let _rocket = rocket::custom(rocket_config)
         .manage(config)
         .manage(connection)
         .mount(

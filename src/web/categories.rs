@@ -92,7 +92,7 @@ pub async fn create(
     connection: &State<mongodb::Database>,
     category: Json<Category>,
 ) -> Result<Json<Category>, Status> {
-    let mut entry = category.clone();
+    let mut entry = category.0.clone();
     entry.id = ObjectId::new().into();
 
     let collection = connection.collection::<Category>("categories");
@@ -120,7 +120,7 @@ pub async fn update(
         .map_err(|e| log_error_and_500(Box::new(e)))?
         .ok_or(Status::NotFound)?;
 
-    let mut entry = category.clone();
+    let mut entry = category.0.clone();
     entry.id = original_entry.id;
 
     collection
