@@ -1,7 +1,45 @@
-use moneta::cli;
+use moneta::{cli, config::Config, web};
 
-use log::debug;
+use log::{info, LevelFilter};
+use simplelog::{ColorChoice, SimpleLogger, TermLogger, TerminalMode};
 use tokio::runtime::Builder;
+
+pub fn initialize_logging(verbosity: i8) {
+    let level = match verbosity {
+        -1 => LevelFilter::Warn,
+        0 => LevelFilter::Info,
+        1 => LevelFilter::Debug,
+        n => {
+            if n > 0 {
+                LevelFilter::Trace
+            } else {
+                LevelFilter::Error
+            }
+        }
+    };
+
+    let mut log_config = simplelog::ConfigBuilder::new();
+
+    // log_config.add_filter_ignore_str("html5ever");
+    // log_config.add_filter_ignore_str("hyper");
+    // log_config.add_filter_ignore_str("reqwest");
+    // log_config.add_filter_ignore_str("selectors");
+    // log_config.add_filter_allow_str("moneta");
+
+    if let Err(e) = TermLogger::init(
+        level,
+        log_config.build(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    ) {
+        SimpleLogger::init(level, log_config.build())
+            .expect("TermLogger and SimpleLogger failed to init!?");
+        info!(
+            "Falling back to SimpleLogger because TermLogger init failed: {}",
+            e
+        );
+    }
+}
 
 fn main() {
     let runtime = Builder::new_multi_thread()
@@ -12,23 +50,26 @@ fn main() {
 
     runtime.block_on(async {
         let matches = cli::build().get_matches();
-        moneta::initialize_logging(matches.occurrences_of("v") as u32);
-
-        // setup default settings and parse overrides from config files
-        let mut settings_builder = cli::initialize_settings(matches.value_of("config"));
-
-        // parse overrides from CLI and modify settings
-        settings_builder =
-            cli::merge_settings(&matches, settings_builder).expect("unable to parse cli overrides");
+        let settings_builder = config::ConfigBuilder::<config::builder::DefaultState>::default()
+            .add_source(config::Environment::with_prefix("moneta").separator("__"))
+            .set_override_option(
+                "verbosity",
+                matches
+                    .get_one::<u8>("verbosity")
+                    .map(|x| *x as i64)
+                    .and_then(|x| if x != 0 { Some(x) } else { None }),
+            )
+            .unwrap();
 
         let settings = settings_builder.build().expect("unable to parse settings");
         let config = settings
-            .try_deserialize::<cli::Config>()
+            .try_deserialize::<Config>()
             .expect("unable to parse settings into Config struct");
 
-        debug!("config={:?}", &config);
+        initialize_logging(config.verbosity);
+        info!("config={:?}", &config);
 
-        let connection = moneta::connect(&config.database_url, &config.database_name, "moneta-web")
+        let connection = moneta::connect(&config.database.url, &config.database.name, "moneta-web")
             .await
             .expect("error connecting and migrating to db");
 
@@ -38,8 +79,8 @@ fn main() {
             cli::account::handle(connection, sub_matches).await;
         } else if let Some(sub_matches) = matches.subcommand_matches("import") {
             cli::import::handle(connection, sub_matches).await;
-        } else if let Some(sub_matches) = matches.subcommand_matches("serve") {
-            cli::serve::handle(connection, sub_matches, config.web, config.verbosity).await;
+        } else if matches.subcommand_matches("serve").is_some() {
+            web::handle(config, connection).await;
         } else {
             cli::build()
                 .print_long_help()

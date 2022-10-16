@@ -10,26 +10,33 @@ use rocket::config::LogLevel;
 use rocket::data::{Limits, ToByteUnit};
 use rocket_okapi::{openapi_get_routes, swagger_ui::make_swagger_ui, swagger_ui::SwaggerUIConfig};
 
-pub struct Config {
-    pub port: u16,
-    pub address: String,
-    pub secret_key: Option<String>,
-    pub log_level: LogLevel,
-}
+use crate::config::Config;
 
 pub async fn handle(config: Config, connection: mongodb::Database) {
+    let level = match config.verbosity {
+        -1 => LogLevel::Critical,
+        0 => LogLevel::Normal,
+        n => {
+            if n > 0 {
+                LogLevel::Debug
+            } else {
+                LogLevel::Off
+            }
+        }
+    };
+
     let limits = Limits::new()
         .limit("forms", 64_i32.kibibytes())
         .limit("json", 10_i32.mebibytes());
 
     let mut rocket_config = rocket::config::Config::figment()
-        .merge(("port", config.port))
-        .merge(("address", config.address.clone()))
+        .merge(("port", config.api.port))
+        .merge(("address", config.api.address.clone()))
         .merge(("limits", limits))
-        .merge(("log_level", config.log_level));
+        .merge(("log_level", level));
 
-    if let Some(key) = config.secret_key.clone() {
-        rocket_config = rocket_config.merge(("secret_key", key));
+    if !config.api.secret_key.is_empty() {
+        rocket_config = rocket_config.merge(("secret_key", config.api.secret_key.clone()));
     }
 
     rocket::custom(rocket_config)

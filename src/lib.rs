@@ -4,12 +4,12 @@ pub mod models;
 pub mod queries;
 pub mod rendering;
 pub mod web;
+pub mod config;
 
 #[macro_use]
 extern crate rocket;
 
 use argonautica::{Hasher, Verifier};
-use simplelog::{ColorChoice, LevelFilter, SimpleLogger, TermLogger, TerminalMode};
 
 pub fn verify_password(pw: &str, hash: &str) -> bool {
     Verifier::default()
@@ -26,37 +26,6 @@ pub fn hash_password(pw: &str) -> String {
         .with_password(pw)
         .hash()
         .unwrap()
-}
-
-pub fn initialize_logging(verbosity: u32) {
-    let level = match verbosity {
-        // 0 => LevelFilter::Warn,
-        0 => LevelFilter::Info,
-        1 => LevelFilter::Debug,
-        _ => LevelFilter::Trace,
-    };
-
-    let mut log_config = simplelog::ConfigBuilder::new();
-
-    // log_config.add_filter_ignore_str("html5ever");
-    // log_config.add_filter_ignore_str("hyper");
-    // log_config.add_filter_ignore_str("reqwest");
-    // log_config.add_filter_ignore_str("selectors");
-    // log_config.add_filter_allow_str("moneta");
-
-    if let Err(e) = TermLogger::init(
-        level,
-        log_config.build(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    ) {
-        SimpleLogger::init(level, log_config.build())
-            .expect("TermLogger and SimpleLogger failed to init!?");
-        info!(
-            "Falling back to SimpleLogger because TermLogger init failed: {}",
-            e
-        );
-    }
 }
 
 pub async fn connect(

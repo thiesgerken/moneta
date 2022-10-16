@@ -1,9 +1,44 @@
 use chrono::Utc;
 use futures::stream::TryStreamExt;
+use log::{LevelFilter, info};
 use moneta::models::Balance;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{doc, Document};
+use simplelog::{TerminalMode, ColorChoice, SimpleLogger, TermLogger};
 use tokio::runtime::Builder;
+
+
+pub fn initialize_logging(verbosity: i8) {
+    let level = match verbosity {
+        // 0 => LevelFilter::Warn,
+        0 => LevelFilter::Info,
+        1 => LevelFilter::Debug,
+        _ => LevelFilter::Trace,
+    };
+
+    let mut log_config = simplelog::ConfigBuilder::new();
+
+    // log_config.add_filter_ignore_str("html5ever");
+    // log_config.add_filter_ignore_str("hyper");
+    // log_config.add_filter_ignore_str("reqwest");
+    // log_config.add_filter_ignore_str("selectors");
+    // log_config.add_filter_allow_str("moneta");
+
+    if let Err(e) = TermLogger::init(
+        level,
+        log_config.build(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    ) {
+        SimpleLogger::init(level, log_config.build())
+            .expect("TermLogger and SimpleLogger failed to init!?");
+        info!(
+            "Falling back to SimpleLogger because TermLogger init failed: {}",
+            e
+        );
+    }
+}
+
 
 fn main() {
     let runtime = Builder::new_multi_thread()
@@ -13,7 +48,7 @@ fn main() {
         .unwrap();
 
     runtime.block_on(async {
-        moneta::initialize_logging(1);
+    initialize_logging(1);
 
         let db = moneta::connect(
             "mongodb://localhost:27017",
