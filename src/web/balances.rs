@@ -38,7 +38,7 @@ pub async fn validate_and_unrender(
         return Err(Status::Forbidden);
     }
 
-    Ok(Balance::from_rendered(balance.clone()))
+    Ok(Balance::from_rendered(balance.0.clone()))
 }
 
 pub async fn render(

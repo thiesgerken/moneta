@@ -9,10 +9,10 @@ use log::info;
 use mongodb::bson;
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
-use prettytable::{cell, row, Table};
+use prettytable::{row, Table};
 use std::str::FromStr;
 
-pub fn build() -> Command<'static> {
+pub fn build() -> Command {
     Command::new("account")
         .about("Account Management")
         .arg(
@@ -49,11 +49,12 @@ pub fn build() -> Command<'static> {
 pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
     let account_collection = connection.collection::<Account>("accounts");
 
-    if let Some(account_id_values) = sub_matches.values_of("sync") {
+    if let Some(account_id_values) = sub_matches.get_many::<String>("sync") {
         assert!(account_id_values.len() == 2);
         let account_ids: Vec<ObjectId> = account_id_values
             .into_iter()
-            .map(ObjectId::from_str)
+            .cloned()
+            .map(|s|ObjectId::from_str(&s))
             .collect::<Result<_, _>>()
             .expect("error parsing object ids");
 
@@ -69,7 +70,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         assert!(accounts.iter().all(|a| a.synchronization.is_none()));
         assert!(accounts[0].user_id != accounts[1].user_id);
 
-        let invert = sub_matches.is_present("invert");
+        let invert = sub_matches.contains_id("invert");
 
         for i in 0..2 {
             account_collection
@@ -89,7 +90,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         rerender_multiple(connection, &account_ids)
             .await
             .expect("Could not rerender entities");
-    } else if let Some(account_id_value) = sub_matches.value_of("unsync") {
+    } else if let Some(account_id_value) = sub_matches.get_one::<String>("unsync") {
         let account_id = ObjectId::from_str(account_id_value).expect("error parsing object id");
         let account = account_collection
             .find_one(doc!("_id": account_id), None)
@@ -114,7 +115,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         rerender_multiple(connection, &account_ids)
             .await
             .expect("Could not rerender entities");
-    } else if sub_matches.is_present("rerender") {
+    } else if sub_matches.contains_id("rerender") {
         let rendered_expenses_collection =
             connection.collection::<RenderedExpense>("expenses_rendered");
         let rendered_balances_collection =
@@ -143,7 +144,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         rerender_multiple(connection, &account_ids)
             .await
             .expect("Could not rerender entities");
-    } else if sub_matches.is_present("list") {
+    } else if sub_matches.contains_id("list") {
         let mut account_cursor = account_collection
             .find(None, None)
             .await

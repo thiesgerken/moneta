@@ -10,10 +10,10 @@ use futures::TryStreamExt;
 use log::info;
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
-use prettytable::{cell, row, Table};
+use prettytable::{row, Table};
 use std::io;
 
-pub fn build() -> Command<'static> {
+pub fn build() -> Command {
     Command::new("user")
         .about("User Management")
         .arg(
@@ -45,7 +45,7 @@ pub fn build() -> Command<'static> {
 pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
     let user_collection = connection.collection::<User>("users");
 
-    if let Some(uname) = sub_matches.value_of("add") {
+    if let Some(uname) = sub_matches.get_one::<String>("add") {
         // check if this username is taken
         if let Some(user) = queries::query_user_by_name(&connection, uname)
             .await
@@ -84,7 +84,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             .await
             .expect("Error saving new user");
         info!("Created user {:?}", u);
-    } else if let Some(uname) = sub_matches.value_of("update") {
+    } else if let Some(uname) = sub_matches.get_one::<String>("update") {
         // check if this user even exists
         let user = queries::query_user_by_name(&connection, uname)
             .await
@@ -118,7 +118,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             .await
             .expect("Could not update user");
         info!("Updated user {}", uname);
-    } else if let Some(uname) = sub_matches.value_of("remove") {
+    } else if let Some(uname) = sub_matches.get_one::<String>("remove") {
         // check if this user even exists
         let user = queries::query_user_by_name(&connection, uname)
             .await
@@ -142,7 +142,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
 
         assert!(delete_res.deleted_count == 1);
         info!("deleted user '{}'", uname);
-    } else if sub_matches.is_present("list") {
+    } else if sub_matches.contains_id("list") {
         let mut user_cursor = user_collection
             .find(None, None)
             .await

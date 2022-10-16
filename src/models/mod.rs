@@ -14,7 +14,7 @@ use mongodb::bson::oid::ObjectId;
 use rocket_okapi::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct ObjectIdWrapper(pub ObjectId);
 

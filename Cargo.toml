@@ -9,17 +9,15 @@ default-run = "moneta"
 argonautica = "0.2"
 futures = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
-clap = { version = "3.0", features = ["cargo"] }
-clap_complete = "3.0"
+clap = { version = "4.0", features = ["cargo"] }
 config = "0.13"
 itertools = "0.10"
 log = "0.4"
-prettytable-rs = "0.8"
+prettytable-rs = "0.9"
 regex = "1.4"
 schemars ={ version =  "0.8", features = ["chrono"]}
-rocket = { version = "0.5.0-rc.1", features = ["secrets", "json"] }
-rocket_okapi = { version = "0.8.0-rc.1", features = ["rapidoc", "swagger", "secrets"] }
-rust-embed = "6.2"
+rocket = { version = "0.5.0-rc.2", features = ["secrets", "json"] }
+rocket_okapi = { version = "0.8.0-rc.2", features = ["rapidoc", "swagger", "secrets"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 simplelog = "0.12"

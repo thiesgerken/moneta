@@ -6,12 +6,12 @@ services:
     image: git.thiesgerken.de:5005/thies/moneta:latest
     restart: unless-stopped
     ports:
-      - "8484:8484"
+      - "8484:80"
     environment:
-      - MONETA__DATABASE_URL=mongodb://mongo:27017
-      - MONETA__WEB__PORT=8484
-      - MONETA__WEB__ADDRESS=0.0.0.0
-      - MONETA__WEB__SECRET_KEY=M7/dfyV00H6WoOGNxygzdOudibhuPdQwJay5pi+I1cg=
+      - MONETA__DATABASE__URL=mongodb://mongo:27017
+      - MONETA__API__PORT=80
+      - MONETA__API__ADDRESS=0.0.0.0
+      - MONETA__API__SECRET_KEY=M7/dfyV00H6WoOGNxygzdOudibhuPdQwJay5pi+I1cg=
     command: moneta serve
 
   mongo:
