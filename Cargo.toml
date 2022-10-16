@@ -29,6 +29,8 @@ mongodb = { version = "2.2.0", features = [
     "bson-chrono-0_4",
     "bson-serde_with"
 ] }
+juniper = "0.15.10"
+juniper_rocket = "0.8.2"
 
 [profile.release]
 lto = true
