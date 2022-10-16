@@ -19,12 +19,12 @@ use super::util;
 pub async fn list(
     _uid: CookieUserId,
     connection: &State<mongodb::Database>,
-    limit: Option<usize>,
-    skip: Option<usize>,
+    limit: Option<i32>,
+    skip: Option<i32>,
     filter: Option<String>,
     sort: Option<String>,
 ) -> Result<Json<Vec<Category>>, Status> {
-    util::list_query::<Category>("categories", connection, limit, skip, filter, sort, None).await
+    util::list_query::<Category>("categories", connection, limit, skip, filter, sort, None).await.map(Json)
 }
 
 #[openapi]

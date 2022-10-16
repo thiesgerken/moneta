@@ -21,12 +21,12 @@ pub fn string_to_document(s: &str) -> Result<Document, Box<dyn Error>> {
 pub async fn list_query<T>(
     collection_name: &str,
     connection: &mongodb::Database,
-    limit: Option<usize>,
-    skip: Option<usize>,
+    limit: Option<i32>,
+    skip: Option<i32>,
     filter: Option<String>,
     sort: Option<String>,
     filter_overrides: Option<Document>,
-) -> Result<Json<Vec<T>>, Status>
+) -> Result<Vec<T>, Status>
 where
     T: DeserializeOwned + Unpin + Send + Sync,
 {
@@ -60,13 +60,16 @@ where
         .find(filter, find_options)
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?
-        .skip(skip.unwrap_or(0))
-        .take(limit.unwrap_or(usize::MAX));
+        .skip(usize::try_from(skip.unwrap_or(0)).map_err(|e| log_error_and_500(Box::new(e)))?)
+        .take(
+            usize::try_from(limit.unwrap_or(i32::MAX))
+                .map_err(|e| log_error_and_500(Box::new(e)))?,
+        );
 
     let entries = cursor
         .try_collect::<Vec<_>>()
         .await
         .map_err(|e| log_error_and_500(Box::new(e)))?;
 
-    Ok(Json(entries))
+    Ok(entries)
 }

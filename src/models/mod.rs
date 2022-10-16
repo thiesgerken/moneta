@@ -10,13 +10,40 @@ pub use expense::{
 };
 
 use chrono::{DateTime, Utc};
+use juniper::{GraphQLObject, graphql_scalar, Value, InputValue, ParseScalarResult, ParseError, parser::{ScalarToken, Token}};
 use mongodb::bson::oid::ObjectId;
 use rocket_okapi::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
-#[serde(transparent)]
 pub struct ObjectIdWrapper(pub ObjectId);
+
+#[graphql_scalar(name = "OID")]
+impl<S> GraphQLScalar for ObjectIdWrapper
+where
+    S: ScalarValue,
+{
+    fn resolve(&self) -> Value {
+        Value::scalar(self.0.to_hex())
+    }
+
+    fn from_input_value(v: &InputValue) -> Option<ObjectIdWrapper> {
+        match *v {
+            InputValue::Scalar(ref s) => s
+                .as_string()
+                .and_then(|s| ObjectId::parse_str(s).ok())
+                .map(ObjectIdWrapper),
+            _ => None,
+        }
+    }
+
+    fn from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
+        match value {
+            ScalarToken::String(value) | ScalarToken::Int(value) => Ok(S::from(value.to_owned())),
+            _ => Err(ParseError::UnexpectedToken(Token::Scalar(value))),
+        }
+    }
+}
 
 impl Deref for ObjectIdWrapper {
     type Target = ObjectId;

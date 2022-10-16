@@ -3,6 +3,7 @@ use crate::web::authentication;
 use crate::{queries, verify_password};
 
 use futures::{StreamExt, TryStreamExt};
+use juniper::{graphql_object, FieldResult, GraphQLObject};
 use log::{info, warn};
 use mongodb::bson::doc;
 use rocket::http::{CookieJar, Status};
@@ -13,8 +14,9 @@ use serde::{Deserialize, Serialize};
 
 use super::authentication::CookieUserId;
 use super::util::log_error_and_500;
+use super::Context;
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInfo {
     #[serde(rename = "_id")]
@@ -38,20 +40,6 @@ impl UserInfo {
             full_name: user.full_name,
         }
     }
-}
-
-#[openapi]
-#[get("/user")]
-pub async fn info(
-    uid: CookieUserId,
-    connection: &State<mongodb::Database>,
-) -> Result<Json<UserInfo>, Status> {
-    let user = queries::query_element_by_id(connection, "users", *uid)
-        .await
-        .map_err(|e| log_error_and_500(Box::new(e)))?
-        .ok_or(Status::InternalServerError)?;
-
-    Ok(Json(UserInfo::new(user)))
 }
 
 #[openapi]
@@ -92,29 +80,4 @@ pub async fn login(
 
         Err(Status::Unauthorized)
     }
-}
-
-#[openapi]
-#[get("/user/list?<skip>&<limit>")]
-pub async fn list(
-    _uid: CookieUserId,
-    connection: &State<mongodb::Database>,
-    limit: Option<usize>,
-    skip: Option<usize>,
-) -> Result<Json<Vec<UserInfo>>, Status> {
-    let collection = connection.collection::<User>("users");
-    let cursor = collection
-        .find(None, None)
-        .await
-        .map_err(|e| log_error_and_500(Box::new(e)))?
-        .skip(skip.unwrap_or(0))
-        .take(limit.unwrap_or(usize::MAX));
-
-    let users = cursor
-        .and_then(|u| async { Ok(UserInfo::new(u)) })
-        .try_collect::<Vec<_>>()
-        .await
-        .map_err(|e| log_error_and_500(Box::new(e)))?;
-
-    Ok(Json(users))
 }

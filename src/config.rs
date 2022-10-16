@@ -36,7 +36,7 @@ impl Default for ApiConfig {
     fn default() -> Self {
         Self {
             secret_key: String::new(),
-            port: 8484,
+            port: 8181,
             address: "127.0.0.1".into(),
         }
     }

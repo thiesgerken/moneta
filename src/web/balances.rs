@@ -73,8 +73,8 @@ pub async fn render(
 pub async fn list(
     uid: CookieUserId,
     connection: &State<mongodb::Database>,
-    limit: Option<usize>,
-    skip: Option<usize>,
+    limit: Option<i32>,
+    skip: Option<i32>,
     filter: Option<String>,
     sort: Option<String>,
 ) -> Result<Json<Vec<RenderedBalance>>, Status> {
@@ -87,7 +87,7 @@ pub async fn list(
         sort,
         Some(doc!("userId": *uid)), // need to make sure that the balance was rendered for this user
     )
-    .await
+    .await.map(Json)
 }
 
 #[openapi]

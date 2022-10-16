@@ -6,6 +6,11 @@ pub mod expenses;
 pub mod user;
 mod util;
 
+use std::sync::Arc;
+
+use futures::{StreamExt, TryStreamExt};
+use mongodb::bson::doc;
+use mongodb::bson::oid::ObjectId;
 use rocket::config::LogLevel;
 use rocket::data::{Limits, ToByteUnit};
 use rocket::http::CookieJar;
@@ -13,8 +18,11 @@ use rocket_okapi::{openapi_get_routes, swagger_ui::make_swagger_ui, swagger_ui::
 use tokio::sync::Mutex;
 
 use crate::config::Config;
+use crate::models::{Account, ObjectIdWrapper, User};
+use crate::queries;
+use crate::web::user::UserInfo;
 
-use juniper::{graphql_object, EmptySubscription, FieldResult};
+use juniper::{graphql_object, EmptySubscription, FieldError, FieldResult, Value};
 use rocket::{response::content, State};
 
 #[rocket::get("/")]
@@ -30,18 +38,29 @@ async fn get_graphql_handler(
     request: juniper_rocket::GraphQLRequest,
     schema: &State<Schema>,
 ) -> juniper_rocket::GraphQLResponse {
+    // sadly, we can't do login via gql because of lifetime issues.
+    // however, at least that means that we can do one auth check for all requests here
     let user_id = cookies
         .get_private("user_id")
         .and_then(|c| c.value().parse().ok());
-
-    request.execute(
-        &*schema,
-        &Context {
-            config: (*config).clone(),
-            connection: (*connection).clone(),
-            user_id,
-        },
-    ).await
+    if let Some(user_id) = user_id {
+        request
+            .execute(
+                &*schema,
+                &Context {
+                    config: (*config).clone(),
+                    connection: (*connection).clone(),
+                    user_id,
+                    user_test: Mutex::new(Arc::new(user_id)),
+                },
+            )
+            .await
+    } else {
+        juniper_rocket::GraphQLResponse::error(FieldError::new(
+            "User is not logged in",
+            Value::null(),
+        ))
+    }
 }
 
 #[rocket::post("/graphql", data = "<request>")]
@@ -52,25 +71,42 @@ async fn post_graphql_handler(
     request: juniper_rocket::GraphQLRequest,
     schema: &State<Schema>,
 ) -> juniper_rocket::GraphQLResponse {
+    // sadly, we can't do login via gql because of lifetime issues.
+    // however, at least that means that we can do one auth check for all requests here
     let user_id = cookies
         .get_private("user_id")
         .and_then(|c| c.value().parse().ok());
+    if let Some(user_id) = user_id {
+        let mutex = Arc::new(user_id);
 
-    request.execute(
-        &*schema,
-        &Context {
-            config: (*config).clone(),
-            connection: (*connection).clone(),
-            user_id,
-        },
-    ).await
+        let r = request
+            .execute(
+                &*schema,
+                &Context {
+                    config: (*config).clone(),
+                    connection: (*connection).clone(),
+                    user_id,
+                    user_test: mutex.clone(),
+                },
+            )
+            .await;
+
+        let x: ObjectId = mutex.;
+
+        r
+    } else {
+        juniper_rocket::GraphQLResponse::error(FieldError::new(
+            "User is not logged in",
+            Value::null(),
+        ))
+    }
 }
 
 pub struct Context {
     pub connection: mongodb::Database,
     pub config: crate::config::Config,
-    pub user_id: Option<i32>,
-    // pub cookies: Mutex< CookieJar<'_>>,
+    pub user_id: ObjectId,
+    pub user_test: Arc<ObjectId>,
 }
 
 impl juniper::Context for Context {}
@@ -84,8 +120,66 @@ impl Query {
         "1.0"
     }
 
-    fn countLetters(context: &Context, id: String) -> FieldResult<i32> {
-        Ok(id.len() as i32)
+    async fn user(context: &Context) -> FieldResult<UserInfo> {
+        let user =
+            queries::query_element_by_id(&context.connection, "users", context.user_id).await?;
+
+        if let Some(user) = user {
+            Ok(UserInfo::new(user))
+        } else {
+            Err(FieldError::new(
+                "User does not exist anymore",
+                Value::null(),
+            ))
+        }
+    }
+
+    async fn users(
+        context: &Context,
+        limit: Option<i32>,
+        skip: Option<i32>,
+    ) -> FieldResult<Vec<UserInfo>> {
+        let collection = &context.connection.collection::<User>("users");
+        let cursor = collection
+            .find(None, None)
+            .await?
+            .skip(usize::try_from(skip.unwrap_or(0))?)
+            .take(usize::try_from(limit.unwrap_or(i32::MAX))?);
+
+        Ok(cursor
+            .and_then(|u| async { Ok(UserInfo::new(u)) })
+            .try_collect::<Vec<_>>()
+            .await?)
+    }
+
+    pub async fn accounts(
+        context: &Context,
+        limit: Option<i32>,
+        skip: Option<i32>,
+        filter: Option<String>,
+        sort: Option<String>,
+    ) -> FieldResult<Vec<Account>> {
+        Ok(util::list_query::<Account>(
+            "accounts",
+            &context.connection,
+            limit,
+            skip,
+            filter,
+            sort,
+            None,
+        )
+        .await?)
+    }
+
+    pub async fn account(context: &Context, id: ObjectIdWrapper) -> FieldResult<Account> {
+        let collection = context.connection.collection::<Account>("accounts");
+        let entry = collection.find_one(doc! {"_id":*id}, None).await?;
+
+        if let Some(entry) = entry {
+            Ok(entry)
+        } else {
+            Err(FieldError::new("Account does not exist", Value::null()))
+        }
     }
 }
 
@@ -146,10 +240,6 @@ pub async fn handle(config: Config, connection: mongodb::Database) {
             openapi_get_routes![
                 user::login,
                 user::logout,
-                user::info,
-                user::list,
-                accounts::list,
-                accounts::get,
                 accounts::delete,
                 accounts::update,
                 accounts::create,

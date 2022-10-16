@@ -1,12 +1,13 @@
 use std::error::Error;
 
 use chrono::{DateTime, Utc};
+use juniper::{GraphQLEnum, GraphQLObject};
 use rocket_okapi::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::ObjectIdWrapper;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, GraphQLEnum)]
 pub enum AccountAvailability {
     Immediately,
     Days,
@@ -16,7 +17,7 @@ pub enum AccountAvailability {
     Decades,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, GraphQLEnum)]
 pub enum AccountRisk {
     None,
     Slight,
@@ -26,7 +27,7 @@ pub enum AccountRisk {
     Huge,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, GraphQLEnum)]
 pub enum AccountKind {
     Cash,
     Debit,
@@ -38,7 +39,7 @@ pub enum AccountKind {
     Other,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     #[serde(rename = "_id", default)]
@@ -71,7 +72,7 @@ pub struct Account {
     pub synchronization: Option<AccountSynchronization>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountSynchronization {
     pub account_id: ObjectIdWrapper, // id of the other account

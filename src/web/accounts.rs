@@ -13,36 +13,6 @@ use rocket::serde::json::Json;
 use rocket::State;
 use rocket_okapi::openapi;
 
-#[openapi]
-#[get("/accounts/list?<skip>&<limit>&<filter>&<sort>")]
-pub async fn list(
-    _uid: CookieUserId,
-    connection: &State<mongodb::Database>,
-    limit: Option<usize>,
-    skip: Option<usize>,
-    filter: Option<String>,
-    sort: Option<String>,
-) -> Result<Json<Vec<Account>>, Status> {
-    util::list_query::<Account>("accounts", connection, limit, skip, filter, sort, None).await
-}
-
-#[openapi]
-#[get("/accounts/<id>")]
-pub async fn get(
-    _uid: CookieUserId,
-    connection: &State<mongodb::Database>,
-    id: String,
-) -> Result<Json<Account>, Status> {
-    let id = ObjectId::from_str(&id).map_err(|e| log_error_and_500(Box::new(e)))?;
-    let collection = connection.collection::<Account>("accounts");
-    let entry = collection
-        .find_one(doc! {"_id":id}, None)
-        .await
-        .map_err(|e| log_error_and_500(Box::new(e)))?
-        .ok_or(Status::NotFound)?;
-
-    Ok(Json(entry))
-}
 
 #[openapi]
 #[delete("/accounts/<id>")]
