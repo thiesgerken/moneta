@@ -1,18 +1,70 @@
 use std::str::FromStr;
 
 use crate::models::rendering::RenderedExpense;
-use crate::models::{Account, Expense};
+use crate::models::{Account, Expense, ObjectIdWrapper};
 use crate::queries;
 use crate::web::authentication::CookieUserId;
+use crate::web::graphql::require_user;
+use crate::web::graphql::Context;
+use crate::web::util::{self, log_error_and_500};
 
-use super::util;
-use crate::web::util::log_error_and_500;
+use juniper::graphql_object;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::State;
-use rocket_okapi::openapi;
+
+pub struct ExpenseQuery;
+
+#[graphql_object(
+    Context = Context,
+)]
+impl ExpenseQuery {
+    pub async fn list(
+        context: &Context,
+        limit: Option<i32>,
+        skip: Option<i32>,
+        filter: Option<String>,
+        sort: Option<String>,
+    ) -> juniper::FieldResult<Vec<RenderedExpense>> {
+        let uid = require_user(context).await?;
+
+        Ok(util::list_query::<RenderedExpense>(
+            "expenses_rendered",
+            &context.connection,
+            limit,
+            skip,
+            filter,
+            sort,
+            Some(doc!("userId": uid)),
+        )
+        .await?)
+    }
+
+    pub async fn get(
+        context: &Context,
+        upstream_id: ObjectIdWrapper,
+    ) -> juniper::FieldResult<RenderedExpense> {
+        let uid = require_user(context).await?;
+        let collection = context
+            .connection
+            .collection::<RenderedExpense>("expenses_rendered");
+
+        let entry = collection
+            .find_one(doc! {"upstreamId":*upstream_id, "userId": uid}, None)
+            .await?;
+
+        if let Some(entry) = entry {
+            Ok(entry)
+        } else {
+            Err(juniper::FieldError::new(
+                "RenderedExpense does not exist",
+                juniper::Value::null(),
+            ))
+        }
+    }
+}
 
 pub async fn validate_and_unrender(
     uid: &CookieUserId,
@@ -54,7 +106,7 @@ pub async fn validate_and_unrender(
     };
 
     // cast to normal expense and insert into database
-    let entry = Expense::from_rendered(expense.0.clone());
+    let entry = Expense::from_rendered(expense.0);
     entry.validate().map_err(log_error_and_500)?;
 
     Ok(entry)
@@ -87,52 +139,6 @@ pub async fn render(
     Ok(Json(rendered_entry))
 }
 
-#[openapi]
-#[get("/expenses/list?<skip>&<limit>&<filter>&<sort>")]
-pub async fn list(
-    uid: CookieUserId,
-    connection: &State<mongodb::Database>,
-    limit: Option<i32>,
-    skip: Option<i32>,
-    filter: Option<String>,
-    sort: Option<String>,
-) -> Result<Json<Vec<RenderedExpense>>, Status> {
-    util::list_query::<RenderedExpense>(
-        "expenses_rendered",
-        connection,
-        limit,
-        skip,
-        filter,
-        sort,
-        Some(doc!("userId": *uid)), // need to make sure that the expense was rendered for this user
-    )
-    .await.map(Json)
-}
-
-#[openapi]
-#[get("/expenses/<upstream_id>")]
-pub async fn get(
-    uid: CookieUserId,
-    connection: &State<mongodb::Database>,
-    upstream_id: String,
-) -> Result<Json<RenderedExpense>, Status> {
-    let upstream_id =
-        ObjectId::from_str(&upstream_id).map_err(|e| log_error_and_500(Box::new(e)))?;
-    let collection = connection.collection::<RenderedExpense>("expenses_rendered");
-    let entry = collection
-        .find_one(doc! {"_id":upstream_id}, None)
-        .await
-        .map_err(|e| log_error_and_500(Box::new(e)))?
-        .ok_or(Status::NotFound)?;
-
-    if *entry.user_id != *uid {
-        return Err(Status::Forbidden);
-    }
-
-    Ok(Json(entry))
-}
-
-#[openapi]
 #[delete("/expenses/<upstream_id>")]
 pub async fn delete(
     uid: CookieUserId,
@@ -170,7 +176,6 @@ pub async fn delete(
     Ok(())
 }
 
-#[openapi]
 #[post("/expenses", data = "<expense>")]
 pub async fn create(
     uid: CookieUserId,
@@ -194,7 +199,6 @@ pub async fn create(
     render(&uid, connection, entry, &related_accounts).await
 }
 
-#[openapi]
 #[put("/expenses/<upstream_id>", data = "<expense>")]
 pub async fn update(
     uid: CookieUserId,

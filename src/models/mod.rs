@@ -10,15 +10,18 @@ pub use expense::{
 };
 
 use chrono::{DateTime, Utc};
-use juniper::{GraphQLObject, graphql_scalar, Value, InputValue, ParseScalarResult, ParseError, parser::{ScalarToken, Token}};
+use juniper::{
+    graphql_scalar,
+    parser::{ScalarToken, Token},
+    GraphQLInputObject, GraphQLObject, InputValue, ParseError, ParseScalarResult, Value,
+};
 use mongodb::bson::oid::ObjectId;
-use rocket_okapi::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct ObjectIdWrapper(pub ObjectId);
 
-#[graphql_scalar(name = "OID")]
+#[graphql_scalar(name = "ObjectId")]
 impl<S> GraphQLScalar for ObjectIdWrapper
 where
     S: ScalarValue,
@@ -65,23 +68,7 @@ impl From<ObjectId> for ObjectIdWrapper {
     }
 }
 
-impl JsonSchema for ObjectIdWrapper {
-    fn schema_name() -> String {
-        "ObjectId".to_owned()
-    }
-
-    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-        #[derive(JsonSchema)]
-        struct ExtendedObjectId {
-            #[serde(rename = "$oid")]
-            _id: String,
-        }
-
-        ExtendedObjectId::json_schema(gen)
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct User {
     #[serde(rename = "_id", default)]
@@ -92,7 +79,7 @@ pub struct User {
     pub password_hash: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct Category {
     #[serde(rename = "_id", default)]
@@ -106,32 +93,54 @@ pub struct Category {
     /// desired max spending in this category per month.
     /// In the future this could become a list of limits and timespans
     /// (to accommodate for varying spending limits over time without changing past data)
-    pub monthly_limit: Option<f32>,
+    pub monthly_limit: Option<f64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLInputObject)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryInput {
+    pub name: String,
+    pub description: String,
+    pub color: Option<String>,
+    pub parent: Option<ObjectIdWrapper>,
+
+    pub monthly_limit: Option<f64>,
+}
+
+impl CategoryInput {
+    pub fn upgrade(self, id: ObjectIdWrapper) -> Category {
+        Category {
+            id,
+            name: self.name,
+            description: self.description,
+            color: self.color,
+            parent: self.parent,
+            monthly_limit: self.monthly_limit,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct Balance {
     #[serde(rename = "_id", default)]
     pub id: ObjectIdWrapper,
 
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
-    #[schemars(with = "DateTime<Utc>")]
     pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
 
     pub account_id: ObjectIdWrapper,
-    pub amount: i64, // cents
+    pub amount: i32, // cents
     pub comments: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
-pub struct ChangelogEntry<T> {
+pub struct ExpenseChangelogEntry {
     pub target_id: ObjectIdWrapper,
     pub user_id: Option<ObjectIdWrapper>,
 
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
-    #[schemars(with = "DateTime<Utc>")]
     pub date: DateTime<Utc>,
 
     /// name of the program that was used to make the change (e.g. web app, CLI, ...)
@@ -141,14 +150,39 @@ pub struct ChangelogEntry<T> {
     pub automatic: bool,
     /// if this action was performed by an automated (AI) system, an indication (between 0 and 1) about how sure this system was.
     /// value should be ignored if the action was performed by a human
-    pub confidence: f32,
+    pub confidence: f64,
 
     /// how the entry looked before and after the change.
     /// either one of these (but not both
     /// representing the creation or deletion of the entry.
-    pub old_state: Option<T>,
-    pub new_state: Option<T>,
+    pub old_state: Option<Expense>,
+    pub new_state: Option<Expense>,
 }
 
-pub type ExpenseChangelogEntry = ChangelogEntry<Expense>;
-pub type BalanceChangelogEntry = ChangelogEntry<Balance>;
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceChangelogEntry {
+    pub target_id: ObjectIdWrapper,
+    pub user_id: Option<ObjectIdWrapper>,
+
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub date: DateTime<Utc>,
+
+    /// name of the program that was used to make the change (e.g. web app, CLI, ...)
+    pub tool: String,
+
+    /// whether this action was performed by a human or an automatic system
+    pub automatic: bool,
+    /// if this action was performed by an automated (AI) system, an indication (between 0 and 1) about how sure this system was.
+    /// value should be ignored if the action was performed by a human
+    pub confidence: f64,
+
+    /// how the entry looked before and after the change.
+    /// either one of these (but not both
+    /// representing the creation or deletion of the entry.
+    pub old_state: Option<Balance>,
+    pub new_state: Option<Balance>,
+}
+
+// pub type ExpenseChangelogEntry = ChangelogEntry<Expense>;
+// pub type BalanceChangelogEntry = ChangelogEntry<Balance>;

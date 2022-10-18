@@ -182,7 +182,7 @@ impl ExpenseTransaction {
         &self,
         user_id: ObjectId,
         accounts: &[Account],
-        reference_amount: Option<i64>,
+        reference_amount: Option<i32>,
     ) -> Result<RenderedExpenseTransaction, Box<dyn Error>> {
         let mut res = RenderedExpenseTransaction {
             date: self.date,

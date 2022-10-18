@@ -1,20 +1,63 @@
 use std::str::FromStr;
 
 use crate::models::rendering::{RenderedBalance, RenderedExpense};
-use crate::models::Account;
+use crate::models::{Account, ObjectIdWrapper};
 use crate::web::authentication::CookieUserId;
+use crate::web::graphql::require_user;
+use crate::web::graphql::Context;
+use crate::web::util::{self, log_error_and_500};
 
-use super::util;
-use crate::web::util::log_error_and_500;
+use juniper::graphql_object;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::State;
-use rocket_okapi::openapi;
 
+pub struct AccountQuery;
 
-#[openapi]
+#[graphql_object(
+    Context = Context,
+)]
+impl AccountQuery {
+    pub async fn list(
+        context: &Context,
+        limit: Option<i32>,
+        skip: Option<i32>,
+        filter: Option<String>,
+        sort: Option<String>,
+    ) -> juniper::FieldResult<Vec<Account>> {
+        require_user(context).await?;
+
+        Ok(util::list_query::<Account>(
+            "accounts",
+            &context.connection,
+            limit,
+            skip,
+            filter,
+            sort,
+            None,
+        )
+        .await?)
+    }
+
+    pub async fn get(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<Account> {
+        require_user(context).await?;
+        let collection = context.connection.collection::<Account>("accounts");
+
+        let entry = collection.find_one(doc! {"_id":*id}, None).await?;
+
+        if let Some(entry) = entry {
+            Ok(entry)
+        } else {
+            Err(juniper::FieldError::new(
+                "Account does not exist",
+                juniper::Value::null(),
+            ))
+        }
+    }
+}
+
 #[delete("/accounts/<id>")]
 pub async fn delete(
     uid: CookieUserId,
@@ -82,7 +125,6 @@ pub async fn delete(
     Ok(())
 }
 
-#[openapi]
 #[post("/accounts", data = "<account>")]
 pub async fn create(
     uid: CookieUserId,
@@ -108,7 +150,6 @@ pub async fn create(
     Ok(entry)
 }
 
-#[openapi]
 #[put("/accounts/<id>", data = "<account>")]
 pub async fn update(
     uid: CookieUserId,

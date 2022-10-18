@@ -54,7 +54,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         let account_ids: Vec<ObjectId> = account_id_values
             .into_iter()
             .cloned()
-            .map(|s|ObjectId::from_str(&s))
+            .map(|s| ObjectId::from_str(&s))
             .collect::<Result<_, _>>()
             .expect("error parsing object ids");
 

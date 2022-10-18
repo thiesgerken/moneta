@@ -1534,7 +1534,6 @@ dependencies = [
  "prettytable-rs",
  "regex",
  "rocket",
- "rocket_okapi",
  "schemars",
  "serde",
  "serde_json",
@@ -1684,18 +1683,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40bec70ba014595f99f7aa110b84331ffe1ee9aece7fe6f387cc7e3ecda4d456"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "okapi"
-version = "0.7.0-rc.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce66b6366e049880a35c378123fddb630b1a1a3c37fa1ca70caaf4a09f6e2893"
-dependencies = [
- "log",
- "schemars",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -2363,35 +2350,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rocket_okapi"
-version = "0.8.0-rc.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "489f4f5b120762f7974e65b919fc462d0660fd8b839026d8985b850fe5acccb0"
-dependencies = [
- "either",
- "log",
- "okapi",
- "rocket",
- "rocket_okapi_codegen",
- "schemars",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "rocket_okapi_codegen"
-version = "0.8.0-rc.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54f94d1ffe41472e08463d7a2674f1db04dc4df745285e8369b33d3cfd6b0308"
-dependencies = [
- "darling",
- "proc-macro2 1.0.37",
- "quote 1.0.18",
- "rocket_http",
- "syn",
-]
-
-[[package]]
 name = "ron"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2478,7 +2436,6 @@ checksum = "2a5fb6c61f29e723026dc8e923d94c694313212abbecbbe5f55a7748eec5b307"
 dependencies = [
  "chrono",
  "dyn-clone",
- "indexmap",
  "schemars_derive",
  "serde",
  "serde_json",

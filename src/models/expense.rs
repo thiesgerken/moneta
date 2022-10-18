@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use chrono::{DateTime, Utc};
-use rocket_okapi::JsonSchema;
+use juniper::GraphQLObject;
 use serde::{Deserialize, Serialize};
 
 use super::ObjectIdWrapper;
@@ -52,7 +52,7 @@ impl Expense {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct Expense {
     #[serde(rename = "_id", default)]
@@ -64,7 +64,7 @@ pub struct Expense {
     pub comments: String,
 
     /// reference for fractional transactions, can be None if only fixed transactions are used
-    pub reference_amount: Option<i64>,
+    pub reference_amount: Option<i32>,
 
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub booking_start: DateTime<Utc>,
@@ -92,7 +92,7 @@ pub struct Expense {
     pub positions: Vec<ExpensePosition>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseTransaction {
     pub account_id: ObjectIdWrapper,
@@ -103,14 +103,14 @@ pub struct ExpenseTransaction {
     // constraint: fraction can only be used if the expense has exactly one transaction with an amount
     // convention: amounts are _added_ to account balances, i.e. a negative amount is a expense
     // convention: fractions are calculated relative to the sum of all transactions with a fixed amount
-    pub amount: Option<i64>,
+    pub amount: Option<i32>,
     pub fraction: Option<f64>,
 
     pub comments: String,
     pub statement: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseCategorization {
     pub category_id: ObjectIdWrapper,
@@ -118,16 +118,16 @@ pub struct ExpenseCategorization {
     pub weight: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpensePosition {
-    pub amount: Option<i64>,
+    pub amount: Option<i32>,
     pub units: f64,
     pub title: String,
     pub comments: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseReceipt {
     pub file_name: String,

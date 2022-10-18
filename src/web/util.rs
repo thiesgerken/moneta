@@ -5,10 +5,10 @@ use std::error::Error;
 use futures::{StreamExt, TryStreamExt};
 use mongodb::bson::{self, Document};
 use mongodb::options::FindOptions;
-use rocket::serde::json::Json;
 use serde::de::DeserializeOwned;
 
 pub fn log_error_and_500(e: Box<dyn Error>) -> Status {
+    // TODO: remove this ?
     error!("{}", e);
     Status::InternalServerError
 }
