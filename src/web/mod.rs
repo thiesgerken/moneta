@@ -84,12 +84,6 @@ pub async fn handle(config: Config, connection: mongodb::Database) {
         .mount(
             "/api/",
             rocket::routes![
-                accounts::delete,
-                accounts::update,
-                accounts::create,
-                balances::delete,
-                balances::update,
-                balances::create,
                 expenses::delete,
                 expenses::update,
                 expenses::create,

@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use chrono::{DateTime, Utc};
-use juniper::{GraphQLEnum, GraphQLObject};
+use juniper::{GraphQLEnum, GraphQLObject, Object, GraphQLInputObject};
 use serde::{Deserialize, Serialize};
 
 use super::ObjectIdWrapper;
@@ -69,6 +69,34 @@ pub struct Account {
     pub synchronization: Option<AccountSynchronization>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLInputObject)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountInput {
+    #[serde(default)]
+    pub user_id: ObjectIdWrapper,
+
+    pub name: String,
+    pub description: String,
+    pub color: Option<String>,
+    pub iban: Option<String>,
+    pub kind: AccountKind,
+    pub availability: AccountAvailability,
+    pub risk: AccountRisk,
+
+    // when the account was opened and possibly closed. Used to determine whether to hide the account or not.
+    // at its opening, it is implicitly assumed that the account had a balance of zero.
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub opened: DateTime<Utc>,
+    #[serde(with = "crate::queries::optional_chrono_datetime_as_bson_datetime")]
+    pub closed: Option<DateTime<Utc>>,
+
+    // how to add balances of this account to the total balance, must be >0 and <=1
+    pub ownership_fraction: f64,
+}
+
+pub type AccountUpdateInput = AccountInput;
+pub type AccountCreateInput = AccountInput;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountSynchronization {
@@ -76,7 +104,7 @@ pub struct AccountSynchronization {
     pub invert: bool, // whether to count income in the original account as an expense in the synchronized account (and vice versa) or not
 }
 
-impl Account {
+impl AccountInput {
     pub fn validate(&self) -> Result<(), Box<dyn Error>> {
         if let Some(closed) = self.closed {
             if closed <= self.opened {
@@ -92,5 +120,23 @@ impl Account {
         }
 
         Ok(())
+    }
+
+    pub fn upgrade(self, id: ObjectIdWrapper, user_id: ObjectIdWrapper) -> Account {
+        Account {
+            id,
+            name: self.name,
+            description: self.description,
+            color: self.color,
+            user_id: user_id,
+            synchronization: None,
+            iban: self.iban,
+            kind: self.kind,
+            availability: self.availability,
+            risk: self.risk,
+            opened: self.opened,
+            closed: self.closed,
+            ownership_fraction: self.ownership_fraction,
+        }
     }
 }

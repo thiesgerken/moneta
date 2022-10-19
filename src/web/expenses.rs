@@ -256,5 +256,3 @@ pub async fn update(
 
     render(&uid, connection, entry, &related_accounts).await
 }
-
-// TODO: implement changelogs for expenses

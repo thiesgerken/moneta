@@ -4,7 +4,7 @@ pub mod rendering;
 
 use std::ops::Deref;
 
-pub use account::{Account, AccountAvailability, AccountKind, AccountRisk, AccountSynchronization};
+pub use account::{Account, AccountAvailability, AccountKind, AccountRisk, AccountSynchronization, AccountCreateInput, AccountUpdateInput, AccountInput};
 pub use expense::{
     Expense, ExpenseCategorization, ExpensePosition, ExpenseReceipt, ExpenseTransaction,
 };
@@ -119,6 +119,9 @@ impl CategoryInput {
         }
     }
 }
+
+pub type CategoryUpdateInput = CategoryInput;
+pub type CategoryCreateInput = CategoryInput;
 
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]

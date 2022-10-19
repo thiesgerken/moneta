@@ -1,5 +1,5 @@
 use crate::models::rendering::RenderedExpense;
-use crate::models::{Category, CategoryInput, ObjectIdWrapper};
+use crate::models::{Category, CategoryCreateInput, CategoryUpdateInput, ObjectIdWrapper};
 use crate::web::graphql::require_user;
 use crate::web::graphql::Context;
 use crate::web::util;
@@ -62,7 +62,7 @@ impl CategoryMutation {
         require_user(context).await?;
         let collection = context.connection.collection::<Category>("categories");
 
-        let entry = collection
+        let category = collection
             .find_one(doc! {"_id":*id}, None)
             .await?
             .ok_or("entry to delete not found")?;
@@ -72,7 +72,7 @@ impl CategoryMutation {
             .connection
             .collection::<RenderedExpense>("expenses_rendered");
         let expense_count = rendered_expenses_collection
-            .count_documents(doc!("categories.category_id": *entry.id.clone()), None)
+            .count_documents(doc!("categories.category_id": *category.id.clone()), None)
             .await?;
 
         if expense_count > 0 {
@@ -93,21 +93,21 @@ impl CategoryMutation {
 
     pub async fn create(
         context: &Context,
-        category: CategoryInput,
+        category: CategoryCreateInput,
     ) -> juniper::FieldResult<Category> {
         require_user(context).await?;
         let collection = context.connection.collection::<Category>("categories");
 
-        let entry = category.upgrade(ObjectId::new().into());
-        collection.insert_one(&entry, None).await?;
+        let category = category.upgrade(ObjectId::new().into());
+        collection.insert_one(&category, None).await?;
 
-        Ok(entry)
+        Ok(category)
     }
 
     pub async fn update(
         context: &Context,
         id: ObjectIdWrapper,
-        category: CategoryInput,
+        category: CategoryUpdateInput,
     ) -> juniper::FieldResult<bool> {
         require_user(context).await?;
         let collection = context.connection.collection::<Category>("categories");

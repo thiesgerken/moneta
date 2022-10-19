@@ -6,6 +6,8 @@
 - on big screens: expandable rows for expense table?
 - Python API would be nice (access all rendered expenses?)
 - provide UpdateDTOs / CreateDTOs ?
+- implement changelogs for balances
+- implement changelogs for expenses
 
 ## Performance
 
