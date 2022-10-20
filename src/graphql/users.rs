@@ -8,7 +8,7 @@ use juniper::{graphql_object, GraphQLObject};
 use mongodb::bson::doc;
 use serde::Serialize;
 
-use super::graphql::{require_user, Context};
+use super::root::{require_user, Context};
 
 #[derive(Serialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]

@@ -1,8 +1,8 @@
 use crate::models::rendering::RenderedExpense;
 use crate::models::{Category, CategoryCreateInput, CategoryUpdateInput, ObjectIdWrapper};
-use crate::web::graphql::require_user;
-use crate::web::graphql::Context;
-use crate::web::util;
+use crate::graphql::root::require_user;
+use crate::graphql::root::Context;
+use crate::graphql::util;
 
 use juniper::graphql_object;
 use mongodb::bson::oid::ObjectId;

@@ -5,9 +5,9 @@ use crate::models::rendering::{
 };
 use crate::models::{Account, Expense, ObjectIdWrapper};
 use crate::queries;
-use crate::web::graphql::require_user;
-use crate::web::graphql::Context;
-use crate::web::util::{self};
+use crate::graphql::root::require_user;
+use crate::graphql::root::Context;
+use crate::graphql::util::{self};
 
 use juniper::graphql_object;
 use mongodb::bson::oid::ObjectId;

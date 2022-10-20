@@ -5,7 +5,7 @@ use log::info;
 use mongodb::bson::oid::ObjectId;
 use tokio::sync::RwLock;
 
-use crate::web::{
+use crate::graphql::{
     accounts::{AccountMutation, AccountQuery},
     balances::{BalanceMutation, BalanceQuery},
     categories::{CategoryMutation, CategoryQuery},

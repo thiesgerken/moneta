@@ -2,7 +2,7 @@ pub mod accounts;
 pub mod balances;
 pub mod categories;
 pub mod expenses;
-mod graphql;
+mod root;
 pub mod users;
 mod util;
 
@@ -25,9 +25,9 @@ async fn get_graphql_handler(
     config: &State<crate::config::Config>,
     cookies: &CookieJar<'_>,
     request: juniper_rocket::GraphQLRequest,
-    schema: &State<graphql::Schema>,
+    schema: &State<root::Schema>,
 ) -> juniper_rocket::GraphQLResponse {
-    graphql::graphql_handler(connection, config, cookies, request, schema).await
+    root::graphql_handler(connection, config, cookies, request, schema).await
 }
 
 #[rocket::post("/graphql", data = "<request>")]
@@ -36,9 +36,9 @@ async fn post_graphql_handler(
     config: &State<crate::config::Config>,
     cookies: &CookieJar<'_>,
     request: juniper_rocket::GraphQLRequest,
-    schema: &State<graphql::Schema>,
+    schema: &State<root::Schema>,
 ) -> juniper_rocket::GraphQLResponse {
-    graphql::graphql_handler(connection, config, cookies, request, schema).await
+    root::graphql_handler(connection, config, cookies, request, schema).await
 }
 
 pub async fn handle(config: Config, connection: mongodb::Database) {
@@ -71,10 +71,10 @@ pub async fn handle(config: Config, connection: mongodb::Database) {
     let _rocket = rocket::custom(rocket_config)
         .manage(config.clone())
         .manage(connection.clone())
-        .manage(graphql::Schema::new(
-            graphql::Query,
-            graphql::Mutation,
-            juniper::EmptySubscription::<graphql::Context>::new(),
+        .manage(root::Schema::new(
+            root::Query,
+            root::Mutation,
+            juniper::EmptySubscription::<root::Context>::new(),
         ))
         .mount(
             "/",
