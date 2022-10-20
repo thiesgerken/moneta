@@ -1,18 +1,12 @@
-use std::str::FromStr;
-
 use crate::models::rendering::{RenderedBalance, RenderedExpense};
 use crate::models::{Account, AccountCreateInput, AccountUpdateInput, ObjectIdWrapper};
-use crate::web::authentication::CookieUserId;
 use crate::web::graphql::require_user;
 use crate::web::graphql::Context;
-use crate::web::util::{self, log_error_and_500};
+use crate::web::util::{self};
 
 use juniper::graphql_object;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
-use rocket::http::Status;
-use rocket::serde::json::Json;
-use rocket::State;
 
 pub struct AccountQuery;
 
@@ -143,8 +137,7 @@ impl AccountMutation {
 
         collection
             .find_one(doc! {"_id":*id, "userId": user_id}, None)
-            .await
-            .map_err(|e| log_error_and_500(Box::new(e)))?
+            .await?
             .ok_or("entry to update not found")?;
 
         account.validate()?;

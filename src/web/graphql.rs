@@ -6,10 +6,10 @@ use mongodb::bson::oid::ObjectId;
 use tokio::sync::RwLock;
 
 use crate::web::{
-    accounts::AccountQuery,
-    balances::BalanceQuery,
-    categories::CategoryQuery,
-    expenses::ExpenseQuery,
+    accounts::{AccountMutation, AccountQuery},
+    balances::{BalanceMutation, BalanceQuery},
+    categories::{CategoryMutation, CategoryQuery},
+    expenses::{ExpenseMutation, ExpenseQuery},
     users::{UserMutation, UserQuery},
 };
 
@@ -105,5 +105,21 @@ impl Query {
 impl Mutation {
     fn users() -> UserMutation {
         UserMutation
+    }
+
+    fn accounts() -> AccountMutation {
+        AccountMutation
+    }
+
+    fn balances() -> BalanceMutation {
+        BalanceMutation
+    }
+
+    fn expenses() -> ExpenseMutation {
+        ExpenseMutation
+    }
+
+    fn categories() -> CategoryMutation {
+        CategoryMutation
     }
 }

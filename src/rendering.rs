@@ -1,6 +1,10 @@
 use crate::models::{
-    rendering::{RenderedBalance, RenderedExpense, RenderedExpenseTransaction},
-    Account, Balance, Expense, ExpenseTransaction,
+    rendering::{
+        RenderedBalance, RenderedBalanceInput, RenderedExpense, RenderedExpenseInput,
+        RenderedExpenseTransaction,
+    },
+    Account, Balance, Expense, ExpenseCategorizationInput, ExpensePositionInput,
+    ExpenseReceiptInput, ExpenseTransaction, ExpenseTransactionInput,
 };
 use futures::TryStreamExt;
 use itertools::Itertools;
@@ -105,7 +109,7 @@ pub async fn rerender_multiple_expenses(
 }
 
 impl Balance {
-    pub fn from_rendered(balance: RenderedBalance) -> Self {
+    pub fn from_rendered(balance: RenderedBalanceInput) -> Self {
         Self {
             id: ObjectId::new().into(),
             date: balance.date,
@@ -167,7 +171,7 @@ impl Balance {
     }
 }
 impl ExpenseTransaction {
-    pub fn from_rendered(transaction: RenderedExpenseTransaction) -> Self {
+    pub fn from_rendered(transaction: ExpenseTransactionInput) -> Self {
         Self {
             account_id: transaction.account_id,
             date: transaction.date,
@@ -243,7 +247,7 @@ impl ExpenseTransaction {
 }
 
 impl Expense {
-    pub fn from_rendered(expense: RenderedExpense) -> Self {
+    pub fn from_rendered(expense: RenderedExpenseInput) -> Self {
         Self {
             id: ObjectId::new().into(),
             title: expense.title,
@@ -258,14 +262,26 @@ impl Expense {
             is_tax_relevant: expense.is_tax_relevant,
             is_unchecked: expense.is_unchecked,
             is_incomplete: expense.is_incomplete,
-            receipts: expense.receipts,
-            categories: expense.categories,
+            receipts: expense
+                .receipts
+                .into_iter()
+                .map(ExpenseReceiptInput::upgrade)
+                .collect(),
+            categories: expense
+                .categories
+                .into_iter()
+                .map(ExpenseCategorizationInput::upgrade)
+                .collect(),
             transactions: expense
                 .transactions
                 .into_iter()
                 .map(ExpenseTransaction::from_rendered)
                 .collect(),
-            positions: expense.positions,
+            positions: expense
+                .positions
+                .into_iter()
+                .map(ExpensePositionInput::upgrade)
+                .collect(),
         }
     }
 

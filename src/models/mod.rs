@@ -4,9 +4,14 @@ pub mod rendering;
 
 use std::ops::Deref;
 
-pub use account::{Account, AccountAvailability, AccountKind, AccountRisk, AccountSynchronization, AccountCreateInput, AccountUpdateInput, AccountInput};
+pub use account::{
+    Account, AccountAvailability, AccountCreateInput, AccountInput, AccountKind, AccountRisk,
+    AccountSynchronization, AccountUpdateInput,
+};
 pub use expense::{
-    Expense, ExpenseCategorization, ExpensePosition, ExpenseReceipt, ExpenseTransaction,
+    Expense, ExpenseCategorization, ExpenseCategorizationInput, ExpensePosition,
+    ExpensePositionInput, ExpenseReceipt, ExpenseReceiptInput, ExpenseTransaction,
+    ExpenseTransactionInput,
 };
 
 use chrono::{DateTime, Utc};

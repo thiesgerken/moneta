@@ -1,17 +1,17 @@
 use std::error::Error;
 
-use crate::models::rendering::RenderedBalance;
+use crate::models::rendering::{
+    RenderedBalance, RenderedBalanceCreateInput, RenderedBalanceInput, RenderedBalanceUpdateInput,
+};
 use crate::models::{Account, Balance, ObjectIdWrapper};
 use crate::queries;
 use crate::web::graphql::require_user;
 use crate::web::graphql::Context;
-use crate::web::util::{self, log_error_and_500};
+use crate::web::util::{self};
 
 use juniper::graphql_object;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
-use rocket::http::Status;
-use rocket::serde::json::Json;
 
 pub struct BalanceQuery;
 
@@ -64,67 +64,37 @@ impl BalanceQuery {
     }
 }
 
-pub async fn validate_and_unrender(
-    uid: ObjectId,
-    balance: Json<RenderedBalance>,
-    related_accounts: &[Account],
-) -> Result<Balance, Status> {
-    let account = related_accounts
-        .iter()
-        .find(|a| a.id == balance.account_id)
-        .ok_or_else(|| {
-            error!(
-                "user {:?} tried to create a balance with unknown account {:?}",
-                uid, &balance.account_id
-            );
-            Status::NotFound
-        })?;
-
-    if *account.user_id != uid {
-        error!(
-            "user {:?} tried to create a balance with foreign account {:?}",
-            uid, &balance.account_id
-        );
-        return Err(Status::Forbidden);
-    }
-
-    Ok(Balance::from_rendered(balance.0.clone()))
-}
-
 pub struct BalanceMutation;
 
 #[graphql_object(
     Context = Context,
 )]
 impl BalanceMutation {
-    pub async fn delete(
-        context: &Context,
-        upstream_id: ObjectIdWrapper,
-    ) -> juniper::FieldResult<bool> {
+    pub async fn delete(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<bool> {
         let user_id = require_user(context).await?;
         let collection = context
             .connection
             .collection::<RenderedBalance>("balances_rendered");
 
         // check if there is a rendered balance with the given upstream id belonging to this user
-        collection
-            .find_one(doc! {"upstreamId":*upstream_id, "userId": user_id}, None)
-            .await
-            .map_err(|e| log_error_and_500(Box::new(e)))?
-            .ok_or(Status::NotFound)?;
+        let original_entry = collection
+            .find_one(doc! {"_id":*id, "userId": user_id}, None)
+            .await?
+            .ok_or("entry to delete not found")?;
 
         let upstream_collection = context.connection.collection::<Balance>("balances");
         let upstream_entry = upstream_collection
-            .find_one(doc! {"_id":*upstream_id}, None)
-            .await
-            .map_err(|e| log_error_and_500(Box::new(e)))?
-            .ok_or(Status::NotFound)?;
+            .find_one(doc! {"_id":*original_entry.upstream_id}, None)
+            .await?
+            .unwrap_or_else(|| {
+                panic!("cannot find upstream balance for rendered balance {:?}", id)
+            });
 
         // remove rendered balances first ...
         upstream_entry.remove_rendered(&context.connection).await?;
         // ... and then the upstream balance itself
         let count = upstream_collection
-            .delete_one(doc! {"_id":*upstream_id}, None)
+            .delete_one(doc! {"_id":*original_entry.upstream_id}, None)
             .await?
             .deleted_count;
         Ok(count == 1)
@@ -141,10 +111,7 @@ impl BalanceMutation {
             queries::query_associated_accounts(&context.connection, &[*balance.account_id]).await?;
         let entry = validate_and_unrender(user_id, balance, &related_accounts).await?;
 
-        collection
-            .insert_one(&entry, None)
-            .await
-            .map_err(|e| log_error_and_500(Box::new(e)))?;
+        collection.insert_one(&entry, None).await?;
 
         let balance = render(user_id, &context.connection, entry, &related_accounts).await?;
         Ok(balance)
@@ -152,7 +119,7 @@ impl BalanceMutation {
 
     pub async fn update(
         context: &Context,
-        upstream_id: ObjectIdWrapper,
+        id: ObjectIdWrapper,
         balance: RenderedBalanceUpdateInput,
     ) -> juniper::FieldResult<RenderedBalance> {
         let user_id = require_user(context).await?;
@@ -160,47 +127,45 @@ impl BalanceMutation {
             .connection
             .collection::<RenderedBalance>("balances_rendered");
 
-        let related_accounts =
-            queries::query_associated_accounts(&context.connection, &[*balance.account_id])
-                .await
-                .map_err(|e| log_error_and_500(Box::new(e)))?;
-        let mut entry = validate_and_unrender(user_id, balance, &related_accounts).await?;
+        let original_rendered_balance = collection
+            .find_one(doc! {"_id":*id, "userId": user_id}, None)
+            .await?
+            .ok_or("entry to update not found")?;
 
-        // check if the original rendered balance belongs to this user
-        let original_entry = collection
-            .find_one(doc! {"upstreamId":*upstream_id, "userId": user_id}, None)
-            .await
-            .map_err(|e| log_error_and_500(Box::new(e)))?
-            .ok_or(Status::NotFound)?;
+        let related_accounts =
+            queries::query_associated_accounts(&context.connection, &[*balance.account_id]).await?;
+        let mut updated_upstream_entry =
+            validate_and_unrender(user_id, balance, &related_accounts).await?;
 
         // find the original upstream balance
         let upstream_collection = context.connection.collection::<Balance>("balances");
         let upstream_entry = upstream_collection
-            .find_one(doc!("_id": *original_entry.upstream_id), None)
-            .await
-            .map_err(|e| log_error_and_500(Box::new(e)))?
+            .find_one(doc!("_id": *original_rendered_balance.upstream_id), None)
+            .await?
             .unwrap_or_else(|| {
-                panic!(
-                    "cannot find upstream balance for rendered balance {:?}",
-                    original_entry.id
-                )
+                panic!("cannot find upstream balance for rendered balance {:?}", id)
             });
 
         // delete its rendered balances
         upstream_entry.remove_rendered(&context.connection).await?;
 
         // update the upstream balance with the changes
-        entry.id = upstream_entry.id;
+        updated_upstream_entry.id = upstream_entry.id;
         upstream_collection
             .update_one(
-                doc!("_id": &*entry.id),
-                doc! {"$set":  bson::to_bson(&entry).unwrap()},
+                doc!("_id": &*updated_upstream_entry.id),
+                doc! {"$set":  bson::to_bson(&updated_upstream_entry).unwrap()},
                 None,
             )
-            .await
-            .map_err(|e| log_error_and_500(Box::new(e)))?;
+            .await?;
 
-        let balance = render(user_id, &context.connection, entry, &related_accounts).await?;
+        let balance = render(
+            user_id,
+            &context.connection,
+            updated_upstream_entry,
+            &related_accounts,
+        )
+        .await?;
         Ok(balance)
     }
 }
@@ -228,4 +193,30 @@ pub async fn render(
         });
 
     Ok(rendered_entry)
+}
+
+pub async fn validate_and_unrender(
+    uid: ObjectId,
+    balance: RenderedBalanceInput,
+    related_accounts: &[Account],
+) -> Result<Balance, Box<dyn Error>> {
+    let account = related_accounts
+        .iter()
+        .find(|a| a.id == balance.account_id)
+        .ok_or_else(|| {
+            format!(
+                "user {:?} tried to create a balance with unknown account {:?}",
+                uid, &balance.account_id
+            )
+        })?;
+
+    if *account.user_id != uid {
+        return Err(format!(
+            "user {:?} tried to create a balance with foreign account {:?}",
+            uid, &balance.account_id
+        )
+        .into());
+    }
+
+    Ok(Balance::from_rendered(balance))
 }

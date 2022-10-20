@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use chrono::{DateTime, Utc};
-use juniper::{GraphQLEnum, GraphQLObject, Object, GraphQLInputObject};
+use juniper::{GraphQLEnum, GraphQLInputObject, GraphQLObject};
 use serde::{Deserialize, Serialize};
 
 use super::ObjectIdWrapper;
@@ -72,9 +72,6 @@ pub struct Account {
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLInputObject)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountInput {
-    #[serde(default)]
-    pub user_id: ObjectIdWrapper,
-
     pub name: String,
     pub description: String,
     pub color: Option<String>,
@@ -128,7 +125,7 @@ impl AccountInput {
             name: self.name,
             description: self.description,
             color: self.color,
-            user_id: user_id,
+            user_id,
             synchronization: None,
             iban: self.iban,
             kind: self.kind,

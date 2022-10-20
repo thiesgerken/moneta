@@ -1,5 +1,4 @@
 pub mod accounts;
-mod authentication;
 pub mod balances;
 pub mod categories;
 pub mod expenses;
@@ -80,14 +79,6 @@ pub async fn handle(config: Config, connection: mongodb::Database) {
         .mount(
             "/",
             rocket::routes![graphiql, get_graphql_handler, post_graphql_handler],
-        )
-        .mount(
-            "/api/",
-            rocket::routes![
-                expenses::delete,
-                expenses::update,
-                expenses::create,
-            ],
         )
         .launch()
         .await
