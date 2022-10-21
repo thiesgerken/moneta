@@ -13,7 +13,11 @@ use crate::graphql::{
     users::{UserMutation, UserQuery},
 };
 
-use super::{accounts::{get_account_loader, AccountLoader}, categories::{get_category_loader, CategoryLoader}};
+use super::{
+    accounts::{get_account_loader, AccountLoader},
+    categories::{get_category_loader, CategoryLoader},
+    users::{get_user_loader, UserLoader},
+};
 
 pub struct Context {
     pub connection: mongodb::Database,
@@ -22,6 +26,7 @@ pub struct Context {
 
     pub account_loader: AccountLoader,
     pub category_loader: CategoryLoader,
+    pub user_loader: UserLoader,
 }
 
 impl juniper::Context for Context {}
@@ -59,6 +64,7 @@ pub async fn graphql_handler(
                 user_id: user_id_writer.clone(),
                 account_loader: get_account_loader((*connection).clone()),
                 category_loader: get_category_loader((*connection).clone()),
+                user_loader: get_user_loader((*connection).clone()),
             },
         )
         .await;

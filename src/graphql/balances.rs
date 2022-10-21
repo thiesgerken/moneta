@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use crate::graphql::accounts::GraphQLAccount;
 use crate::graphql::root::require_user;
 use crate::graphql::root::Context;
 use crate::graphql::util::{self};
@@ -16,29 +17,18 @@ use juniper::FieldResult;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
 
-pub struct BalanceQuery;
-
 #[derive(Debug, Clone)]
 pub struct GraphQLBalance {
     data: RenderedBalance,
 }
 impl GraphQLBalance {
     pub fn new(data: RenderedBalance) -> Self {
-        GraphQLBalance { data }
+        Self { data }
     }
 }
 
-#[graphql_object(
-    Context = Context,name = "Balance")]
+#[graphql_object(    Context = Context,name = "Balance")]
 impl GraphQLBalance {
-    fn comments(&self) -> &str {
-        &self.data.comments
-    }
-
-    fn amount(&self) -> i32 {
-        self.data.amount
-    }
-
     fn id(&self) -> ObjectIdWrapper {
         self.data.id
     }
@@ -47,17 +37,29 @@ impl GraphQLBalance {
         self.data.upstream_id
     }
 
+    fn comments(&self) -> &str {
+        &self.data.comments
+    }
+
+    fn amount(&self) -> i32 {
+        self.data.amount
+    }
+
     fn date(&self) -> DateTime<Utc> {
         self.data.date
     }
 
-    async fn account(&self, context: &Context) -> FieldResult<Account> {
-        Ok(context
-            .account_loader
-            .try_load(self.data.account_id)
-            .await?)
+    async fn account(&self, context: &Context) -> FieldResult<GraphQLAccount> {
+        Ok(GraphQLAccount::new(
+            context
+                .account_loader
+                .try_load(self.data.account_id)
+                .await?,
+        ))
     }
 }
+
+pub struct BalanceQuery;
 
 #[graphql_object(
     Context = Context,

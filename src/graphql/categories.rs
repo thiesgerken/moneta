@@ -11,9 +11,54 @@ use dataloader::cached::Loader;
 use dataloader::BatchFn;
 use futures::TryStreamExt;
 use juniper::graphql_object;
+use juniper::FieldResult;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
 use mongodb::Database;
+
+#[derive(Debug, Clone)]
+pub struct GraphQLCategory {
+    data: Category,
+}
+
+impl GraphQLCategory {
+    pub fn new(data: Category) -> Self {
+        Self { data }
+    }
+}
+
+#[graphql_object(Context = Context, name = "Category")]
+impl GraphQLCategory {
+    fn id(&self) -> ObjectIdWrapper {
+        self.data.id
+    }
+
+    fn name(&self) -> &str {
+        &self.data.name
+    }
+
+    fn description(&self) -> &str {
+        &self.data.description
+    }
+
+    fn color(&self) -> &Option<String> {
+        &self.data.color
+    }
+
+    async fn parent(&self, context: &Context) -> FieldResult<Option<GraphQLCategory>> {
+        if let Some(parent) = self.data.parent {
+            Ok(Some(GraphQLCategory::new(
+                context.category_loader.try_load(parent).await?,
+            )))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn monthly_limit(&self) -> Option<f64> {
+        self.data.monthly_limit
+    }
+}
 
 pub struct CategoryQuery;
 
@@ -27,7 +72,7 @@ impl CategoryQuery {
         skip: Option<i32>,
         filter: Option<String>,
         sort: Option<String>,
-    ) -> juniper::FieldResult<Vec<Category>> {
+    ) -> juniper::FieldResult<Vec<GraphQLCategory>> {
         require_user(context).await?;
 
         Ok(util::list_query::<Category>(
@@ -39,12 +84,20 @@ impl CategoryQuery {
             sort,
             None,
         )
-        .await?)
+        .await?
+        .into_iter()
+        .map(GraphQLCategory::new)
+        .collect())
     }
 
-    pub async fn get(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<Category> {
+    pub async fn get(
+        context: &Context,
+        id: ObjectIdWrapper,
+    ) -> juniper::FieldResult<GraphQLCategory> {
         require_user(context).await?;
-        Ok(context.category_loader.try_load(id).await?)
+        Ok(GraphQLCategory::new(
+            context.category_loader.try_load(id).await?,
+        ))
     }
 }
 
@@ -152,7 +205,6 @@ pub struct CategoryBatcher {
 
 #[async_trait]
 impl BatchFn<ObjectIdWrapper, Category> for CategoryBatcher {
-    // A hashmap is used, as we need to return an array which maps each original key to a Cult.
     async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, Category> {
         get_many(&self.connection, keys)
             .await

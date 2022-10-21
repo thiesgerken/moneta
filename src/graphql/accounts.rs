@@ -5,16 +5,92 @@ use crate::graphql::root::require_user;
 use crate::graphql::root::Context;
 use crate::graphql::util::{self};
 use crate::models::rendering::{RenderedBalance, RenderedExpense};
+use crate::models::AccountAvailability;
+use crate::models::AccountKind;
+use crate::models::AccountRisk;
+use crate::models::AccountSynchronization;
 use crate::models::{Account, AccountCreateInput, AccountUpdateInput, ObjectIdWrapper};
 
+use chrono::DateTime;
+use chrono::Utc;
 use dataloader::cached::Loader;
 use dataloader::BatchFn;
 use futures::TryStreamExt;
 use juniper::graphql_object;
+use juniper::FieldResult;
 use log::debug;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
 use mongodb::Database;
+
+use super::users::GraphQLUserInfo;
+
+#[derive(Debug, Clone)]
+pub struct GraphQLAccount {
+    data: Account,
+}
+impl GraphQLAccount {
+    pub fn new(data: Account) -> Self {
+        Self { data }
+    }
+}
+
+#[graphql_object(    Context = Context,name = "Account")]
+impl GraphQLAccount {
+    fn id(&self) -> ObjectIdWrapper {
+        self.data.id
+    }
+
+    async fn owner(&self, context: &Context) -> FieldResult<GraphQLUserInfo> {
+        Ok(GraphQLUserInfo::new(
+            context.user_loader.try_load(self.data.user_id).await?,
+        ))
+    }
+
+    fn name(&self) -> &str {
+        &self.data.name
+    }
+
+    fn description(&self) -> &str {
+        &self.data.description
+    }
+
+    fn color(&self) -> &Option<String> {
+        &self.data.color
+    }
+
+    fn iban(&self) -> &Option<String> {
+        &self.data.iban
+    }
+
+    fn kind(&self) -> AccountKind {
+        self.data.kind
+    }
+
+    fn availability(&self) -> AccountAvailability {
+        self.data.availability
+    }
+
+    fn risk(&self) -> AccountRisk {
+        self.data.risk
+    }
+
+    fn opened(&self) -> DateTime<Utc> {
+        self.data.opened
+    }
+
+    fn closed(&self) -> Option<DateTime<Utc>> {
+        self.data.closed
+    }
+
+    fn ownership_fraction(&self) -> f64 {
+        self.data.ownership_fraction
+    }
+
+    fn synchronization(&self) -> &Option<AccountSynchronization> {
+        &self.data.synchronization
+    }
+}
 
 pub struct AccountQuery;
 
@@ -28,7 +104,7 @@ impl AccountQuery {
         skip: Option<i32>,
         filter: Option<String>,
         sort: Option<String>,
-    ) -> juniper::FieldResult<Vec<Account>> {
+    ) -> juniper::FieldResult<Vec<GraphQLAccount>> {
         require_user(context).await?;
 
         Ok(util::list_query::<Account>(
@@ -40,12 +116,20 @@ impl AccountQuery {
             sort,
             None,
         )
-        .await?)
+        .await?
+        .into_iter()
+        .map(GraphQLAccount::new)
+        .collect())
     }
 
-    pub async fn get(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<Account> {
+    pub async fn get(
+        context: &Context,
+        id: ObjectIdWrapper,
+    ) -> juniper::FieldResult<GraphQLAccount> {
         require_user(context).await?;
-        Ok(context.account_loader.try_load(id).await?)
+        Ok(GraphQLAccount::new(
+            context.account_loader.try_load(id).await?,
+        ))
     }
 }
 
@@ -180,7 +264,6 @@ pub struct AccountBatcher {
 
 #[async_trait]
 impl BatchFn<ObjectIdWrapper, Account> for AccountBatcher {
-    // A hashmap is used, as we need to return an array which maps each original key to a Cult.
     async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, Account> {
         get_many(&self.connection, keys)
             .await

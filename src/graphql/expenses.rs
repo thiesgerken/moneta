@@ -1,17 +1,203 @@
 use std::error::Error;
 
+use crate::graphql::accounts::GraphQLAccount;
+use crate::graphql::categories::GraphQLCategory;
 use crate::graphql::root::require_user;
 use crate::graphql::root::Context;
 use crate::graphql::util::{self};
+use crate::models::rendering::RenderedExpenseTransaction;
 use crate::models::rendering::{
     RenderedExpense, RenderedExpenseCreateInput, RenderedExpenseInput, RenderedExpenseUpdateInput,
 };
+use crate::models::ExpenseCategorization;
+use crate::models::ExpensePosition;
+use crate::models::ExpenseReceipt;
 use crate::models::{Account, Expense, ObjectIdWrapper};
 use crate::queries;
 
+use chrono::DateTime;
+use chrono::Utc;
 use juniper::graphql_object;
+use juniper::FieldResult;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
+
+#[derive(Debug, Clone)]
+pub struct GraphQLExpenseCategorization {
+    data: ExpenseCategorization,
+}
+
+impl GraphQLExpenseCategorization {
+    pub fn new(data: ExpenseCategorization) -> Self {
+        Self { data }
+    }
+}
+
+#[graphql_object(Context = Context, name = "ExpenseCategorization")]
+impl GraphQLExpenseCategorization {
+    async fn category(&self, context: &Context) -> FieldResult<GraphQLCategory> {
+        Ok(GraphQLCategory::new(
+            context
+                .category_loader
+                .try_load(self.data.category_id)
+                .await?,
+        ))
+    }
+
+    fn weight(&self) -> f64 {
+        self.data.weight
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GraphQLExpenseTransaction {
+    data: RenderedExpenseTransaction,
+}
+
+impl GraphQLExpenseTransaction {
+    pub fn new(data: RenderedExpenseTransaction) -> Self {
+        GraphQLExpenseTransaction { data }
+    }
+}
+
+#[graphql_object(Context = Context, name = "ExpenseTransaction")]
+impl GraphQLExpenseTransaction {
+    async fn account(&self, context: &Context) -> FieldResult<GraphQLAccount> {
+        Ok(GraphQLAccount::new(
+            context
+                .account_loader
+                .try_load(self.data.account_id)
+                .await?,
+        ))
+    }
+
+    fn date(&self) -> DateTime<Utc> {
+        self.data.date
+    }
+
+    fn amount(&self) -> Option<i32> {
+        self.data.amount
+    }
+
+    fn fraction(&self) -> Option<f64> {
+        self.data.fraction
+    }
+
+    fn comments(&self) -> &str {
+        &self.data.comments
+    }
+
+    fn statement(&self) -> &str {
+        &self.data.statement
+    }
+
+    fn calculated_amount(&self) -> f64 {
+        self.data.calculated_amount
+    }
+
+    fn effective_amount(&self) -> f64 {
+        self.data.effective_amount
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GraphQLExpense {
+    data: RenderedExpense,
+}
+
+impl GraphQLExpense {
+    pub fn new(data: RenderedExpense) -> Self {
+        GraphQLExpense { data }
+    }
+}
+
+#[graphql_object(
+    Context = Context,name = "Expense")]
+impl GraphQLExpense {
+    fn id(&self) -> ObjectIdWrapper {
+        self.data.id
+    }
+
+    fn upstream_id(&self) -> ObjectIdWrapper {
+        self.data.upstream_id
+    }
+
+    fn title(&self) -> &str {
+        &self.data.title
+    }
+
+    fn store(&self) -> &str {
+        &self.data.store
+    }
+
+    fn description(&self) -> &str {
+        &self.data.description
+    }
+
+    fn comments(&self) -> &str {
+        &self.data.comments
+    }
+
+    fn reference_amount(&self) -> Option<i32> {
+        self.data.reference_amount
+    }
+
+    fn booking_start(&self) -> DateTime<Utc> {
+        self.data.booking_start
+    }
+
+    fn booking_end(&self) -> DateTime<Utc> {
+        self.data.booking_end
+    }
+
+    // TODO: recurring expense connection (expense loader?)
+
+    fn is_template(&self) -> bool {
+        self.data.is_template
+    }
+
+    fn is_tax_relevant(&self) -> bool {
+        self.data.is_tax_relevant
+    }
+
+    fn is_unchecked(&self) -> bool {
+        self.data.is_unchecked
+    }
+
+    fn is_incomplete(&self) -> bool {
+        self.data.is_incomplete
+    }
+
+    fn receipts(&self) -> &Vec<ExpenseReceipt> {
+        &self.data.receipts
+    }
+
+    fn categories(&self) -> Vec<GraphQLExpenseCategorization> {
+        self.data
+            .categories
+            .iter()
+            .cloned()
+            .map(GraphQLExpenseCategorization::new)
+            .collect()
+    }
+
+    fn transactions(&self) -> Vec<GraphQLExpenseTransaction> {
+        self.data
+            .transactions
+            .iter()
+            .cloned()
+            .map(GraphQLExpenseTransaction::new)
+            .collect()
+    }
+
+    fn positions(&self) -> &Vec<ExpensePosition> {
+        &self.data.positions
+    }
+
+    fn effective_amount(&self) -> f64 {
+        self.data.effective_amount
+    }
+}
 
 pub struct ExpenseQuery;
 
@@ -25,7 +211,7 @@ impl ExpenseQuery {
         skip: Option<i32>,
         filter: Option<String>,
         sort: Option<String>,
-    ) -> juniper::FieldResult<Vec<RenderedExpense>> {
+    ) -> juniper::FieldResult<Vec<GraphQLExpense>> {
         let uid = require_user(context).await?;
 
         Ok(util::list_query::<RenderedExpense>(
@@ -37,22 +223,27 @@ impl ExpenseQuery {
             sort,
             Some(doc!("userId": uid)),
         )
-        .await?)
+        .await?
+        .into_iter()
+        .map(GraphQLExpense::new)
+        .collect())
     }
 
     pub async fn get(
         context: &Context,
         id: ObjectIdWrapper,
-    ) -> juniper::FieldResult<RenderedExpense> {
+    ) -> juniper::FieldResult<GraphQLExpense> {
         let uid = require_user(context).await?;
         let collection = context
             .connection
             .collection::<RenderedExpense>("expenses_rendered");
 
-        Ok(collection
-            .find_one(doc! {"_id":*id, "userId": uid}, None)
-            .await?
-            .ok_or_else(|| format!("Expense {id:?} not found"))?)
+        Ok(GraphQLExpense::new(
+            collection
+                .find_one(doc! {"_id":*id, "userId": uid}, None)
+                .await?
+                .ok_or_else(|| format!("Expense {id:?} not found"))?,
+        ))
     }
 }
 pub struct ExpenseMutation;
