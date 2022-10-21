@@ -156,9 +156,7 @@ pub struct UserBatcher {
 #[async_trait]
 impl BatchFn<ObjectIdWrapper, User> for UserBatcher {
     async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, User> {
-        get_many(&self.connection, keys)
-            .await
-            .unwrap_or(HashMap::new())
+        get_many(&self.connection, keys).await.unwrap_or_default()
     }
 }
 

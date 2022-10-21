@@ -161,7 +161,7 @@ impl AccountMutation {
             .connection
             .collection::<RenderedBalance>("balances_rendered");
         let balance_count = rendered_balances_collection
-            .count_documents(doc!("account_id": *account.id.clone()), None)
+            .count_documents(doc!("account_id": *account.id), None)
             .await?;
 
         if balance_count > 0 {
@@ -176,7 +176,7 @@ impl AccountMutation {
             .connection
             .collection::<RenderedExpense>("expenses_rendered");
         let expense_count = rendered_expenses_collection
-            .count_documents(doc!("account_id": *account.id.clone()), None)
+            .count_documents(doc!("account_id": *account.id), None)
             .await?;
         if expense_count > 0 {
             return Err( format!(
@@ -265,9 +265,7 @@ pub struct AccountBatcher {
 #[async_trait]
 impl BatchFn<ObjectIdWrapper, Account> for AccountBatcher {
     async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, Account> {
-        get_many(&self.connection, keys)
-            .await
-            .unwrap_or(HashMap::new())
+        get_many(&self.connection, keys).await.unwrap_or_default()
     }
 }
 

@@ -121,7 +121,7 @@ impl CategoryMutation {
             .connection
             .collection::<RenderedExpense>("expenses_rendered");
         let expense_count = rendered_expenses_collection
-            .count_documents(doc!("categories.category_id": *category.id.clone()), None)
+            .count_documents(doc!("categories.category_id": *category.id), None)
             .await?;
 
         if expense_count > 0 {
@@ -206,9 +206,7 @@ pub struct CategoryBatcher {
 #[async_trait]
 impl BatchFn<ObjectIdWrapper, Category> for CategoryBatcher {
     async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, Category> {
-        get_many(&self.connection, keys)
-            .await
-            .unwrap_or(HashMap::new())
+        get_many(&self.connection, keys).await.unwrap_or_default()
     }
 }
 

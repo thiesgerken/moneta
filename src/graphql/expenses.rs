@@ -385,7 +385,7 @@ pub async fn validate_and_unrender(
     if expense
         .categories
         .iter()
-        .map(|c| c.category_id.clone())
+        .map(|c| c.category_id)
         .any(|a_id| !related_accounts.iter().any(|a| *a.id == *a_id))
     {
         return Err(format!(

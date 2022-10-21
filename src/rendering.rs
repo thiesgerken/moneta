@@ -127,10 +127,10 @@ impl Balance {
 
         let mut res = vec![RenderedBalance {
             id: ObjectId::new().into(),
-            upstream_id: self.id.clone(),
-            user_id: main_account.user_id.clone(),
+            upstream_id: self.id,
+            user_id: main_account.user_id,
             date: self.date,
-            account_id: main_account.id.clone(),
+            account_id: main_account.id,
             amount: self.amount,
             comments: self.comments.clone(),
         }];
@@ -145,10 +145,10 @@ impl Balance {
 
             res.push(RenderedBalance {
                 id: ObjectId::new().into(),
-                upstream_id: self.id.clone(),
-                user_id: other_account.user_id.clone(),
+                upstream_id: self.id,
+                user_id: other_account.user_id,
                 date: self.date,
-                account_id: other_account.id.clone(),
+                account_id: other_account.id,
                 amount: self.amount * if sync.invert { -1 } else { 1 },
                 comments: self.comments.clone(),
             });
@@ -160,7 +160,7 @@ impl Balance {
     pub async fn remove_rendered(&self, db: &Database) -> Result<DeleteResult, Box<dyn Error>> {
         let rendered_balances_collection = db.collection::<RenderedBalance>("balances_rendered");
         let r = rendered_balances_collection
-            .delete_many(doc!("upstream_id": *self.id.clone()), None)
+            .delete_many(doc!("upstream_id": *self.id), None)
             .await?;
 
         info!(
@@ -190,7 +190,7 @@ impl ExpenseTransaction {
     ) -> Result<RenderedExpenseTransaction, Box<dyn Error>> {
         let mut res = RenderedExpenseTransaction {
             date: self.date,
-            account_id: self.account_id.clone(),
+            account_id: self.account_id,
             comments: self.comments.clone(),
             amount: self.amount,
             fraction: self.fraction,
@@ -230,7 +230,7 @@ impl ExpenseTransaction {
                 })?;
 
             if *other_account.user_id == user_id {
-                res.account_id = other_account.id.clone();
+                res.account_id = other_account.id;
 
                 if sync.invert {
                     res.calculated_amount *= -1.;
@@ -299,7 +299,7 @@ impl Expense {
 
         Ok(RenderedExpense {
             id: ObjectId::new().into(),
-            upstream_id: self.id.clone(),
+            upstream_id: self.id,
             user_id: user_id.into(),
             title: self.title.clone(),
             store: self.store.clone(),
@@ -308,7 +308,7 @@ impl Expense {
             comments: self.comments.clone(),
             booking_start: self.booking_start,
             booking_end: self.booking_end,
-            recurring_expense_id: self.recurring_expense_id.clone(),
+            recurring_expense_id: self.recurring_expense_id,
             is_template: self.is_template,
             is_tax_relevant: self.is_tax_relevant,
             is_unchecked: self.is_unchecked,
@@ -329,7 +329,7 @@ impl Expense {
 
         let synchronized_account_ids: Vec<_> = main_accounts
             .iter()
-            .flat_map(|a| a.synchronization.as_ref().map(|ass| ass.account_id.clone()))
+            .flat_map(|a| a.synchronization.as_ref().map(|ass| ass.account_id))
             .collect();
         let synchronized_accounts: Vec<_> = accounts
             .iter()
@@ -344,7 +344,7 @@ impl Expense {
             .collect();
         relevant_accounts
             .iter()
-            .map(|a| *a.user_id.clone())
+            .map(|a| *a.user_id)
             .unique()
             .map(|uid| self.render_for_user(uid, &relevant_accounts))
             .collect::<Result<Vec<_>, _>>()
@@ -353,7 +353,7 @@ impl Expense {
     pub async fn remove_rendered(&self, db: &Database) -> Result<DeleteResult, Box<dyn Error>> {
         let rendered_expenses_collection = db.collection::<RenderedExpense>("expenses_rendered");
         let r = rendered_expenses_collection
-            .delete_many(doc!("upstream_id": *self.id.clone()), None)
+            .delete_many(doc!("upstream_id": *self.id), None)
             .await?;
 
         info!(
