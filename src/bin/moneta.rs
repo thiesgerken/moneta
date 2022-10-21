@@ -1,4 +1,4 @@
-use moneta::{cli, config::Config, web};
+use moneta::{cli, config::Config, graphql};
 
 use log::{info, LevelFilter};
 use simplelog::{ColorChoice, SimpleLogger, TermLogger, TerminalMode};
@@ -80,7 +80,7 @@ fn main() {
         } else if let Some(sub_matches) = matches.subcommand_matches("import") {
             cli::import::handle(connection, sub_matches).await;
         } else if matches.subcommand_matches("serve").is_some() {
-            web::handle(config, connection).await;
+            graphql::handle(config, connection).await;
         } else {
             cli::build()
                 .print_long_help()

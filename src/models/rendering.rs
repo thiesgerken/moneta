@@ -1,10 +1,16 @@
 use chrono::{DateTime, Utc};
-use rocket_okapi::JsonSchema;
+use juniper::{GraphQLInputObject, GraphQLObject};
 use serde::{Deserialize, Serialize};
 
-use super::{ExpenseCategorization, ExpensePosition, ExpenseReceipt, ObjectIdWrapper};
+use super::{
+    expense::{
+        ExpenseCategorizationInput, ExpensePositionInput, ExpenseReceiptInput,
+        ExpenseTransactionInput,
+    },
+    ExpenseCategorization, ExpensePosition, ExpenseReceipt, ObjectIdWrapper,
+};
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderedExpense {
     #[serde(rename = "_id", default)]
@@ -22,13 +28,11 @@ pub struct RenderedExpense {
     pub description: String,
     pub comments: String,
 
-    pub reference_amount: Option<i64>,
+    pub reference_amount: Option<i32>,
 
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
-    #[schemars(with = "DateTime<Utc>")]
     pub booking_start: DateTime<Utc>,
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
-    #[schemars(with = "DateTime<Utc>")]
     pub booking_end: DateTime<Utc>,
 
     /// TODO: (not implemented yet)
@@ -56,15 +60,14 @@ pub struct RenderedExpense {
     pub effective_amount: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderedExpenseTransaction {
     pub account_id: ObjectIdWrapper,
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
-    #[schemars(with = "DateTime<Utc>")]
     pub date: DateTime<Utc>,
 
-    pub amount: Option<i64>,
+    pub amount: Option<i32>,
     pub fraction: Option<f64>,
 
     pub comments: String,
@@ -77,7 +80,7 @@ pub struct RenderedExpenseTransaction {
     pub effective_amount: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderedBalance {
     #[serde(rename = "_id", default)]
@@ -91,10 +94,64 @@ pub struct RenderedBalance {
     pub user_id: ObjectIdWrapper,
 
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
-    #[schemars(with = "DateTime<Utc>")]
     pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
 
     pub account_id: ObjectIdWrapper,
-    pub amount: i64, // cents
+    pub amount: i32, // cents
     pub comments: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLInputObject)]
+#[graphql(name = "BalanceInput")]
+#[serde(rename_all = "camelCase")]
+pub struct RenderedBalanceInput {
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
+
+    pub account_id: ObjectIdWrapper,
+    pub amount: i32, // cents
+    pub comments: String,
+}
+
+pub type RenderedBalanceUpdateInput = RenderedBalanceInput;
+pub type RenderedBalanceCreateInput = RenderedBalanceInput;
+
+#[derive(Debug, Clone, Serialize, Deserialize, GraphQLInputObject)]
+#[graphql(name = "ExpenseInput")]
+#[serde(rename_all = "camelCase")]
+pub struct RenderedExpenseInput {
+    pub title: String,
+    pub store: String,
+    pub description: String,
+    pub comments: String,
+
+    pub reference_amount: Option<i32>,
+
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub booking_start: DateTime<Utc>,
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub booking_end: DateTime<Utc>,
+
+    /// TODO: (not implemented yet)
+    /// if this is part of something recurring, e.g. rent oder insurance payments,
+    /// then this contains the id of the rule that was triggered / this expense belongs to.
+    /// useful to check that these recurring expense have been paid yet in the current timespan and to spot mistakes (e.g. double payments)
+    pub recurring_expense_id: Option<ObjectIdWrapper>,
+
+    /// set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis
+    pub is_template: bool,
+    /// to track expenses that should be looked at again when preparing tax forms
+    pub is_tax_relevant: bool,
+    /// needs to be looked at by a user first (missing info, low confidence, ...)
+    pub is_unchecked: bool,
+    /// if we anticipate more transactions to appear before this can be completed; e.g. payback when a order hasn't arrived
+    pub is_incomplete: bool,
+
+    pub receipts: Vec<ExpenseReceiptInput>,
+    pub categories: Vec<ExpenseCategorizationInput>,
+    pub transactions: Vec<ExpenseTransactionInput>,
+    pub positions: Vec<ExpensePositionInput>,
+}
+
+pub type RenderedExpenseUpdateInput = RenderedExpenseInput;
+pub type RenderedExpenseCreateInput = RenderedExpenseInput;

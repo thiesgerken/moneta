@@ -1,12 +1,11 @@
 use chrono::Utc;
 use futures::stream::TryStreamExt;
-use log::{LevelFilter, info};
+use log::{info, LevelFilter};
 use moneta::models::Balance;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{doc, Document};
-use simplelog::{TerminalMode, ColorChoice, SimpleLogger, TermLogger};
+use simplelog::{ColorChoice, SimpleLogger, TermLogger, TerminalMode};
 use tokio::runtime::Builder;
-
 
 pub fn initialize_logging(verbosity: i8) {
     let level = match verbosity {
@@ -39,7 +38,6 @@ pub fn initialize_logging(verbosity: i8) {
     }
 }
 
-
 fn main() {
     let runtime = Builder::new_multi_thread()
         .thread_name("moneta-sandbox")
@@ -48,7 +46,7 @@ fn main() {
         .unwrap();
 
     runtime.block_on(async {
-    initialize_logging(1);
+        initialize_logging(1);
 
         let db = moneta::connect(
             "mongodb://localhost:27017",

@@ -1,10 +1,10 @@
 pub mod cli;
+pub mod config;
+pub mod graphql;
 pub mod import;
 pub mod models;
 pub mod queries;
 pub mod rendering;
-pub mod web;
-pub mod config;
 
 #[macro_use]
 extern crate rocket;

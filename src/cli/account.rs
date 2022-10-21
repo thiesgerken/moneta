@@ -54,7 +54,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         let account_ids: Vec<ObjectId> = account_id_values
             .into_iter()
             .cloned()
-            .map(|s|ObjectId::from_str(&s))
+            .map(|s| ObjectId::from_str(&s))
             .collect::<Result<_, _>>()
             .expect("error parsing object ids");
 
@@ -76,7 +76,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             account_collection
             .update_one(
                 doc! {"_id": *accounts[i ].id},
-                doc! {"$set": {"synchronization": bson::to_bson(&Some(AccountSynchronization{ account_id: accounts[(i+1)%2].id.clone(), invert })).unwrap()}},
+                doc! {"$set": {"synchronization": bson::to_bson(&Some(AccountSynchronization{ account_id: accounts[(i+1)%2].id, invert })).unwrap()}},
                 None,
             )
             .await
@@ -139,7 +139,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             .try_collect()
             .await
             .expect("Error loading accounts");
-        let account_ids: Vec<_> = accounts.iter().map(|a| *a.id.clone()).collect();
+        let account_ids: Vec<_> = accounts.iter().map(|a| *a.id).collect();
 
         rerender_multiple(connection, &account_ids)
             .await

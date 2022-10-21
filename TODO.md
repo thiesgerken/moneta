@@ -4,8 +4,10 @@
 - push notifications
 - front page: stream of recent events
 - on big screens: expandable rows for expense table?
-
 - Python API would be nice (access all rendered expenses?)
+- provide UpdateDTOs / CreateDTOs ?
+- implement changelogs for balances
+- implement changelogs for expenses
 
 ## Performance
 
@@ -24,5 +26,3 @@ something to track recurring expenses (to show if they are missing / have been d
 ...
 
 category budgets to remember how much one is allowed to spend?
-
-authentication via access tokens (instead of cookies)? these should be tracked as well
