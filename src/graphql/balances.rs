@@ -1,19 +1,63 @@
 use std::error::Error;
 
+use crate::graphql::root::require_user;
+use crate::graphql::root::Context;
+use crate::graphql::util::{self};
 use crate::models::rendering::{
     RenderedBalance, RenderedBalanceCreateInput, RenderedBalanceInput, RenderedBalanceUpdateInput,
 };
 use crate::models::{Account, Balance, ObjectIdWrapper};
 use crate::queries;
-use crate::graphql::root::require_user;
-use crate::graphql::root::Context;
-use crate::graphql::util::{self};
 
+use chrono::DateTime;
+use chrono::Utc;
 use juniper::graphql_object;
+use juniper::FieldResult;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
 
 pub struct BalanceQuery;
+
+#[derive(Debug, Clone)]
+pub struct GraphQLBalance {
+    data: RenderedBalance,
+}
+impl GraphQLBalance {
+    pub fn new(data: RenderedBalance) -> Self {
+        GraphQLBalance { data }
+    }
+}
+
+#[graphql_object(
+    Context = Context,name = "Balance")]
+impl GraphQLBalance {
+    fn comments(&self) -> &str {
+        &self.data.comments
+    }
+
+    fn amount(&self) -> i32 {
+        self.data.amount
+    }
+
+    fn id(&self) -> ObjectIdWrapper {
+        self.data.id
+    }
+
+    fn upstream_id(&self) -> ObjectIdWrapper {
+        self.data.upstream_id
+    }
+
+    fn date(&self) -> DateTime<Utc> {
+        self.data.date
+    }
+
+    async fn account(&self, context: &Context) -> FieldResult<Account> {
+        Ok(context
+            .account_loader
+            .try_load(self.data.account_id)
+            .await?)
+    }
+}
 
 #[graphql_object(
     Context = Context,
@@ -25,7 +69,7 @@ impl BalanceQuery {
         skip: Option<i32>,
         filter: Option<String>,
         sort: Option<String>,
-    ) -> juniper::FieldResult<Vec<RenderedBalance>> {
+    ) -> juniper::FieldResult<Vec<GraphQLBalance>> {
         let uid = require_user(context).await?;
 
         Ok(util::list_query::<RenderedBalance>(
@@ -37,30 +81,27 @@ impl BalanceQuery {
             sort,
             Some(doc!("userId": uid)),
         )
-        .await?)
+        .await?
+        .into_iter()
+        .map(GraphQLBalance::new)
+        .collect())
     }
 
     pub async fn get(
         context: &Context,
-        upstream_id: ObjectIdWrapper,
-    ) -> juniper::FieldResult<RenderedBalance> {
+        id: ObjectIdWrapper,
+    ) -> juniper::FieldResult<GraphQLBalance> {
         let uid = require_user(context).await?;
         let collection = context
             .connection
             .collection::<RenderedBalance>("balances_rendered");
 
-        let entry = collection
-            .find_one(doc! {"upstreamId":*upstream_id, "userId": uid}, None)
-            .await?;
-
-        if let Some(entry) = entry {
-            Ok(entry)
-        } else {
-            Err(juniper::FieldError::new(
-                "Balance does not exist",
-                juniper::Value::null(),
-            ))
-        }
+        Ok(GraphQLBalance::new(
+            collection
+                .find_one(doc! {"_id":*id, "userId": uid}, None)
+                .await?
+                .ok_or_else(|| format!("Balance {id:?} not found"))?,
+        ))
     }
 }
 
@@ -103,7 +144,7 @@ impl BalanceMutation {
     pub async fn create(
         context: &Context,
         balance: RenderedBalanceCreateInput,
-    ) -> juniper::FieldResult<RenderedBalance> {
+    ) -> juniper::FieldResult<GraphQLBalance> {
         let user_id = require_user(context).await?;
         let collection = context.connection.collection::<Balance>("balances");
 
@@ -114,14 +155,14 @@ impl BalanceMutation {
         collection.insert_one(&entry, None).await?;
 
         let balance = render(user_id, &context.connection, entry, &related_accounts).await?;
-        Ok(balance)
+        Ok(GraphQLBalance::new(balance))
     }
 
     pub async fn update(
         context: &Context,
         id: ObjectIdWrapper,
         balance: RenderedBalanceUpdateInput,
-    ) -> juniper::FieldResult<RenderedBalance> {
+    ) -> juniper::FieldResult<GraphQLBalance> {
         let user_id = require_user(context).await?;
         let collection = context
             .connection
@@ -166,7 +207,7 @@ impl BalanceMutation {
             &related_accounts,
         )
         .await?;
-        Ok(balance)
+        Ok(GraphQLBalance::new(balance))
     }
 }
 

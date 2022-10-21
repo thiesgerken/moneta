@@ -1,12 +1,20 @@
-use crate::models::rendering::{RenderedBalance, RenderedExpense};
-use crate::models::{Account, AccountCreateInput, AccountUpdateInput, ObjectIdWrapper};
+use std::collections::HashMap;
+use std::error::Error;
+
 use crate::graphql::root::require_user;
 use crate::graphql::root::Context;
 use crate::graphql::util::{self};
+use crate::models::rendering::{RenderedBalance, RenderedExpense};
+use crate::models::{Account, AccountCreateInput, AccountUpdateInput, ObjectIdWrapper};
 
+use dataloader::cached::Loader;
+use dataloader::BatchFn;
+use futures::TryStreamExt;
 use juniper::graphql_object;
+use log::debug;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
+use mongodb::Database;
 
 pub struct AccountQuery;
 
@@ -37,18 +45,7 @@ impl AccountQuery {
 
     pub async fn get(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<Account> {
         require_user(context).await?;
-        let collection = context.connection.collection::<Account>("accounts");
-
-        let entry = collection.find_one(doc! {"_id":*id}, None).await?;
-
-        if let Some(entry) = entry {
-            Ok(entry)
-        } else {
-            Err(juniper::FieldError::new(
-                "Account does not exist",
-                juniper::Value::null(),
-            ))
-        }
+        Ok(context.account_loader.try_load(id).await?)
     }
 }
 
@@ -153,4 +150,46 @@ impl AccountMutation {
 
         Ok(count == 1)
     }
+}
+
+pub async fn get_many(
+    connection: &Database,
+    ids: &[ObjectIdWrapper],
+) -> Result<HashMap<ObjectIdWrapper, Account>, Box<dyn Error>> {
+    debug!("Performing a coalesced account query for {} ids", ids.len());
+
+    let collection = connection.collection::<Account>("accounts");
+    let accounts = collection
+        .find(
+            doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<ObjectId>>()}},
+            None,
+        )
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    Ok(accounts
+        .into_iter()
+        .map(|a| (a.id, a))
+        .collect::<HashMap<_, _>>())
+}
+
+pub struct AccountBatcher {
+    connection: Database,
+}
+
+#[async_trait]
+impl BatchFn<ObjectIdWrapper, Account> for AccountBatcher {
+    // A hashmap is used, as we need to return an array which maps each original key to a Cult.
+    async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, Account> {
+        get_many(&self.connection, keys)
+            .await
+            .unwrap_or(HashMap::new())
+    }
+}
+
+pub type AccountLoader = Loader<ObjectIdWrapper, Account, AccountBatcher>;
+
+pub fn get_account_loader(connection: Database) -> AccountLoader {
+    Loader::new(AccountBatcher { connection })
 }

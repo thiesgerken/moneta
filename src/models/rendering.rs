@@ -102,6 +102,7 @@ pub struct RenderedBalance {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLInputObject)]
+#[graphql(name = "BalanceInput")]
 #[serde(rename_all = "camelCase")]
 pub struct RenderedBalanceInput {
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
@@ -116,6 +117,7 @@ pub type RenderedBalanceUpdateInput = RenderedBalanceInput;
 pub type RenderedBalanceCreateInput = RenderedBalanceInput;
 
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLInputObject)]
+#[graphql(name = "ExpenseInput")]
 #[serde(rename_all = "camelCase")]
 pub struct RenderedExpenseInput {
     pub title: String,

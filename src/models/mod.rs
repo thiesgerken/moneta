@@ -23,7 +23,7 @@ use juniper::{
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct ObjectIdWrapper(pub ObjectId);
 
 #[graphql_scalar(name = "ObjectId")]

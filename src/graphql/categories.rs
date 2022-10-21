@@ -1,12 +1,19 @@
-use crate::models::rendering::RenderedExpense;
-use crate::models::{Category, CategoryCreateInput, CategoryUpdateInput, ObjectIdWrapper};
+use std::collections::HashMap;
+use std::error::Error;
+
 use crate::graphql::root::require_user;
 use crate::graphql::root::Context;
 use crate::graphql::util;
+use crate::models::rendering::RenderedExpense;
+use crate::models::{Category, CategoryCreateInput, CategoryUpdateInput, ObjectIdWrapper};
 
+use dataloader::cached::Loader;
+use dataloader::BatchFn;
+use futures::TryStreamExt;
 use juniper::graphql_object;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
+use mongodb::Database;
 
 pub struct CategoryQuery;
 
@@ -37,18 +44,7 @@ impl CategoryQuery {
 
     pub async fn get(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<Category> {
         require_user(context).await?;
-        let collection = context.connection.collection::<Category>("categories");
-
-        let entry = collection.find_one(doc! {"_id":*id}, None).await?;
-
-        if let Some(entry) = entry {
-            Ok(entry)
-        } else {
-            Err(juniper::FieldError::new(
-                "Category does not exist",
-                juniper::Value::null(),
-            ))
-        }
+        Ok(context.category_loader.try_load(id).await?)
     }
 }
 
@@ -123,4 +119,49 @@ impl CategoryMutation {
 
         Ok(count == 1)
     }
+}
+
+pub async fn get_many(
+    connection: &Database,
+    ids: &[ObjectIdWrapper],
+) -> Result<HashMap<ObjectIdWrapper, Category>, Box<dyn Error>> {
+    debug!(
+        "Performing a coalesced category query for {} ids",
+        ids.len()
+    );
+
+    let collection = connection.collection::<Category>("categories");
+    let categories = collection
+        .find(
+            doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<ObjectId>>()}},
+            None,
+        )
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    Ok(categories
+        .into_iter()
+        .map(|a| (a.id, a))
+        .collect::<HashMap<_, _>>())
+}
+
+pub struct CategoryBatcher {
+    connection: Database,
+}
+
+#[async_trait]
+impl BatchFn<ObjectIdWrapper, Category> for CategoryBatcher {
+    // A hashmap is used, as we need to return an array which maps each original key to a Cult.
+    async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, Category> {
+        get_many(&self.connection, keys)
+            .await
+            .unwrap_or(HashMap::new())
+    }
+}
+
+pub type CategoryLoader = Loader<ObjectIdWrapper, Category, CategoryBatcher>;
+
+pub fn get_category_loader(connection: Database) -> CategoryLoader {
+    Loader::new(CategoryBatcher { connection })
 }

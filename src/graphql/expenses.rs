@@ -1,13 +1,13 @@
 use std::error::Error;
 
+use crate::graphql::root::require_user;
+use crate::graphql::root::Context;
+use crate::graphql::util::{self};
 use crate::models::rendering::{
     RenderedExpense, RenderedExpenseCreateInput, RenderedExpenseInput, RenderedExpenseUpdateInput,
 };
 use crate::models::{Account, Expense, ObjectIdWrapper};
 use crate::queries;
-use crate::graphql::root::require_user;
-use crate::graphql::root::Context;
-use crate::graphql::util::{self};
 
 use juniper::graphql_object;
 use mongodb::bson::oid::ObjectId;
@@ -42,25 +42,17 @@ impl ExpenseQuery {
 
     pub async fn get(
         context: &Context,
-        upstream_id: ObjectIdWrapper,
+        id: ObjectIdWrapper,
     ) -> juniper::FieldResult<RenderedExpense> {
         let uid = require_user(context).await?;
         let collection = context
             .connection
             .collection::<RenderedExpense>("expenses_rendered");
 
-        let entry = collection
-            .find_one(doc! {"upstreamId":*upstream_id, "userId": uid}, None)
-            .await?;
-
-        if let Some(entry) = entry {
-            Ok(entry)
-        } else {
-            Err(juniper::FieldError::new(
-                "RenderedExpense does not exist",
-                juniper::Value::null(),
-            ))
-        }
+        Ok(collection
+            .find_one(doc! {"_id":*id, "userId": uid}, None)
+            .await?
+            .ok_or_else(|| format!("Expense {id:?} not found"))?)
     }
 }
 pub struct ExpenseMutation;
