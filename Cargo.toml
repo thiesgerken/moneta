@@ -30,6 +30,7 @@ dataloader = { version = "0.16", default-features = false, features = [
 ] }
 juniper = "0.15.10"
 juniper_rocket = "0.8.2"
+dotenv = "0.15.0"
 
 [profile.release]
 lto = true

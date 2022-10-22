@@ -1,6 +1,7 @@
 use moneta::{cli, config::Config, graphql};
 
-use log::{info, LevelFilter};
+use dotenv::dotenv;
+use log::{debug, info, LevelFilter};
 use simplelog::{ColorChoice, SimpleLogger, TermLogger, TerminalMode};
 use tokio::runtime::Builder;
 
@@ -42,6 +43,8 @@ pub fn initialize_logging(verbosity: i8) {
 }
 
 fn main() {
+    dotenv().ok();
+
     let runtime = Builder::new_multi_thread()
         .thread_name("moneta-main")
         .enable_all()
@@ -67,7 +70,7 @@ fn main() {
             .expect("unable to parse settings into Config struct");
 
         initialize_logging(config.verbosity);
-        info!("config={:?}", &config);
+        debug!("config={:?}", &config);
 
         let connection = moneta::connect(&config.database.url, &config.database.name, "moneta-web")
             .await
