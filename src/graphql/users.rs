@@ -70,6 +70,8 @@ impl UserQuery {
         limit: Option<i32>,
         skip: Option<i32>,
     ) -> juniper::FieldResult<Vec<GraphQLUserInfo>> {
+        require_user(context).await?;
+
         let collection = &context.connection.collection::<User>("users");
         let cursor = collection
             .find(None, None)
