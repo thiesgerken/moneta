@@ -5,24 +5,30 @@ services:
       context: .
     image: git.thiesgerken.de:5005/thies/moneta:main
     restart: unless-stopped
-    ports:
-      - "8484:80"
+    expose:
+      - 80
     environment:
       - MONETA__DATABASE__URL=mongodb://mongo:27017
       - MONETA__API__PORT=80
       - MONETA__API__ADDRESS=0.0.0.0
       - MONETA__API__SECRET_KEY=M7/dfyV00H6WoOGNxygzdOudibhuPdQwJay5pi+I1cg=
     command: moneta serve
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.moneta-backend.rule=PathPrefix(`/graphql`)"
+      - "traefik.http.routers.moneta-backend.entrypoints=web"
 
   frontend:
-    # proxies /graphql to backend:80, so don't rename that lightly!
-    # TODO: use traefik instead
     build:
       context: ../moneta-frontend
     image: git.thiesgerken.de:5005/thies/moneta-frontend:main
     restart: unless-stopped
-    ports:
-      - "8485:80"
+    expose:
+      - 80
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.moneta-frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.moneta-frontend.entrypoints=web"
 
   mongo:
     image: mongo:5
@@ -30,7 +36,20 @@ services:
       - mongo:/data/db
     restart: unless-stopped
     ports:
-      - "127.0.0.1:27018:27017" # for debugging
+      # for debugging :)
+      - "127.0.0.1:27018:27017"
+
+  traefik:
+    image: "traefik:v2.9"
+    container_name: "traefik"
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "8485:80"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
 
 volumes:
   mongo:
