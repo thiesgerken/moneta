@@ -10,6 +10,8 @@ pub mod rendering;
 extern crate rocket;
 
 use argonautica::{Hasher, Verifier};
+use models::rendering::RenderedExpense;
+use mongodb::bson::doc;
 
 pub fn verify_password(pw: &str, hash: &str) -> bool {
     Verifier::default()
@@ -37,5 +39,23 @@ pub async fn connect(
     client_options.app_name = Some(app_name.to_owned());
 
     let client = mongodb::Client::with_options(client_options)?;
-    Ok(client.database(database_name))
+    let db = client.database(database_name);
+
+    db.collection::<RenderedExpense>("expenses_rendered")
+        .create_indexes(
+            [
+                mongodb::IndexModel::builder()
+                    .keys(doc! {"upstreamId": 1})
+                    .build(),
+                mongodb::IndexModel::builder()
+                    .keys(doc! {"userId": 1})
+                    .build(),
+            ],
+            None,
+        )
+        .await?;
+
+    // TODO: indexes for balances and usual sorting by date
+
+    Ok(db)
 }
