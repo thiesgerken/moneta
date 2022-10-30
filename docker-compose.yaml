@@ -1,9 +1,9 @@
 version: "3.3"
 services:
-  moneta:
+  backend:
     build:
       context: .
-    image: git.thiesgerken.de:5005/thies/moneta:latest
+    image: git.thiesgerken.de:5005/thies/moneta:main
     restart: unless-stopped
     ports:
       - "8484:80"
@@ -13,6 +13,16 @@ services:
       - MONETA__API__ADDRESS=0.0.0.0
       - MONETA__API__SECRET_KEY=M7/dfyV00H6WoOGNxygzdOudibhuPdQwJay5pi+I1cg=
     command: moneta serve
+
+  frontend:
+    # proxies /graphql to backend:80, so don't rename that lightly!
+    # TODO: use traefik instead
+    build:
+      context: ../moneta-frontend
+    image: git.thiesgerken.de:5005/thies/moneta-frontend:main
+    restart: unless-stopped
+    ports:
+      - "8485:80"
 
   mongo:
     image: mongo:5
