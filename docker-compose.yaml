@@ -1,0 +1,26 @@
+version: "3.3"
+services:
+  moneta:
+    build:
+      context: .
+    image: git.thiesgerken.de:5005/thies/moneta:latest
+    restart: unless-stopped
+    ports:
+      - "8484:80"
+    environment:
+      - MONETA__DATABASE__URL=mongodb://mongo:27017
+      - MONETA__API__PORT=80
+      - MONETA__API__ADDRESS=0.0.0.0
+      - MONETA__API__SECRET_KEY=M7/dfyV00H6WoOGNxygzdOudibhuPdQwJay5pi+I1cg=
+    command: moneta serve
+
+  mongo:
+    image: mongo:5
+    volumes:
+      - mongo:/data/db
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27018:27017" # for debugging
+
+volumes:
+  mongo:

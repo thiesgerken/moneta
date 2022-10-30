@@ -1,275 +1,365 @@
-use crate::models::*;
+use crate::models::{
+    rendering::{
+        RenderedBalance, RenderedBalanceInput, RenderedExpense, RenderedExpenseInput,
+        RenderedExpenseTransaction,
+    },
+    Account, Balance, Expense, ExpenseCategorizationInput, ExpensePositionInput,
+    ExpenseReceiptInput, ExpenseTransaction, ExpenseTransactionInput,
+};
+use futures::TryStreamExt;
+use itertools::Itertools;
+use mongodb::{
+    bson::{doc, oid::ObjectId},
+    results::DeleteResult,
+    Database,
+};
+use std::error::Error;
 
-use log::error;
-use serde::{Deserialize, Serialize};
-
-// The contents of these "Rendered" entities may have been altered to be viewed by the user that requests them
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RenderedAccount {
-    pub info: Account,
-    pub synchronization: Option<AccountSynchronization>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RenderedExpense {
-    pub info: Expense,
-    pub events: Vec<ExpenseEvent>,
-    pub receipts: Vec<ExpenseReceipt>,
-    pub categories: Vec<ExpenseCategory>,
-    pub transactions: Vec<ExpenseTransaction>,
-    pub positions: Vec<ExpensePosition>,
-    pub group: Option<ExpenseGroup>,
-    pub total_amount: i64,
-    pub calculated_amounts: Vec<i64>, // for each transaction
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RenderedCategory {
-    pub info: Category,
-    pub replaces: Vec<i32>,
-}
-
-pub type RenderedBalance = Balance;
-
-impl RenderedBalance {
-    pub fn render(
-        mut balance: Balance,
-        account_sync: Option<AccountSynchronization>,
-    ) -> RenderedBalance {
-        if let Some(sync) = account_sync {
-            balance.account_id = if sync.account1 == balance.account_id {
-                sync.account2
-            } else {
-                sync.account1
-            };
-            balance.amount *= if sync.invert { -1 } else { 1 };
-        }
-
-        balance
-    }
-}
-
-impl RenderedCategory {
-    pub fn render(category: Category, replaces: &[CategoryReplacement]) -> RenderedCategory {
-        RenderedCategory {
-            replaces: replaces
-                .iter()
-                .filter(|c| c.replacement == category.id)
-                .map(|c| c.original)
-                .collect(),
-            info: category,
-        }
-    }
-}
-
-pub fn calculate_total_amount(
-    uid: i32,
-    info: &Expense,
-    transactions: &[(ExpenseTransaction, Account, Option<AccountSynchronization>)],
-) -> (i64, Vec<i64>) {
-    let ts_with_amount = transactions
-        .iter()
-        .filter_map(|(t, _, _)| t.amount)
-        .collect::<Vec<_>>();
-    if ts_with_amount.is_empty() {
-        error!(
-            "expense {} has no transactions with a fixed amount! pretending that its 0.",
-            info.id
-        );
-    } else if ts_with_amount.len() > 1 && ts_with_amount.len() < transactions.len() {
-        error!(
-        "expense {} has multiple transactions with a fixed amount, and also fractional transactions. This is unsupported behavior!",
-        info.id
+pub async fn rerender_multiple(
+    connection: mongodb::Database,
+    account_ids: &[ObjectId],
+) -> Result<(), Box<dyn Error>> {
+    let b_count = rerender_multiple_balances(connection.clone(), account_ids).await?;
+    info!(
+        "Rerendered {} balances belonging to {} accounts",
+        b_count,
+        account_ids.len()
     );
-    }
-    let sum_of_amounts = ts_with_amount.iter().sum::<i64>();
-    let mut total_amount: i64 = 0;
 
-    // if there is an account syncing, then the synced account has to belong to the user anyway, no need to check uids in that case
-    total_amount += transactions
-        .iter()
-        .filter(|(_, a, acs)| acs.is_some() || a.user_id == uid)
-        .filter_map(|(t, _, _)| t.amount)
-        .sum::<i64>();
-    total_amount += transactions
-        .iter()
-        .filter(|(_, a, acs)| acs.is_some() || a.user_id == uid)
-        .filter_map(|(t, _, _)| t.fraction.map(|x| (x * sum_of_amounts as f64) as i64))
-        .sum::<i64>();
+    let e_count = rerender_multiple_expenses(connection.clone(), account_ids).await?;
+    info!(
+        "Rerendered {} expenses belonging to {} accounts",
+        e_count,
+        account_ids.len()
+    );
 
-    let calculated_amounts = transactions
-        .iter()
-        .map(|(t, _, _)| {
-            t.amount
-                .unwrap_or_else(|| (t.fraction.unwrap_or(0.0) * sum_of_amounts as f64) as i64)
-        })
-        .collect::<Vec<_>>();
-
-    (total_amount, calculated_amounts)
+    Ok(())
 }
 
-impl RenderedExpense {
-    // it is very important that the transactions only contain account synchronizations if the account in the transaction does not belong to the user!
-    pub fn render(
-        uid: i32,
-        info: Expense,
-        transactions: Vec<(ExpenseTransaction, Account, Option<AccountSynchronization>)>,
-        categories: Vec<(ExpenseCategory, Option<CategoryReplacement>)>,
-        receipts: Vec<ExpenseReceipt>,
-        positions: Vec<ExpensePosition>,
-        events: Vec<ExpenseEvent>,
-        group: Option<ExpenseGroup>,
-    ) -> RenderedExpense {
-        assert!(info.group_id.is_none() == group.is_none());
+/// account_ids must contain synchronized accounts as well
+pub async fn rerender_multiple_balances(
+    connection: mongodb::Database,
+    account_ids: &[ObjectId],
+) -> Result<usize, Box<dyn Error>> {
+    let account_collection = connection.collection::<Account>("accounts");
 
-        let transactions = transactions
-            .into_iter()
-            .map(|(mut t, a, acs)| {
-                if let Some(acs) = &acs {
-                    if acs.invert {
-                        t.amount = t.amount.map(|y| -y);
-                        t.fraction = t.fraction.map(|y| -y);
-                    }
+    let accounts = account_collection
+        .find(doc!("_id": {"$in": &account_ids}), None)
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
 
-                    t.account_id = if acs.account1 == t.account_id {
-                        acs.account2
-                    } else {
-                        acs.account1
-                    };
-                }
-                (t, a, acs)
-            })
-            .collect::<Vec<_>>();
+    let rendered_balances_collection =
+        connection.collection::<RenderedBalance>("balances_rendered");
+    rendered_balances_collection
+        .delete_many(doc!("accountId": {"$in": &account_ids}), None)
+        .await?;
 
-        let (total_amount, calculated_amounts) = calculate_total_amount(uid, &info, &transactions);
+    let balance_collection = connection.collection::<Balance>("balances");
+    let mut cursor = balance_collection
+        .find(doc!("accountId": {"$in": &account_ids}), None)
+        .await?;
 
-        let categories = categories
-            .into_iter()
-            .map(|(mut c, repl)| {
-                if let Some(repl) = repl {
-                    c.category_id = repl.replacement;
-                }
-                c
-            })
-            .collect::<Vec<ExpenseCategory>>();
+    let mut rendered_balances = Vec::new();
+    while let Some(b) = cursor.try_next().await? {
+        rendered_balances.extend(b.render(&accounts)?.into_iter());
+    }
 
-        let transactions = transactions
-            .into_iter()
-            .map(|(t, _, _)| t)
-            .collect::<Vec<_>>();
+    let r = rendered_balances_collection
+        .insert_many(&rendered_balances, None)
+        .await?;
 
-        RenderedExpense {
-            info,
-            categories,
-            events,
-            transactions,
-            positions,
-            receipts,
-            group,
-            total_amount,
-            calculated_amounts,
+    Ok(r.inserted_ids.len())
+}
+
+/// account_ids must contain synchronized accounts as well
+pub async fn rerender_multiple_expenses(
+    connection: mongodb::Database,
+    account_ids: &[ObjectId],
+) -> Result<usize, Box<dyn Error>> {
+    // need to get all accounts, because the transactions could be linked to other accounts
+    let account_collection = connection.collection::<Account>("accounts");
+    let accounts = account_collection
+        .find(doc!(), None) // can't be that many, right?
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    let rendered_expenses_collection =
+        connection.collection::<RenderedExpense>("expenses_rendered");
+    rendered_expenses_collection
+        .delete_many(doc!("transactions.accountId": {"$in": &account_ids}), None)
+        .await?;
+
+    let expense_collection = connection.collection::<Expense>("expenses");
+    let mut cursor = expense_collection
+        .find(doc!("transactions.accountId": {"$in": &account_ids}), None)
+        .await?;
+
+    let mut rendered_expenses = Vec::new();
+    while let Some(e) = cursor.try_next().await? {
+        rendered_expenses.extend(e.render(&accounts)?.into_iter());
+    }
+
+    let r = rendered_expenses_collection
+        .insert_many(&rendered_expenses, None)
+        .await?;
+
+    Ok(r.inserted_ids.len())
+}
+
+impl Balance {
+    pub fn from_rendered(balance: RenderedBalanceInput) -> Self {
+        Self {
+            id: ObjectId::new().into(),
+            date: balance.date,
+            account_id: balance.account_id,
+            amount: balance.amount,
+            comments: balance.comments,
         }
     }
 
-    // assumes that the input vectors are sorted by expense_id!
-    pub fn filter_and_render(
-        uid: i32,
-        info: Expense,
-        transactions: &[(ExpenseTransaction, Account, Option<AccountSynchronization>)],
-        categories: &[(ExpenseCategory, Option<CategoryReplacement>)],
-        positions: &[ExpensePosition],
-        receipts: &[ExpenseReceipt],
-        events: &[ExpenseEvent],
-        groups: &[ExpenseGroup],
-    ) -> RenderedExpense {
-        let transactions = transactions
+    pub fn render(&self, accounts: &[Account]) -> Result<Vec<RenderedBalance>, Box<dyn Error>> {
+        let main_account = accounts
             .iter()
-            // .filter(|(t, _)| t.expense_id == info.id)
-            .skip_while(|(t, _, _)| t.expense_id != info.id)
-            .take_while(|(t, _, _)| t.expense_id == info.id)
-            .map(|(t, a, acs)| {
-                let mut t = t.clone();
+            .find(|a| a.id == self.account_id)
+            .ok_or_else(|| format!("Cannot find main account of {:?}", &self))?;
 
-                if let Some(acs) = acs {
-                    if acs.invert {
-                        t.amount = t.amount.map(|y| -y);
-                        t.fraction = t.fraction.map(|y| -y);
-                    }
+        let mut res = vec![RenderedBalance {
+            id: ObjectId::new().into(),
+            upstream_id: self.id,
+            user_id: main_account.user_id,
+            date: self.date,
+            account_id: main_account.id,
+            amount: self.amount,
+            comments: self.comments.clone(),
+        }];
 
-                    t.account_id = if acs.account1 == t.account_id {
-                        acs.account2
-                    } else {
-                        acs.account1
-                    };
-                }
-                (t, a.clone(), acs.clone())
-            })
-            .collect::<Vec<_>>();
+        if let Some(sync) = &main_account.synchronization {
+            let other_account = accounts
+                .iter()
+                .find(|a| a.id == sync.account_id)
+                .ok_or_else(|| {
+                    format!("Cannot find synchronized account of {:?}", &main_account)
+                })?;
 
-        let categories = categories
-            .iter()
-            // .filter(|(c, _)| c.expense_id == info.id)
-            .skip_while(|(t, _)| t.expense_id != info.id)
-            .take_while(|(t, _)| t.expense_id == info.id)
-            .map(|(c, repl)| {
-                let mut c = c.clone();
+            res.push(RenderedBalance {
+                id: ObjectId::new().into(),
+                upstream_id: self.id,
+                user_id: other_account.user_id,
+                date: self.date,
+                account_id: other_account.id,
+                amount: self.amount * if sync.invert { -1 } else { 1 },
+                comments: self.comments.clone(),
+            });
+        }
 
-                if let Some(repl) = repl {
-                    c.category_id = repl.replacement;
-                }
-                c
-            })
-            .collect::<Vec<ExpenseCategory>>();
+        Ok(res)
+    }
 
-        let events = events
-            .iter()
-            // .filter(|e| e.expense_id == info.id)
-            .skip_while(|t| t.expense_id != info.id)
-            .take_while(|t| t.expense_id == info.id)
-            .cloned()
-            .collect();
+    pub async fn remove_rendered(&self, db: &Database) -> Result<DeleteResult, Box<dyn Error>> {
+        let rendered_balances_collection = db.collection::<RenderedBalance>("balances_rendered");
+        let r = rendered_balances_collection
+            .delete_many(doc!("upstream_id": *self.id), None)
+            .await?;
 
-        let receipts = receipts
-            .iter()
-            // .filter(|r| r.expense_id == info.id)
-            .skip_while(|t| t.expense_id != info.id)
-            .take_while(|t| t.expense_id == info.id)
-            .cloned()
-            .collect();
+        info!(
+            "deleted {} rendered balances of balance {:?}",
+            r.deleted_count, &self.id
+        );
+        Ok(r)
+    }
+}
+impl ExpenseTransaction {
+    pub fn from_rendered(transaction: ExpenseTransactionInput) -> Self {
+        Self {
+            account_id: transaction.account_id,
+            date: transaction.date,
+            amount: transaction.amount,
+            fraction: transaction.fraction,
+            comments: transaction.comments,
+            statement: transaction.statement,
+        }
+    }
 
-        let (total_amount, calculated_amounts) = calculate_total_amount(uid, &info, &transactions);
-        let transactions = transactions
-            .into_iter()
-            .map(|(t, _, _)| t)
-            .collect::<Vec<_>>();
-
-        let positions = positions
-            .iter()
-            .skip_while(|t| t.expense_id != info.id)
-            .take_while(|t| t.expense_id == info.id)
-            .cloned()
-            .collect();
-
-        let group = if let Some(g_id) = info.group_id {
-            groups.iter().find(|g| g.id == g_id).cloned()
-        } else {
-            None
+    pub fn render_for_user(
+        &self,
+        user_id: ObjectId,
+        accounts: &[Account],
+        reference_amount: Option<i32>,
+    ) -> Result<RenderedExpenseTransaction, Box<dyn Error>> {
+        let mut res = RenderedExpenseTransaction {
+            date: self.date,
+            account_id: self.account_id,
+            comments: self.comments.clone(),
+            amount: self.amount,
+            fraction: self.fraction,
+            statement: self.statement.clone(),
+            calculated_amount: 0.0, // will be filled in the sequel
+            effective_amount: 0.0,  // will be filled in the sequel
         };
 
-        RenderedExpense {
-            info,
-            categories,
-            events,
-            transactions,
-            positions,
-            receipts,
-            group,
-            total_amount,
-            calculated_amounts,
+        res.calculated_amount = if let Some(amount) = self.amount {
+            amount as f64
+        } else {
+            let total_amount = reference_amount.ok_or("tried to convert a fractional transaction, but no reference amount available?! expense seems to be invalid")?;
+
+            total_amount as f64
+                * self
+                    .fraction
+                    .ok_or("tried to convert transaction without amount or fraction set")?
+        };
+
+        let main_account = accounts
+            .iter()
+            .find(|a| a.id == self.account_id)
+            .ok_or_else(|| format!("cannot find main account of {:?}", self))?;
+
+        res.effective_amount = if *main_account.user_id == user_id {
+            main_account.ownership_fraction * res.calculated_amount
+        } else {
+            0.0
+        };
+
+        if let Some(sync) = &main_account.synchronization {
+            let other_account = accounts
+                .iter()
+                .find(|a| a.id == sync.account_id)
+                .ok_or_else(|| {
+                    format!("Cannot find synchronized account of {:?}", &main_account)
+                })?;
+
+            if *other_account.user_id == user_id {
+                res.account_id = other_account.id;
+
+                if sync.invert {
+                    res.calculated_amount *= -1.;
+                    res.amount = res.amount.map(|x| -x);
+                    res.fraction = res.fraction.map(|x| -x);
+                }
+
+                res.effective_amount = other_account.ownership_fraction * res.calculated_amount;
+            }
         }
+
+        Ok(res)
+    }
+}
+
+impl Expense {
+    pub fn from_rendered(expense: RenderedExpenseInput) -> Self {
+        Self {
+            id: ObjectId::new().into(),
+            title: expense.title,
+            store: expense.store,
+            description: expense.description,
+            comments: expense.comments,
+            booking_start: expense.booking_start,
+            booking_end: expense.booking_end,
+            recurring_expense_id: expense.recurring_expense_id,
+            reference_amount: expense.reference_amount,
+            is_template: expense.is_template,
+            is_tax_relevant: expense.is_tax_relevant,
+            is_unchecked: expense.is_unchecked,
+            is_incomplete: expense.is_incomplete,
+            receipts: expense
+                .receipts
+                .into_iter()
+                .map(ExpenseReceiptInput::upgrade)
+                .collect(),
+            categories: expense
+                .categories
+                .into_iter()
+                .map(ExpenseCategorizationInput::upgrade)
+                .collect(),
+            transactions: expense
+                .transactions
+                .into_iter()
+                .map(ExpenseTransaction::from_rendered)
+                .collect(),
+            positions: expense
+                .positions
+                .into_iter()
+                .map(ExpensePositionInput::upgrade)
+                .collect(),
+        }
+    }
+
+    pub fn render_for_user(
+        &self,
+        user_id: ObjectId,
+        accounts: &[Account],
+    ) -> Result<RenderedExpense, Box<dyn Error>> {
+        let rendered_ts: Vec<_> = self
+            .transactions
+            .iter()
+            .map(|t| t.render_for_user(user_id, accounts, self.reference_amount))
+            .collect::<Result<_, _>>()?;
+        let effective_amount = rendered_ts.iter().map(|t| t.effective_amount).sum();
+
+        Ok(RenderedExpense {
+            id: ObjectId::new().into(),
+            upstream_id: self.id,
+            user_id: user_id.into(),
+            title: self.title.clone(),
+            store: self.store.clone(),
+            description: self.description.clone(),
+            reference_amount: self.reference_amount,
+            comments: self.comments.clone(),
+            booking_start: self.booking_start,
+            booking_end: self.booking_end,
+            recurring_expense_id: self.recurring_expense_id,
+            is_template: self.is_template,
+            is_tax_relevant: self.is_tax_relevant,
+            is_unchecked: self.is_unchecked,
+            is_incomplete: self.is_incomplete,
+            receipts: self.receipts.clone(),
+            categories: self.categories.clone(),
+            transactions: rendered_ts,
+            positions: self.positions.clone(),
+            effective_amount,
+        })
+    }
+
+    pub fn render(&self, accounts: &[Account]) -> Result<Vec<RenderedExpense>, Box<dyn Error>> {
+        let main_accounts: Vec<_> = accounts
+            .iter()
+            .filter(|a| self.transactions.iter().any(|t| a.id == t.account_id))
+            .collect();
+
+        let synchronized_account_ids: Vec<_> = main_accounts
+            .iter()
+            .flat_map(|a| a.synchronization.as_ref().map(|ass| ass.account_id))
+            .collect();
+        let synchronized_accounts: Vec<_> = accounts
+            .iter()
+            .filter(|a| synchronized_account_ids.iter().any(|t| &a.id == t))
+            .collect();
+
+        let relevant_accounts: Vec<_> = synchronized_accounts
+            .iter()
+            .chain(main_accounts.iter())
+            .cloned()
+            .cloned()
+            .collect();
+        relevant_accounts
+            .iter()
+            .map(|a| *a.user_id)
+            .unique()
+            .map(|uid| self.render_for_user(uid, &relevant_accounts))
+            .collect::<Result<Vec<_>, _>>()
+    }
+
+    pub async fn remove_rendered(&self, db: &Database) -> Result<DeleteResult, Box<dyn Error>> {
+        let rendered_expenses_collection = db.collection::<RenderedExpense>("expenses_rendered");
+        let r = rendered_expenses_collection
+            .delete_many(doc!("upstream_id": *self.id), None)
+            .await?;
+
+        info!(
+            "deleted {} rendered expenses of expense {:?}",
+            r.deleted_count, &self.id
+        );
+        Ok(r)
     }
 }

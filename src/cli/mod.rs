@@ -1,95 +1,23 @@
-pub mod export;
+pub mod account;
 pub mod import;
-pub mod serve;
 pub mod user;
 
-use clap::{crate_authors, crate_name, crate_version, App, Arg};
-use config::ConfigError;
-use serde::{Deserialize, Serialize};
-use std::path::Path;
+use clap::{crate_authors, crate_name, crate_version, Arg, ArgAction, Command};
 
-// build a clap::App interface
-pub fn build() -> App<'static> {
-    App::new(crate_name!())
+pub fn build() -> Command {
+    Command::new(crate_name!())
         .version(crate_version!())
         .author(crate_authors!())
         .about("Personal expense management and analysis")
-        .arg(Arg::new("config")
-                .short('c')
-                .long("config")
-                .value_name("file")
-                .help("read configuration from this file (instead of config.* in '/etc/moneta' and moneta.* in '.')"))
-        .arg(Arg::new("v")
+        .arg(
+            Arg::new("verbosity")
                 .short('v')
-                .long("verbose")
-                .multiple_occurrences(true)
-                .help("specify multiple times (up to three) to increase verbosity level"))
-        .arg(Arg::new("database")
-                .long("database")
-                .help("database url [default: 'postgres://localhost/moneta']")
-                .value_name("url"))
+                .long("verbosity")
+                .action(ArgAction::Count)
+                .help("specify multiple times (up to three) to increase verbosity level"),
+        )
         .subcommand(user::build())
         .subcommand(import::build())
-        .subcommand(export::build())
-        .subcommand(serve::build())
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(default)]
-pub struct Config {
-    #[serde(skip)]
-    pub verbosity: i64,
-    pub database: String,
-    pub web: serve::Config,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            database: "postgres://localhost/moneta".into(),
-            verbosity: 0,
-            web: Default::default(),
-        }
-    }
-}
-
-// set default settings and load overrides from config files
-// files that are considered: basenames /etc/moneta/config and ./moneta
-// fails, if additional_file does not exist or cannot be read
-pub fn initialize_settings(additional_file: Option<&str>) -> Result<config::Config, ConfigError> {
-    // let default: Config = Default::default();
-    // let mut settings = config::Config::try_from(&default)?;
-    let mut settings = config::Config::new();
-
-    if let Some(p) = additional_file {
-        settings
-            .merge(config::File::from(Path::new(p)).required(true))
-            .expect("unable to read config file");
-    } else {
-        settings
-            .merge(config::File::with_name("/etc/moneta/config").required(false))
-            .unwrap()
-            .merge(config::File::with_name("./moneta").required(false))
-            .unwrap();
-    }
-
-    Ok(settings)
-}
-
-// parse the command line flags and add them as overrides to settings
-pub fn merge_settings(
-    opts: &clap::ArgMatches,
-    settings: &mut config::Config,
-) -> Result<(), ConfigError> {
-    let ov = vec!["database"];
-
-    for x in ov.iter() {
-        if let Some(y) = opts.value_of(x) {
-            settings.set(x, y)?;
-        }
-    }
-
-    settings.set("verbosity", opts.occurrences_of("v") as i64)?;
-
-    Ok(())
+        .subcommand(account::build())
+        .subcommand(Command::new("serve").about("serve web interface"))
 }
