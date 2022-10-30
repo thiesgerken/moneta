@@ -19,6 +19,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use juniper::graphql_object;
 use juniper::FieldResult;
+use juniper::GraphQLObject;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
 
@@ -199,6 +200,19 @@ impl GraphQLExpense {
     }
 }
 
+#[derive(GraphQLObject)]
+#[graphql(context=Context)]
+pub struct ExpenseConnection {
+    pub total_count: i32,
+    pub edges: Vec<ExpenseNode>,
+}
+
+#[derive(GraphQLObject)]
+#[graphql(context=Context)]
+pub struct ExpenseNode {
+    pub node: GraphQLExpense,
+}
+
 pub struct ExpenseQuery;
 
 #[graphql_object(
@@ -211,10 +225,10 @@ impl ExpenseQuery {
         skip: Option<i32>,
         filter: Option<String>,
         sort: Option<String>,
-    ) -> juniper::FieldResult<Vec<GraphQLExpense>> {
+    ) -> juniper::FieldResult<ExpenseConnection> {
         let uid = require_user(context).await?;
 
-        Ok(util::list_query::<RenderedExpense>(
+        let (total_count, edges) = util::list_query::<RenderedExpense>(
             "expenses_rendered",
             &context.connection,
             limit,
@@ -223,10 +237,17 @@ impl ExpenseQuery {
             sort,
             Some(doc!("userId": uid)),
         )
-        .await?
-        .into_iter()
-        .map(GraphQLExpense::new)
-        .collect())
+        .await?;
+
+        Ok(ExpenseConnection {
+            total_count: total_count as i32,
+            edges: edges
+                .into_iter()
+                .map(|e| ExpenseNode {
+                    node: GraphQLExpense::new(e),
+                })
+                .collect(),
+        })
     }
 
     pub async fn get(

@@ -84,7 +84,7 @@ impl CategoryQuery {
             sort,
             None,
         )
-        .await?
+        .await?.1
         .into_iter()
         .map(GraphQLCategory::new)
         .collect())

@@ -12,6 +12,7 @@ use crate::queries;
 
 use chrono::DateTime;
 use chrono::Utc;
+use juniper::GraphQLObject;
 use juniper::graphql_object;
 use juniper::FieldResult;
 use mongodb::bson::oid::ObjectId;
@@ -59,6 +60,19 @@ impl GraphQLBalance {
     }
 }
 
+#[derive(GraphQLObject)]
+#[graphql(context=Context)]
+pub struct BalanceConnection {
+    pub total_count: i32,
+    pub edges: Vec<BalanceNode>,
+}
+
+#[derive(GraphQLObject)]
+#[graphql(context=Context)]
+pub struct BalanceNode {
+    pub node: GraphQLBalance,
+}
+
 pub struct BalanceQuery;
 
 #[graphql_object(
@@ -71,10 +85,10 @@ impl BalanceQuery {
         skip: Option<i32>,
         filter: Option<String>,
         sort: Option<String>,
-    ) -> juniper::FieldResult<Vec<GraphQLBalance>> {
+    ) -> juniper::FieldResult<BalanceConnection> {
         let uid = require_user(context).await?;
 
-        Ok(util::list_query::<RenderedBalance>(
+        let (total_count, edges) = util::list_query::<RenderedBalance>(
             "balances_rendered",
             &context.connection,
             limit,
@@ -83,10 +97,17 @@ impl BalanceQuery {
             sort,
             Some(doc!("userId": uid)),
         )
-        .await?
-        .into_iter()
-        .map(GraphQLBalance::new)
-        .collect())
+        .await?;
+
+        Ok(BalanceConnection {
+            total_count: total_count as i32,
+            edges: edges
+                .into_iter()
+                .map(|e| BalanceNode {
+                    node: GraphQLBalance::new(e),
+                })
+                .collect(),
+        })
     }
 
     pub async fn get(

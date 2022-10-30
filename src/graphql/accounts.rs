@@ -116,7 +116,7 @@ impl AccountQuery {
             sort,
             None,
         )
-        .await?
+        .await?.1
         .into_iter()
         .map(GraphQLAccount::new)
         .collect())

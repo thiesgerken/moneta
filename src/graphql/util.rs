@@ -18,7 +18,7 @@ pub async fn list_query<T>(
     filter: Option<String>,
     sort: Option<String>,
     filter_overrides: Option<Document>,
-) -> Result<Vec<T>, Box<dyn Error>>
+) -> Result<(u64, Vec<T>), Box<dyn Error>>
 where
     T: DeserializeOwned + Unpin + Send + Sync,
 {
@@ -42,11 +42,14 @@ where
     let find_options = sort.map(|s| FindOptions::builder().sort(s).build());
 
     let collection = connection.collection::<T>(collection_name);
+    let total_count = collection.count_documents(filter.clone(), None).await?;
     let cursor = collection
         .find(filter, find_options)
         .await?
         .skip(usize::try_from(skip.unwrap_or(0))?)
         .take(usize::try_from(limit.unwrap_or(i32::MAX))?);
 
-    Ok(cursor.try_collect::<Vec<_>>().await?)
+    let edges = cursor.try_collect::<Vec<_>>().await?;
+
+    Ok((total_count, edges))
 }
