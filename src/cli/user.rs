@@ -112,7 +112,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         user_collection
             .update_one(
                 doc! {"_id": *user.id},
-                doc! {"$set": {"full_name":fname, "password_hash": hash_password(password)}},
+                doc! {"$set": {"fullName":fname, "passwordHash": hash_password(password)}},
                 None,
             )
             .await

@@ -57,7 +57,7 @@ pub async fn query_associated_accounts(
 ) -> Result<Vec<Account>, mongodb::error::Error> {
     let collection = connection.collection::<Account>("accounts");
 
-    collection.find(doc! { "$or": [ {"_id": {"$in": account_ids}}, {"synchronization.account_id": {"$in": account_ids}}] }, None).await?   .try_collect::<Vec<_>>()
+    collection.find(doc! { "$or": [ {"_id": {"$in": account_ids}}, {"synchronization.accountId": {"$in": account_ids}}] }, None).await?   .try_collect::<Vec<_>>()
     .await
 }
 
