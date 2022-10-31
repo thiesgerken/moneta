@@ -10,7 +10,7 @@ pub mod rendering;
 extern crate rocket;
 
 use argonautica::{Hasher, Verifier};
-use models::rendering::RenderedExpense;
+use models::rendering::{RenderedBalance, RenderedExpense};
 use mongodb::bson::doc;
 
 pub fn verify_password(pw: &str, hash: &str) -> bool {
@@ -50,12 +50,36 @@ pub async fn connect(
                 mongodb::IndexModel::builder()
                     .keys(doc! {"userId": 1})
                     .build(),
+                mongodb::IndexModel::builder()
+                    .keys(doc! {"userId": 1, "bookingStart": 1})
+                    .build(),
+                mongodb::IndexModel::builder()
+                    .keys(doc! {"userId": 1, "bookingEnd": 1})
+                    .build(),
             ],
             None,
         )
         .await?;
 
-    // TODO: indexes for balances and usual sorting by date
+    db.collection::<RenderedBalance>("balances_rendered")
+        .create_indexes(
+            [
+                mongodb::IndexModel::builder()
+                    .keys(doc! {"upstreamId": 1})
+                    .build(),
+                mongodb::IndexModel::builder()
+                    .keys(doc! {"userId": 1})
+                    .build(),
+                mongodb::IndexModel::builder()
+                    .keys(doc! {"userId": 1, "date": 1})
+                    .build(),
+                mongodb::IndexModel::builder()
+                    .keys(doc! {"userId": 1, "accountId": 1})
+                    .build(),
+            ],
+            None,
+        )
+        .await?;
 
     Ok(db)
 }
