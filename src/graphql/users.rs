@@ -38,6 +38,22 @@ impl GraphQLUserInfo {
     fn full_name(&self) -> &str {
         &self.data.full_name
     }
+
+    fn first_name(&self) -> Option<&str> {
+        if let Some((first, _)) = self.data.full_name.split_once(' ') {
+            Some(first)
+        } else {
+            None
+        }
+    }
+
+    fn last_name(&self) -> Option<&str> {
+        if let Some((_, last)) = self.data.full_name.split_once(' ') {
+            Some(last)
+        } else {
+            None
+        }
+    }
 }
 
 pub struct UserQuery;
