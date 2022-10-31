@@ -3,7 +3,7 @@ services:
   backend:
     build:
       context: .
-    image: git.thiesgerken.de:5005/thies/moneta:main
+    image: git.gerken.haus/thies/moneta:main
     restart: unless-stopped
     expose:
       - 80
@@ -21,7 +21,7 @@ services:
   frontend:
     build:
       context: ../moneta-frontend
-    image: git.thiesgerken.de:5005/thies/moneta-frontend:main
+    image: git.gerken.haus/thies/moneta-frontend:main
     restart: unless-stopped
     expose:
       - 80
