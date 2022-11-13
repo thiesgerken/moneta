@@ -12,6 +12,7 @@ use super::{
 
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
+#[graphql(name = "Expense")]
 pub struct RenderedExpense {
     #[serde(rename = "_id", default)]
     pub id: ObjectIdWrapper,
@@ -62,6 +63,7 @@ pub struct RenderedExpense {
 
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
+#[graphql(name = "ExpenseTransaction")]
 pub struct RenderedExpenseTransaction {
     pub account_id: ObjectIdWrapper,
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
@@ -82,6 +84,7 @@ pub struct RenderedExpenseTransaction {
 
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
+#[graphql(name = "Balance")]
 pub struct RenderedBalance {
     #[serde(rename = "_id", default)]
     pub id: ObjectIdWrapper,
