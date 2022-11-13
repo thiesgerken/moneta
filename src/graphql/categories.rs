@@ -75,7 +75,7 @@ impl CategoryQuery {
     ) -> juniper::FieldResult<Vec<GraphQLCategory>> {
         require_user(context).await?;
 
-        Ok(util::list_query::<Category>(
+        let categories = util::list_query::<Category>(
             "categories",
             &context.connection,
             limit,
@@ -84,10 +84,15 @@ impl CategoryQuery {
             sort,
             None,
         )
-        .await?.1
-        .into_iter()
-        .map(GraphQLCategory::new)
-        .collect())
+        .await?
+        .1;
+
+        context
+            .category_loader
+            .prime_many(categories.iter().map(|a| (a.id, a.clone())))
+            .await;
+
+        Ok(categories.into_iter().map(GraphQLCategory::new).collect())
     }
 
     pub async fn get(

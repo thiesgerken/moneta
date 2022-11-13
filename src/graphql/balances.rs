@@ -12,9 +12,9 @@ use crate::queries;
 
 use chrono::DateTime;
 use chrono::Utc;
-use juniper::GraphQLObject;
 use juniper::graphql_object;
 use juniper::FieldResult;
+use juniper::GraphQLObject;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
 

@@ -56,6 +56,24 @@ pub async fn connect(
                 mongodb::IndexModel::builder()
                     .keys(doc! {"userId": 1, "bookingEnd": 1})
                     .build(),
+                mongodb::IndexModel::builder()
+                    .keys(doc! {"userId": 1, "isTemplate": 1, "isUnchecked": 1, "isIncomplete": 1, "bookingStart": -1})
+                    .build(),
+                mongodb::IndexModel::builder()
+                    .keys(doc! {"userId": 1, "isTemplate": 1, "isUnchecked": 1, "isIncomplete": 1, "bookingEnd": -1})
+                    .build(),
+                mongodb::IndexModel::builder()
+                    .keys(doc! {"userId": 1, "isTemplate": 1, "isUnchecked": -1, "isIncomplete": -1, "bookingStart": -1})
+                    .build(),
+                mongodb::IndexModel::builder()
+                    .keys(doc! {"userId": 1, "isTemplate": 1, "isUnchecked": -1, "isIncomplete": -1, "bookingEnd": -1})
+                    .build(),
+                mongodb::IndexModel::builder()
+                    .keys(doc! {"userId": 1, "transactions.date": 1})
+                    .build(),
+                mongodb::IndexModel::builder()
+                    .keys(doc! {"userId": 1, "transactions.accountId": 1, "transactions.date": 1})
+                    .build(),
             ],
             None,
         )
@@ -74,7 +92,7 @@ pub async fn connect(
                     .keys(doc! {"userId": 1, "date": 1})
                     .build(),
                 mongodb::IndexModel::builder()
-                    .keys(doc! {"userId": 1, "accountId": 1})
+                    .keys(doc! {"userId": 1, "accountId": 1, "date": 1})
                     .build(),
             ],
             None,

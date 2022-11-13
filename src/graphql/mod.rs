@@ -1,4 +1,5 @@
 pub mod accounts;
+pub mod analysis;
 pub mod balances;
 pub mod categories;
 pub mod expenses;

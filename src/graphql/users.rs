@@ -95,10 +95,14 @@ impl UserQuery {
             .skip(usize::try_from(skip.unwrap_or(0))?)
             .take(usize::try_from(limit.unwrap_or(i32::MAX))?);
 
-        Ok(cursor
-            .and_then(|u| async { Ok(GraphQLUserInfo::new(u)) })
-            .try_collect::<Vec<_>>()
-            .await?)
+        let users = cursor.try_collect::<Vec<_>>().await?;
+
+        context
+            .user_loader
+            .prime_many(users.iter().map(|a| (a.id, a.clone())))
+            .await;
+
+        Ok(users.into_iter().map(|u| GraphQLUserInfo::new(u)).collect())
     }
 }
 

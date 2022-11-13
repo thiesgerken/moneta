@@ -107,7 +107,7 @@ impl AccountQuery {
     ) -> juniper::FieldResult<Vec<GraphQLAccount>> {
         require_user(context).await?;
 
-        Ok(util::list_query::<Account>(
+        let accounts = util::list_query::<Account>(
             "accounts",
             &context.connection,
             limit,
@@ -116,10 +116,14 @@ impl AccountQuery {
             sort,
             None,
         )
-        .await?.1
-        .into_iter()
-        .map(GraphQLAccount::new)
-        .collect())
+        .await?
+        .1;
+
+        context
+            .account_loader
+            .prime_many(accounts.iter().map(|a| (a.id, a.clone()))).await;
+
+        Ok(accounts.into_iter().map(GraphQLAccount::new).collect())
     }
 
     pub async fn get(

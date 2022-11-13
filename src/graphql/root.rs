@@ -7,6 +7,7 @@ use tokio::sync::RwLock;
 
 use crate::graphql::{
     accounts::{AccountMutation, AccountQuery},
+    analysis::AnalysisQuery,
     balances::{BalanceMutation, BalanceQuery},
     categories::{CategoryMutation, CategoryQuery},
     expenses::{ExpenseMutation, ExpenseQuery},
@@ -109,6 +110,10 @@ impl Query {
 
     fn categories() -> CategoryQuery {
         CategoryQuery
+    }
+
+    fn analysis() -> AnalysisQuery {
+        AnalysisQuery
     }
 }
 

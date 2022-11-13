@@ -5,7 +5,7 @@ use crate::models::*;
 use crate::queries;
 
 use clap::ArgMatches;
-use clap::{Arg, ArgGroup, Command, ArgAction};
+use clap::{Arg, ArgAction, ArgGroup, Command};
 use futures::TryStreamExt;
 use log::info;
 use mongodb::bson::doc;
@@ -34,7 +34,12 @@ pub fn build() -> Command {
                 .value_name("name")
                 .help("update user name and password"),
         )
-        .arg(Arg::new("list").long("list").action(ArgAction::SetTrue).help("list users"))
+        .arg(
+            Arg::new("list")
+                .long("list")
+                .action(ArgAction::SetTrue)
+                .help("list users"),
+        )
         .group(
             ArgGroup::new("action")
                 .args(&["add", "update", "remove", "list"])
