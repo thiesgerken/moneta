@@ -198,6 +198,8 @@ impl GraphQLExpense {
     fn effective_amount(&self) -> f64 {
         self.data.effective_amount
     }
+
+    // TODO: query changelogs
 }
 
 #[derive(GraphQLObject)]
