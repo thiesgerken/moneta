@@ -8,6 +8,7 @@ use crate::models::ObjectIdWrapper;
 use chrono::DateTime;
 use chrono::Utc;
 use futures::TryStreamExt;
+use itertools::Itertools;
 use juniper::graphql_object;
 use juniper::GraphQLObject;
 
@@ -83,7 +84,7 @@ impl AnalysisQuery {
                 })
                 .fold(0.0, |acc, t| acc + t.calculated_amount);
 
-            if contribution > 0.0 {
+            if contribution != 0.0 {
                 computed_amount += contribution;
                 expense_count += 1;
             }
@@ -124,21 +125,31 @@ impl AnalysisQuery {
             .account_loader
             .load_many(newest_balances.keys().map(|k| *k).collect::<Vec<_>>())
             .await;
-        //TODO: remove hidden accounts here (from accounts and newest_balances)
+
+        let expense_collection = context
+            .connection
+            .collection::<RenderedExpense>("expenses_rendered");
+
+        // NOTE: in production builds, it is faster to query a few more expenses and filter in here
+        //       than to let mongo do it. For reference & experiments, here is the other version:
+        // let filters: Vec<Document> = newest_balances
+        //     .iter()
+        //     .map(|(_,b)| doc!{ "transactions": {"$elemMatch" : {"date": {"$gte": b.date, "$lt": date}, "accountId": *b.account_id }}})
+        //     .collect();
+        // let mut expense_cursor = expense_collection
+        //     .find(doc! { "userId": user,"$or" : filters}, None)
+        //     .await?;
+
         let oldest_balance_date = newest_balances
             .values()
             .map(|b| b.date)
             .min()
             .unwrap_or(date);
-
-        let expense_collection = context
-            .connection
-            .collection::<RenderedExpense>("expenses_rendered");
-        let mut expense_cursor =        expense_collection
-        .find(
-            doc! { "userId": user,"transactions" : {"$elemMatch": { "date": {"$lt": date,"$gte": oldest_balance_date}}}}  , None
-        )
-        .await?;
+        let mut expense_cursor = expense_collection
+            .find(
+                doc! { "userId": user,"transactions" : {"$elemMatch": { "date": {"$lt": date,"$gte": oldest_balance_date}}}}  , None
+            )
+            .await?;
 
         let mut computed_amounts = newest_balances
             .iter()
@@ -177,6 +188,7 @@ impl AnalysisQuery {
                 account: GraphQLAccount::new(v),
                 expense_count: expense_counts.remove(&k).unwrap(),
             })
+            .sorted_by_key(|b| b.account.data.name.clone())
             .collect())
     }
 }

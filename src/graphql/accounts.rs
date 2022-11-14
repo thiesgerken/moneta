@@ -27,7 +27,7 @@ use super::users::GraphQLUserInfo;
 
 #[derive(Debug, Clone)]
 pub struct GraphQLAccount {
-    data: Account,
+    pub data: Account,
 }
 impl GraphQLAccount {
     pub fn new(data: Account) -> Self {
