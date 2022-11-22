@@ -24,6 +24,26 @@ use mongodb::bson::{self, doc};
 use mongodb::Database;
 
 use super::users::GraphQLUserInfo;
+#[derive(Debug, Clone)]
+pub struct GraphQLAccountSynchronization {
+    pub data: AccountSynchronization,
+}
+
+#[graphql_object(    Context = Context,name = "AccountSynchronization")]
+impl GraphQLAccountSynchronization {
+    fn invert(&self) -> bool {
+        self.data.invert
+    }
+
+    async fn account(&self, context: &Context) -> FieldResult<GraphQLAccount> {
+        Ok(GraphQLAccount::new(
+            context
+                .account_loader
+                .try_load(self.data.account_id)
+                .await?,
+        ))
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct GraphQLAccount {
@@ -87,8 +107,8 @@ impl GraphQLAccount {
         self.data.ownership_fraction
     }
 
-    fn synchronization(&self) -> &Option<AccountSynchronization> {
-        &self.data.synchronization
+    fn synchronization(&self) -> Option<GraphQLAccountSynchronization> {
+        self.data.synchronization.as_ref().map(|d| GraphQLAccountSynchronization{data: d.clone()})
     }
 }
 
