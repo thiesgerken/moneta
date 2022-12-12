@@ -169,6 +169,10 @@ impl GraphQLExpense {
         self.data.is_incomplete
     }
 
+    fn is_extraordinary(&self) -> bool {
+        self.data.is_extraordinary
+    }
+
     fn receipts(&self) -> &Vec<ExpenseReceipt> {
         &self.data.receipts
     }

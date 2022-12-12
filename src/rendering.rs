@@ -262,6 +262,7 @@ impl Expense {
             is_tax_relevant: expense.is_tax_relevant,
             is_unchecked: expense.is_unchecked,
             is_incomplete: expense.is_incomplete,
+            is_extraordinary: expense.is_extraordinary,
             receipts: expense
                 .receipts
                 .into_iter()
@@ -313,6 +314,7 @@ impl Expense {
             is_tax_relevant: self.is_tax_relevant,
             is_unchecked: self.is_unchecked,
             is_incomplete: self.is_incomplete,
+            is_extraordinary: self.is_extraordinary,
             receipts: self.receipts.clone(),
             categories: self.categories.clone(),
             transactions: rendered_ts,

@@ -85,6 +85,8 @@ pub struct Expense {
     pub is_unchecked: bool,
     /// if we anticipate more transactions to appear before this can be completed; e.g. payback when a order hasn't arrived
     pub is_incomplete: bool,
+    /// if this expense should not be considered for monthly spending and so on
+    pub is_extraordinary: bool,
 
     pub receipts: Vec<ExpenseReceipt>,
     pub categories: Vec<ExpenseCategorization>,
