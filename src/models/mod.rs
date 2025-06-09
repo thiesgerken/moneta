@@ -1,7 +1,7 @@
 mod account;
 mod expense;
-pub mod rendering;
 mod oid;
+pub mod rendering;
 
 pub use oid::ObjectIdWrapper;
 
@@ -16,11 +16,8 @@ pub use expense::{
 };
 
 use chrono::{DateTime, Utc};
-use juniper::{ GraphQLInputObject, GraphQLObject,
-};
+use juniper::{GraphQLInputObject, GraphQLObject};
 use serde::{Deserialize, Serialize};
-
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -115,31 +112,3 @@ pub struct ExpenseChangelogEntry {
     pub old_state: Option<Expense>,
     pub new_state: Option<Expense>,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
-#[serde(rename_all = "camelCase")]
-pub struct BalanceChangelogEntry {
-    pub target_id: ObjectIdWrapper,
-    pub user_id: Option<ObjectIdWrapper>,
-
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
-    pub date: DateTime<Utc>,
-
-    /// name of the program that was used to make the change (e.g. web app, CLI, ...)
-    pub tool: String,
-
-    /// whether this action was performed by a human or an automatic system
-    pub automatic: bool,
-    /// if this action was performed by an automated (AI) system, an indication (between 0 and 1) about how sure this system was.
-    /// value should be ignored if the action was performed by a human
-    pub confidence: f64,
-
-    /// how the entry looked before and after the change.
-    /// either one of these (but not both
-    /// representing the creation or deletion of the entry.
-    pub old_state: Option<Balance>,
-    pub new_state: Option<Balance>,
-}
-
-// pub type ExpenseChangelogEntry = ChangelogEntry<Expense>;
-// pub type BalanceChangelogEntry = ChangelogEntry<Balance>;
