@@ -6,6 +6,7 @@ use crate::graphql::root::Context;
 use crate::graphql::root::require_user;
 use crate::graphql::util::{self};
 use crate::models::ExpenseCategorization;
+use crate::models::ExpenseChangelogEntry;
 use crate::models::ExpensePosition;
 use crate::models::ExpenseReceipt;
 use crate::models::rendering::RenderedExpenseTransaction;
@@ -17,6 +18,7 @@ use crate::queries;
 
 use chrono::DateTime;
 use chrono::Utc;
+use futures::TryStreamExt;
 use juniper::FieldResult;
 use juniper::GraphQLObject;
 use juniper::graphql_object;
@@ -151,8 +153,6 @@ impl GraphQLExpense {
         self.data.booking_end
     }
 
-    // TODO: recurring expense connection (expense loader?)
-
     fn is_template(&self) -> bool {
         self.data.is_template
     }
@@ -203,7 +203,23 @@ impl GraphQLExpense {
         self.data.effective_amount
     }
 
-    // TODO: query changelogs
+    async fn changelog(
+        &self,
+        context: &Context,
+    ) -> juniper::FieldResult<Vec<GraphQLExpenseChangelogEntry>> {
+        let collection = context
+            .connection
+            .collection::<ExpenseChangelogEntry>("expense_changes");
+
+        Ok(collection
+            .find(doc! {"targetId": *self.data.id})
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?
+            .into_iter()
+            .map(GraphQLExpenseChangelogEntry::new)
+            .collect())
+    }
 }
 
 #[derive(GraphQLObject)]
@@ -217,6 +233,58 @@ pub struct ExpenseConnection {
 #[graphql(context=Context)]
 pub struct ExpenseNode {
     pub node: GraphQLExpense,
+}
+
+#[derive(Debug, Clone)]
+pub struct GraphQLExpenseChangelogEntry {
+    data: ExpenseChangelogEntry,
+}
+
+impl GraphQLExpenseChangelogEntry {
+    pub fn new(data: ExpenseChangelogEntry) -> Self {
+        GraphQLExpenseChangelogEntry { data }
+    }
+}
+
+#[graphql_object(Context = Context, name = "ExpenseChangelogEntry")]
+impl GraphQLExpenseChangelogEntry {
+    fn target_id(&self) -> ObjectIdWrapper {
+        self.data.target_id
+    }
+    fn user_id(&self) -> Option<ObjectIdWrapper> {
+        self.data.user_id
+    }
+    fn date(&self) -> DateTime<Utc> {
+        self.data.date
+    }
+    fn tool(&self) -> &str {
+        &self.data.tool
+    }
+    fn automatic(&self) -> bool {
+        self.data.automatic
+    }
+    fn confidence(&self) -> f64 {
+        self.data.confidence
+    }
+    fn old_state(&self) -> Option<Expense> {
+        self.data.old_state.clone()
+    }
+    fn new_state(&self) -> Option<Expense> {
+        self.data.new_state.clone()
+    }
+}
+
+#[derive(GraphQLObject)]
+#[graphql(context=Context)]
+pub struct ExpenseChangelogConnection {
+    pub total_count: i32,
+    pub edges: Vec<ExpenseChangelogNode>,
+}
+
+#[derive(GraphQLObject)]
+#[graphql(context=Context)]
+pub struct ExpenseChangelogNode {
+    pub node: GraphQLExpenseChangelogEntry,
 }
 
 pub struct ExpenseQuery;
