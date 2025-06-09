@@ -77,7 +77,7 @@ pub async fn graphql_handler(
             cookies.add_private(rocket::http::Cookie::new("user_id", uid.to_string()));
         } else {
             info!("Logout for user_id {}", user_id.unwrap());
-            cookies.remove_private(rocket::http::Cookie::named("user_id"));
+            cookies.remove_private(rocket::http::Cookie::build("user_id"));
         }
     }
 
@@ -88,7 +88,7 @@ pub async fn graphql_handler(
     Context = Context,
 )]
 impl Query {
-    fn apiVersion() -> &'static str {
+    fn api_version() -> &'static str {
         "1.0"
     }
 

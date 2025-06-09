@@ -5,15 +5,15 @@ use crate::{
     queries, verify_password,
 };
 
-use dataloader::{cached::Loader, BatchFn};
+use dataloader::{BatchFn, cached::Loader};
 use futures::{StreamExt, TryStreamExt};
 use juniper::graphql_object;
 use mongodb::{
-    bson::{doc, oid::ObjectId},
     Database,
+    bson::{doc, oid::ObjectId},
 };
 
-use super::root::{require_user, Context};
+use super::root::{Context, require_user};
 
 #[derive(Debug, Clone)]
 pub struct GraphQLUserInfo {
@@ -90,7 +90,7 @@ impl UserQuery {
 
         let collection = &context.connection.collection::<User>("users");
         let cursor = collection
-            .find(None, None)
+            .find(doc!())
             .await?
             .skip(usize::try_from(skip.unwrap_or(0))?)
             .take(usize::try_from(limit.unwrap_or(i32::MAX))?);
@@ -102,7 +102,7 @@ impl UserQuery {
             .prime_many(users.iter().map(|a| (a.id, a.clone())))
             .await;
 
-        Ok(users.into_iter().map(|u| GraphQLUserInfo::new(u)).collect())
+        Ok(users.into_iter().map(GraphQLUserInfo::new).collect())
     }
 }
 
@@ -157,10 +157,7 @@ pub async fn get_many(
 
     let collection = connection.collection::<User>("users");
     let users = collection
-        .find(
-            doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<ObjectId>>()}},
-            None,
-        )
+        .find(doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<ObjectId>>()}})
         .await?
         .try_collect::<Vec<_>>()
         .await?;
@@ -175,7 +172,6 @@ pub struct UserBatcher {
     connection: Database,
 }
 
-#[async_trait]
 impl BatchFn<ObjectIdWrapper, User> for UserBatcher {
     async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, User> {
         get_many(&self.connection, keys).await.unwrap_or_default()

@@ -2,24 +2,24 @@ use std::error::Error;
 
 use crate::graphql::accounts::GraphQLAccount;
 use crate::graphql::categories::GraphQLCategory;
-use crate::graphql::root::require_user;
 use crate::graphql::root::Context;
+use crate::graphql::root::require_user;
 use crate::graphql::util::{self};
+use crate::models::ExpenseCategorization;
+use crate::models::ExpensePosition;
+use crate::models::ExpenseReceipt;
 use crate::models::rendering::RenderedExpenseTransaction;
 use crate::models::rendering::{
     RenderedExpense, RenderedExpenseCreateInput, RenderedExpenseInput, RenderedExpenseUpdateInput,
 };
-use crate::models::ExpenseCategorization;
-use crate::models::ExpensePosition;
-use crate::models::ExpenseReceipt;
 use crate::models::{Account, Expense, ObjectIdWrapper};
 use crate::queries;
 
 use chrono::DateTime;
 use chrono::Utc;
-use juniper::graphql_object;
 use juniper::FieldResult;
 use juniper::GraphQLObject;
+use juniper::graphql_object;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
 
@@ -267,7 +267,7 @@ impl ExpenseQuery {
 
         Ok(GraphQLExpense::new(
             collection
-                .find_one(doc! {"_id":*id, "userId": uid}, None)
+                .find_one(doc! {"_id":*id, "userId": uid})
                 .await?
                 .ok_or_else(|| format!("Expense {id:?} not found"))?,
         ))
@@ -287,13 +287,13 @@ impl ExpenseMutation {
 
         // check if there is a rendered expense with the given upstream id belonging to this user
         let original_entry = collection
-            .find_one(doc! {"_id":*id, "userId": user_id}, None)
+            .find_one(doc! {"_id":*id, "userId": user_id})
             .await?
             .ok_or("entry to delete not found")?;
 
         let upstream_collection = context.connection.collection::<Expense>("expenses");
         let upstream_entry = upstream_collection
-            .find_one(doc! {"_id":*original_entry.upstream_id}, None)
+            .find_one(doc! {"_id":*original_entry.upstream_id})
             .await?
             .unwrap_or_else(|| {
                 panic!("cannot find upstream expense for rendered expense {:?}", id)
@@ -303,7 +303,7 @@ impl ExpenseMutation {
         upstream_entry.remove_rendered(&context.connection).await?;
         // ... and then the upstream expense itself
         let count = upstream_collection
-            .delete_one(doc! {"_id":*original_entry.upstream_id}, None)
+            .delete_one(doc! {"_id":*original_entry.upstream_id})
             .await?
             .deleted_count;
         Ok(count == 1)
@@ -322,7 +322,7 @@ impl ExpenseMutation {
             queries::query_associated_accounts(&context.connection, &occurring_account_ids).await?;
         let entry = validate_and_unrender(user_id, expense, &related_accounts).await?;
 
-        collection.insert_one(&entry, None).await?;
+        collection.insert_one(&entry).await?;
 
         let expense = render(user_id, &context.connection, entry, &related_accounts).await?;
         Ok(expense)
@@ -339,7 +339,7 @@ impl ExpenseMutation {
             .collection::<RenderedExpense>("expenses_rendered");
 
         let original_rendered_expense = collection
-            .find_one(doc! {"_id":*id, "userId": user_id}, None)
+            .find_one(doc! {"_id":*id, "userId": user_id})
             .await?
             .ok_or("entry to update not found")?;
 
@@ -354,7 +354,7 @@ impl ExpenseMutation {
         // find the original upstream expense
         let upstream_collection = context.connection.collection::<Expense>("expenses");
         let upstream_entry = upstream_collection
-            .find_one(doc!("_id": *original_rendered_expense.upstream_id), None)
+            .find_one(doc!("_id": *original_rendered_expense.upstream_id))
             .await?
             .unwrap_or_else(|| {
                 panic!("cannot find upstream expense for rendered expense {:?}", id)
@@ -369,7 +369,6 @@ impl ExpenseMutation {
             .update_one(
                 doc!("_id": &*updated_upstream_entry.id),
                 doc! {"$set":  bson::to_bson(&updated_upstream_entry).unwrap()},
-                None,
             )
             .await?;
 
@@ -438,7 +437,7 @@ pub async fn render(
     // create rendered expenses and insert them into database
     let rendered_expenses = entry.render(related_accounts)?;
     let collection = connection.collection::<RenderedExpense>("expenses_rendered");
-    collection.insert_many(&rendered_expenses, None).await?;
+    collection.insert_many(&rendered_expenses).await?;
 
     // find the rendered expense that was rendered for this user and return it
     let rendered_entry = rendered_expenses

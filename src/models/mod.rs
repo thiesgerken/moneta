@@ -1,8 +1,9 @@
 mod account;
 mod expense;
 pub mod rendering;
+mod oid;
 
-use std::ops::Deref;
+pub use oid::ObjectIdWrapper;
 
 pub use account::{
     Account, AccountAvailability, AccountCreateInput, AccountInput, AccountKind, AccountRisk,
@@ -15,63 +16,11 @@ pub use expense::{
 };
 
 use chrono::{DateTime, Utc};
-use juniper::{
-    graphql_scalar,
-    parser::{ScalarToken, Token},
-    GraphQLInputObject, GraphQLObject, InputValue, ParseError, ParseScalarResult, Value,
+use juniper::{ GraphQLInputObject, GraphQLObject,
 };
-use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone, Hash, Serialize, Deserialize, Default, PartialEq, Eq)]
-pub struct ObjectIdWrapper(pub ObjectId);
 
-#[graphql_scalar(name = "ObjectId")]
-impl<S> GraphQLScalar for ObjectIdWrapper
-where
-    S: ScalarValue,
-{
-    fn resolve(&self) -> Value {
-        Value::scalar(self.0.to_hex())
-    }
-
-    fn from_input_value(v: &InputValue) -> Option<ObjectIdWrapper> {
-        match *v {
-            InputValue::Scalar(ref s) => s
-                .as_string()
-                .and_then(|s| ObjectId::parse_str(s).ok())
-                .map(ObjectIdWrapper),
-            _ => None,
-        }
-    }
-
-    fn from_str<'a>(value: ScalarToken<'a>) -> ParseScalarResult<'a, S> {
-        match value {
-            ScalarToken::String(value) | ScalarToken::Int(value) => Ok(S::from(value.to_owned())),
-            _ => Err(ParseError::UnexpectedToken(Token::Scalar(value))),
-        }
-    }
-}
-
-impl Deref for ObjectIdWrapper {
-    type Target = ObjectId;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl From<ObjectIdWrapper> for ObjectId {
-    fn from(o: ObjectIdWrapper) -> Self {
-        o.0
-    }
-}
-
-impl From<ObjectId> for ObjectIdWrapper {
-    fn from(o: ObjectId) -> Self {
-        ObjectIdWrapper(o)
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

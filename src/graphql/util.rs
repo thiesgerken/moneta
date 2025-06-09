@@ -31,9 +31,9 @@ where
     let filter = if let Some(ov) = filter_overrides {
         let mut f = filter.unwrap_or_default();
         f.extend(ov.into_iter());
-        Some(f)
-    } else {
-        filter
+        f
+    } else  {
+        filter.unwrap_or_default()
     };
 
     let sort = sort
@@ -43,9 +43,9 @@ where
     let find_options = sort.map(|s| FindOptions::builder().sort(s).build());
 
     let collection = connection.collection::<T>(collection_name);
-    let total_count = collection.count_documents(filter.clone(), None).await?;
+    let total_count = collection.count_documents(filter.clone()).await?;
     let cursor = collection
-        .find(filter, find_options)
+        .find(filter).with_options(find_options)
         .await?
         .skip(usize::try_from(skip.unwrap_or(0))?)
         .take(usize::try_from(limit.unwrap_or(i32::MAX))?);

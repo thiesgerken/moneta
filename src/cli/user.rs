@@ -42,7 +42,7 @@ pub fn build() -> Command {
         )
         .group(
             ArgGroup::new("action")
-                .args(&["add", "update", "remove", "list"])
+                .args(["add", "update", "remove", "list"])
                 .required(true),
         )
 }
@@ -85,7 +85,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         };
 
         user_collection
-            .insert_one(&u, None)
+            .insert_one(&u)
             .await
             .expect("Error saving new user");
         info!("Created user {:?}", u);
@@ -118,7 +118,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             .update_one(
                 doc! {"_id": *user.id},
                 doc! {"$set": {"fullName":fname, "passwordHash": hash_password(password)}},
-                None,
+
             )
             .await
             .expect("Could not update user");
@@ -141,7 +141,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
 
         // TODO: also need to remove orphaned accounts, expenses, ..., re-render stuff, ...
         let delete_res = user_collection
-            .delete_one(doc! {"_id": *user.id}, None)
+            .delete_one(doc! {"_id": *user.id})
             .await
             .expect("Could not delete user");
 
@@ -149,7 +149,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         info!("deleted user '{}'", uname);
     } else if sub_matches.contains_id("list") {
         let mut user_cursor = user_collection
-            .find(None, None)
+            .find(doc! {})
             .await
             .expect("Could not obtain users");
 
@@ -168,26 +168,26 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             let r_expense_collection =
                 connection.collection::<RenderedExpense>("expenses_rendered");
             let r_expense_count = r_expense_collection
-                .count_documents(doc! {"userId": *u.id}, None)
+                .count_documents(doc! {"userId": *u.id})
                 .await
                 .expect("Could not obtain expenses of user");
 
             let r_balance_collection =
                 connection.collection::<RenderedBalance>("balances_rendered");
             let r_balance_count = r_balance_collection
-                .count_documents(doc! {"userId": *u.id}, None)
+                .count_documents(doc! {"userId": *u.id})
                 .await
                 .expect("Could not obtain balances of user");
 
             let account_collection = connection.collection::<Account>("accounts");
             let account_count = account_collection
-                .count_documents(doc! {"userId": *u.id}, None)
+                .count_documents(doc! {"userId": *u.id})
                 .await
                 .expect("Could not obtain accounts of user");
 
             let category_collection = connection.collection::<Category>("categories");
             let category_count = category_collection
-                .count_documents(doc! {"userId": *u.id}, None)
+                .count_documents(doc! {"userId": *u.id})
                 .await
                 .expect("Could not obtain categories of user");
 

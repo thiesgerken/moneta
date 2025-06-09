@@ -1,5 +1,6 @@
 # TODO
 
+- better error handling
 - analysis
 - push notifications
 - front page: stream of recent events
@@ -21,7 +22,6 @@
 // preliminary Bool
 // transaction String
 // deriving Show Generic
-// |]
 
 something to track recurring expenses (to show if they are missing / have been deducted twice or something like that)
 ...

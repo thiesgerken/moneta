@@ -74,8 +74,8 @@ pub async fn connect(
                 mongodb::IndexModel::builder()
                     .keys(doc! {"userId": 1, "transactions.accountId": 1, "transactions.date": 1})
                     .build(),
-            ],
-            None,
+            ]
+            ,
         )
         .await?;
 
@@ -94,8 +94,8 @@ pub async fn connect(
                 mongodb::IndexModel::builder()
                     .keys(doc! {"userId": 1, "accountId": 1, "date": 1})
                     .build(),
-            ],
-            None,
+            ]
+            ,
         )
         .await?;
 

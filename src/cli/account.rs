@@ -18,7 +18,7 @@ pub fn build() -> Command {
         .arg(
             Arg::new("sync")
                 .long("sync")
-                .value_names(&["id1", "id2"])
+                .value_names(["id1", "id2"])
                 .number_of_values(2)
                 .help("synchronize two accounts"),
         )
@@ -41,7 +41,7 @@ pub fn build() -> Command {
         .arg(Arg::new("list").long("list").help("list accounts"))
         .group(
             ArgGroup::new("action")
-                .args(&["sync", "list", "unsync", "rerender"])
+                .args(["sync", "list", "unsync", "rerender"])
                 .required(true),
         )
 }
@@ -59,7 +59,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             .expect("error parsing object ids");
 
         let accounts: Vec<_> = account_collection
-            .find(doc!("_id": {"$in": &account_ids}), None)
+            .find(doc!("_id": {"$in": &account_ids}))
             .await
             .expect("Error loading accounts")
             .try_collect()
@@ -77,7 +77,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             .update_one(
                 doc! {"_id": *accounts[i ].id},
                 doc! {"$set": {"synchronization": bson::to_bson(&Some(AccountSynchronization{ account_id: accounts[(i+1)%2].id, invert })).unwrap()}},
-                None,
+
             )
             .await
             .expect("Could not update account");
@@ -93,7 +93,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
     } else if let Some(account_id_value) = sub_matches.get_one::<String>("unsync") {
         let account_id = ObjectId::from_str(account_id_value).expect("error parsing object id");
         let account = account_collection
-            .find_one(doc!("_id": account_id), None)
+            .find_one(doc!("_id": account_id))
             .await
             .expect("Error loading accounts")
             .expect("Error loading accounts");
@@ -105,7 +105,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             .update_many(
                 doc! {"_id": {"$in":& account_ids}},
                 doc! {"$unset": {"synchronization":1}},
-                None,
+
             )
             .await
             .expect("Could not update accounts");
@@ -121,11 +121,11 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         let rendered_balances_collection =
             connection.collection::<RenderedBalance>("balances_rendered");
         let expense_count = rendered_expenses_collection
-            .count_documents(doc!(), None)
+            .count_documents(doc!())
             .await
             .expect("Error counting rendered expenses");
         let balance_count = rendered_balances_collection
-            .count_documents(doc!(), None)
+            .count_documents(doc!())
             .await
             .expect("Error counting rendered balances");
 
@@ -133,7 +133,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         info!("Database has {} rendered expenses", expense_count);
 
         let accounts: Vec<_> = account_collection
-            .find(doc!(), None)
+            .find(doc!())
             .await
             .expect("Error loading accounts")
             .try_collect()
@@ -146,7 +146,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             .expect("Could not rerender entities");
     } else if sub_matches.contains_id("list") {
         let mut account_cursor = account_collection
-            .find(None, None)
+            .find(doc! {})
             .await
             .expect("Could not obtain users");
 

@@ -168,7 +168,7 @@ impl AccountMutation {
         let collection = context.connection.collection::<Account>("accounts");
 
         let account = collection
-            .find_one(doc! {"_id":*id, "userId": user_id}, None)
+            .find_one(doc! {"_id":*id, "userId": user_id})
             .await?
             .ok_or("entry to delete not found")?;
 
@@ -185,7 +185,7 @@ impl AccountMutation {
             .connection
             .collection::<RenderedBalance>("balances_rendered");
         let balance_count = rendered_balances_collection
-            .count_documents(doc!("account_id": *account.id), None)
+            .count_documents(doc!("account_id": *account.id))
             .await?;
 
         if balance_count > 0 {
@@ -200,7 +200,7 @@ impl AccountMutation {
             .connection
             .collection::<RenderedExpense>("expenses_rendered");
         let expense_count = rendered_expenses_collection
-            .count_documents(doc!("account_id": *account.id), None)
+            .count_documents(doc!("account_id": *account.id))
             .await?;
         if expense_count > 0 {
             return Err( format!(
@@ -211,7 +211,7 @@ impl AccountMutation {
 
         // everything seems to be in order, proceed with the deletion
         let count = collection
-            .delete_one(doc! {"_id":*id, "userId": user_id}, None)
+            .delete_one(doc! {"_id":*id, "userId": user_id})
             .await?
             .deleted_count;
         Ok(count == 1)
@@ -227,7 +227,7 @@ impl AccountMutation {
         account.validate()?;
 
         let account = account.upgrade(ObjectId::new().into(), user_id.into());
-        collection.insert_one(&account, None).await?;
+        collection.insert_one(&account).await?;
 
         Ok(account)
     }
@@ -241,7 +241,7 @@ impl AccountMutation {
         let collection = context.connection.collection::<Account>("accounts");
 
         collection
-            .find_one(doc! {"_id":*id, "userId": user_id}, None)
+            .find_one(doc! {"_id":*id, "userId": user_id})
             .await?
             .ok_or("entry to update not found")?;
 
@@ -251,7 +251,7 @@ impl AccountMutation {
             .update_one(
                 doc! {"_id":*id,"userId": user_id},
                 doc! {"$set":  bson::to_bson(&account).unwrap()},
-                None,
+
             )
             .await?
             .modified_count;
@@ -270,7 +270,7 @@ pub async fn get_many(
     let accounts = collection
         .find(
             doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<ObjectId>>()}},
-            None,
+
         )
         .await?
         .try_collect::<Vec<_>>()
@@ -286,7 +286,6 @@ pub struct AccountBatcher {
     connection: Database,
 }
 
-#[async_trait]
 impl BatchFn<ObjectIdWrapper, Account> for AccountBatcher {
     async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, Account> {
         get_many(&self.connection, keys).await.unwrap_or_default()

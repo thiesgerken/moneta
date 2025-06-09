@@ -1,20 +1,18 @@
 use std::collections::HashMap;
 
-use crate::graphql::root::require_user;
 use crate::graphql::root::Context;
-use crate::models::rendering::{RenderedBalance, RenderedExpense};
+use crate::graphql::root::require_user;
 use crate::models::ObjectIdWrapper;
+use crate::models::rendering::{RenderedBalance, RenderedExpense};
 
 use chrono::DateTime;
 use chrono::Utc;
 use futures::TryStreamExt;
 use itertools::Itertools;
-use juniper::graphql_object;
 use juniper::GraphQLObject;
+use juniper::graphql_object;
 
 use mongodb::bson::doc;
-use mongodb::options::FindOneOptions;
-use mongodb::options::FindOptions;
 
 use super::accounts::GraphQLAccount;
 use super::balances::GraphQLBalance;
@@ -56,10 +54,8 @@ impl AnalysisQuery {
             .connection
             .collection::<RenderedBalance>("balances_rendered");
         let newest_balance = balance_collection
-            .find_one(
-                doc! {"accountId": *account_id, "userId": user , "date": {"$lte": date} },
-                FindOneOptions::builder().sort(doc! {"date": -1}).build(),
-            )
+            .find_one(doc! {"accountId": *account_id, "userId": user , "date": {"$lte": date} })
+            .sort(doc! {"date": -1})
             .await?
             .unwrap(); // we can panic here
 
@@ -68,7 +64,7 @@ impl AnalysisQuery {
             .collection::<RenderedExpense>("expenses_rendered");
         let mut expense_cursor =        expense_collection
         .find(
-            doc! { "userId": user,"transactions" : {"$elemMatch": {"accountId": *account_id , "date": {"$lt": date,"$gte": newest_balance.date}}}}  , None
+            doc! { "userId": user,"transactions" : {"$elemMatch": {"accountId": *account_id , "date": {"$lt": date,"$gte": newest_balance.date}}}}
         )
         .await?;
 
@@ -112,10 +108,8 @@ impl AnalysisQuery {
 
         // one could also do an aggregation here, but we can also simply query all balances; shouldn't be that many
         let mut newest_balances = balance_collection
-            .find(
-                doc! { "userId": user , "date": {"$lte": date} },
-                FindOptions::builder().sort(doc! {"date": 1}).build(),
-            )
+            .find(doc! { "userId": user , "date": {"$lte": date} })
+            .sort(doc! {"date": 1})
             .await?
             .and_then(|b| async { Ok((b.account_id, b)) })
             .try_collect::<HashMap<_, _>>()
@@ -123,7 +117,7 @@ impl AnalysisQuery {
 
         let accounts = context
             .account_loader
-            .load_many(newest_balances.keys().map(|k| *k).collect::<Vec<_>>())
+            .load_many(newest_balances.keys().copied().collect::<Vec<_>>())
             .await;
 
         let expense_collection = context
@@ -147,7 +141,7 @@ impl AnalysisQuery {
             .unwrap_or(date);
         let mut expense_cursor = expense_collection
             .find(
-                doc! { "userId": user,"transactions" : {"$elemMatch": { "date": {"$lt": date,"$gte": oldest_balance_date}}}}  , None
+                doc! { "userId": user,"transactions" : {"$elemMatch": { "date": {"$lt": date,"$gte": oldest_balance_date}}}}
             )
             .await?;
 

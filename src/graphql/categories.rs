@@ -1,20 +1,20 @@
 use std::collections::HashMap;
 use std::error::Error;
 
-use crate::graphql::root::require_user;
 use crate::graphql::root::Context;
+use crate::graphql::root::require_user;
 use crate::graphql::util;
 use crate::models::rendering::RenderedExpense;
 use crate::models::{Category, CategoryCreateInput, CategoryUpdateInput, ObjectIdWrapper};
 
-use dataloader::cached::Loader;
 use dataloader::BatchFn;
+use dataloader::cached::Loader;
 use futures::TryStreamExt;
-use juniper::graphql_object;
 use juniper::FieldResult;
+use juniper::graphql_object;
+use mongodb::Database;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
-use mongodb::Database;
 
 #[derive(Debug, Clone)]
 pub struct GraphQLCategory {
@@ -117,7 +117,7 @@ impl CategoryMutation {
         let collection = context.connection.collection::<Category>("categories");
 
         let category = collection
-            .find_one(doc! {"_id":*id}, None)
+            .find_one(doc! {"_id":*id})
             .await?
             .ok_or("entry to delete not found")?;
 
@@ -126,7 +126,7 @@ impl CategoryMutation {
             .connection
             .collection::<RenderedExpense>("expenses_rendered");
         let expense_count = rendered_expenses_collection
-            .count_documents(doc!("categories.category_id": *category.id), None)
+            .count_documents(doc!("categories.category_id": *category.id))
             .await?;
 
         if expense_count > 0 {
@@ -138,10 +138,7 @@ impl CategoryMutation {
         }
 
         // everything seems to be in order, proceed with the deletion
-        let count = collection
-            .delete_one(doc! {"_id":*id}, None)
-            .await?
-            .deleted_count;
+        let count = collection.delete_one(doc! {"_id":*id}).await?.deleted_count;
         Ok(count == 1)
     }
 
@@ -153,7 +150,7 @@ impl CategoryMutation {
         let collection = context.connection.collection::<Category>("categories");
 
         let category = category.upgrade(ObjectId::new().into());
-        collection.insert_one(&category, None).await?;
+        collection.insert_one(&category).await?;
 
         Ok(category)
     }
@@ -170,7 +167,6 @@ impl CategoryMutation {
             .update_one(
                 doc! {"_id":*id},
                 doc! {"$set":  bson::to_bson(&category).unwrap()},
-                None,
             )
             .await?
             .modified_count;
@@ -190,10 +186,7 @@ pub async fn get_many(
 
     let collection = connection.collection::<Category>("categories");
     let categories = collection
-        .find(
-            doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<ObjectId>>()}},
-            None,
-        )
+        .find(doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<ObjectId>>()}})
         .await?
         .try_collect::<Vec<_>>()
         .await?;
@@ -208,7 +201,6 @@ pub struct CategoryBatcher {
     connection: Database,
 }
 
-#[async_trait]
 impl BatchFn<ObjectIdWrapper, Category> for CategoryBatcher {
     async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, Category> {
         get_many(&self.connection, keys).await.unwrap_or_default()

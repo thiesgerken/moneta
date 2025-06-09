@@ -1,9 +1,9 @@
 use chrono::Utc;
 use futures::stream::TryStreamExt;
-use log::{info, LevelFilter};
+use log::{LevelFilter, info};
 use moneta::models::Balance;
+use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
-use mongodb::bson::{doc, Document};
 use simplelog::{ColorChoice, SimpleLogger, TermLogger, TerminalMode};
 use tokio::runtime::Builder;
 
@@ -57,24 +57,10 @@ fn main() {
         .unwrap();
 
         // List the names of the collections in that database.
-        for collection_name in db.list_collection_names(None).await.unwrap() {
+        for collection_name in db.list_collection_names().await.unwrap() {
             println!("{}", collection_name);
         }
 
-        // Get a handle to a collection in the database.
-        let collection = db.collection::<Document>("books");
-
-        let docs = vec![
-            doc! { "title": "1984", "author": "George Orwell" },
-            doc! { "title": "Animal Farm", "author": "George Orwell" },
-            doc! { "title": "The Great Gatsby", "author": "F. Scott Fitzgerald" },
-        ];
-
-        // Insert some documents into the "my_db.books" collection.
-        let res = collection.insert_many(docs, None).await.unwrap();
-        println!("{:?}", res);
-
-        // Get a handle to a collection of `Book`.
         let typed_collection = db.collection::<Balance>("balances");
 
         let balances = vec![
@@ -96,13 +82,11 @@ fn main() {
         println!("to insert: {:?}", balances);
         println!("to insert: {:?}", serde_json::to_string(&balances[0]));
 
-        // Insert the books into "my_db.books" collection, no manual conversion to BSON necessary.
-        let res = typed_collection.insert_many(balances, None).await.unwrap();
+        let res = typed_collection.insert_many(balances).await.unwrap();
         println!("insert result: {:?}", res);
 
-        // Query the books in the collection with a filter and an option.
         let filter = doc! {};
-        let mut cursor = typed_collection.find(filter, None).await.unwrap();
+        let mut cursor = typed_collection.find(filter).await.unwrap();
 
         // Iterate over the results of the cursor.
         while let Some(balance) = cursor.try_next().await.unwrap() {

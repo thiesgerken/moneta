@@ -44,7 +44,7 @@ pub async fn rerender_multiple_balances(
     let account_collection = connection.collection::<Account>("accounts");
 
     let accounts = account_collection
-        .find(doc!("_id": {"$in": &account_ids}), None)
+        .find(doc!("_id": {"$in": &account_ids}))
         .await?
         .try_collect::<Vec<_>>()
         .await?;
@@ -52,12 +52,12 @@ pub async fn rerender_multiple_balances(
     let rendered_balances_collection =
         connection.collection::<RenderedBalance>("balances_rendered");
     rendered_balances_collection
-        .delete_many(doc!("accountId": {"$in": &account_ids}), None)
+        .delete_many(doc!("accountId": {"$in": &account_ids}))
         .await?;
 
     let balance_collection = connection.collection::<Balance>("balances");
     let mut cursor = balance_collection
-        .find(doc!("accountId": {"$in": &account_ids}), None)
+        .find(doc!("accountId": {"$in": &account_ids}))
         .await?;
 
     let mut rendered_balances = Vec::new();
@@ -66,7 +66,7 @@ pub async fn rerender_multiple_balances(
     }
 
     let r = rendered_balances_collection
-        .insert_many(&rendered_balances, None)
+        .insert_many(&rendered_balances)
         .await?;
 
     Ok(r.inserted_ids.len())
@@ -80,7 +80,7 @@ pub async fn rerender_multiple_expenses(
     // need to get all accounts, because the transactions could be linked to other accounts
     let account_collection = connection.collection::<Account>("accounts");
     let accounts = account_collection
-        .find(doc!(), None) // can't be that many, right?
+        .find(doc!()) // can't be that many, right?
         .await?
         .try_collect::<Vec<_>>()
         .await?;
@@ -88,12 +88,12 @@ pub async fn rerender_multiple_expenses(
     let rendered_expenses_collection =
         connection.collection::<RenderedExpense>("expenses_rendered");
     rendered_expenses_collection
-        .delete_many(doc!("transactions.accountId": {"$in": &account_ids}), None)
+        .delete_many(doc!("transactions.accountId": {"$in": &account_ids}))
         .await?;
 
     let expense_collection = connection.collection::<Expense>("expenses");
     let mut cursor = expense_collection
-        .find(doc!("transactions.accountId": {"$in": &account_ids}), None)
+        .find(doc!("transactions.accountId": {"$in": &account_ids}))
         .await?;
 
     let mut rendered_expenses = Vec::new();
@@ -102,7 +102,7 @@ pub async fn rerender_multiple_expenses(
     }
 
     let r = rendered_expenses_collection
-        .insert_many(&rendered_expenses, None)
+        .insert_many(&rendered_expenses)
         .await?;
 
     Ok(r.inserted_ids.len())
@@ -160,7 +160,7 @@ impl Balance {
     pub async fn remove_rendered(&self, db: &Database) -> Result<DeleteResult, Box<dyn Error>> {
         let rendered_balances_collection = db.collection::<RenderedBalance>("balances_rendered");
         let r = rendered_balances_collection
-            .delete_many(doc!("upstream_id": *self.id), None)
+            .delete_many(doc!("upstream_id": *self.id))
             .await?;
 
         info!(
@@ -355,7 +355,7 @@ impl Expense {
     pub async fn remove_rendered(&self, db: &Database) -> Result<DeleteResult, Box<dyn Error>> {
         let rendered_expenses_collection = db.collection::<RenderedExpense>("expenses_rendered");
         let r = rendered_expenses_collection
-            .delete_many(doc!("upstream_id": *self.id), None)
+            .delete_many(doc!("upstream_id": *self.id))
             .await?;
 
         info!(

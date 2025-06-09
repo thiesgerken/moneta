@@ -48,7 +48,7 @@ where
 {
     let collection = connection.collection::<T>(collection);
     let filter = doc! {"_id":id};
-    collection.find_one(filter, None).await
+    collection.find_one(filter).await
 }
 
 pub async fn query_associated_accounts(
@@ -57,7 +57,7 @@ pub async fn query_associated_accounts(
 ) -> Result<Vec<Account>, mongodb::error::Error> {
     let collection = connection.collection::<Account>("accounts");
 
-    collection.find(doc! { "$or": [ {"_id": {"$in": account_ids}}, {"synchronization.accountId": {"$in": account_ids}}] }, None).await?   .try_collect::<Vec<_>>()
+    collection.find(doc! { "$or": [ {"_id": {"$in": account_ids}}, {"synchronization.accountId": {"$in": account_ids}}] }).await?   .try_collect::<Vec<_>>()
     .await
 }
 
@@ -67,5 +67,5 @@ pub async fn query_user_by_name(
 ) -> Result<Option<User>, mongodb::error::Error> {
     let collection = connection.collection::<User>("users");
     let filter = doc! {"name":user_name};
-    collection.find_one(filter, None).await
+    collection.find_one(filter).await
 }

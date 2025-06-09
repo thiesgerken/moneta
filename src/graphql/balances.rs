@@ -121,7 +121,7 @@ impl BalanceQuery {
 
         Ok(GraphQLBalance::new(
             collection
-                .find_one(doc! {"_id":*id, "userId": uid}, None)
+                .find_one(doc! {"_id":*id, "userId": uid})
                 .await?
                 .ok_or_else(|| format!("Balance {id:?} not found"))?,
         ))
@@ -142,13 +142,13 @@ impl BalanceMutation {
 
         // check if there is a rendered balance with the given upstream id belonging to this user
         let original_entry = collection
-            .find_one(doc! {"_id":*id, "userId": user_id}, None)
+            .find_one(doc! {"_id":*id, "userId": user_id})
             .await?
             .ok_or("entry to delete not found")?;
 
         let upstream_collection = context.connection.collection::<Balance>("balances");
         let upstream_entry = upstream_collection
-            .find_one(doc! {"_id":*original_entry.upstream_id}, None)
+            .find_one(doc! {"_id":*original_entry.upstream_id})
             .await?
             .unwrap_or_else(|| {
                 panic!("cannot find upstream balance for rendered balance {:?}", id)
@@ -158,7 +158,7 @@ impl BalanceMutation {
         upstream_entry.remove_rendered(&context.connection).await?;
         // ... and then the upstream balance itself
         let count = upstream_collection
-            .delete_one(doc! {"_id":*original_entry.upstream_id}, None)
+            .delete_one(doc! {"_id":*original_entry.upstream_id})
             .await?
             .deleted_count;
         Ok(count == 1)
@@ -175,7 +175,7 @@ impl BalanceMutation {
             queries::query_associated_accounts(&context.connection, &[*balance.account_id]).await?;
         let entry = validate_and_unrender(user_id, balance, &related_accounts).await?;
 
-        collection.insert_one(&entry, None).await?;
+        collection.insert_one(&entry).await?;
 
         let balance = render(user_id, &context.connection, entry, &related_accounts).await?;
         Ok(GraphQLBalance::new(balance))
@@ -192,7 +192,7 @@ impl BalanceMutation {
             .collection::<RenderedBalance>("balances_rendered");
 
         let original_rendered_balance = collection
-            .find_one(doc! {"_id":*id, "userId": user_id}, None)
+            .find_one(doc! {"_id":*id, "userId": user_id})
             .await?
             .ok_or("entry to update not found")?;
 
@@ -204,7 +204,7 @@ impl BalanceMutation {
         // find the original upstream balance
         let upstream_collection = context.connection.collection::<Balance>("balances");
         let upstream_entry = upstream_collection
-            .find_one(doc!("_id": *original_rendered_balance.upstream_id), None)
+            .find_one(doc!("_id": *original_rendered_balance.upstream_id))
             .await?
             .unwrap_or_else(|| {
                 panic!("cannot find upstream balance for rendered balance {:?}", id)
@@ -218,8 +218,8 @@ impl BalanceMutation {
         upstream_collection
             .update_one(
                 doc!("_id": &*updated_upstream_entry.id),
-                doc! {"$set":  bson::to_bson(&updated_upstream_entry).unwrap()},
-                None,
+                doc! {"$set":  bson::to_bson(&updated_upstream_entry).unwrap()}
+            ,
             )
             .await?;
 
@@ -243,7 +243,7 @@ pub async fn render(
     // create rendered balances and insert them into database
     let rendered_balances = entry.render(related_accounts)?;
     let collection = connection.collection::<RenderedBalance>("balances_rendered");
-    collection.insert_many(&rendered_balances, None).await?;
+    collection.insert_many(&rendered_balances).await?;
 
     // find the rendered balance that was rendered for this user and return it
     let rendered_entry = rendered_balances
