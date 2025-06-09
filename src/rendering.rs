@@ -1,17 +1,18 @@
 use crate::models::{
+    Account, Balance, Expense, ExpenseCategorizationInput, ExpensePositionInput,
+    ExpenseReceiptInput, ExpenseTransaction, ExpenseTransactionInput,
     rendering::{
         RenderedBalance, RenderedBalanceInput, RenderedExpense, RenderedExpenseInput,
         RenderedExpenseTransaction,
     },
-    Account, Balance, Expense, ExpenseCategorizationInput, ExpensePositionInput,
-    ExpenseReceiptInput, ExpenseTransaction, ExpenseTransactionInput,
 };
+use chrono::Utc;
 use futures::TryStreamExt;
 use itertools::Itertools;
 use mongodb::{
+    Database,
     bson::{doc, oid::ObjectId},
     results::DeleteResult,
-    Database,
 };
 use std::error::Error;
 
@@ -110,12 +111,16 @@ pub async fn rerender_multiple_expenses(
 
 impl Balance {
     pub fn from_rendered(balance: RenderedBalanceInput) -> Self {
+        let now = Utc::now();
+
         Self {
             id: ObjectId::new().into(),
             date: balance.date,
             account_id: balance.account_id,
             amount: balance.amount,
             comments: balance.comments,
+            created_at: now,
+            updated_at: now,
         }
     }
 
@@ -133,6 +138,8 @@ impl Balance {
             account_id: main_account.id,
             amount: self.amount,
             comments: self.comments.clone(),
+            created_at: self.created_at,
+            updated_at: self.updated_at,
         }];
 
         if let Some(sync) = &main_account.synchronization {
@@ -151,6 +158,8 @@ impl Balance {
                 account_id: other_account.id,
                 amount: self.amount * if sync.invert { -1 } else { 1 },
                 comments: self.comments.clone(),
+                created_at: self.created_at,
+                updated_at: self.updated_at,
             });
         }
 
@@ -248,6 +257,8 @@ impl ExpenseTransaction {
 
 impl Expense {
     pub fn from_rendered(expense: RenderedExpenseInput) -> Self {
+        let now = Utc::now();
+
         Self {
             id: ObjectId::new().into(),
             title: expense.title,
@@ -282,6 +293,8 @@ impl Expense {
                 .into_iter()
                 .map(ExpensePositionInput::upgrade)
                 .collect(),
+            created_at: now,
+            updated_at: now,
         }
     }
 
@@ -318,6 +331,8 @@ impl Expense {
             transactions: rendered_ts,
             positions: self.positions.clone(),
             effective_amount,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
         })
     }
 

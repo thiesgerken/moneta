@@ -86,6 +86,11 @@ pub struct Balance {
     pub account_id: ObjectIdWrapper,
     pub amount: i32, // cents
     pub comments: String,
+
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub created_at: DateTime<Utc>,
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]

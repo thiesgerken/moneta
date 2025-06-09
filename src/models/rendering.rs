@@ -55,6 +55,11 @@ pub struct RenderedExpense {
     // how much the total wealth of the user this was rendered for changed by this expense
     // (sum of the effective_amounts of all the rendered transactions of this rendered expense)
     pub effective_amount: f64,
+
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub created_at: DateTime<Utc>,
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
@@ -98,6 +103,11 @@ pub struct RenderedBalance {
     pub account_id: ObjectIdWrapper,
     pub amount: i32, // cents
     pub comments: String,
+
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub created_at: DateTime<Utc>,
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLInputObject)]

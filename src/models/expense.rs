@@ -86,6 +86,11 @@ pub struct Expense {
     pub categories: Vec<ExpenseCategorization>,
     pub transactions: Vec<ExpenseTransaction>, // must not be empty
     pub positions: Vec<ExpensePosition>,
+
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub created_at: DateTime<Utc>,
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]

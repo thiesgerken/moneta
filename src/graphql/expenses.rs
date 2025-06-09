@@ -4,6 +4,7 @@ use crate::graphql::accounts::GraphQLAccount;
 use crate::graphql::categories::GraphQLCategory;
 use crate::graphql::root::Context;
 use crate::graphql::root::require_user;
+use crate::graphql::users::GraphQLUserInfo;
 use crate::graphql::util::{self};
 use crate::models::ExpenseCategorization;
 use crate::models::ExpenseChangelogEntry;
@@ -212,7 +213,7 @@ impl GraphQLExpense {
             .collection::<ExpenseChangelogEntry>("expense_changes");
 
         Ok(collection
-            .find(doc! {"targetId": *self.data.id})
+            .find(doc! {"targetId": *self.data.upstream_id})
             .await?
             .try_collect::<Vec<_>>()
             .await?
@@ -271,6 +272,16 @@ impl GraphQLExpenseChangelogEntry {
     }
     fn new_state(&self) -> Option<Expense> {
         self.data.new_state.clone()
+    }
+
+    async fn user(&self, context: &Context) -> FieldResult<Option<GraphQLUserInfo>> {
+        let Some(user_id) = self.data.user_id else {
+            return Ok(None);
+        };
+
+        Ok(Some(GraphQLUserInfo::new(
+            context.user_loader.try_load(user_id).await?,
+        )))
     }
 }
 
@@ -433,6 +444,9 @@ impl ExpenseMutation {
 
         // update the upstream expense with the changes
         updated_upstream_entry.id = upstream_entry.id;
+        updated_upstream_entry.updated_at = Utc::now();
+        updated_upstream_entry.created_at = original_rendered_expense.created_at;
+
         upstream_collection
             .update_one(
                 doc!("_id": &*updated_upstream_entry.id),

@@ -215,6 +215,9 @@ impl BalanceMutation {
 
         // update the upstream balance with the changes
         updated_upstream_entry.id = upstream_entry.id;
+        updated_upstream_entry.updated_at = Utc::now();
+        updated_upstream_entry.created_at = original_rendered_balance.created_at;
+
         upstream_collection
             .update_one(
                 doc!("_id": &*updated_upstream_entry.id),
