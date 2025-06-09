@@ -71,12 +71,6 @@ pub struct Expense {
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub booking_end: DateTime<Utc>,
 
-    /// TODO: (not implemented yet)
-    /// if this is part of something recurring, e.g. rent oder insurance payments,
-    /// then this contains the id of the rule that was triggered / this expense belongs to.
-    /// useful to check that these recurring expense have been paid yet in the current timespan and to spot mistakes (e.g. double payments)
-    pub recurring_expense_id: Option<ObjectIdWrapper>,
-
     /// set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis
     pub is_template: bool,
     /// to track expenses that should be looked at again when preparing tax forms
@@ -132,7 +126,7 @@ pub struct ExpensePosition {
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseReceipt {
-    pub file_name: String,
+    pub uri: String, /// can be a local file or e.g. a reference to a document in a dms
     pub ocr: Option<String>,
 }
 
@@ -174,7 +168,7 @@ pub struct ExpensePositionInput {
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLInputObject)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseReceiptInput {
-    pub file_name: String,
+    pub uri: String,
     pub ocr: Option<String>,
 }
 
@@ -213,7 +207,7 @@ impl ExpensePositionInput {
 impl ExpenseReceiptInput {
     pub fn upgrade(self) -> ExpenseReceipt {
         ExpenseReceipt {
-            file_name: self.file_name,
+            uri: self.uri,
             ocr: self.ocr,
         }
     }

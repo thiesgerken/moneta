@@ -18,7 +18,7 @@ pub struct DatabaseConfig {
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
-            url: "mongodb://localhost:27017".into(),
+            url: "mongodb://localhost:27018".into(),
             name: "moneta".into(),
         }
     }
