@@ -1,4 +1,4 @@
-FROM rust:1.64-bullseye as builder
+FROM rust:1.87-bullseye AS builder
 
 RUN apt-get update -y && apt-get dist-upgrade -y \
   && apt-get update -y && apt-get install -y --no-install-recommends libc-dev libssl-dev pkg-config gcc clang \

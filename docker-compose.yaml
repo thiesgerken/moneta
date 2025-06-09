@@ -1,4 +1,3 @@
-version: "3.3"
 services:
   backend:
     build:
@@ -19,6 +18,8 @@ services:
       - "traefik.http.routers.moneta-backend.entrypoints=web"
 
   frontend:
+    deploy:
+      replicas: 0
     build:
       context: ../moneta-frontend
     image: git.gerken.haus/thies/moneta-frontend:main
@@ -31,9 +32,9 @@ services:
       - "traefik.http.routers.moneta-frontend.entrypoints=web"
 
   mongo:
-    image: mongo:5
+    image: mongo:6
     volumes:
-      - mongo:/data/db
+      - ./volumes/mongo:/data/db
     restart: unless-stopped
     ports:
       # for debugging :)

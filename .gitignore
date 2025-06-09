@@ -5,3 +5,4 @@ moneta.toml
 vapid.pem
 moneydb-export.json
 .env
+/volumes
