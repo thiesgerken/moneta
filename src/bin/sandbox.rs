@@ -70,6 +70,8 @@ fn main() {
                 date: Utc::now(),
                 amount: 1234,
                 comments: "".to_string(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
             },
             Balance {
                 account_id: ObjectId::new().into(),
@@ -77,6 +79,8 @@ fn main() {
                 date: Utc::now(),
                 amount: 1234,
                 comments: "".to_string(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
             },
         ];
         println!("to insert: {:?}", balances);

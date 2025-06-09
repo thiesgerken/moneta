@@ -103,7 +103,7 @@ pub struct ExpenseChangelogEntry {
     pub date: DateTime<Utc>,
 
     /// name of the program that was used to make the change (e.g. web app, CLI, ...)
-    pub tool: String,
+    pub tool: Option<String>,
 
     /// whether this action was performed by a human or an automatic system
     pub automatic: bool,

@@ -258,8 +258,8 @@ impl GraphQLExpenseChangelogEntry {
     fn date(&self) -> DateTime<Utc> {
         self.data.date
     }
-    fn tool(&self) -> &str {
-        &self.data.tool
+    fn tool(&self) -> Option<&str> {
+        self.data.tool.as_deref()
     }
     fn automatic(&self) -> bool {
         self.data.automatic
@@ -385,6 +385,24 @@ impl ExpenseMutation {
             .delete_one(doc! {"_id":*original_entry.upstream_id})
             .await?
             .deleted_count;
+
+        // create a changelog entry for this removal
+        let changelog_entry = ExpenseChangelogEntry {
+            user_id: Some(user_id.into()),
+            target_id: id,
+            date: Utc::now(),
+            old_state: Some(upstream_entry),
+            new_state: None,
+            tool: None,
+            automatic: false,
+            confidence: 1.0,
+        };
+        context
+            .connection
+            .collection::<ExpenseChangelogEntry>("expense_changes")
+            .insert_one(&changelog_entry)
+            .await?;
+
         Ok(count == 1)
     }
 
@@ -402,6 +420,23 @@ impl ExpenseMutation {
         let entry = validate_and_unrender(user_id, expense, &related_accounts).await?;
 
         collection.insert_one(&entry).await?;
+
+        // create a changelog entry for this creation
+        let changelog_entry = ExpenseChangelogEntry {
+            user_id: Some(user_id.into()),
+            target_id: entry.id,
+            date: entry.created_at,
+            old_state: None,
+            new_state: Some(entry.clone()),
+            tool: None,
+            automatic: false,
+            confidence: 1.0,
+        };
+        context
+            .connection
+            .collection::<ExpenseChangelogEntry>("expense_changes")
+            .insert_one(&changelog_entry)
+            .await?;
 
         let expense = render(user_id, &context.connection, entry, &related_accounts).await?;
         Ok(expense)
@@ -445,13 +480,30 @@ impl ExpenseMutation {
         // update the upstream expense with the changes
         updated_upstream_entry.id = upstream_entry.id;
         updated_upstream_entry.updated_at = Utc::now();
-        updated_upstream_entry.created_at = original_rendered_expense.created_at;
+        updated_upstream_entry.created_at = upstream_entry.created_at;
 
         upstream_collection
             .update_one(
                 doc!("_id": &*updated_upstream_entry.id),
                 doc! {"$set":  bson::to_bson(&updated_upstream_entry).unwrap()},
             )
+            .await?;
+
+        // create a changelog entry for this update
+        let changelog_entry = ExpenseChangelogEntry {
+            user_id: Some(user_id.into()),
+            target_id: id,
+            date: updated_upstream_entry.updated_at,
+            old_state: Some(upstream_entry),
+            new_state: Some(updated_upstream_entry.clone()),
+            tool: None,
+            automatic: false,
+            confidence: 1.0,
+        };
+        context
+            .connection
+            .collection::<ExpenseChangelogEntry>("expense_changes")
+            .insert_one(&changelog_entry)
             .await?;
 
         let expense = render(
