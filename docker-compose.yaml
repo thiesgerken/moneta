@@ -19,13 +19,15 @@ services:
 
   frontend:
     deploy:
-      replicas: 0
+      replicas: 1
     build:
       context: ../moneta-frontend
     image: git.gerken.haus/thies/moneta-frontend:main
     restart: unless-stopped
     expose:
       - 80
+    environment:
+      - GRAPHQL_API_URL=http://backend:80/graphql
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.moneta-frontend.rule=PathPrefix(`/`)"

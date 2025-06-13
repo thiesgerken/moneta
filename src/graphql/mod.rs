@@ -7,11 +7,13 @@ mod root;
 pub mod users;
 mod util;
 
+use rocket_cors::{AllowedOrigins, CorsOptions};
+
 use mongodb::bson::doc;
+use rocket::State;
 use rocket::config::LogLevel;
 use rocket::data::{Limits, ToByteUnit};
-use rocket::http::CookieJar;
-use rocket::State;
+use rocket::http::{CookieJar, Method};
 
 use crate::config::Config;
 
@@ -69,6 +71,16 @@ pub async fn handle(config: Config, connection: mongodb::Database) {
         rocket_config = rocket_config.merge(("secret_key", config.api.secret_key.clone()));
     }
 
+    let cors = CorsOptions::default()
+        .allowed_origins(AllowedOrigins::all())
+        .allowed_methods(
+            vec![Method::Get, Method::Post, Method::Patch]
+                .into_iter()
+                .map(From::from)
+                .collect(),
+        )
+        .allow_credentials(true);
+
     let _rocket = rocket::custom(rocket_config)
         .manage(config.clone())
         .manage(connection.clone())
@@ -81,6 +93,7 @@ pub async fn handle(config: Config, connection: mongodb::Database) {
             "/",
             rocket::routes![graphiql, get_graphql_handler, post_graphql_handler],
         )
+        .attach(cors.to_cors().unwrap())
         .launch()
         .await
         .expect("server died");
