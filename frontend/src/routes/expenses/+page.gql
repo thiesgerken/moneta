@@ -1,6 +1,6 @@
-query Expenses {
+query Expenses($limit: Int, $offset: Int) {
 	expenses {
-		list(limit: 5) {
+		list(limit: $limit, skip: $offset) {
 			totalCount
 			edges {
 				node {
