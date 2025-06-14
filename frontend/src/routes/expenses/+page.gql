@@ -1,0 +1,14 @@
+query Expenses {
+	expenses {
+		list(limit: 5) {
+			totalCount
+			edges {
+				node {
+					id
+					title
+					effectiveAmount
+				}
+			}
+		}
+	}
+}

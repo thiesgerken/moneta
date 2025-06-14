@@ -1,0 +1,354 @@
+type Account {
+  availability: AccountAvailability!
+  closed: DateTime
+  color: String
+  description: String!
+  iban: String
+  id: ObjectIdWrapper!
+  kind: AccountKind!
+  name: String!
+  opened: DateTime!
+  owner: User!
+  ownershipFraction: Float!
+  risk: AccountRisk!
+  synchronization: AccountSynchronization
+}
+
+enum AccountAvailability {
+  DAYS
+  DECADES
+  IMMEDIATELY
+  MONTHS
+  WEEKS
+  YEARS
+}
+
+input AccountInput {
+  availability: AccountAvailability!
+  closed: DateTime
+  color: String
+  description: String!
+  iban: String
+  kind: AccountKind!
+  name: String!
+  opened: DateTime!
+  ownershipFraction: Float!
+  risk: AccountRisk!
+}
+
+enum AccountKind {
+  CASH
+  CREDIT
+  DEBIT
+  DEBT
+  OTHER
+  REAL_ESTATE
+  STOCKS
+  VIRTUAL
+}
+
+type AccountMutation {
+  create(account: AccountInput!): Account!
+  delete(id: ObjectIdWrapper!): Boolean!
+  update(account: AccountInput!, id: ObjectIdWrapper!): Boolean!
+}
+
+type AccountQuery {
+  get(id: ObjectIdWrapper!): Account!
+  list(filter: String, limit: Int, skip: Int, sort: String): [Account!]!
+}
+
+enum AccountRisk {
+  HIGH
+  HUGE
+  LOW
+  MEDIUM
+  NONE
+  SLIGHT
+}
+
+type AccountSynchronization {
+  account: Account!
+  invert: Boolean!
+}
+
+type AnalysisQuery {
+  balance(accountId: ObjectIdWrapper!, date: DateTime): ComputedBalance!
+  balances(date: DateTime): [ComputedBalance!]!
+}
+
+type Balance {
+  account: Account!
+  amount: Int!
+  comments: String!
+  date: DateTime!
+  id: ObjectIdWrapper!
+  upstreamId: ObjectIdWrapper!
+}
+
+type BalanceConnection {
+  edges: [BalanceNode!]!
+  totalCount: Int!
+}
+
+input BalanceInput {
+  accountId: ObjectIdWrapper!
+  amount: Int!
+  comments: String!
+  date: DateTime!
+}
+
+type BalanceMutation {
+  create(balance: BalanceInput!): Balance!
+  delete(id: ObjectIdWrapper!): Boolean!
+  update(balance: BalanceInput!, id: ObjectIdWrapper!): Balance!
+}
+
+type BalanceNode {
+  node: Balance!
+}
+
+type BalanceQuery {
+  get(id: ObjectIdWrapper!): Balance!
+  list(filter: String, limit: Int, skip: Int, sort: String): BalanceConnection!
+}
+
+type Category {
+  color: String
+  description: String!
+  id: ObjectIdWrapper!
+  monthlyLimit: Float
+  name: String!
+  parent: Category
+}
+
+input CategoryInput {
+  color: String
+  description: String!
+  monthlyLimit: Float
+  name: String!
+  parent: ObjectIdWrapper
+}
+
+type CategoryMutation {
+  create(category: CategoryInput!): Category!
+  delete(id: ObjectIdWrapper!): Boolean!
+  update(category: CategoryInput!, id: ObjectIdWrapper!): Boolean!
+}
+
+type CategoryQuery {
+  get(id: ObjectIdWrapper!): Category!
+  list(filter: String, limit: Int, skip: Int, sort: String): [Category!]!
+}
+
+type ComputedBalance {
+  account: Account!
+  amount: Float!
+  date: DateTime!
+  expenseCount: Int!
+  reference: Balance!
+}
+
+"""
+Combined date and time (with time zone) in [RFC 3339][0] format.
+
+Represents a description of an exact instant on the time-line (such as the
+instant that a user account was created).
+
+[`DateTime` scalar][1] compliant.
+
+See also [`chrono::DateTime`][2] for details.
+
+[0]: https://datatracker.ietf.org/doc/html/rfc3339#section-5
+[1]: https://graphql-scalars.dev/docs/scalars/date-time
+[2]: https://docs.rs/chrono/latest/chrono/struct.DateTime.html
+"""
+scalar DateTime
+
+type Expense {
+  bookingEnd: DateTime!
+  bookingStart: DateTime!
+  categories: [ExpenseCategorization!]!
+  changelog: [ExpenseChangelogEntry!]!
+  comments: String!
+  description: String!
+  effectiveAmount: Float!
+  id: ObjectIdWrapper!
+  isExtraordinary: Boolean!
+  isIncomplete: Boolean!
+  isTaxRelevant: Boolean!
+  isTemplate: Boolean!
+  isUnchecked: Boolean!
+  positions: [ExpensePosition!]!
+  receipts: [ExpenseReceipt!]!
+  referenceAmount: Int
+  store: String!
+  title: String!
+  transactions: [ExpenseTransaction!]!
+  upstreamId: ObjectIdWrapper!
+}
+
+type ExpenseCategorization {
+  category: Category!
+  weight: Float!
+}
+
+input ExpenseCategorizationInput {
+  categoryId: ObjectIdWrapper!
+  weight: Float!
+}
+
+type ExpenseChangelogEntry {
+  automatic: Boolean!
+  confidence: Float!
+  date: DateTime!
+  newState: Expense
+  oldState: Expense
+  targetId: ObjectIdWrapper!
+  tool: String
+  user: User
+  userId: ObjectIdWrapper
+}
+
+type ExpenseConnection {
+  edges: [ExpenseNode!]!
+  totalCount: Int!
+}
+
+input ExpenseInput {
+  bookingEnd: DateTime!
+  bookingStart: DateTime!
+  categories: [ExpenseCategorizationInput!]!
+  comments: String!
+  description: String!
+
+  """
+  if this expense should not be considered for monthly spending and so on
+  """
+  isExtraordinary: Boolean!
+
+  """
+  if we anticipate more transactions to appear before this can be completed; e.g. payback when a order hasn't arrived
+  """
+  isIncomplete: Boolean!
+
+  """
+  to track expenses that should be looked at again when preparing tax forms
+  """
+  isTaxRelevant: Boolean!
+
+  """
+  set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis
+  """
+  isTemplate: Boolean!
+
+  """
+  needs to be looked at by a user first (missing info, low confidence, ...)
+  """
+  isUnchecked: Boolean!
+  positions: [ExpensePositionInput!]!
+  receipts: [ExpenseReceiptInput!]!
+  referenceAmount: Int
+  store: String!
+  title: String!
+  transactions: [ExpenseTransactionInput!]!
+}
+
+type ExpenseMutation {
+  create(expense: ExpenseInput!): Expense!
+  delete(id: ObjectIdWrapper!): Boolean!
+  update(expense: ExpenseInput!, id: ObjectIdWrapper!): Expense!
+}
+
+type ExpenseNode {
+  node: Expense!
+}
+
+type ExpensePosition {
+  amount: Int
+  comments: String!
+  title: String!
+  units: Float!
+}
+
+input ExpensePositionInput {
+  amount: Int
+  comments: String!
+  title: String!
+  units: Float!
+}
+
+type ExpenseQuery {
+  get(id: ObjectIdWrapper!): Expense!
+  list(filter: String, limit: Int, skip: Int, sort: String): ExpenseConnection!
+}
+
+type ExpenseReceipt {
+  """can be a local file or e.g. a reference to a document in a dms"""
+  ocr: String
+  uri: String!
+}
+
+input ExpenseReceiptInput {
+  ocr: String
+  uri: String!
+}
+
+type ExpenseTransaction {
+  account: Account!
+  amount: Int
+  calculatedAmount: Float!
+  comments: String!
+  date: DateTime!
+  effectiveAmount: Float!
+  fraction: Float
+  statement: String!
+}
+
+input ExpenseTransactionInput {
+  accountId: ObjectIdWrapper!
+  amount: Int
+  comments: String!
+  date: DateTime!
+  fraction: Float
+  statement: String!
+}
+
+type Mutation {
+  accounts: AccountMutation!
+  balances: BalanceMutation!
+  categories: CategoryMutation!
+  expenses: ExpenseMutation!
+  users: UserMutation!
+}
+
+scalar ObjectIdWrapper
+
+type Query {
+  accounts: AccountQuery!
+  analysis: AnalysisQuery!
+  apiVersion: String!
+  balances: BalanceQuery!
+  categories: CategoryQuery!
+  expenses: ExpenseQuery!
+  users: UserQuery!
+}
+
+type User {
+  firstName: String
+  fullName: String!
+  id: ObjectIdWrapper!
+  lastName: String
+  name: String!
+}
+
+type UserMutation {
+  login(name: String!, password: String!): User!
+  logout: Boolean!
+}
+
+type UserQuery {
+  get(id: ObjectIdWrapper!): User!
+  list(limit: Int, skip: Int): [User!]!
+  me: User!
+}
