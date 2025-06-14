@@ -10,6 +10,11 @@ const config = {
 		'houdini-svelte': {
 			forceRunesMode: true
 		}
+	},
+	scalars: {
+		ObjectIdWrapper: {
+			type: 'String'
+		}
 	}
 };
 

@@ -6,7 +6,9 @@
 	}
 
 	const { data } = $props() as Props;
-	const { ApiVersion } = $derived(data);
+	const { About } = $derived(data);
 </script>
 
-<p>{$ApiVersion.data?.apiVersion}</p>
+<p>{$About.data?.apiVersion}</p>
+
+<p>{$About.data?.users.me.name || 'Not logged in'}</p>
