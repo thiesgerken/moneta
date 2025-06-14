@@ -1,8 +1,8 @@
 services:
   backend:
     build:
-      context: .
-    image: git.gerken.haus/thies/moneta:main
+      context: ./backend
+    image: git.gerken.haus/thies/moneta/backend:main
     restart: unless-stopped
     expose:
       - 80
@@ -21,8 +21,8 @@ services:
     deploy:
       replicas: 1
     build:
-      context: ../moneta-frontend
-    image: git.gerken.haus/thies/moneta-frontend:main
+      context: ./frontend
+    image: git.gerken.haus/thies/moneta/frontend:main
     restart: unless-stopped
     expose:
       - 80
