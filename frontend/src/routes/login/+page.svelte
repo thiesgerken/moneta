@@ -25,7 +25,7 @@
 		`);
 
 		await loginMutation.mutate({ name: username, password });
-		window.location.href = '/';
+		window.location.href = '/about';
 	}
 </script>
 

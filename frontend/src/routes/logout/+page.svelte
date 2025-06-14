@@ -15,7 +15,7 @@
 		`);
 
 		await logoutMutation.mutate(null);
-		window.location.href = '/';
+		window.location.href = '/about';
 	}
 </script>
 
