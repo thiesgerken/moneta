@@ -20,13 +20,16 @@
 		PlusOutline,
 		FilterSolid,
 		ChevronRightOutline,
-		ChevronLeftOutline
+		ChevronLeftOutline,
+		ChevronDownOutline
 	} from 'flowbite-svelte-icons';
 	import type { ExpenseTableVariables } from './$houdini';
+	import { formatAccounts, formatBookingPeriod, formatCategories } from './expense_utils';
 
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
 	let searchTerm = $state('');
+	let expandedRows = $state<String[]>([]);
 
 	export const _ExpenseTableVariables: ExpenseTableVariables = () => {
 		let filter = JSON.stringify({});
@@ -79,6 +82,9 @@
 
 	const store = graphql(`
 		query ExpenseTable($limit: Int, $offset: Int, $filter: String, $sort: String) @load {
+			users {
+				me { name }
+			}
 			expenses {
 				list(limit: $limit, skip: $offset, filter: $filter, sort: $sort) {
 					totalCount
@@ -97,6 +103,25 @@
 								units
 								comments
 							}
+							categories {
+								weight
+								category {
+									name
+									color
+								}
+							}
+							transactions {
+								fraction
+								effectiveAmount
+								amount
+								account {
+									name
+									owner {
+										name
+										firstName
+									}
+								}
+							}
 						}
 					}
 				}
@@ -108,6 +133,14 @@
 	const totalPages = $derived(Math.ceil(totalCount / itemsPerPage));
 
 	let expenses = $derived($store.data?.expenses.list.edges.map((expense) => expense.node) || []);
+
+	function toggleRow(id: String) {
+		if (expandedRows.includes(id)) {
+			expandedRows = expandedRows.filter(rowId => rowId !== id);
+		} else {
+			expandedRows = [...expandedRows, id];
+		}
+	}
 </script>
 
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5">
@@ -116,7 +149,7 @@
 		hoverable={true}
 		striped={true}
 		bind:inputValue={searchTerm}
-        tableClass="w-full text-left text-sm table-fixed"
+        tableClass="w-full text-left text-sm"
 		divClass="bg-white dark:bg-gray-800 relative shadow-md sm:rounded-lg overflow-x-auto"
 		innerDivClass="flex flex-col md:flex-row items-center justify-between space-y-3 md:space-y-0 md:space-x-4 p-4"
 		searchClass="w-full md:w-1/2 relative"
@@ -152,40 +185,35 @@
 			</div>
 		{/snippet}
 		<TableHead>
-			<TableHeadCell class="px-4 py-3 w-32" scope="col">Datum</TableHeadCell>
-			<TableHeadCell class="px-4 py-3 w-32" scope="col">Betrag</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col">Datum</TableHeadCell>
 			<TableHeadCell class="px-4 py-3" scope="col">Titel</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col">Konten</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col">Kategorien</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col">Betrag</TableHeadCell>
 			<TableHeadCell class="px-4 py-3" scope="col">Geschäft</TableHeadCell>
-			<TableHeadCell class="px-4 py-3 w-128" scope="col">Beschreibung</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col">Beschreibung</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each expenses as expense (expense.id)}
-				<TableBodyRow>
-					<TableBodyCell class="px-4 py-3">
-						{#if expense.bookingStart.toISOString() == expense.bookingEnd.toISOString()}
-							{expense.bookingStart.toLocaleDateString('de-DE', {
-								month: '2-digit',
-								day: '2-digit',
-								year: 'numeric'
-							})}
-						{:else}
-							{expense.bookingStart.toLocaleDateString('de-DE', {
-								month: '2-digit',
-								day: '2-digit',
-								year: 'numeric'
-							})} - {expense.bookingEnd.toLocaleDateString('de-DE', {
-								month: '2-digit',
-								day: '2-digit',
-								year: 'numeric'
-							})}
-						{/if}
+				<TableBodyRow onclick={() => toggleRow(expense.id)}>
+					<TableBodyCell class="px-4 py-3" >
+						<button type="button" class="mr-2 focus:outline-none" >
+							{#if expandedRows.includes(expense.id)}
+								<ChevronDownOutline class="inline w-4 h-4" />
+							{:else}
+								<ChevronRightOutline class="inline w-4 h-4" />
+							{/if}
+						</button>
+						{formatBookingPeriod(expense.bookingStart, expense.bookingEnd, false)}
 					</TableBodyCell>
+					<TableBodyCell class="px-4 py-3 max-w-96 truncate">{expense.title}</TableBodyCell>
+					<TableBodyCell class="px-4 py-3 max-w-64 truncate">{formatAccounts(expense.transactions, $store.data?.users.me.name)}</TableBodyCell>
+					<TableBodyCell class="px-4 py-3 max-w-64 truncate">{formatCategories(expense.categories)}</TableBodyCell>
 					<TableBodyCell class="px-4 py-3"
 						>{(expense.effectiveAmount / 100).toFixed(2)}€</TableBodyCell
 					>
-					<TableBodyCell class="px-4 py-3">{expense.title}</TableBodyCell>
-                    <TableBodyCell class="px-4 py-3">{expense.store}</TableBodyCell>
-					<TableBodyCell class="px-4 py-3 truncate"
+                    <TableBodyCell class="px-4 py-3 max-w-64 truncate">{expense.store}</TableBodyCell>
+					<TableBodyCell class="px-4 py-3 max-w-96 truncate"
 						>{expense.description}
 						{expense.positions
 							.map(
@@ -194,6 +222,36 @@
 							.join(', ')}
 					</TableBodyCell>
 				</TableBodyRow>
+				{#if expandedRows.includes(expense.id)}
+					<tr>
+						<td colspan="5" class="bg-gray-100 dark:bg-gray-800 px-4 py-3 border-b">
+							<div class="flex flex-col gap-2">
+								<strong>Details:</strong>
+								<div><b>Buchungszeitraum:</b>
+									{formatBookingPeriod(expense.bookingStart, expense.bookingEnd, true)}
+								</div>
+								<div><b>Positionen:</b>
+									<ul class="list-disc ml-6">
+										{#each expense.positions as position}
+											<li>
+												{#if position.units > 1}
+												{position.units}x
+												{/if}
+												{position.title}
+												{#if position.amount}
+													für {(position.amount  / 100).toFixed(2)}€
+												{/if}
+												{#if position.comments}
+												<span class="italic text-xs">{position.comments}</span>
+												{/if}
+											</li>
+										{/each}
+									</ul>
+								</div>
+							</div>
+						</td>
+					</tr>
+				{/if}
 			{/each}
 		</TableBody>
 		{#snippet footer()}
