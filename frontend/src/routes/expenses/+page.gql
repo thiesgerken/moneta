@@ -6,7 +6,11 @@ query Expenses($limit: Int, $offset: Int) {
 				node {
 					id
 					title
+					description
+					store
 					effectiveAmount
+					bookingStart
+					bookingEnd
 				}
 			}
 		}

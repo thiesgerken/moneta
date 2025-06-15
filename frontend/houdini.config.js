@@ -14,6 +14,15 @@ const config = {
 	scalars: {
 		ObjectIdWrapper: {
 			type: 'String'
+		},
+		DateTime: {
+			type: 'Date',
+			unmarshal(val) {
+				return val ? new Date(val) : null;
+			},
+			marshal(date) {
+				return date && date.toISOString();
+			}
 		}
 	}
 };
