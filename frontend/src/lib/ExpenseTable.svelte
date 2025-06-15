@@ -34,33 +34,26 @@
 	export const _ExpenseTableVariables: ExpenseTableVariables = () => {
 		let filter = JSON.stringify({});
 		if (searchTerm) {
+			const re = {
+							$regex: searchTerm,
+							$options: 'i'
+						}
+
 			filter = JSON.stringify({
 				$or: [
 					{
-						title: {
-							$regex: searchTerm,
-							$options: 'i'
-						}
+						title: re
 					},
 					{
-						description: {
-							$regex: searchTerm,
-							$options: 'i'
-						}
+						description: re
 					},
 					{
-						store: {
-							$regex: searchTerm,
-							$options: 'i'
-						}
+						store: re
 					},
 					{
 						positions: {
 							$elemMatch: {
-								title: {
-									$regex: searchTerm,
-									$options: 'i'
-								}
+								title: re
 							}
 						}
 					}
