@@ -1,5 +1,3 @@
-/** @type { import('./$houdini').AllItemsVariables } */
-
 import type { ExpensesVariables, PageLoadEvent } from './$houdini';
 
 export const _ExpensesVariables: ExpensesVariables = (event: PageLoadEvent) => {
