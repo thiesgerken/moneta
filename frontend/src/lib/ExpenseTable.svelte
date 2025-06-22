@@ -39,6 +39,7 @@
 
 	export const _ExpenseTableVariables: ExpenseTableVariables = () => {
 		let filter = JSON.stringify({});
+		// TODO: better filtering via UI, not just searching
 		if (searchTerm) {
 			const re = {
 				$regex: searchTerm,
@@ -67,6 +68,8 @@
 			});
 		}
 
+		// TODO: better sorting via UI — sort by default on stuff that is unchecked/incomplete
+		// TODO: a default filter should be to hide templates
 		const sort = JSON.stringify({
 			bookingStart: -1
 		});
@@ -157,6 +160,12 @@
 
 	const totalCount = $derived($store.data?.expenses.list.totalCount || 0);
 	const totalPages = $derived(Math.ceil(totalCount / itemsPerPage));
+
+	$effect(() => {
+		if (totalPages < currentPage) {
+			currentPage = Math.max(totalPages, 1);
+		}
+	});
 
 	let expenses = $derived($store.data?.expenses.list.edges.map((expense) => expense.node) || []);
 
@@ -263,19 +272,20 @@
 					</TableBodyCell>
 					<TableBodyCell class="px-4 py-3">
 						{#if expense.isTaxRelevant}
-							<span class="bg-green-100 text-green-700 px-2 py-1 rounded-md">Steuerrelevant</span>
+							<span class="rounded-md bg-green-100 px-2 py-1 text-green-700">Steuerrelevant</span>
 						{/if}
 						{#if expense.isTemplate}
-							<span class="bg-blue-100 text-blue-700 px-2 py-1 rounded-md">Vorlage</span>
+							<span class="rounded-md bg-blue-100 px-2 py-1 text-blue-700">Vorlage</span>
 						{/if}
 						{#if expense.isUnchecked}
-							<span class="bg-red-100 text-yellow-700 px-2 py-1 rounded-md">Unbestätigt</span>
+							<span class="rounded-md bg-red-100 px-2 py-1 text-yellow-700">Unbestätigt</span>
 						{/if}
 						{#if expense.isIncomplete}
-							<span class="bg-red-100 text-red-700 px-2 py-1 rounded-md">Unvollständig</span>
+							<span class="rounded-md bg-red-100 px-2 py-1 text-red-700">Unvollständig</span>
 						{/if}
 						{#if expense.isExtraordinary}
-							<span class="bg-purple-100 text-purple-700 px-2 py-1 rounded-md">Außergewöhnlich</span>
+							<span class="rounded-md bg-purple-100 px-2 py-1 text-purple-700">Außergewöhnlich</span
+							>
 						{/if}
 					</TableBodyCell>
 				</TableBodyRow>
