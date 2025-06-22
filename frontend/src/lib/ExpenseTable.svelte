@@ -218,6 +218,7 @@
 			<TableHeadCell class="px-4 py-3" scope="col">Betrag</TableHeadCell>
 			<TableHeadCell class="px-4 py-3" scope="col">Geschäft</TableHeadCell>
 			<TableHeadCell class="px-4 py-3" scope="col">Beschreibung</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col">Status</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each expenses as expense (expense.id)}
@@ -259,6 +260,23 @@
 								(position) => `${position.units > 1 ? position.units + 'x ' : ''}${position.title}`
 							)
 							.join(', ')}
+					</TableBodyCell>
+					<TableBodyCell class="px-4 py-3">
+						{#if expense.isTaxRelevant}
+							<span class="bg-green-100 text-green-700 px-2 py-1 rounded-md">Steuerrelevant</span>
+						{/if}
+						{#if expense.isTemplate}
+							<span class="bg-blue-100 text-blue-700 px-2 py-1 rounded-md">Vorlage</span>
+						{/if}
+						{#if expense.isUnchecked}
+							<span class="bg-red-100 text-yellow-700 px-2 py-1 rounded-md">Unbestätigt</span>
+						{/if}
+						{#if expense.isIncomplete}
+							<span class="bg-red-100 text-red-700 px-2 py-1 rounded-md">Unvollständig</span>
+						{/if}
+						{#if expense.isExtraordinary}
+							<span class="bg-purple-100 text-purple-700 px-2 py-1 rounded-md">Außergewöhnlich</span>
+						{/if}
 					</TableBodyCell>
 				</TableBodyRow>
 				{#if expandedRows.includes(expense.id)}
