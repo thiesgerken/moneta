@@ -4,6 +4,7 @@ use futures::{StreamExt, TryStreamExt};
 use mongodb::bson::{self, Document};
 use mongodb::options::FindOptions;
 use serde::de::DeserializeOwned;
+use similar::TextDiff;
 
 pub fn string_to_document(s: &str) -> Result<Document, Box<dyn Error>> {
     // also handles EJSON (i.e. decodes {$oid: "..."} as ObjectId if possible)
@@ -32,7 +33,7 @@ where
         let mut f = filter.unwrap_or_default();
         f.extend(ov.into_iter());
         f
-    } else  {
+    } else {
         filter.unwrap_or_default()
     };
 
@@ -45,7 +46,8 @@ where
     let collection = connection.collection::<T>(collection_name);
     let total_count = collection.count_documents(filter.clone()).await?;
     let cursor = collection
-        .find(filter).with_options(find_options)
+        .find(filter)
+        .with_options(find_options)
         .await?
         .skip(usize::try_from(skip.unwrap_or(0))?)
         .take(usize::try_from(limit.unwrap_or(i32::MAX))?);
@@ -53,4 +55,16 @@ where
     let edges = cursor.try_collect::<Vec<_>>().await?;
 
     Ok((total_count, edges))
+}
+
+pub fn json_diff<T: serde::Serialize>(
+    left: &T,
+    right: &T,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let left_json = serde_json::to_string_pretty(left)?;
+    let right_json = serde_json::to_string_pretty(right)?;
+
+    let diff = TextDiff::from_lines(&left_json, &right_json);
+
+    Ok(diff.unified_diff().context_radius(3).to_string())
 }

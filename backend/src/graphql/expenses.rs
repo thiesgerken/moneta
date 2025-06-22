@@ -273,7 +273,11 @@ impl GraphQLExpenseChangelogEntry {
     fn new_state(&self) -> Option<Expense> {
         self.data.new_state.clone()
     }
-
+    fn diff(&self) -> Option<String> {
+        let old_state = self.data.old_state.as_ref()?;
+        let new_state = self.data.new_state.as_ref()?;
+        util::json_diff(&old_state, &new_state).ok()
+    }
     async fn user(&self, context: &Context) -> FieldResult<Option<GraphQLUserInfo>> {
         let Some(user_id) = self.data.user_id else {
             return Ok(None);
