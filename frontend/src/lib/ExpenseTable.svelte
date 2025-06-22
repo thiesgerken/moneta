@@ -336,7 +336,7 @@
 										<ul class="ml-6 list-disc">
 											{#each expense.categories as category}
 												<li>
-													<span style={makeCategoryColor([category])}>
+													<span class="rounded-md px-1" style={makeCategoryColor([category])}>
 														{category.category.name}
 													</span>
 													(Gewicht: {category.weight})
@@ -373,7 +373,7 @@
 									<ul class="ml-6 list-disc">
 										{#each expense.transactions.toSorted((a, b) => Math.abs(b.effectiveAmount) - Math.abs(a.effectiveAmount)) as transaction}
 											<li>
-												<span style={makeAccountColor([transaction], expense.referenceAmount)}>
+												<span class="rounded-md px-1.5 py-0.5" style={makeAccountColor([transaction], expense.referenceAmount)}>
 													{#if transaction.account.owner.name != $store.data?.users.me.name}
 														{transaction.account.owner.firstName} / {transaction.account.name}
 													{:else}
@@ -395,6 +395,7 @@
 														minute: '2-digit'
 													})}
 												{/if}
+												<!-- TODO: shoe the transaction text -->
 											</li>
 										{/each}
 									</ul>
