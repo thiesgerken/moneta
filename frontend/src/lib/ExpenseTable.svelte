@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { fragment, graphql } from '$houdini';
+	import { graphql } from '$houdini';
 
 	import {
 		TableBody,
@@ -36,10 +36,13 @@
 	let itemsPerPage = $derived(15);
 	let searchTerm = $state('');
 	let expandedRows = $state<String[]>([]);
+	let sortBy: { field: string; direction: number }[] = $state([
+		{ field: 'status', direction: -1 },
+		{ field: 'bookingStart', direction: -1 }
+	]);
 
 	export const _ExpenseTableVariables: ExpenseTableVariables = () => {
 		let filter = JSON.stringify({});
-		// TODO: better filtering via UI, not just searching
 		if (searchTerm) {
 			const re = {
 				$regex: searchTerm,
@@ -68,17 +71,42 @@
 			});
 		}
 
-		// TODO: better sorting via UI — sort by default on stuff that is unchecked/incomplete
+		// TODO: better filtering via UI
 		// TODO: a default filter should be to hide templates
-		const sort = JSON.stringify({
-			bookingStart: -1
-		});
+
+		let currentSort: any = {};
+		for (const { field, direction } of sortBy) {
+			switch (field) {
+				case 'status':
+					currentSort.isTemplate = -direction;
+					currentSort.isIncomplete = direction;
+					currentSort.isUnchecked = direction;
+					break;
+				case 'accounts':
+					currentSort['transactions.accountId'] = direction;
+					break;
+				case 'categories':
+					currentSort['categories.categoryId'] = direction;
+					break;
+				case 'bookingStart':
+				case 'title':
+				case 'store':
+				case 'description':
+				case 'comments':
+				case 'effectiveAmount':
+				case 'categories':
+					currentSort[field] = direction;
+					break;
+				default:
+					throw new Error(`Unknown sort field: ${field}`);
+			}
+		}
 
 		return {
 			limit: itemsPerPage || 10,
 			offset: ((currentPage || 1) - 1) * (itemsPerPage || 10),
 			filter,
-			sort
+			sort: JSON.stringify(currentSort)
 		};
 	};
 
@@ -142,6 +170,7 @@
 								effectiveAmount
 								amount
 								date
+								statement
 								account {
 									name
 									owner {
@@ -176,7 +205,30 @@
 			expandedRows = [...expandedRows, id];
 		}
 	}
+
+	function sortByField(field: string) {
+		const index = sortBy.findIndex(({ field: f }) => f === field);
+		if (index === -1) {
+			sortBy = [{ field, direction: -1 }];
+		} else {
+			sortBy = [{ field, direction: -sortBy[index].direction }];
+		}
+	}
+
+	function isSortedBy(field: string) {
+		const index = sortBy.findIndex(({ field: f }) => f === field);
+		if (index === -1) return null;
+		return sortBy[index].direction;
+	}
 </script>
+
+{#snippet sortIcon(field: string)}
+	{#if isSortedBy(field) === -1}
+		{'▲'}
+	{:else if isSortedBy(field) === 1}
+		{'▼'}
+	{/if}
+{/snippet}
 
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5">
 	<TableSearch
@@ -219,15 +271,40 @@
 				</Dropdown>
 			</div>
 		{/snippet}
+
 		<TableHead>
-			<TableHeadCell class="px-4 py-3" scope="col">Datum</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col">Titel</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col">Konten</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col">Kategorien</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col">Betrag</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col">Geschäft</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col">Beschreibung</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col">Status</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('bookingStart')}>
+				Datum
+				{@render sortIcon('bookingStart')}
+			</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('title')}>
+				Titel
+				{@render sortIcon('title')}
+			</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('accounts')}>
+				Konten
+				{@render sortIcon('accounts')}
+			</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('categories')}>
+				Kategorien
+				{@render sortIcon('categories')}
+			</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('effectiveAmount')}>
+				Betrag
+				{@render sortIcon('effectiveAmount')}
+			</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('store')}>
+				Geschäft
+				{@render sortIcon('store')}
+			</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('description')}>
+				Beschreibung
+				{@render sortIcon('description')}
+			</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('status')}>
+				Status
+				{@render sortIcon('status')}
+			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each expenses as expense (expense.id)}
@@ -373,7 +450,10 @@
 									<ul class="ml-6 list-disc">
 										{#each expense.transactions.toSorted((a, b) => Math.abs(b.effectiveAmount) - Math.abs(a.effectiveAmount)) as transaction}
 											<li>
-												<span class="rounded-md px-1.5 py-0.5" style={makeAccountColor([transaction], expense.referenceAmount)}>
+												<span
+													class="rounded-md px-1.5 py-0.5"
+													style={makeAccountColor([transaction], expense.referenceAmount)}
+												>
 													{#if transaction.account.owner.name != $store.data?.users.me.name}
 														{transaction.account.owner.firstName} / {transaction.account.name}
 													{:else}
@@ -395,7 +475,9 @@
 														minute: '2-digit'
 													})}
 												{/if}
-												<!-- TODO: shoe the transaction text -->
+												{#if transaction.statement}
+													<pre class="text-xs">{transaction.statement}</pre>
+												{/if}
 											</li>
 										{/each}
 									</ul>
