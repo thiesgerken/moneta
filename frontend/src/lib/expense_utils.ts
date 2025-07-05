@@ -121,3 +121,38 @@ export function makeStripedBackground(segments: { color: string; percentage: num
 
 	return s + ');';
 }
+
+
+export interface SortableAccount {
+	readonly name: string;
+	readonly owner: {
+		readonly name: string;
+	};
+	readonly closed: Date | null;
+}
+
+export function accountSorter(a: SortableAccount, b: SortableAccount, user_name: string) {
+
+	const aBelongsToMe = a.owner.name == user_name;
+	const bBelongsToMe = b.owner.name == user_name;
+
+	if (aBelongsToMe &&  !bBelongsToMe) return -1;
+	if (!aBelongsToMe && bBelongsToMe) return 1;
+
+	if (a.owner.name != b.owner.name) {
+		return a.owner.name.localeCompare(b.owner.name);
+	}
+
+	if (a.closed && !b.closed) return 1;
+	if (!a.closed && b.closed) return -1;
+
+	return a.name.localeCompare(b.name);
+};
+
+export interface SortableCategory {
+readonly name: string;
+}
+
+export function categorySorter(a: SortableCategory, b: SortableCategory) {
+	return a.name.localeCompare(b.name);
+}

@@ -13,7 +13,10 @@
 		Checkbox,
 		ButtonGroup,
 		List,
-		Li
+		Li,
+		MultiSelect,
+		Badge,
+		Datepicker
 	} from 'flowbite-svelte';
 	import { Section } from 'flowbite-svelte-blocks';
 	import {
@@ -25,6 +28,8 @@
 	} from 'flowbite-svelte-icons';
 	import type { ExpenseTableVariables } from './$houdini';
 	import {
+		accountSorter,
+		categorySorter,
 		formatAccounts,
 		formatBookingPeriod,
 		formatCategories,
@@ -41,38 +46,150 @@
 		{ field: 'bookingStart', direction: -1 }
 	]);
 
+	let filteredAccounts = $state<string[]>([]);
+	let filteredCategories = $state<string[]>([]);
+
+	let filterDateRange: { from: Date | undefined; to: Date | undefined } = $state({
+		from: undefined,
+		to: undefined
+	});
+
+	let showTemplates = $state(false);
+	let showTaxRelevant = $state(true);
+	let showExtraordinary = $state(true);
+	let showUnchecked = $state(true);
+	let showIncomplete = $state(true);
+	let showNormal = $state(true);
+
 	export const _ExpenseTableVariables: ExpenseTableVariables = () => {
-		let filter = JSON.stringify({});
+		let filters = [];
 		if (searchTerm) {
 			const re = {
 				$regex: searchTerm,
 				$options: 'i'
 			};
 
-			filter = JSON.stringify({
-				$or: [
-					{
-						title: re
-					},
-					{
-						description: re
-					},
-					{
-						store: re
-					},
-					{
-						positions: {
-							$elemMatch: {
-								title: re
-							}
+			const searchFilters: any[] = [
+				{
+					title: re
+				},
+				{
+					description: re
+				},
+				{
+					store: re
+				},
+				{
+					positions: {
+						$elemMatch: {
+							title: re
 						}
 					}
+				}
+			];
+
+			const searchFloat = parseFloat(searchTerm.trim());
+			if (!isNaN(searchFloat) && searchFloat) {
+				const lower = Math.floor(searchFloat * 100);
+				const upper = Math.ceil(searchFloat * 100);
+
+				searchFilters.push(
+					{
+						transactions: {
+							$elemMatch: {
+								$or: [
+									{
+										effectiveAmount: { $gte: lower, $lte: upper }
+									},
+									{
+										amount: { $gte: lower, $lte: upper }
+									},
+									{
+										effectiveAmount: { $gte: -upper, $lte: -lower }
+									},
+									{
+										amount: { $gte: -upper, $lte: -lower }
+									}
+								]
+							}
+						}
+					},
+					{
+						effectiveAmount: { $gte: lower, $lte: upper }
+					},
+					{
+						effectiveAmount: { $gte: -upper, $lte: -lower }
+					}
+				);
+			}
+
+			filters.push({
+				$or: searchFilters
+			});
+		}
+
+		if (filteredAccounts.length > 0) {
+			filters.push({
+				'transactions.accountId': {
+					$in: filteredAccounts.map((account) => ({ $oid: account }))
+				}
+			});
+		}
+
+		if (filteredCategories.length > 0) {
+			filters.push({
+				'categories.categoryId': {
+					$in: filteredCategories.map((category) => ({ $oid: category }))
+				}
+			});
+		}
+
+		if (!showTemplates) {
+			filters.push({
+				isTemplate: false
+			});
+		}
+
+		if (!showTaxRelevant) {
+			filters.push({
+				isTaxRelevant: false
+			});
+		}
+
+		if (!showExtraordinary) {
+			filters.push({
+				isExtraordinary: false
+			});
+		}
+
+		if (!showUnchecked) {
+			filters.push({
+				isUnchecked: false
+			});
+		}
+
+		if (!showIncomplete) {
+			filters.push({
+				isIncomplete: false
+			});
+		}
+
+		if (!showNormal) {
+			filters.push({
+				$or: [
+					{ isTemplate: true },
+					{ isTaxRelevant: true },
+					{ isExtraordinary: true },
+					{ isUnchecked: true },
+					{ isIncomplete: true }
 				]
 			});
 		}
 
-		// TODO: better filtering via UI
-		// TODO: a default filter should be to hide templates
+		if (filterDateRange.from)
+			filters.push({ bookingStart: { $gte: { $date: filterDateRange.from } } });
+
+		if (filterDateRange.to) filters.push({ bookingEnd: { $lte: { $date: filterDateRange.to } } });
 
 		let currentSort: any = {};
 		for (const { field, direction } of sortBy) {
@@ -105,18 +222,46 @@
 		return {
 			limit: itemsPerPage || 10,
 			offset: ((currentPage || 1) - 1) * (itemsPerPage || 10),
-			filter,
+			filter: filters.length > 0 ? JSON.stringify({ $and: filters }) : undefined,
 			sort: JSON.stringify(currentSort)
 		};
 	};
 
-	const store = graphql(`
-		query ExpenseTable($limit: Int, $offset: Int, $filter: String, $sort: String) @load {
+	// Stuff that we always need independently of the current page and sorting and so on
+	const basicStore = graphql(`
+		query BasicInformation @load {
 			users {
 				me {
 					name
 				}
 			}
+			accounts {
+				list {
+					id
+					name
+					owner {
+						name
+						firstName
+					}
+					color
+					closed
+				}
+			}
+			categories {
+				list {
+					id
+					name
+					parent {
+						id
+					}
+					color
+				}
+			}
+		}
+	`);
+
+	const expenseStore = graphql(`
+		query ExpenseTable($limit: Int, $offset: Int, $filter: String, $sort: String) @load {
 			expenses {
 				list(limit: $limit, skip: $offset, filter: $filter, sort: $sort) {
 					totalCount
@@ -187,7 +332,28 @@
 		}
 	`);
 
-	const totalCount = $derived($store.data?.expenses.list.totalCount || 0);
+	const filterableCategories = $derived(
+		$basicStore.data?.categories.list.sort(categorySorter).map((category) => ({
+			name: category.name,
+			value: category.id,
+			color: category.color
+		}))
+	);
+
+	const filterableAccounts = $derived(
+		$basicStore.data?.accounts.list
+			.sort((a, b) => accountSorter(a, b, $basicStore.data?.users.me.name || ''))
+			.map((account) => ({
+				name:
+					account.owner.name == $basicStore.data?.users.me.name
+						? account.name
+						: `${account.owner.firstName} / ${account.name}`,
+				value: account.id,
+				color: account.color
+			}))
+	);
+
+	const totalCount = $derived($expenseStore.data?.expenses.list.totalCount || 0);
 	const totalPages = $derived(Math.ceil(totalCount / itemsPerPage));
 
 	$effect(() => {
@@ -196,7 +362,9 @@
 		}
 	});
 
-	let expenses = $derived($store.data?.expenses.list.edges.map((expense) => expense.node) || []);
+	let expenses = $derived(
+		$expenseStore.data?.expenses.list.edges.map((expense) => expense.node) || []
+	);
 
 	function toggleRow(id: String) {
 		if (expandedRows.includes(id)) {
@@ -248,24 +416,71 @@
 				<Button>
 					<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
 				</Button>
-				<Button color="alternative">Filtern<FilterSolid class="ml-2 h-3 w-3 " /></Button>
+				<Datepicker
+					range
+					bind:rangeFrom={filterDateRange.from}
+					bind:rangeTo={filterDateRange.to}
+					placeholder="Datum"
+				/>
+				<MultiSelect
+					items={filterableAccounts ?? []}
+					bind:value={filteredAccounts}
+					size="lg"
+					class="ml-2 h-1 min-w-48"
+					placeholder="Konten"
+				>
+					{#snippet children({ item, clear })}
+						<Badge
+							style={`background-color: ${item.color}`}
+							class="text-black"
+							dismissable
+							params={{ duration: 100 }}
+							onclose={clear}
+						>
+							{item.name}
+						</Badge>
+					{/snippet}
+				</MultiSelect>
+				<MultiSelect
+					items={filterableCategories ?? []}
+					bind:value={filteredCategories}
+					size="lg"
+					class="ml-2 h-1 min-w-48"
+					placeholder="Kategorien"
+				>
+					{#snippet children({ item, clear })}
+						<Badge
+							style={`background-color: ${item.color}`}
+							class="text-black"
+							dismissable
+							params={{ duration: 100 }}
+							onclose={clear}
+						>
+							{item.name}
+						</Badge>
+					{/snippet}
+				</MultiSelect>
+				<Button size="lg" color="alternative">Filter<FilterSolid class="ml-2 h-3 w-3 " /></Button>
 				<Dropdown class="w-48 space-y-2 p-3 text-sm">
-					<h6 class="mb-3 text-sm font-medium text-gray-900 dark:text-white">Konto</h6>
+					<h6 class="mb-3 text-sm font-medium text-gray-900 dark:text-white">Zustand</h6>
 					<List tag="dl">
 						<Li>
-							<Checkbox>Apple (56)</Checkbox>
+							<Checkbox bind:checked={showTaxRelevant}>Steuerrelevant</Checkbox>
 						</Li>
 						<Li>
-							<Checkbox>Microsoft (16)</Checkbox>
+							<Checkbox bind:checked={showTemplates}>Vorlage</Checkbox>
 						</Li>
 						<Li>
-							<Checkbox>Razor (49)</Checkbox>
+							<Checkbox bind:checked={showExtraordinary}>Außergewöhnlich</Checkbox>
 						</Li>
 						<Li>
-							<Checkbox>Nikon (12)</Checkbox>
+							<Checkbox bind:checked={showUnchecked}>Unbestätigt</Checkbox>
 						</Li>
 						<Li>
-							<Checkbox>BenQ (74)</Checkbox>
+							<Checkbox bind:checked={showIncomplete}>Unvollständig</Checkbox>
+						</Li>
+						<Li>
+							<Checkbox bind:checked={showNormal}>Normal</Checkbox>
 						</Li>
 					</List>
 				</Dropdown>
@@ -323,7 +538,7 @@
 					<TableBodyCell
 						class="max-w-64 truncate px-4 py-3 text-black"
 						style={makeAccountColor(expense.transactions, expense.referenceAmount)}
-						>{formatAccounts(expense.transactions, $store.data?.users.me.name)}</TableBodyCell
+						>{formatAccounts(expense.transactions, $basicStore.data?.users.me.name)}</TableBodyCell
 					>
 					<TableBodyCell
 						class="max-w-64 truncate px-4 py-3 text-black"
@@ -454,7 +669,7 @@
 													class="rounded-md px-1.5 py-0.5"
 													style={makeAccountColor([transaction], expense.referenceAmount)}
 												>
-													{#if transaction.account.owner.name != $store.data?.users.me.name}
+													{#if transaction.account.owner.name != $basicStore.data?.users.me.name}
 														{transaction.account.owner.firstName} / {transaction.account.name}
 													{:else}
 														{transaction.account.name}
@@ -499,7 +714,7 @@
 									<ul class="ml-6 list-disc">
 										{#each expense.changelog.toReversed() as change}
 											<li>
-												{change.user!.name == $store.data?.users.me.name
+												{change.user!.name == $basicStore.data?.users.me.name
 													? 'Du'
 													: change.user!.firstName} am {change.date.toLocaleDateString('de-DE', {
 													year: 'numeric',
@@ -546,17 +761,27 @@
 					<span class="font-semibold text-gray-900 dark:text-white">{totalCount}</span>
 				</span>
 				<ButtonGroup>
-					<Button onclick={() => currentPage--} disabled={currentPage <= 1}
-						><ChevronLeftOutline size="xs" class="m-1.5" /></Button
-					>
+					<Button onclick={() => currentPage--} disabled={currentPage <= 1}>
+						<ChevronLeftOutline size="xs" class="m-1.5" />
+					</Button>
+					{#if currentPage > 3}
+						<Button disabled={currentPage === 1} onclick={() => (currentPage = 1)}>1</Button>
+						<Button disabled>...</Button>
+					{/if}
 					{#each [currentPage - 2, currentPage - 1, currentPage, currentPage + 1, currentPage + 2].filter((page) => page > 0 && page <= totalPages) as pageNumber}
 						<Button disabled={currentPage === pageNumber} onclick={() => (currentPage = pageNumber)}
 							>{pageNumber}</Button
 						>
 					{/each}
-					<Button onclick={() => currentPage++} disabled={currentPage >= totalPages}
-						><ChevronRightOutline size="xs" class="m-1.5" /></Button
-					>
+					{#if currentPage < totalPages - 2}
+						<Button disabled>...</Button>
+						<Button disabled={currentPage === totalPages} onclick={() => (currentPage = totalPages)}
+							>{totalPages}</Button
+						>
+					{/if}
+					<Button onclick={() => currentPage++} disabled={currentPage >= totalPages}>
+						<ChevronRightOutline size="xs" class="m-1.5" />
+					</Button>
 				</ButtonGroup>
 			</div>
 		{/snippet}
