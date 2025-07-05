@@ -36,6 +36,7 @@
 		makeAccountColor,
 		makeCategoryColor
 	} from './expense_utils';
+	import ExpenseModal from './ExpenseModal.svelte';
 
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
@@ -45,6 +46,11 @@
 		{ field: 'status', direction: -1 },
 		{ field: 'bookingStart', direction: -1 }
 	]);
+
+	let showNewExpenseModal = $state(false);
+	const handleNewExpenseModalSubmit = () => {
+		alert('Form submited.');
+	};
 
 	let filteredAccounts = $state<string[]>([]);
 	let filteredCategories = $state<string[]>([]);
@@ -398,6 +404,13 @@
 	{/if}
 {/snippet}
 
+<ExpenseModal
+	bind:open={showNewExpenseModal}
+	user_name={$basicStore.data?.users.me?.name}
+	accounts={$basicStore.data?.accounts.list || []}
+	categories={$basicStore.data?.categories.list || []}
+/>
+
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5">
 	<TableSearch
 		placeholder="Suchen"
@@ -413,7 +426,7 @@
 			<div
 				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end space-y-2 md:w-auto md:flex-row md:items-center md:space-x-3 md:space-y-0"
 			>
-				<Button>
+				<Button onclick={() => (showNewExpenseModal = true)}>
 					<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
 				</Button>
 				<Datepicker
