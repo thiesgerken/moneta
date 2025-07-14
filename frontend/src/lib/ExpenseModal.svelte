@@ -1,19 +1,31 @@
 <script lang="ts">
-	import { Modal, Label, Input, Textarea, Button, Datepicker, Checkbox } from 'flowbite-svelte';
+	import {
+		Modal,
+		Label,
+		Input,
+		Textarea,
+		Button,
+		Datepicker,
+		Checkbox,
+		Select
+	} from 'flowbite-svelte';
+
+	import { graphql } from '$houdini';
+	import { formatAccount } from './expense_utils';
+	import { CircleMinusOutline, CirclePlusOutline } from 'flowbite-svelte-icons';
 
 	interface Props {
 		open?: boolean;
-
 		user_name: string | undefined;
 		accounts: {
-			readonly id: String;
-			readonly name: String;
+			readonly id: string;
+			readonly name: string;
 			readonly color: string | null;
-			readonly owner: { readonly name: String; readonly firstName: string | null };
+			readonly owner: { readonly name: string; readonly firstName: string | null };
 		}[];
 		categories: {
-			readonly id: String;
-			readonly name: String;
+			readonly id: string;
+			readonly name: string;
 			readonly color: string | null;
 		}[];
 	}
@@ -31,19 +43,66 @@
 	let referenceAmount: number | undefined = $state(undefined);
 	let bookingStart: Date | undefined = $state(undefined);
 	let bookingEnd: Date | undefined = $state(undefined);
-	let hasDifferentEndDate = $state(false);
 
-	const titleError = $derived(!title ? 'Titel ist erforderlich.' : '');
-	const storeError = $derived('');
-	const descriptionError = $derived('');
-	const referenceAmountError = $derived('');
-	const bookingStartError = $derived(!bookingStart ? 'Buchungsdatum ist erforderlich.' : '');
+	// Categories and transactions state
+	let expenseCategories = $state([{ categoryId: '', weight: 1 }]);
+	let transactions: {
+		date: Date | undefined;
+		accountId: string;
+		amount: string;
+		comments: string;
+		statement: string;
+	}[] = $state([{ date: undefined, accountId: '', amount: '', comments: '', statement: '' }]);
+
+	function addCategory() {
+		expenseCategories = [...expenseCategories, { categoryId: '', weight: 1 }];
+	}
+	function removeCategory(i: number) {
+		if (expenseCategories.length > 1) {
+			expenseCategories = expenseCategories.slice(0, i).concat(expenseCategories.slice(i + 1));
+		}
+	}
+	function addTransaction() {
+		transactions = [
+			...transactions,
+			{ date: undefined, accountId: '', amount: '', comments: '', statement: '' }
+		];
+	}
+	function removeTransaction(i: number) {
+		if (transactions.length > 1) {
+			transactions = transactions.slice(0, i).concat(transactions.slice(i + 1));
+		}
+	}
+
+	const titleError = $derived(!title);
+	const storeError = $derived(false);
+	const descriptionError = $derived(false);
+	const referenceAmountError = $derived(false);
+	const bookingStartError = $derived(!bookingStart);
 	const bookingEndError = $derived.by(() => {
-		if (!hasDifferentEndDate || !bookingStart) return '';
-		if (!bookingEnd) return 'kein Enddatum angegeben.';
-		if (bookingEnd < bookingStart) return 'Enddatum darf nicht vor dem Startdatum liegen.';
-		return '';
+		if (bookingStart && bookingEnd && bookingEnd < bookingStart) return true;
+		return false;
 	});
+
+	// Validation for categories and transactions
+	const categoryErrors = $derived.by(() => {
+		return expenseCategories.map((cat) => {
+			const errors: { categoryId?: boolean; weight?: boolean } = {};
+			if (!cat.categoryId) errors.categoryId = true;
+			if (!cat.weight || cat.weight < 1) errors.weight = true;
+			return errors;
+		});
+	});
+	const transactionErrors = $derived.by(() => {
+		return transactions.map((tx) => {
+			const errors: { accountId?: boolean; amount?: boolean; date?: boolean } = {};
+			if (!tx.accountId) errors.accountId = true;
+			if (tx.amount === '' || isNaN(Number(tx.amount))) errors.amount = true;
+			return errors;
+		});
+	});
+	const hasCategoryErrors = $derived(categoryErrors.some((e) => e.categoryId || e.weight));
+	const hasTransactionErrors = $derived(transactionErrors.some((e) => e.accountId || e.amount));
 	const formHasErrors = $derived(
 		!!(
 			titleError ||
@@ -51,15 +110,16 @@
 			descriptionError ||
 			referenceAmountError ||
 			bookingStartError ||
-			bookingEndError
+			bookingEndError ||
+			hasCategoryErrors ||
+			hasTransactionErrors
 		)
 	);
 
 	const handleSubmit = (event: Event) => {
 		event.preventDefault();
-
 		if (formHasErrors) return;
-		const endDate = hasDifferentEndDate ? bookingEnd : bookingStart;
+		const endDate = bookingEnd || bookingStart;
 		console.log({
 			title,
 			store,
@@ -72,11 +132,11 @@
 			isIncomplete,
 			referenceAmount,
 			bookingStart,
-			bookingEnd: endDate
+			bookingEnd: endDate,
+			expenseCategories,
+			transactions
 		});
 	};
-
-	import { graphql } from '$houdini';
 
 	//     mutation xx {
 	//   expenses {
@@ -99,71 +159,205 @@
 	`);
 </script>
 
-<Modal title="Neue Ausgabe" bind:open autoclose>
+<Modal title="Neue Ausgabe" bind:open>
 	<form onsubmit={handleSubmit}>
 		<div class="mb-4 grid gap-4 sm:grid-cols-2">
 			<div>
 				<Label for="title" class="mb-2">Titel</Label>
-				<Input type="text" id="title" placeholder="Titel" bind:value={title} required />
-				{#if titleError}<div class="text-sm text-red-600">{titleError}</div>{/if}
+				<Input
+					type="text"
+					id="title"
+					placeholder="Titel"
+					bind:value={title}
+					required
+					color={titleError ? 'red' : undefined}
+				/>
 			</div>
 			<div>
 				<Label for="store" class="mb-2">Geschäft</Label>
-				<Input type="text" id="store" placeholder="Geschäft" bind:value={store}  />
-				{#if storeError}<div class="text-sm text-red-600">{storeError}</div>{/if}
+				<Input
+					type="text"
+					clearable
+					id="store"
+					placeholder="Geschäft"
+					bind:value={store}
+					color={storeError ? 'red' : undefined}
+				/>
 			</div>
 			<div>
 				<Label for="referenceAmount" class="mb-2">Referenzbetrag</Label>
 				<Input
 					type="number"
+					clearable
 					id="referenceAmount"
 					placeholder="Betrag"
 					bind:value={referenceAmount}
 					min="0"
 					step="0.01"
+					color={referenceAmountError ? 'red' : undefined}
 				/>
-				{#if referenceAmountError}<div class="text-sm text-red-600">
-						{referenceAmountError}
-					</div>{/if}
 			</div>
 			<div class="sm:col-span-2">
 				<Label for="description" class="mb-2">Beschreibung</Label>
 				<Textarea
 					id="description"
+					clearable
 					placeholder="Beschreibung"
 					rows={2}
+					class="mb-2"
 					bind:value={description}
-
+					color={descriptionError ? 'red' : undefined}
 				/>
-				{#if descriptionError}<div class="text-sm text-red-600">{descriptionError}</div>{/if}
 			</div>
 			<div class="sm:col-span-2">
 				<Label for="comments" class="mb-2">Kommentare</Label>
-				<Textarea id="comments" placeholder="Kommentare" rows={2} bind:value={comments} />
+				<Textarea id="comments" clearable placeholder="Kommentare" rows={2} bind:value={comments} />
 			</div>
-			<div class="sm:col-span-2">
+			<div>
 				<Label class="mb-2 block">Buchungsbeginn</Label>
-				<Datepicker bind:value={bookingStart} placeholder="Startdatum wählen" />
-				{#if bookingStartError}<div class="text-sm text-red-600">{bookingStartError}</div>{/if}
+				<Datepicker
+					bind:value={bookingStart}
+					placeholder="Startdatum"
+					inputClass={bookingStartError ? 'border-red-600 bg-red-100 text-red-400' : ''}
+				/>
 			</div>
-			<div class="flex items-center gap-2 sm:col-span-2">
-				<Checkbox bind:checked={hasDifferentEndDate}>Abweichendes Enddatum</Checkbox>
+			<div>
+				<Label class="mb-2 block">Buchungsende</Label>
 				<Datepicker
 					bind:value={bookingEnd}
-					placeholder="Enddatum wählen"
-					disabled={!hasDifferentEndDate}
+					placeholder="optionales Enddatum"
+					inputClass={bookingEndError ? 'border-red-600 bg-red-100 text-red-400' : ''}
 				/>
-				{#if bookingEndError}<div class="text-sm text-red-600">{bookingEndError}</div>{/if}
 			</div>
-			<div class="sm:col-span-2">
+			<div>
 				<Label class="mb-2 block">Flags</Label>
 				<Checkbox bind:checked={isTemplate}>Vorlage</Checkbox>
 				<Checkbox bind:checked={isUnchecked}>Unbestätigt</Checkbox>
+			</div>
+			<div>
 				<Checkbox bind:checked={isIncomplete}>Unvollständig</Checkbox>
 				<Checkbox bind:checked={isExtraordinary}>Außergewöhnlich</Checkbox>
 				<Checkbox bind:checked={isTaxRelevant}>Steuerrelevant</Checkbox>
 			</div>
-			<div class="sm:col-span-2 justify-center">
+			{#each expenseCategories as cat, i}
+				{#if i === 0}
+					<div class="col-span-2">
+						<Label class="mb-2 block">Kategorien</Label>
+					</div>
+				{/if}
+				<div>
+					<Select
+						items={categories
+							.map((c) => ({ value: c.id, name: c.name }))
+							.filter((c) => !expenseCategories.some((ec, idx) => idx !== i && ec.categoryId === c.value))}
+						bind:value={cat.categoryId}
+						placeholder="Kategorie"
+						selectClass={categoryErrors[i]?.categoryId
+							? 'text-red-700 border-red-700 bg-red-100'
+							: undefined}
+					/>
+				</div>
+				<div class="flex gap-2">
+					<Input
+						type="number"
+						min="1"
+						class="w-3/4"
+						bind:value={cat.weight}
+						placeholder="Gewicht"
+						color={categoryErrors[i]?.weight ? 'red' : undefined}
+					/>
+					<Button
+						class="w-1/4"
+						onclick={(e: MouseEvent) => {
+							e.stopPropagation();
+							removeCategory(i);
+						}}
+						color={expenseCategories.length === 1 ? 'gray' : 'red'}
+						disabled={expenseCategories.length === 1}
+					>
+						<CircleMinusOutline class="h-5 w-5" />
+					</Button>
+				</div>
+			{/each}
+			<div class="col-span-2 mb-4">
+				<Button
+					class="mx-auto block w-24"
+					onclick={(e: MouseEvent) => {
+						e.stopPropagation();
+						addCategory();
+					}}><CirclePlusOutline class="h-5 w-5 block mx-auto" /></Button
+				>
+			</div>
+			<div class="mb-4 sm:col-span-2">
+				<Label class="mb-2 block">Transaktionen</Label>
+				{#each transactions as tx, i}
+					<div class="mb-2 flex items-center gap-2">
+						<Datepicker
+							class="mt-2"
+							bind:value={tx.date}
+							placeholder="Datum"
+							inputClass={transactionErrors[i]?.date
+								? 'border-red-600 bg-red-100 text-red-400'
+								: ''}
+						/>
+						<Select
+							class="mt-2"
+							items={accounts.map((a) => ({
+								value: a.id,
+								name: formatAccount(
+									{
+										name: a.name,
+										owner: { name: a.owner.name, firstName: a.owner.firstName }
+									},
+									user_name
+								)
+							}))}
+							bind:value={tx.accountId}
+							selectClass={transactionErrors[i]?.accountId
+								? 'text-red-700 border-red-700 bg-red-100'
+								: undefined}
+							placeholder="Konto wählen"
+						/>
+
+						<Input
+							type="number"
+							placeholder="Betrag"
+							bind:value={tx.amount}
+							class="w-24"
+							color={transactionErrors[i]?.amount ? 'red' : undefined}
+						/>
+						<Textarea
+							placeholder="Kommentar"
+							clearable
+							bind:value={tx.comments}
+							class="w-32"
+							rows={2}
+						/>
+						<Textarea
+							placeholder="Statement"
+							clearable
+							bind:value={tx.statement}
+							class="w-32"
+							rows={2}
+						/>
+						<Button
+							onclick={(e: MouseEvent) => {
+								e.stopPropagation();
+								removeTransaction(i);
+							}}
+							color={transactions.length === 1 ? 'gray' : 'red'}
+							disabled={transactions.length === 1}>Löschen</Button
+						>
+					</div>
+				{/each}
+				<Button
+					onclick={(e: MouseEvent) => {
+						e.stopPropagation();
+						addTransaction();
+					}}>Transaktion hinzufügen</Button
+				>
+			</div>
+			<div class="justify-center sm:col-span-2">
 				<Button type="submit" class="w-full" disabled={formHasErrors}>
 					<svg
 						class="-ml-1 mr-1 h-6 w-6"

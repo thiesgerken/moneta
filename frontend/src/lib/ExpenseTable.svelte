@@ -30,7 +30,7 @@
 	import {
 		accountSorter,
 		categorySorter,
-		formatAccounts,
+		formatTransactionAccounts,
 		formatBookingPeriod,
 		formatCategories,
 		makeAccountColor,
@@ -407,8 +407,17 @@
 <ExpenseModal
 	bind:open={showNewExpenseModal}
 	user_name={$basicStore.data?.users.me?.name}
-	accounts={$basicStore.data?.accounts.list || []}
-	categories={$basicStore.data?.categories.list || []}
+	accounts={$basicStore.data?.accounts.list.map((a) => ({
+		id: a.id.toString(),
+		name: a.name,
+		owner: { name: a.owner.name, firstName: a.owner.firstName },
+		color: a.color
+	})) || []}
+	categories={$basicStore.data?.categories.list.map((c) => ({
+		id: c.id.toString(),
+		name: c.name,
+		color: c.color
+	})) || []}
 />
 
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5">
@@ -551,7 +560,10 @@
 					<TableBodyCell
 						class="max-w-64 truncate px-4 py-3 text-black"
 						style={makeAccountColor(expense.transactions, expense.referenceAmount)}
-						>{formatAccounts(expense.transactions, $basicStore.data?.users.me.name)}</TableBodyCell
+						>{formatTransactionAccounts(
+							expense.transactions,
+							$basicStore.data?.users.me.name
+						)}</TableBodyCell
 					>
 					<TableBodyCell
 						class="max-w-64 truncate px-4 py-3 text-black"

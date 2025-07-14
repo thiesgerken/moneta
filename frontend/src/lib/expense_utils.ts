@@ -14,7 +14,16 @@ export function formatBookingPeriod(begin: Date, end: Date, time: boolean = fals
 	return `${begin.toLocaleString('de-DE', fmt)} - ${end.toLocaleString('de-DE', fmt)}`;
 }
 
-export function formatAccounts(
+export function formatAccount(
+	account: { name: string; owner: { name: string; firstName: string | null } },
+	user_name: string | undefined
+) {
+	return user_name == account.owner.name
+		? account.name
+		: `${account.owner.firstName || account.owner.name} / ${account.name}`;
+}
+
+export function formatTransactionAccounts(
 	transactions: {
 		effectiveAmount: number;
 		account: { name: string; owner: { name: string; firstName: string | null } };
@@ -23,10 +32,7 @@ export function formatAccounts(
 ) {
 	const accountSums = transactions.reduce(
 		(sums, transaction) => {
-			const accountName =
-				user_name == transaction.account.owner.name
-					? transaction.account.name
-					: `${transaction.account.owner.firstName || transaction.account.owner.name} / ${transaction.account.name}`;
+			const accountName = formatAccount(transaction.account, user_name);
 			sums[accountName] = (sums[accountName] || 0) + transaction.effectiveAmount;
 			return sums;
 		},
@@ -122,7 +128,6 @@ export function makeStripedBackground(segments: { color: string; percentage: num
 	return s + ');';
 }
 
-
 export interface SortableAccount {
 	readonly name: string;
 	readonly owner: {
@@ -132,11 +137,10 @@ export interface SortableAccount {
 }
 
 export function accountSorter(a: SortableAccount, b: SortableAccount, user_name: string) {
-
 	const aBelongsToMe = a.owner.name == user_name;
 	const bBelongsToMe = b.owner.name == user_name;
 
-	if (aBelongsToMe &&  !bBelongsToMe) return -1;
+	if (aBelongsToMe && !bBelongsToMe) return -1;
 	if (!aBelongsToMe && bBelongsToMe) return 1;
 
 	if (a.owner.name != b.owner.name) {
@@ -147,10 +151,10 @@ export function accountSorter(a: SortableAccount, b: SortableAccount, user_name:
 	if (!a.closed && b.closed) return -1;
 
 	return a.name.localeCompare(b.name);
-};
+}
 
 export interface SortableCategory {
-readonly name: string;
+	readonly name: string;
 }
 
 export function categorySorter(a: SortableCategory, b: SortableCategory) {
