@@ -203,7 +203,7 @@
 					id="description"
 					clearable
 					placeholder="Beschreibung"
-					rows={2}
+					rows={description ? 5 : 1}
 					class="mb-2"
 					bind:value={description}
 					color={descriptionError ? 'red' : undefined}
@@ -211,7 +211,13 @@
 			</div>
 			<div class="sm:col-span-2">
 				<Label for="comments" class="mb-2">Kommentare</Label>
-				<Textarea id="comments" clearable placeholder="Kommentare" rows={2} bind:value={comments} />
+				<Textarea
+					id="comments"
+					clearable
+					placeholder="Kommentare"
+					rows={comments ? 5 : 1}
+					bind:value={comments}
+				/>
 			</div>
 			<div>
 				<Label class="mb-2 block">Buchungsbeginn</Label>
@@ -239,6 +245,8 @@
 				<Checkbox bind:checked={isExtraordinary}>Außergewöhnlich</Checkbox>
 				<Checkbox bind:checked={isTaxRelevant}>Steuerrelevant</Checkbox>
 			</div>
+			<!-- TODO: support positions -->
+			<!-- TODO: support receipts -->
 			{#each expenseCategories as cat, i}
 				{#if i === 0}
 					<div class="col-span-2">
@@ -249,7 +257,9 @@
 					<Select
 						items={categories
 							.map((c) => ({ value: c.id, name: c.name }))
-							.filter((c) => !expenseCategories.some((ec, idx) => idx !== i && ec.categoryId === c.value))}
+							.filter(
+								(c) => !expenseCategories.some((ec, idx) => idx !== i && ec.categoryId === c.value)
+							)}
 						bind:value={cat.categoryId}
 						placeholder="Kategorie"
 						selectClass={categoryErrors[i]?.categoryId
@@ -285,12 +295,15 @@
 					onclick={(e: MouseEvent) => {
 						e.stopPropagation();
 						addCategory();
-					}}><CirclePlusOutline class="h-5 w-5 block mx-auto" /></Button
+					}}><CirclePlusOutline class="mx-auto block h-5 w-5" /></Button
 				>
 			</div>
 			<div class="mb-4 sm:col-span-2">
 				<Label class="mb-2 block">Transaktionen</Label>
 				{#each transactions as tx, i}
+					{#if i > 0}
+						<div class="my-4 border-t border-gray-200"></div>
+					{/if}
 					<div class="mb-2 flex items-center gap-2">
 						<Datepicker
 							class="mt-2"
@@ -318,28 +331,6 @@
 								: undefined}
 							placeholder="Konto wählen"
 						/>
-
-						<Input
-							type="number"
-							placeholder="Betrag"
-							bind:value={tx.amount}
-							class="w-24"
-							color={transactionErrors[i]?.amount ? 'red' : undefined}
-						/>
-						<Textarea
-							placeholder="Kommentar"
-							clearable
-							bind:value={tx.comments}
-							class="w-32"
-							rows={2}
-						/>
-						<Textarea
-							placeholder="Statement"
-							clearable
-							bind:value={tx.statement}
-							class="w-32"
-							rows={2}
-						/>
 						<Button
 							onclick={(e: MouseEvent) => {
 								e.stopPropagation();
@@ -348,6 +339,32 @@
 							color={transactions.length === 1 ? 'gray' : 'red'}
 							disabled={transactions.length === 1}>Löschen</Button
 						>
+					</div>
+					<div class="mb-2 flex items-center gap-2">
+						<Input
+							type="number"
+							placeholder="Betrag"
+							bind:value={tx.amount}
+							class="w-24"
+							color={transactionErrors[i]?.amount ? 'red' : undefined}
+						/>
+						<!-- TODO: need to switch between fixed amount and percentage of reference amount -->
+					</div>
+					<div class="mb-2 flex items-center gap-2">
+						<Textarea
+							placeholder="Kommentar"
+							clearable
+							bind:value={tx.comments}
+							class="w-78"
+							rows={tx.statement || tx.comments ? 5 : 1}
+						/>
+						<Textarea
+							placeholder="Transaktionstext"
+							clearable
+							bind:value={tx.statement}
+							class="w-78 font-mono"
+							rows={tx.statement || tx.comments ? 5 : 1}
+						/>
 					</div>
 				{/each}
 				<Button
