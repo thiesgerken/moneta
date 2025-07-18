@@ -385,23 +385,22 @@
 						>
 					</div>
 					<div class="mb-2 flex items-center gap-2">
-						<div class="relative w-24">
-							<Input
-								type="number"
-								placeholder="0"
-								bind:value={tx.amount}
-								class="no-spinner pr-6"
-								color={transactionErrors[i]?.amount ? 'red' : undefined}
-								disabled={tx.isRelative}
-							/>
-							<span
-								class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
-								>€</span
-							>
-						</div>
-						<Checkbox bind:checked={tx.isRelative}>Relativ</Checkbox>
-						{#if tx.isRelative}
-							<div class="relative w-20">
+						{#if !tx.isRelative}
+							<div class="relative w-48">
+								<Input
+									type="number"
+									placeholder="0"
+									bind:value={tx.amount}
+									class="no-spinner pr-6"
+									color={transactionErrors[i]?.amount ? 'red' : undefined}
+								/>
+								<span
+									class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+									>€</span
+								>
+							</div>
+						{:else}
+							<div class="relative w-32">
 								<Input
 									type="number"
 									placeholder="0"
@@ -417,12 +416,13 @@
 									>%</span
 								>
 							</div>
-							<span class="text-sm text-gray-600">
+							<span class="text-sm text-gray-600 w-16">
 								= {referenceAmount && tx.percentage
 									? ((Number(tx.percentage) / 100) * referenceAmount).toFixed(2)
 									: '0.00'} €
 							</span>
 						{/if}
+						<Checkbox bind:checked={tx.isRelative} class="ml-3">Relativ</Checkbox>
 					</div>
 					<div class="mb-2 flex items-center gap-2">
 						<Textarea
