@@ -233,7 +233,7 @@
 						bind:value={referenceAmount}
 						min="0"
 						step="0.01"
-						class="pr-6"
+						class="no-spinner pr-6"
 						color={referenceAmountError ? 'red' : undefined}
 					/>
 					<span class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
@@ -315,7 +315,7 @@
 					<Input
 						type="number"
 						min="1"
-						class="w-3/4"
+						class="no-spinner w-3/4"
 						bind:value={cat.weight}
 						placeholder="Gewicht"
 						color={categoryErrors[i]?.weight ? 'red' : undefined}
@@ -390,7 +390,7 @@
 								type="number"
 								placeholder="0"
 								bind:value={tx.amount}
-								class="pr-6"
+								class="no-spinner pr-6"
 								color={transactionErrors[i]?.amount ? 'red' : undefined}
 								disabled={tx.isRelative}
 							/>
@@ -406,7 +406,7 @@
 									type="number"
 									placeholder="0"
 									bind:value={tx.percentage}
-									class="pr-6"
+									class="no-spinner pr-6"
 									color={transactionErrors[i]?.percentage ? 'red' : undefined}
 									min="0"
 									max="100"
@@ -467,3 +467,15 @@
 		</div>
 	</form>
 </Modal>
+
+<style>
+	:global(.no-spinner::-webkit-outer-spin-button),
+	:global(.no-spinner::-webkit-inner-spin-button) {
+		-webkit-appearance: none;
+		margin: 0;
+	}
+	:global(.no-spinner) {
+		-moz-appearance: textfield;
+		appearance: textfield;
+	}
+</style>
