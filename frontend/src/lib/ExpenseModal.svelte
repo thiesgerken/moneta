@@ -52,7 +52,19 @@
 		amount: string;
 		comments: string;
 		statement: string;
-	}[] = $state([{ date: undefined, accountId: '', amount: '', comments: '', statement: '' }]);
+		isRelative: boolean;
+		percentage: string;
+	}[] = $state([
+		{
+			date: undefined,
+			accountId: '',
+			amount: '',
+			comments: '',
+			statement: '',
+			isRelative: false,
+			percentage: ''
+		}
+	]);
 
 	function addCategory() {
 		expenseCategories = [...expenseCategories, { categoryId: '', weight: 1 }];
@@ -65,7 +77,15 @@
 	function addTransaction() {
 		transactions = [
 			...transactions,
-			{ date: undefined, accountId: '', amount: '', comments: '', statement: '' }
+			{
+				date: undefined,
+				accountId: '',
+				amount: '',
+				comments: '',
+				statement: '',
+				isRelative: false,
+				percentage: ''
+			}
 		];
 	}
 	function removeTransaction(i: number) {
@@ -77,7 +97,14 @@
 	const titleError = $derived(!title);
 	const storeError = $derived(false);
 	const descriptionError = $derived(false);
-	const referenceAmountError = $derived(false);
+	const referenceAmountError = $derived.by(() => {
+		const hasRelativeTransactions = transactions.some((tx) => tx.isRelative);
+		if (hasRelativeTransactions) {
+			return !referenceAmount; // Must be provided when relative transactions exist
+		} else {
+			return !!referenceAmount; // Must NOT be provided when no relative transactions
+		}
+	});
 	const bookingStartError = $derived(!bookingStart);
 	const bookingEndError = $derived.by(() => {
 		if (bookingStart && bookingEnd && bookingEnd < bookingStart) return true;
@@ -95,14 +122,25 @@
 	});
 	const transactionErrors = $derived.by(() => {
 		return transactions.map((tx) => {
-			const errors: { accountId?: boolean; amount?: boolean; date?: boolean } = {};
+			const errors: {
+				accountId?: boolean;
+				amount?: boolean;
+				date?: boolean;
+				percentage?: boolean;
+			} = {};
 			if (!tx.accountId) errors.accountId = true;
-			if (tx.amount === '' || isNaN(Number(tx.amount))) errors.amount = true;
+			if (tx.isRelative) {
+				if (tx.percentage === '' || isNaN(Number(tx.percentage))) errors.percentage = true;
+			} else {
+				if (tx.amount === '' || isNaN(Number(tx.amount))) errors.amount = true;
+			}
 			return errors;
 		});
 	});
 	const hasCategoryErrors = $derived(categoryErrors.some((e) => e.categoryId || e.weight));
-	const hasTransactionErrors = $derived(transactionErrors.some((e) => e.accountId || e.amount));
+	const hasTransactionErrors = $derived(
+		transactionErrors.some((e) => e.accountId || e.amount || e.percentage)
+	);
 	const formHasErrors = $derived(
 		!!(
 			titleError ||
@@ -186,16 +224,22 @@
 			</div>
 			<div>
 				<Label for="referenceAmount" class="mb-2">Referenzbetrag</Label>
-				<Input
-					type="number"
-					clearable
-					id="referenceAmount"
-					placeholder="Betrag"
-					bind:value={referenceAmount}
-					min="0"
-					step="0.01"
-					color={referenceAmountError ? 'red' : undefined}
-				/>
+				<div class="relative">
+					<Input
+						type="number"
+						clearable
+						id="referenceAmount"
+						placeholder="0"
+						bind:value={referenceAmount}
+						min="0"
+						step="0.01"
+						class="pr-6"
+						color={referenceAmountError ? 'red' : undefined}
+					/>
+					<span class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+						>€</span
+					>
+				</div>
 			</div>
 			<div class="sm:col-span-2">
 				<Label for="description" class="mb-2">Beschreibung</Label>
@@ -341,14 +385,44 @@
 						>
 					</div>
 					<div class="mb-2 flex items-center gap-2">
-						<Input
-							type="number"
-							placeholder="Betrag"
-							bind:value={tx.amount}
-							class="w-24"
-							color={transactionErrors[i]?.amount ? 'red' : undefined}
-						/>
-						<!-- TODO: need to switch between fixed amount and percentage of reference amount -->
+						<div class="relative w-24">
+							<Input
+								type="number"
+								placeholder="0"
+								bind:value={tx.amount}
+								class="pr-6"
+								color={transactionErrors[i]?.amount ? 'red' : undefined}
+								disabled={tx.isRelative}
+							/>
+							<span
+								class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+								>€</span
+							>
+						</div>
+						<Checkbox bind:checked={tx.isRelative}>Relativ</Checkbox>
+						{#if tx.isRelative}
+							<div class="relative w-20">
+								<Input
+									type="number"
+									placeholder="0"
+									bind:value={tx.percentage}
+									class="pr-6"
+									color={transactionErrors[i]?.percentage ? 'red' : undefined}
+									min="0"
+									max="100"
+									step="0.01"
+								/>
+								<span
+									class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+									>%</span
+								>
+							</div>
+							<span class="text-sm text-gray-600">
+								= {referenceAmount && tx.percentage
+									? ((Number(tx.percentage) / 100) * referenceAmount).toFixed(2)
+									: '0.00'} €
+							</span>
+						{/if}
 					</div>
 					<div class="mb-2 flex items-center gap-2">
 						<Textarea
