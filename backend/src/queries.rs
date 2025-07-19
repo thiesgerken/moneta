@@ -2,7 +2,7 @@ use futures::TryStreamExt;
 use mongodb::bson::{doc, oid::ObjectId};
 use serde::de::DeserializeOwned;
 
-use crate::models::{Account, User};
+use crate::models::{Account, Category, User};
 
 pub mod optional_chrono_datetime_as_bson_datetime {
     use chrono::Utc;
@@ -68,4 +68,16 @@ pub async fn query_user_by_name(
     let collection = connection.collection::<User>("users");
     let filter = doc! {"name":user_name};
     collection.find_one(filter).await
+}
+
+pub async fn query_categories(
+    connection: &mongodb::Database,
+) -> Result<Vec<Category>, mongodb::error::Error> {
+    let collection = connection.collection::<Category>("categories");
+    collection
+        .find(doc! {})
+        .projection(doc! {"_id": 1})
+        .await?
+        .try_collect::<Vec<_>>()
+        .await
 }

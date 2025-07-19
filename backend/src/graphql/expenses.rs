@@ -6,6 +6,7 @@ use crate::graphql::root::Context;
 use crate::graphql::root::require_user;
 use crate::graphql::users::GraphQLUserInfo;
 use crate::graphql::util::{self};
+use crate::models::Category;
 use crate::models::ExpenseCategorization;
 use crate::models::ExpenseChangelogEntry;
 use crate::models::ExpensePosition;
@@ -421,7 +422,8 @@ impl ExpenseMutation {
             expense.transactions.iter().map(|t| *t.account_id).collect();
         let related_accounts =
             queries::query_associated_accounts(&context.connection, &occurring_account_ids).await?;
-        let entry = validate_and_unrender(user_id, expense, &related_accounts).await?;
+        let categories = queries::query_categories(&context.connection).await?;
+        let entry = validate_and_unrender(user_id, expense, &related_accounts, &categories).await?;
 
         collection.insert_one(&entry).await?;
 
@@ -465,9 +467,10 @@ impl ExpenseMutation {
             expense.transactions.iter().map(|t| *t.account_id).collect();
         let related_accounts =
             queries::query_associated_accounts(&context.connection, &occurring_account_ids).await?;
+        let categories = queries::query_categories(&context.connection).await?;
 
         let mut updated_upstream_entry =
-            validate_and_unrender(user_id, expense, &related_accounts).await?;
+            validate_and_unrender(user_id, expense, &related_accounts, &categories).await?;
 
         // find the original upstream expense
         let upstream_collection = context.connection.collection::<Expense>("expenses");
@@ -525,6 +528,7 @@ pub async fn validate_and_unrender(
     uid: ObjectId,
     expense: RenderedExpenseInput,
     related_accounts: &[Account],
+    categories: &[Category],
 ) -> Result<Expense, Box<dyn Error>> {
     if expense
         .transactions
@@ -550,7 +554,7 @@ pub async fn validate_and_unrender(
         .categories
         .iter()
         .map(|c| c.category_id)
-        .any(|a_id| !related_accounts.iter().any(|a| *a.id == *a_id))
+        .any(|a_id| !categories.iter().any(|a| *a.id == *a_id))
     {
         return Err(format!(
             "user {:?} tried to create an expense with unknown category id(s)",
