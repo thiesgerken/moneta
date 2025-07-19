@@ -305,7 +305,8 @@
 							positions {
 								title
 								amount
-								units
+								quantity
+								unit
 								comments
 							}
 							categories {
@@ -583,7 +584,8 @@
 						>{expense.description}
 						{expense.positions
 							.map(
-								(position) => `${position.units > 1 ? position.units + 'x ' : ''}${position.title}`
+								(position) =>
+									`${position.quantity ? position.quantity + (position.unit ? ' ' + position.unit : '') : ''}${position.title}`
 							)
 							.join(', ')}
 					</TableBodyCell>
@@ -669,8 +671,11 @@
 										<ul class="ml-6 list-disc">
 											{#each expense.positions as position}
 												<li>
-													{#if position.units > 1}
-														{position.units}x
+													{#if position.quantity && position.quantity > 1}
+														{position.quantity}
+														{#if position.unit}
+															{position.unit}
+														{/if}
 													{/if}
 													{position.title}
 													{#if position.amount}

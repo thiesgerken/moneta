@@ -268,15 +268,17 @@ type ExpenseNode {
 type ExpensePosition {
   amount: Int
   comments: String!
+  quantity: Float
   title: String!
-  units: Float!
+  unit: String
 }
 
 input ExpensePositionInput {
   amount: Int
   comments: String!
+  quantity: Float
   title: String!
-  units: Float!
+  unit: String
 }
 
 type ExpenseQuery {
