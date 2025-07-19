@@ -16,8 +16,8 @@ impl Expense {
             return Err("Expense categorizations must have positive weights".into());
         }
 
-        if self.positions.iter().any(|p| p.units <= 0.0) {
-            return Err("Expense positions must have positive units".into());
+        if self.positions.iter().any(|p| p.quantity.map(|x| x <= 0.0).unwrap_or(false)) {
+            return Err("Expense positions must have positive quantity".into());
         }
 
         if self.transactions.is_empty() {
@@ -122,8 +122,9 @@ pub struct ExpenseCategorization {
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpensePosition {
-    pub amount: Option<i32>,
-    pub units: f64,
+    pub amount: Option<i32>,   // total amount of the position
+    pub quantity: Option<f64>, // how many things
+    pub unit: Option<String>,  // how is "quantity" measured?
     pub title: String,
     pub comments: String,
 }
@@ -131,7 +132,8 @@ pub struct ExpensePosition {
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseReceipt {
-    pub uri: String, /// can be a local file or e.g. a reference to a document in a dms
+    pub uri: String,
+    /// can be a local file or e.g. a reference to a document in a dms
     pub ocr: Option<String>,
 }
 
@@ -165,7 +167,8 @@ pub struct ExpenseCategorizationInput {
 #[serde(rename_all = "camelCase")]
 pub struct ExpensePositionInput {
     pub amount: Option<i32>,
-    pub units: f64,
+    pub quantity: Option<f64>,
+    pub unit: Option<String>,
     pub title: String,
     pub comments: String,
 }
@@ -202,7 +205,8 @@ impl ExpensePositionInput {
     pub fn upgrade(self) -> ExpensePosition {
         ExpensePosition {
             amount: self.amount,
-            units: self.units,
+            quantity: self.quantity,
+            unit: self.unit,
             title: self.title,
             comments: self.comments,
         }
