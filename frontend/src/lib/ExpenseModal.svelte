@@ -10,7 +10,7 @@
 		Select
 	} from 'flowbite-svelte';
 
-	import { graphql } from '$houdini';
+	import { graphql, type ExpenseInput } from '$houdini';
 	import { formatAccount } from './expense_utils';
 	import { CircleMinusOutline, CirclePlusOutline } from 'flowbite-svelte-icons';
 
@@ -45,12 +45,11 @@
 	let bookingEnd: Date | undefined = $state(undefined);
 
 	// Categories and transactions state
-	let expenseCategories = $state([{ categoryId: '', weight: 1 }]);
+	let expenseCategories = $state([{ categoryId: '', weight: '1' }]);
 	let transactions: {
 		date: Date | undefined;
 		accountId: string;
 		amount: string;
-		comments: string;
 		statement: string;
 		isRelative: boolean;
 		percentage: string;
@@ -59,7 +58,6 @@
 			date: undefined,
 			accountId: '',
 			amount: '',
-			comments: '',
 			statement: '',
 			isRelative: false,
 			percentage: ''
@@ -73,18 +71,10 @@
 		quantity: string;
 		unit: string;
 		comments: string;
-	}[] = $state([
-		{
-			title: '',
-			totalAmount: '',
-			quantity: '',
-			unit: '',
-			comments: ''
-		}
-	]);
+	}[] = $state([]);
 
 	function addCategory() {
-		expenseCategories = [...expenseCategories, { categoryId: '', weight: 1 }];
+		expenseCategories = [...expenseCategories, { categoryId: '', weight: '1' }];
 	}
 	function removeCategory(i: number) {
 		if (expenseCategories.length > 1) {
@@ -98,7 +88,6 @@
 				date: undefined,
 				accountId: '',
 				amount: '',
-				comments: '',
 				statement: '',
 				isRelative: false,
 				percentage: ''
@@ -123,7 +112,7 @@
 		];
 	}
 	function removePosition(i: number) {
-		if (positions.length > 1) {
+		if (positions.length > 0) {
 			positions = positions.slice(0, i).concat(positions.slice(i + 1));
 		}
 	}
@@ -149,7 +138,7 @@
 		return expenseCategories.map((cat) => {
 			const errors: { categoryId?: boolean; weight?: boolean } = {};
 			if (!cat.categoryId) errors.categoryId = true;
-			if (!cat.weight || cat.weight < 1) errors.weight = true;
+			if (cat.weight && (isNaN(Number(cat.weight)) || Number(cat.weight) < 1)) errors.weight = true;
 			return errors;
 		});
 	});
@@ -174,7 +163,7 @@
 	const hasTransactionErrors = $derived(
 		transactionErrors.some((e) => e.accountId || e.amount || e.percentage)
 	);
-  	const positionErrors = $derived.by(() => {
+	const positionErrors = $derived.by(() => {
 		return positions.map((pos) => {
 			const errors: {
 				title?: boolean;
@@ -182,8 +171,8 @@
 				quantity?: boolean;
 			} = {};
 			if (!pos.title) errors.title = true;
-			if (!pos.totalAmount || isNaN(Number(pos.totalAmount))) errors.totalAmount = true;
-			if (!pos.quantity || isNaN(Number(pos.quantity))) errors.quantity = true;
+			if (pos.totalAmount && isNaN(Number(pos.totalAmount))) errors.totalAmount = true;
+			if (pos.quantity && isNaN(Number(pos.quantity))) errors.quantity = true;
 			return errors;
 		});
 	});
@@ -207,8 +196,10 @@
 	const handleSubmit = (event: Event) => {
 		event.preventDefault();
 		if (formHasErrors) return;
+
 		const endDate = bookingEnd || bookingStart;
-		console.log({
+
+		const input: ExpenseInput = {
 			title,
 			store,
 			description,
@@ -219,12 +210,32 @@
 			isTaxRelevant,
 			isIncomplete,
 			referenceAmount,
-			bookingStart,
-			bookingEnd: endDate,
-			expenseCategories,
-			transactions,
-			positions
-		});
+			bookingStart: bookingStart!,
+			bookingEnd: endDate!,
+			receipts: [],
+			categories: expenseCategories.map((cat) => ({
+				categoryId: cat.categoryId,
+				weight: cat.weight ? Number(cat.weight) : 1
+			})),
+			transactions: transactions.map((tx) => ({
+				date: tx.date || bookingStart!,
+				accountId: tx.accountId,
+				amount: !tx.isRelative ? Number(tx.amount) : undefined,
+				percentage: tx.isRelative ? Number(tx.percentage) : undefined,
+				statement: tx.statement,
+				comments: ''
+			})),
+			positions: positions.map((pos) => ({
+				title: pos.title,
+				amount: pos.totalAmount ? Number(pos.totalAmount) : undefined,
+				quantity: pos.quantity ? Number(pos.quantity) : undefined,
+				unit: pos.unit || undefined,
+				comments: pos.comments
+			}))
+		};
+
+		console.log(input);
+		CreateExpense.mutate({ input });
 	};
 
 	//     mutation xx {
@@ -322,7 +333,6 @@
 				<Checkbox bind:checked={isExtraordinary}>Außergewöhnlich</Checkbox>
 				<Checkbox bind:checked={isTaxRelevant}>Steuerrelevant</Checkbox>
 			</div>
-			<!-- TODO: support positions -->
 			<!-- TODO: support receipts -->
 
 			{#if transactions.filter((tx) => tx.isRelative).length > 0}
@@ -350,195 +360,29 @@
 
 			<div class="mb-4 sm:col-span-2">
 				<Label class="mb-2 block">Transaktionen</Label>
-				{#each transactions as tx, i}
-					{#if i > 0}
-						<div class="my-4 border-t border-gray-200"></div>
-					{/if}
-					<div class="mb-2 flex items-center gap-2">
-						<Datepicker
-							bind:value={tx.date}
-							placeholder="Datum"
-							inputClass={transactionErrors[i]?.date
-								? 'border-red-600 bg-red-100 text-red-400'
-								: ''}
-						/>
-						<Select
-							items={accounts.map((a) => ({
-								value: a.id,
-								name: formatAccount(
-									{
-										name: a.name,
-										owner: { name: a.owner.name, firstName: a.owner.firstName }
-									},
-									user_name
-								)
-							}))}
-							bind:value={tx.accountId}
-							selectClass={transactionErrors[i]?.accountId
-								? 'text-red-700 border-red-700 bg-red-100'
-								: undefined}
-							placeholder="Konto wählen"
-						/>
-
-						<Button
-							class="w-1/4"
-							onclick={(e: MouseEvent) => {
-								e.stopPropagation();
-								removeTransaction(i);
-							}}
-							color={transactions.length === 1 ? 'gray' : 'red'}
-							disabled={transactions.length === 1}
-						>
-							<CircleMinusOutline class="h-5 w-5" />
-						</Button>
-					</div>
-					<div class="mb-2 flex items-center gap-2">
-						{#if !tx.isRelative}
-							<div class="relative w-32">
-								<Input
-									type="number"
-									placeholder="0"
-									bind:value={tx.amount}
-									class="no-spinner pr-6"
-									color={transactionErrors[i]?.amount ? 'red' : undefined}
-								/>
-								<span
-									class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
-									>€</span
-								>
-							</div>
-							<span class="w-16 text-sm text-gray-600"> </span>
-						{:else}
-							<div class="relative w-32">
-								<Input
-									type="number"
-									placeholder="0"
-									bind:value={tx.percentage}
-									class="no-spinner pr-6"
-									color={transactionErrors[i]?.percentage ? 'red' : undefined}
-									min="0"
-									max="100"
-									step="0.01"
-								/>
-								<span
-									class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
-									>%</span
-								>
-							</div>
-							<span class="w-16 text-sm text-gray-600">
-								= {referenceAmount && tx.percentage
-									? ((Number(tx.percentage) / 100) * referenceAmount).toFixed(2)
-									: '0.00'} €
-							</span>
-						{/if}
-						<Checkbox bind:checked={tx.isRelative} class="ml-3">Relativ</Checkbox>
-					</div>
-					<div class="mb-2 flex items-center gap-2">
-						<Textarea
-							placeholder="Kommentar"
-							clearable
-							bind:value={tx.comments}
-							class="w-78"
-							rows={tx.statement || tx.comments ? 5 : 1}
-						/>
-						<Textarea
-							placeholder="Transaktionstext"
-							clearable
-							bind:value={tx.statement}
-							class="w-78 font-mono"
-							rows={tx.statement || tx.comments ? 5 : 1}
-						/>
-					</div>
-				{/each}
-			</div>
-
-			<div class="col-span-2 mb-4">
-				<Button
-					class="mx-auto block w-24"
-					onclick={(e: MouseEvent) => {
-						e.stopPropagation();
-						addTransaction();
-					}}><CirclePlusOutline class="mx-auto block h-5 w-5" /></Button
-				>
-			</div>
-
-			{#each expenseCategories as cat, i}
-				{#if i === 0}
-					<div class="col-span-2">
-						<Label class="mb-2 block">Kategorien</Label>
-					</div>
-				{/if}
-				<div>
-					<Select
-						items={categories
-							.map((c) => ({ value: c.id, name: c.name }))
-							.filter(
-								(c) => !expenseCategories.some((ec, idx) => idx !== i && ec.categoryId === c.value)
-							)}
-						bind:value={cat.categoryId}
-						placeholder="Kategorie"
-						selectClass={categoryErrors[i]?.categoryId
-							? 'text-red-700 border-red-700 bg-red-100'
-							: undefined}
-					/>
-				</div>
-				<div class="flex gap-2">
-					<Input
-						type="number"
-						min="1"
-						class="no-spinner w-3/4"
-						bind:value={cat.weight}
-						placeholder="Gewicht"
-						color={categoryErrors[i]?.weight ? 'red' : undefined}
-					/>
-					<Button
-						class="w-1/4"
-						onclick={(e: MouseEvent) => {
-							e.stopPropagation();
-							removeCategory(i);
-						}}
-						color={expenseCategories.length === 1 ? 'gray' : 'red'}
-						disabled={expenseCategories.length === 1}
-					>
-						<CircleMinusOutline class="h-5 w-5" />
-					</Button>
-				</div>
-			{/each}
-			<div class="col-span-2 mb-4">
-				<Button
-					class="mx-auto block w-24"
-					onclick={(e: MouseEvent) => {
-						e.stopPropagation();
-						addCategory();
-					}}><CirclePlusOutline class="mx-auto block h-5 w-5" /></Button
-				>
-			</div>
-
-			<div class="mb-4 sm:col-span-2">
-				<Label class="mb-2 block">Positionen</Label>
 				<div class="overflow-x-auto">
 					<table class="w-full border-collapse border border-gray-300">
 						<thead>
 							<tr class="bg-gray-50">
 								<th
 									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>Titel</th
+									>Datum</th
 								>
 								<th
 									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>Gesamtbetrag (€)</th
+									>Konto</th
 								>
 								<th
 									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>Menge</th
+									>Relativ</th
 								>
 								<th
 									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>Einheit</th
+									>Betrag</th
 								>
 								<th
 									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>Kommentare</th
+									>Transaktionstext</th
 								>
 								<th
 									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
@@ -547,64 +391,97 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each positions as pos, i}
+							{#each transactions as tx, i}
 								<tr>
 									<td class="border border-gray-300 px-3 py-2">
-										<Input
-											type="text"
-											placeholder="Titel"
-											bind:value={pos.title}
-											class="w-full"
-											color={positionErrors[i]?.title ? 'red' : undefined}
+										<Datepicker
+											bind:value={tx.date}
+											placeholder="Datum"
+											inputClass={transactionErrors[i]?.date
+												? 'border-red-600 bg-red-100 text-red-400'
+												: ''}
 										/>
 									</td>
 									<td class="border border-gray-300 px-3 py-2">
-										<div class="relative">
-											<Input
-												type="number"
-												placeholder="0.00"
-												bind:value={pos.totalAmount}
-												class="no-spinner w-full pr-6"
-												min="0"
-												step="0.01"
-												color={positionErrors[i]?.totalAmount ? 'red' : undefined}
-											/>
-											<span
-												class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
-												>€</span
-											>
+										<Select
+											items={accounts.map((a) => ({
+												value: a.id,
+												name: formatAccount(
+													{
+														name: a.name,
+														owner: { name: a.owner.name, firstName: a.owner.firstName }
+													},
+													user_name
+												)
+											}))}
+											bind:value={tx.accountId}
+											selectClass={transactionErrors[i]?.accountId
+												? 'text-red-700 border-red-700 bg-red-100'
+												: undefined}
+											placeholder="Konto"
+										/>
+									</td>
+									<td class="border border-gray-300 px-3 py-2">
+										<Checkbox bind:checked={tx.isRelative} class="ml-1"></Checkbox>
+									</td>
+									<td class="border border-gray-300 px-3 py-2">
+										<div class="flex items-center gap-2">
+											{#if !tx.isRelative}
+												<div class="relative flex-1">
+													<Input
+														type="number"
+														placeholder=""
+														bind:value={tx.amount}
+														class="no-spinner pr-6"
+														color={transactionErrors[i]?.amount ? 'red' : undefined}
+													/>
+													<span
+														class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+														>€</span
+													>
+												</div>
+											{:else}
+												<div class="relative flex-1">
+													<Input
+														type="number"
+														placeholder=""
+														bind:value={tx.percentage}
+														class="no-spinner pr-6"
+														color={transactionErrors[i]?.percentage ? 'red' : undefined}
+														min="0"
+														max="100"
+														step="0.01"
+													/>
+													<span
+														class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+														>%</span
+													>
+												</div>
+											{/if}
 										</div>
-									</td>
-									<td class="border border-gray-300 px-3 py-2">
-										<Input
-											type="number"
-											placeholder="1"
-											bind:value={pos.quantity}
-											class="no-spinner w-full"
-											min="0"
-											step="0.01"
-											color={positionErrors[i]?.quantity ? 'red' : undefined}
-										/>
-									</td>
-									<td class="border border-gray-300 px-3 py-2">
-										<Input type="text" placeholder="Stück" bind:value={pos.unit} class="w-full" />
+										{#if tx.isRelative && referenceAmount && tx.percentage}
+											<div class="mt-1 text-xs text-gray-600">
+												= {((Number(tx.percentage) / 100) * referenceAmount).toFixed(2)} €
+											</div>
+										{/if}
 									</td>
 									<td class="border border-gray-300 px-3 py-2">
 										<Textarea
-											placeholder="Kommentare"
-											bind:value={pos.comments}
-											class="w-full"
-											rows={pos.comments ? 3 : 1}
+											placeholder=""
+											clearable
+											bind:value={tx.statement}
+											class="w-full font-mono"
+											rows={tx.statement ? 3 : 1}
 										/>
 									</td>
 									<td class="border border-gray-300 px-3 py-2">
 										<Button
 											onclick={(e: MouseEvent) => {
 												e.stopPropagation();
-												removePosition(i);
+												removeTransaction(i);
 											}}
-											color={positions.length === 1 ? 'gray' : 'red'}
-											disabled={positions.length === 1}
+											color={transactions.length === 1 ? 'gray' : 'red'}
+											disabled={transactions.length === 1}
 											size="xs"
 										>
 											<CircleMinusOutline class="h-4 w-4" />
@@ -615,6 +492,204 @@
 						</tbody>
 					</table>
 				</div>
+				<div class="mt-2 text-center">
+					<Button
+						onclick={(e: MouseEvent) => {
+							e.stopPropagation();
+							addTransaction();
+						}}
+						size="xs"
+					>
+						<CirclePlusOutline class="mr-1 h-4 w-4" />
+						Transaktion hinzufügen
+					</Button>
+				</div>
+			</div>
+
+			<div class="mb-4 sm:col-span-2">
+				<Label class="mb-2 block">Kategorien</Label>
+				<div class="overflow-x-auto">
+					<table class="w-full border-collapse border border-gray-300">
+						<thead>
+							<tr class="bg-gray-50">
+								<th
+									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+									>Kategorie</th
+								>
+								<th
+									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+									>Gewicht</th
+								>
+								<th
+									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+									>Aktion</th
+								>
+							</tr>
+						</thead>
+						<tbody>
+							{#each expenseCategories as cat, i}
+								<tr>
+									<td class="border border-gray-300 px-3 py-2">
+										<Select
+											items={categories
+												.map((c) => ({ value: c.id, name: c.name }))
+												.filter(
+													(c) =>
+														!expenseCategories.some(
+															(ec, idx) => idx !== i && ec.categoryId === c.value
+														)
+												)}
+											bind:value={cat.categoryId}
+											placeholder="Kategorie"
+											selectClass={categoryErrors[i]?.categoryId
+												? 'text-red-700 border-red-700 bg-red-100'
+												: undefined}
+										/>
+									</td>
+									<td class="border border-gray-300 px-3 py-2">
+										<Input
+											type="number"
+											min="1"
+											class="no-spinner w-full"
+											bind:value={cat.weight}
+											placeholder="Gewicht"
+											color={categoryErrors[i]?.weight ? 'red' : undefined}
+										/>
+									</td>
+									<td class="border border-gray-300 px-3 py-2">
+										<Button
+											onclick={(e: MouseEvent) => {
+												e.stopPropagation();
+												removeCategory(i);
+											}}
+											color={expenseCategories.length === 1 ? 'gray' : 'red'}
+											disabled={expenseCategories.length === 1}
+											size="xs"
+										>
+											<CircleMinusOutline class="h-4 w-4" />
+										</Button>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+				<div class="mt-2 text-center">
+					<Button
+						onclick={(e: MouseEvent) => {
+							e.stopPropagation();
+							addCategory();
+						}}
+						size="xs"
+					>
+						<CirclePlusOutline class="mr-1 h-4 w-4" />
+						Kategorie hinzufügen
+					</Button>
+				</div>
+			</div>
+
+			<div class="mb-4 sm:col-span-2">
+				<Label class="mb-2 block">Positionen</Label>
+				{#if positions.length > 0}
+					<div class="overflow-x-auto">
+						<table class="w-full border-collapse border border-gray-300">
+							<thead>
+								<tr class="bg-gray-50">
+									<th
+										class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+										>Titel</th
+									>
+									<th
+										class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+										>Gesamtbetrag (€)</th
+									>
+									<th
+										class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+										>Menge</th
+									>
+									<th
+										class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+										>Einheit</th
+									>
+									<th
+										class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+										>Kommentare</th
+									>
+									<th
+										class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+										>Aktion</th
+									>
+								</tr>
+							</thead>
+							<tbody>
+								{#each positions as pos, i}
+									<tr>
+										<td class="border border-gray-300 px-3 py-2">
+											<Input
+												type="text"
+												placeholder="Titel"
+												bind:value={pos.title}
+												class="w-full"
+												color={positionErrors[i]?.title ? 'red' : undefined}
+											/>
+										</td>
+										<td class="border border-gray-300 px-3 py-2">
+											<div class="relative">
+												<Input
+													type="number"
+													placeholder=""
+													bind:value={pos.totalAmount}
+													class="no-spinner w-full pr-6"
+													min="0"
+													step="0.01"
+													color={positionErrors[i]?.totalAmount ? 'red' : undefined}
+												/>
+												<span
+													class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+													>€</span
+												>
+											</div>
+										</td>
+										<td class="border border-gray-300 px-3 py-2">
+											<Input
+												type="number"
+												placeholder=""
+												bind:value={pos.quantity}
+												class="no-spinner w-full"
+												min="0"
+												step="0.01"
+												color={positionErrors[i]?.quantity ? 'red' : undefined}
+											/>
+										</td>
+										<td class="border border-gray-300 px-3 py-2">
+											<Input type="text" placeholder="" bind:value={pos.unit} class="w-full" />
+										</td>
+										<td class="border border-gray-300 px-3 py-2">
+											<Textarea
+												placeholder="Kommentare"
+												bind:value={pos.comments}
+												class="w-full"
+												rows={pos.comments ? 3 : 1}
+											/>
+										</td>
+										<td class="border border-gray-300 px-3 py-2">
+											<Button
+												onclick={(e: MouseEvent) => {
+													e.stopPropagation();
+													removePosition(i);
+												}}
+												color={positions.length === 1 ? 'gray' : 'red'}
+												size="xs"
+											>
+												<CircleMinusOutline class="h-4 w-4" />
+											</Button>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
 				<div class="mt-2 text-center">
 					<Button
 						onclick={(e: MouseEvent) => {
