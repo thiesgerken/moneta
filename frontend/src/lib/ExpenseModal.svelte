@@ -209,7 +209,9 @@
 			isExtraordinary,
 			isTaxRelevant,
 			isIncomplete,
-			referenceAmount,
+			referenceAmount: transactions.some((tx) => tx.isRelative)
+				? Number(referenceAmount)
+				: undefined,
 			bookingStart: bookingStart!,
 			bookingEnd: endDate!,
 			receipts: [],
@@ -238,15 +240,7 @@
 		CreateExpense.mutate({ input });
 	};
 
-	//     mutation xx {
-	//   expenses {
-	//     create(
-	//       expense: {title: "sss", store: "s", description: "", comments: "", referenceAmount: 0, bookingStart: "2025-01-01T00:00:00Z", bookingEnd: "2025-01-01T00:00:00Z", isTemplate: false, isUnchecked: false, isExtraordinary: false, isTaxRelevant: false, isIncomplete: false, receipts: [], categories: [{categoryId: 4, weight: 1}], transactions: [{date: "00", accountId: 2, comments: "", statement: ""}], positions: [{units: 1, amount: 300, title: "", comments: ""}]}
-	//     ) {
-	//       id
-	//     }
-	//   }
-	// }
+	// TODO: switch between create and update, also need to be able to consume an existing expense and display it initially
 
 	const CreateExpense = graphql(`
 		mutation CreateExpense($input: ExpenseInput!) {
