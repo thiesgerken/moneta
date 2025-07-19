@@ -99,11 +99,10 @@
 	const descriptionError = $derived(false);
 	const referenceAmountError = $derived.by(() => {
 		const hasRelativeTransactions = transactions.some((tx) => tx.isRelative);
-		if (hasRelativeTransactions) {
-			return !referenceAmount; // Must be provided when relative transactions exist
-		} else {
-			return !!referenceAmount; // Must NOT be provided when no relative transactions
-		}
+		if (!hasRelativeTransactions) return false;
+
+		// Must be provided when relative transactions exist
+		return !referenceAmount;
 	});
 	const bookingStartError = $derived(!bookingStart);
 	const bookingEndError = $derived.by(() => {
@@ -222,25 +221,7 @@
 					color={storeError ? 'red' : undefined}
 				/>
 			</div>
-			<div>
-				<Label for="referenceAmount" class="mb-2">Referenzbetrag</Label>
-				<div class="relative">
-					<Input
-						type="number"
-						clearable
-						id="referenceAmount"
-						placeholder="0"
-						bind:value={referenceAmount}
-						min="0"
-						step="0.01"
-						class="no-spinner pr-6"
-						color={referenceAmountError ? 'red' : undefined}
-					/>
-					<span class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
-						>€</span
-					>
-				</div>
-			</div>
+
 			<div class="sm:col-span-2">
 				<Label for="description" class="mb-2">Beschreibung</Label>
 				<Textarea
@@ -291,6 +272,144 @@
 			</div>
 			<!-- TODO: support positions -->
 			<!-- TODO: support receipts -->
+
+			{#if transactions.filter((tx) => tx.isRelative).length > 0}
+				<div>
+					<Label for="referenceAmount" class="mb-2">Referenzbetrag</Label>
+					<div class="relative">
+						<Input
+							type="number"
+							clearable
+							id="referenceAmount"
+							placeholder="0"
+							bind:value={referenceAmount}
+							min="0"
+							step="0.01"
+							class="no-spinner pr-6"
+							color={referenceAmountError ? 'red' : undefined}
+						/>
+						<span
+							class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+							>€</span
+						>
+					</div>
+				</div>
+			{/if}
+
+			<div class="mb-4 sm:col-span-2">
+				<Label class="mb-2 block">Transaktionen</Label>
+				{#each transactions as tx, i}
+					{#if i > 0}
+						<div class="my-4 border-t border-gray-200"></div>
+					{/if}
+					<div class="mb-2 flex items-center gap-2">
+						<Datepicker
+							bind:value={tx.date}
+							placeholder="Datum"
+							inputClass={transactionErrors[i]?.date
+								? 'border-red-600 bg-red-100 text-red-400'
+								: ''}
+						/>
+						<Select
+							items={accounts.map((a) => ({
+								value: a.id,
+								name: formatAccount(
+									{
+										name: a.name,
+										owner: { name: a.owner.name, firstName: a.owner.firstName }
+									},
+									user_name
+								)
+							}))}
+							bind:value={tx.accountId}
+							selectClass={transactionErrors[i]?.accountId
+								? 'text-red-700 border-red-700 bg-red-100'
+								: undefined}
+							placeholder="Konto wählen"
+						/>
+
+						<Button
+							class="w-1/4"
+							onclick={(e: MouseEvent) => {
+								e.stopPropagation();
+								removeTransaction(i);
+							}}
+							color={transactions.length === 1 ? 'gray' : 'red'}
+							disabled={transactions.length === 1}
+						>
+							<CircleMinusOutline class="h-5 w-5" />
+						</Button>
+					</div>
+					<div class="mb-2 flex items-center gap-2">
+						{#if !tx.isRelative}
+							<div class="relative w-32">
+								<Input
+									type="number"
+									placeholder="0"
+									bind:value={tx.amount}
+									class="no-spinner pr-6"
+									color={transactionErrors[i]?.amount ? 'red' : undefined}
+								/>
+								<span
+									class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+									>€</span
+								>
+							</div>
+							<span class="w-16 text-sm text-gray-600"> </span>
+						{:else}
+							<div class="relative w-32">
+								<Input
+									type="number"
+									placeholder="0"
+									bind:value={tx.percentage}
+									class="no-spinner pr-6"
+									color={transactionErrors[i]?.percentage ? 'red' : undefined}
+									min="0"
+									max="100"
+									step="0.01"
+								/>
+								<span
+									class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+									>%</span
+								>
+							</div>
+							<span class="w-16 text-sm text-gray-600">
+								= {referenceAmount && tx.percentage
+									? ((Number(tx.percentage) / 100) * referenceAmount).toFixed(2)
+									: '0.00'} €
+							</span>
+						{/if}
+						<Checkbox bind:checked={tx.isRelative} class="ml-3">Relativ</Checkbox>
+					</div>
+					<div class="mb-2 flex items-center gap-2">
+						<Textarea
+							placeholder="Kommentar"
+							clearable
+							bind:value={tx.comments}
+							class="w-78"
+							rows={tx.statement || tx.comments ? 5 : 1}
+						/>
+						<Textarea
+							placeholder="Transaktionstext"
+							clearable
+							bind:value={tx.statement}
+							class="w-78 font-mono"
+							rows={tx.statement || tx.comments ? 5 : 1}
+						/>
+					</div>
+				{/each}
+			</div>
+
+			<div class="col-span-2 mb-4">
+				<Button
+					class="mx-auto block w-24"
+					onclick={(e: MouseEvent) => {
+						e.stopPropagation();
+						addTransaction();
+					}}><CirclePlusOutline class="mx-auto block h-5 w-5" /></Button
+				>
+			</div>
+
 			{#each expenseCategories as cat, i}
 				{#if i === 0}
 					<div class="col-span-2">
@@ -342,112 +461,7 @@
 					}}><CirclePlusOutline class="mx-auto block h-5 w-5" /></Button
 				>
 			</div>
-			<div class="mb-4 sm:col-span-2">
-				<Label class="mb-2 block">Transaktionen</Label>
-				{#each transactions as tx, i}
-					{#if i > 0}
-						<div class="my-4 border-t border-gray-200"></div>
-					{/if}
-					<div class="mb-2 flex items-center gap-2">
-						<Datepicker
-							class="mt-2"
-							bind:value={tx.date}
-							placeholder="Datum"
-							inputClass={transactionErrors[i]?.date
-								? 'border-red-600 bg-red-100 text-red-400'
-								: ''}
-						/>
-						<Select
-							class="mt-2"
-							items={accounts.map((a) => ({
-								value: a.id,
-								name: formatAccount(
-									{
-										name: a.name,
-										owner: { name: a.owner.name, firstName: a.owner.firstName }
-									},
-									user_name
-								)
-							}))}
-							bind:value={tx.accountId}
-							selectClass={transactionErrors[i]?.accountId
-								? 'text-red-700 border-red-700 bg-red-100'
-								: undefined}
-							placeholder="Konto wählen"
-						/>
-						<Button
-							onclick={(e: MouseEvent) => {
-								e.stopPropagation();
-								removeTransaction(i);
-							}}
-							color={transactions.length === 1 ? 'gray' : 'red'}
-							disabled={transactions.length === 1}>Löschen</Button
-						>
-					</div>
-					<div class="mb-2 flex items-center gap-2">
-						{#if !tx.isRelative}
-							<div class="relative w-48">
-								<Input
-									type="number"
-									placeholder="0"
-									bind:value={tx.amount}
-									class="no-spinner pr-6"
-									color={transactionErrors[i]?.amount ? 'red' : undefined}
-								/>
-								<span
-									class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
-									>€</span
-								>
-							</div>
-						{:else}
-							<div class="relative w-32">
-								<Input
-									type="number"
-									placeholder="0"
-									bind:value={tx.percentage}
-									class="no-spinner pr-6"
-									color={transactionErrors[i]?.percentage ? 'red' : undefined}
-									min="0"
-									max="100"
-									step="0.01"
-								/>
-								<span
-									class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
-									>%</span
-								>
-							</div>
-							<span class="text-sm text-gray-600 w-16">
-								= {referenceAmount && tx.percentage
-									? ((Number(tx.percentage) / 100) * referenceAmount).toFixed(2)
-									: '0.00'} €
-							</span>
-						{/if}
-						<Checkbox bind:checked={tx.isRelative} class="ml-3">Relativ</Checkbox>
-					</div>
-					<div class="mb-2 flex items-center gap-2">
-						<Textarea
-							placeholder="Kommentar"
-							clearable
-							bind:value={tx.comments}
-							class="w-78"
-							rows={tx.statement || tx.comments ? 5 : 1}
-						/>
-						<Textarea
-							placeholder="Transaktionstext"
-							clearable
-							bind:value={tx.statement}
-							class="w-78 font-mono"
-							rows={tx.statement || tx.comments ? 5 : 1}
-						/>
-					</div>
-				{/each}
-				<Button
-					onclick={(e: MouseEvent) => {
-						e.stopPropagation();
-						addTransaction();
-					}}>Transaktion hinzufügen</Button
-				>
-			</div>
+
 			<div class="justify-center sm:col-span-2">
 				<Button type="submit" class="w-full" disabled={formHasErrors}>
 					<svg
