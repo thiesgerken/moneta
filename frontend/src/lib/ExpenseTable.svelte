@@ -30,7 +30,7 @@
 		TrashBinOutline,
 		ExclamationCircleOutline
 	} from 'flowbite-svelte-icons';
-	import type { ExpenseTableVariables } from './$houdini';
+	import type { ExpenseTableExpensesVariables } from './$houdini';
 	import {
 		accountSorter,
 		categorySorter,
@@ -72,7 +72,7 @@
 	let showIncomplete = $state(true);
 	let showNormal = $state(true);
 
-	export const _ExpenseTableVariables: ExpenseTableVariables = () => {
+	export const _ExpenseTableVariables: ExpenseTableExpensesVariables = () => {
 		let filters = [];
 		if (searchTerm) {
 			const re = {
@@ -240,7 +240,7 @@
 
 	// Stuff that we always need independently of the current page and sorting and so on
 	const basicStore = graphql(`
-		query BasicInformation @load {
+		query ExpenseTableBasic @load {
 			users {
 				me {
 					name
@@ -272,7 +272,7 @@
 	`);
 
 	const expenseStore = graphql(`
-		query ExpenseTable($limit: Int, $offset: Int, $filter: String, $sort: String) @load {
+		query ExpenseTableExpenses($limit: Int, $offset: Int, $filter: String, $sort: String) @load {
 			expenses {
 				list(limit: $limit, skip: $offset, filter: $filter, sort: $sort) {
 					totalCount
@@ -384,11 +384,8 @@
 	let expenseToDelete = $derived(expenses.find((e) => e.id === expenseIdToDelete) || undefined);
 
 	function toggleRow(id: String) {
-		if (expandedRows.includes(id)) {
-			expandedRows = expandedRows.filter((rowId) => rowId !== id);
-		} else {
-			expandedRows = [...expandedRows, id];
-		}
+		if (expandedRows.includes(id)) expandedRows = expandedRows.filter((rowId) => rowId !== id);
+		else expandedRows = [...expandedRows, id];
 	}
 
 	function sortByField(field: string) {
