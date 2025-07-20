@@ -21,7 +21,8 @@
 
 	interface Props {
 		open?: boolean;
-		user_name: string | undefined;
+		onsubmit?: () => Promise<void>; // used to signal that the form has been successfully submitted, need to invalidate cached stuff
+		userName: string | undefined;
 		accounts: {
 			readonly id: string;
 			readonly name: string;
@@ -76,7 +77,14 @@
 			}[];
 		};
 	}
-	let { open = $bindable(), accounts, categories, user_name, expense }: Props = $props();
+	let {
+		open = $bindable(),
+		accounts,
+		categories,
+		userName: user_name,
+		expense,
+		onsubmit
+	}: Props = $props();
 
 	let title = $derived(expense?.title || '');
 	let store = $derived(expense?.store || '');
@@ -87,8 +95,8 @@
 	let isExtraordinary = $derived(expense?.isExtraordinary || false);
 	let isTaxRelevant = $derived(expense?.isTaxRelevant || false);
 	let isIncomplete = $derived(expense?.isIncomplete || false);
-	let referenceAmount: number | undefined = $derived(
-		expense?.referenceAmount ? expense.referenceAmount / 100 : undefined
+	let referenceAmount: string | undefined = $derived(
+		expense?.referenceAmount ? (expense.referenceAmount / 100).toFixed(2) : undefined
 	);
 	let bookingStart: Date | undefined = $derived(
 		expense?.bookingStart ? new Date(expense.bookingStart) : undefined
@@ -115,7 +123,7 @@
 		expense?.transactions.map((tx) => ({
 			date: tx.date ? new Date(tx.date) : undefined,
 			accountId: tx.account.id.toString(),
-			amount: tx.amount ? (tx.amount / 100).toString() : '',
+			amount: tx.amount ? (tx.amount / 100).toFixed(2) : '',
 			statement: tx.statement || '',
 			isRelative: tx.fraction !== null,
 			percentage: tx.fraction ? (100 * tx.fraction).toString() : ''
@@ -199,7 +207,7 @@
 		if (!hasRelativeTransactions) return false;
 
 		// Must be provided when relative transactions exist
-		return !referenceAmount;
+		return !referenceAmount || !Number(referenceAmount);
 	});
 	const bookingStartError = $derived(!bookingStart);
 	const bookingEndError = $derived.by(() => {
@@ -334,16 +342,20 @@
 
 		if (expense) await UpdateExpense.mutate({ id: expense.id, input });
 		else await CreateExpense.mutate({ input });
+
+		if (onsubmit) await onsubmit();
+		open = false;
 	};
 </script>
 
-<Modal title={expense ? 'Ausgabe bearbeiten' : 'Neue Ausgabe'} bind:open>
+<Modal title={expense ? 'Ausgabe bearbeiten' : 'Neue Ausgabe'} bind:open size="lg">
 	<form onsubmit={handleSubmit}>
 		<div class="mb-4 grid gap-4 sm:grid-cols-2">
 			<div>
 				<Label for="title" class="mb-2">Titel</Label>
 				<Input
 					type="text"
+					clearable
 					id="title"
 					placeholder="Titel"
 					bind:value={title}
@@ -440,19 +452,19 @@
 						<thead>
 							<tr class="bg-gray-50">
 								<th
-									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+									class="w-1/6 border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
 									>Datum</th
 								>
 								<th
-									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+									class="w-1/6 border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
 									>Konto</th
 								>
 								<th
-									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+									class="w-1/12 border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
 									>Relativ</th
 								>
 								<th
-									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+									class="w-1/6 border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
 									>Betrag</th
 								>
 								<th
@@ -460,8 +472,8 @@
 									>Transaktionstext</th
 								>
 								<th
-									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>Aktion</th
+									class="w-1/12 border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+									>&nbsp;</th
 								>
 							</tr>
 						</thead>
@@ -490,6 +502,9 @@
 												)
 											}))}
 											bind:value={tx.accountId}
+											style={tx.accountId
+												? `background-color: ${accounts.find((a) => a.id === tx.accountId)?.color}`
+												: undefined}
 											selectClass={transactionErrors[i]?.accountId
 												? 'text-red-700 border-red-700 bg-red-100'
 												: undefined}
@@ -532,9 +547,9 @@
 												</div>
 											{/if}
 										</div>
-										{#if tx.isRelative && referenceAmount && tx.percentage}
+										{#if tx.isRelative && referenceAmount && tx.percentage && Number(referenceAmount)}
 											<div class="mt-1 text-xs text-gray-600">
-												= {((Number(tx.percentage) / 100) * referenceAmount).toFixed(2)} €
+												= {((Number(tx.percentage) / 100) * Number(referenceAmount)).toFixed(2)} €
 											</div>
 										{/if}
 									</td>
@@ -544,7 +559,7 @@
 											clearable
 											bind:value={tx.statement}
 											class="w-full font-mono"
-											rows={tx.statement ? 3 : 1}
+											rows={tx.statement ? 5 : 1}
 										/>
 									</td>
 									<td class="border border-gray-300 px-3 py-2">
@@ -594,8 +609,8 @@
 									>Gewicht</th
 								>
 								<th
-									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>Aktion</th
+									class="w-1/12 border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+									>&nbsp;</th
 								>
 							</tr>
 						</thead>
@@ -614,6 +629,9 @@
 												)}
 											bind:value={cat.categoryId}
 											placeholder="Kategorie"
+											style={cat.categoryId
+												? `background-color: ${categories.find((c) => c.id === cat.categoryId)?.color}`
+												: undefined}
 											selectClass={categoryErrors[i]?.categoryId
 												? 'text-red-700 border-red-700 bg-red-100'
 												: undefined}
@@ -689,8 +707,8 @@
 										>Kommentare</th
 									>
 									<th
-										class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-										>Aktion</th
+										class="w-1/12 border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
+										>&nbsp;</th
 									>
 								</tr>
 							</thead>

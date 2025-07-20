@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { graphql } from '$houdini';
+	import { cache, graphql } from '$houdini';
 
 	import {
 		TableBody,
@@ -16,7 +16,8 @@
 		Li,
 		MultiSelect,
 		Badge,
-		Datepicker
+		Datepicker,
+		Modal
 	} from 'flowbite-svelte';
 	import { Section } from 'flowbite-svelte-blocks';
 	import {
@@ -25,7 +26,9 @@
 		ChevronRightOutline,
 		ChevronLeftOutline,
 		ChevronDownOutline,
-		EditOutline
+		EditOutline,
+		TrashBinOutline,
+		ExclamationCircleOutline
 	} from 'flowbite-svelte-icons';
 	import type { ExpenseTableVariables } from './$houdini';
 	import {
@@ -50,6 +53,9 @@
 
 	let showNewExpenseModal = $state(false);
 	let showEditExpenseModal = $state(false);
+	let showDeleteExpenseModal = $state(false);
+	let expenseIdToEdit: string | undefined = $state(undefined);
+	let expenseIdToDelete: string | undefined = $state(undefined);
 
 	let filteredAccounts = $state<string[]>([]);
 	let filteredCategories = $state<string[]>([]);
@@ -374,6 +380,9 @@
 		$expenseStore.data?.expenses.list.edges.map((expense) => expense.node) || []
 	);
 
+	let expenseToEdit = $derived(expenses.find((e) => e.id === expenseIdToEdit) || undefined);
+	let expenseToDelete = $derived(expenses.find((e) => e.id === expenseIdToDelete) || undefined);
+
 	function toggleRow(id: String) {
 		if (expandedRows.includes(id)) {
 			expandedRows = expandedRows.filter((rowId) => rowId !== id);
@@ -396,6 +405,31 @@
 		if (index === -1) return null;
 		return sortBy[index].direction;
 	}
+
+	const DeleteExpense = graphql(`
+		mutation DeleteExpense($id: ObjectIdWrapper!) {
+			expenses {
+				delete(id: $id)
+			}
+		}
+	`);
+
+	async function handleExpenseModalSubmit() {
+		cache.markStale('Expense');
+		await expenseStore.fetch({});
+		expandedRows = [];
+	}
+
+	async function handleDeleteExpense() {
+		if (!expenseToDelete) return;
+		await DeleteExpense.mutate({ id: expenseToDelete.id });
+		expenseIdToDelete = undefined;
+		showDeleteExpenseModal = false;
+
+		cache.markStale('Expense');
+		await expenseStore.fetch({});
+		expandedRows = [];
+	}
 </script>
 
 {#snippet sortIcon(field: string)}
@@ -406,9 +440,34 @@
 	{/if}
 {/snippet}
 
+<Modal bind:open={showDeleteExpenseModal} size="xs">
+	<div class="text-center">
+		<ExclamationCircleOutline class="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-200" />
+		<h3 class="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
+			Soll die Ausgabe <b>{expenseToDelete?.title}</b> wirklich gelöscht werden?
+		</h3>
+		<div class="space-x-2">
+			<Button type="submit" value="delete" color="red" onclick={handleDeleteExpense}>Löschen</Button
+			>
+			<Button
+				type="submit"
+				value="cancel"
+				color="alternative"
+				onclick={() => {
+					showDeleteExpenseModal = false;
+					expenseIdToDelete = undefined;
+				}}
+			>
+				Abbrechen
+			</Button>
+		</div>
+	</div>
+</Modal>
+
 <ExpenseModal
 	bind:open={showNewExpenseModal}
-	user_name={$basicStore.data?.users.me?.name}
+	onsubmit={handleExpenseModalSubmit}
+	userName={$basicStore.data?.users.me?.name}
 	accounts={$basicStore.data?.accounts.list.map((a) => ({
 		id: a.id.toString(),
 		name: a.name,
@@ -424,8 +483,9 @@
 
 <ExpenseModal
 	bind:open={showEditExpenseModal}
-	user_name={$basicStore.data?.users.me?.name}
-	expense={expenses.find((e) => e.id === expandedRows[0])}
+	onsubmit={handleExpenseModalSubmit}
+	userName={$basicStore.data?.users.me?.name}
+	expense={expenseToEdit}
 	accounts={$basicStore.data?.accounts.list.map((a) => ({
 		id: a.id.toString(),
 		name: a.name,
@@ -454,9 +514,6 @@
 			<div
 				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end space-y-2 md:w-auto md:flex-row md:items-center md:space-x-3 md:space-y-0"
 			>
-				<Button disabled={expandedRows.length != 1} color="secondary" onclick={() => (showEditExpenseModal = true)}>
-					<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
-				</Button>
 				<Button onclick={() => (showNewExpenseModal = true)}>
 					<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
 				</Button>
@@ -788,6 +845,31 @@
 											</li>
 										{/each}
 									</ul>
+								</div>
+
+								<div class="flex gap-2">
+									<Button
+										color="yellow"
+										size="xs"
+										onclick={() => {
+											expenseIdToEdit = expense.id.toString();
+											showEditExpenseModal = true;
+										}}
+									>
+										<EditOutline class="mr-2 h-3.5 w-3.5" />
+										Bearbeiten
+									</Button>
+									<Button
+										color="red"
+										size="xs"
+										onclick={() => {
+											expenseIdToDelete = expense.id.toString();
+											showDeleteExpenseModal = true;
+										}}
+									>
+										<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
+										Löschen
+									</Button>
 								</div>
 							</div>
 						</td>
