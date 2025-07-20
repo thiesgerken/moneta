@@ -2,7 +2,11 @@
 	import '../app.css';
 	import Nav from '$lib/Nav.svelte';
 
-	let { children } = $props();
+	interface Props {
+		children: any;
+	}
+
+	const { children } = $props() as Props;
 </script>
 
 <Nav />

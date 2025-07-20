@@ -1,8 +1,10 @@
-query About{
+query About {
 	apiVersion
 	users {
 		me {
 			name
+			firstName
+			lastName
 		}
 	}
 }
