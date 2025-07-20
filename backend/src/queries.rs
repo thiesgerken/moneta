@@ -76,7 +76,6 @@ pub async fn query_categories(
     let collection = connection.collection::<Category>("categories");
     collection
         .find(doc! {})
-        .projection(doc! {"_id": 1})
         .await?
         .try_collect::<Vec<_>>()
         .await

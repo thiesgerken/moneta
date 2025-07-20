@@ -169,7 +169,7 @@ impl Balance {
     pub async fn remove_rendered(&self, db: &Database) -> Result<DeleteResult, Box<dyn Error>> {
         let rendered_balances_collection = db.collection::<RenderedBalance>("balances_rendered");
         let r = rendered_balances_collection
-            .delete_many(doc!("upstream_id": *self.id))
+            .delete_many(doc!("upstreamId": *self.id))
             .await?;
 
         info!(
@@ -368,7 +368,7 @@ impl Expense {
     pub async fn remove_rendered(&self, db: &Database) -> Result<DeleteResult, Box<dyn Error>> {
         let rendered_expenses_collection = db.collection::<RenderedExpense>("expenses_rendered");
         let r = rendered_expenses_collection
-            .delete_many(doc!("upstream_id": *self.id))
+            .delete_many(doc!("upstreamId": *self.id))
             .await?;
 
         info!(
