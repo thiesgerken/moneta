@@ -24,7 +24,9 @@ const config = {
 				return date && date.toISOString();
 			}
 		}
-	}
+	} ,features: {
+        imperativeCache: true,
+    }
 };
 
 export default config;
