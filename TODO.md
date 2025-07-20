@@ -17,3 +17,4 @@
 - Change stream query endpoint
   API is kind of hard — who can see what? correct thing to do would be to persist uids who can see the changelog entry on each entry, depending on users that have access to either the old or the new state. Easier: just query all expenses that were updated recently and then query their changelogs?
 - would be awesome if effectiveAmount would be visible for other users as well in order to check correctness
+- ausgabe in transaktion umwandeln (zB Retoure mit original zusammenfassen, dann automatisch buchungszeitraum anpassen?)
