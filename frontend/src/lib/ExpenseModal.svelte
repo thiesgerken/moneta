@@ -12,7 +12,12 @@
 
 	import { graphql, type ExpenseInput } from '$houdini';
 	import { formatAccount } from './expense_utils';
-	import { CircleMinusOutline, CirclePlusOutline } from 'flowbite-svelte-icons';
+	import {
+		CircleMinusOutline,
+		CirclePlusOutline,
+		EditOutline,
+		PlusOutline
+	} from 'flowbite-svelte-icons';
 
 	interface Props {
 		open?: boolean;
@@ -28,24 +33,77 @@
 			readonly name: string;
 			readonly color: string | null;
 		}[];
-	}
-	let { open = $bindable(), accounts, categories, user_name }: Props = $props();
+		expense?: {
+			readonly id: String;
+			readonly title: string;
+			readonly description: string;
+			readonly store: string;
+			readonly bookingStart: Date;
+			readonly bookingEnd: Date;
+			readonly comments: string;
+			readonly isTaxRelevant: boolean;
+			readonly isTemplate: boolean;
+			readonly isUnchecked: boolean;
+			readonly isIncomplete: boolean;
+			readonly isExtraordinary: boolean;
+			readonly receipts: {
+				readonly uri: string;
+			}[];
 
-	let title = $state('');
-	let store = $state('');
-	let description = $state('');
-	let comments = $state('');
-	let isTemplate = $state(false);
-	let isUnchecked = $state(false);
-	let isExtraordinary = $state(false);
-	let isTaxRelevant = $state(false);
-	let isIncomplete = $state(false);
-	let referenceAmount: number | undefined = $state(undefined);
-	let bookingStart: Date | undefined = $state(undefined);
-	let bookingEnd: Date | undefined = $state(undefined);
+			readonly positions: {
+				readonly title: string;
+				readonly amount: number | null;
+				readonly quantity: number | null;
+				readonly unit: string | null;
+				readonly comments: string;
+			}[];
+			readonly categories: {
+				readonly weight: number;
+				readonly category: {
+					readonly id: String;
+				};
+			}[];
+			readonly referenceAmount: number | null;
+			readonly transactions: {
+				readonly fraction: number | null;
+				readonly effectiveAmount: number;
+				readonly amount: number | null;
+				readonly date: Date;
+				readonly statement: string;
+				readonly account: {
+					readonly id: String;
+				};
+			}[];
+		};
+	}
+	let { open = $bindable(), accounts, categories, user_name, expense }: Props = $props();
+
+	let title = $derived(expense?.title || '');
+	let store = $derived(expense?.store || '');
+	let description = $derived(expense?.description || '');
+	let comments = $derived(expense?.comments || '');
+	let isTemplate = $derived(expense?.isTemplate || false);
+	let isUnchecked = $derived(expense?.isUnchecked || false);
+	let isExtraordinary = $derived(expense?.isExtraordinary || false);
+	let isTaxRelevant = $derived(expense?.isTaxRelevant || false);
+	let isIncomplete = $derived(expense?.isIncomplete || false);
+	let referenceAmount: number | undefined = $derived(
+		expense?.referenceAmount ? expense.referenceAmount / 100 : undefined
+	);
+	let bookingStart: Date | undefined = $derived(
+		expense?.bookingStart ? new Date(expense.bookingStart) : undefined
+	);
+	let bookingEnd: Date | undefined = $derived(
+		expense?.bookingEnd ? new Date(expense.bookingEnd) : undefined
+	);
 
 	// Categories and transactions state
-	let expenseCategories = $state([{ categoryId: '', weight: '1' }]);
+	let expenseCategories = $derived(
+		expense?.categories.map((cat) => ({
+			categoryId: cat.category.id,
+			weight: cat.weight.toString()
+		})) || [{ categoryId: '', weight: '1' }]
+	);
 	let transactions: {
 		date: Date | undefined;
 		accountId: string;
@@ -53,25 +111,41 @@
 		statement: string;
 		isRelative: boolean;
 		percentage: string;
-	}[] = $state([
-		{
-			date: undefined,
-			accountId: '',
-			amount: '',
-			statement: '',
-			isRelative: false,
-			percentage: ''
-		}
-	]);
+	}[] = $derived(
+		expense?.transactions.map((tx) => ({
+			date: tx.date ? new Date(tx.date) : undefined,
+			accountId: tx.account.id.toString(),
+			amount: tx.amount ? (tx.amount / 100).toString() : '',
+			statement: tx.statement || '',
+			isRelative: tx.fraction !== null,
+			percentage: tx.fraction ? (100 * tx.fraction).toString() : ''
+		})) || [
+			{
+				date: undefined,
+				accountId: '',
+				amount: '',
+				statement: '',
+				isRelative: false,
+				percentage: ''
+			}
+		]
+	);
 
-	// Positions state
 	let positions: {
 		title: string;
 		totalAmount: string;
 		quantity: string;
 		unit: string;
 		comments: string;
-	}[] = $state([]);
+	}[] = $derived(
+		expense?.positions.map((pos) => ({
+			title: pos.title,
+			totalAmount: pos.amount ? (pos.amount / 100).toString() : '',
+			quantity: pos.quantity?.toString() || '',
+			unit: pos.unit || '',
+			comments: pos.comments || ''
+		})) || []
+	);
 
 	function addCategory() {
 		expenseCategories = [...expenseCategories, { categoryId: '', weight: '1' }];
@@ -193,7 +267,26 @@
 		)
 	);
 
-	const handleSubmit = (event: Event) => {
+	const UpdateExpense = graphql(`
+		mutation UpdateExpense($id: ObjectIdWrapper!, $input: ExpenseInput!) {
+			expenses {
+				update(id: $id, expense: $input) {
+					id
+				}
+			}
+		}
+	`);
+	const CreateExpense = graphql(`
+		mutation CreateExpense($input: ExpenseInput!) {
+			expenses {
+				create(expense: $input) {
+					id
+				}
+			}
+		}
+	`);
+
+	const handleSubmit = async (event: Event) => {
 		event.preventDefault();
 		if (formHasErrors) return;
 
@@ -210,7 +303,7 @@
 			isTaxRelevant,
 			isIncomplete,
 			referenceAmount: transactions.some((tx) => tx.isRelative)
-				? Number(referenceAmount)
+				? Number(referenceAmount) * 100
 				: undefined,
 			bookingStart: bookingStart!,
 			bookingEnd: endDate!,
@@ -222,38 +315,29 @@
 			transactions: transactions.map((tx) => ({
 				date: tx.date || bookingStart!,
 				accountId: tx.accountId,
-				amount: !tx.isRelative ? Number(tx.amount) : undefined,
-				percentage: tx.isRelative ? Number(tx.percentage) : undefined,
+				amount: !tx.isRelative ? Number(tx.amount) * 100 : undefined,
+				fraction: tx.isRelative ? Number(tx.percentage) / 100 : undefined,
 				statement: tx.statement,
 				comments: ''
 			})),
 			positions: positions.map((pos) => ({
 				title: pos.title,
-				amount: pos.totalAmount ? Number(pos.totalAmount) : undefined,
+				amount: pos.totalAmount ? Number(pos.totalAmount) * 100 : undefined,
 				quantity: pos.quantity ? Number(pos.quantity) : undefined,
 				unit: pos.unit || undefined,
 				comments: pos.comments
 			}))
 		};
 
-		console.log(input);
-		CreateExpense.mutate({ input });
+		console.log('expense', expense);
+		console.log('update', input);
+
+		if (expense) await UpdateExpense.mutate({ id: expense.id, input });
+		else await CreateExpense.mutate({ input });
 	};
-
-	// TODO: switch between create and update, also need to be able to consume an existing expense and display it initially
-
-	const CreateExpense = graphql(`
-		mutation CreateExpense($input: ExpenseInput!) {
-			expenses {
-				create(expense: $input) {
-					id
-				}
-			}
-		}
-	`);
 </script>
 
-<Modal title="Neue Ausgabe" bind:open>
+<Modal title={expense ? 'Ausgabe bearbeiten' : 'Neue Ausgabe'} bind:open>
 	<form onsubmit={handleSubmit}>
 		<div class="mb-4 grid gap-4 sm:grid-cols-2">
 			<div>
@@ -334,12 +418,9 @@
 					<Label for="referenceAmount" class="mb-2">Referenzbetrag</Label>
 					<div class="relative">
 						<Input
-							type="number"
-							clearable
 							id="referenceAmount"
 							placeholder="0"
 							bind:value={referenceAmount}
-							min="0"
 							step="0.01"
 							class="no-spinner pr-6"
 							color={referenceAmountError ? 'red' : undefined}
@@ -423,7 +504,6 @@
 											{#if !tx.isRelative}
 												<div class="relative flex-1">
 													<Input
-														type="number"
 														placeholder=""
 														bind:value={tx.amount}
 														class="no-spinner pr-6"
@@ -437,7 +517,6 @@
 											{:else}
 												<div class="relative flex-1">
 													<Input
-														type="number"
 														placeholder=""
 														bind:value={tx.percentage}
 														class="no-spinner pr-6"
@@ -630,11 +709,9 @@
 										<td class="border border-gray-300 px-3 py-2">
 											<div class="relative">
 												<Input
-													type="number"
 													placeholder=""
 													bind:value={pos.totalAmount}
 													class="no-spinner w-full pr-6"
-													min="0"
 													step="0.01"
 													color={positionErrors[i]?.totalAmount ? 'red' : undefined}
 												/>
@@ -646,11 +723,9 @@
 										</td>
 										<td class="border border-gray-300 px-3 py-2">
 											<Input
-												type="number"
 												placeholder=""
 												bind:value={pos.quantity}
 												class="no-spinner w-full"
-												min="0"
 												step="0.01"
 												color={positionErrors[i]?.quantity ? 'red' : undefined}
 											/>
@@ -700,18 +775,13 @@
 
 			<div class="justify-center sm:col-span-2">
 				<Button type="submit" class="w-full" disabled={formHasErrors}>
-					<svg
-						class="-ml-1 mr-1 h-6 w-6"
-						fill="currentColor"
-						viewBox="0 0 20 20"
-						xmlns="http://www.w3.org/2000/svg"
-						><path
-							fill-rule="evenodd"
-							d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
-							clip-rule="evenodd"
-						/></svg
-					>
-					Erstellen
+					{#if expense}
+						<EditOutline class="mr-1 h-4 w-4" />
+						Aktualisieren
+					{:else}
+						<PlusOutline class="mr-1 h-4 w-4" />
+						Erstellen
+					{/if}
 				</Button>
 			</div>
 		</div>

@@ -24,7 +24,8 @@
 		FilterSolid,
 		ChevronRightOutline,
 		ChevronLeftOutline,
-		ChevronDownOutline
+		ChevronDownOutline,
+		EditOutline
 	} from 'flowbite-svelte-icons';
 	import type { ExpenseTableVariables } from './$houdini';
 	import {
@@ -48,9 +49,7 @@
 	]);
 
 	let showNewExpenseModal = $state(false);
-	const handleNewExpenseModalSubmit = () => {
-		alert('Form submited.');
-	};
+	let showEditExpenseModal = $state(false);
 
 	let filteredAccounts = $state<string[]>([]);
 	let filteredCategories = $state<string[]>([]);
@@ -312,6 +311,7 @@
 							categories {
 								weight
 								category {
+									id
 									name
 									color
 								}
@@ -324,6 +324,7 @@
 								date
 								statement
 								account {
+									id
 									name
 									owner {
 										name
@@ -421,6 +422,23 @@
 	})) || []}
 />
 
+<ExpenseModal
+	bind:open={showEditExpenseModal}
+	user_name={$basicStore.data?.users.me?.name}
+	expense={expenses.find((e) => e.id === expandedRows[0])}
+	accounts={$basicStore.data?.accounts.list.map((a) => ({
+		id: a.id.toString(),
+		name: a.name,
+		owner: { name: a.owner.name, firstName: a.owner.firstName },
+		color: a.color
+	})) || []}
+	categories={$basicStore.data?.categories.list.map((c) => ({
+		id: c.id.toString(),
+		name: c.name,
+		color: c.color
+	})) || []}
+/>
+
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5">
 	<TableSearch
 		placeholder="Suchen"
@@ -436,6 +454,9 @@
 			<div
 				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end space-y-2 md:w-auto md:flex-row md:items-center md:space-x-3 md:space-y-0"
 			>
+				<Button disabled={expandedRows.length != 1} color="secondary" onclick={() => (showEditExpenseModal = true)}>
+					<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
+				</Button>
 				<Button onclick={() => (showNewExpenseModal = true)}>
 					<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
 				</Button>
