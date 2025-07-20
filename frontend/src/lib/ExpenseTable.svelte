@@ -72,7 +72,7 @@
 	let showIncomplete = $state(true);
 	let showNormal = $state(true);
 
-	export const _ExpenseTableVariables: ExpenseTableExpensesVariables = () => {
+	export const _ExpenseTableExpensesVariables: ExpenseTableExpensesVariables = () => {
 		let filters = [];
 		if (searchTerm) {
 			const re = {
