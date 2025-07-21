@@ -239,7 +239,7 @@
 
 	function getRiskColor(risk: string): string {
 		const riskColorMap: Record<string, string> = {
-			NONE: 'bg-gray-100 text-gray-700',
+			NONE: 'bg-green-100 text-green-700',
 			SLIGHT: 'bg-green-100 text-green-700',
 			LOW: 'bg-blue-100 text-blue-700',
 			MEDIUM: 'bg-yellow-100 text-yellow-700',
@@ -363,10 +363,6 @@
 				Beschreibung
 				{@render sortIcon('description')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('owner')}>
-				Besitzer
-				{@render sortIcon('owner')}
-			</TableHeadCell>
 			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('kind')}>
 				Typ
 				{@render sortIcon('kind')}
@@ -405,9 +401,6 @@
 						{account.description || '-'}
 					</TableBodyCell>
 					<TableBodyCell class="px-4 py-3">
-						{account.owner.name}
-					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
 						{getKindDisplayName(account.kind)}
 					</TableBodyCell>
 					<TableBodyCell class="px-4 py-3">
@@ -436,10 +429,6 @@
 										{account.description}
 									</div>
 								{/if}
-								<div>
-									<b>Besitzer:</b>
-									{account.owner.name}
-								</div>
 								<div>
 									<b>Farbe:</b>
 									{#if account.color}
