@@ -9,8 +9,6 @@
 		TableHeadCell,
 		TableSearch,
 		Button,
-		Checkbox,
-		Badge,
 		Modal
 	} from 'flowbite-svelte';
 	import { Section } from 'flowbite-svelte-blocks';
@@ -22,7 +20,6 @@
 		TrashBinOutline,
 		ExclamationCircleOutline
 	} from 'flowbite-svelte-icons';
-	import { categorySorter } from './expense_utils';
 	import CategoryModal from './CategoryModal.svelte';
 
 	let searchTerm = $state('');

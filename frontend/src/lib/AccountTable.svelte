@@ -9,8 +9,6 @@
 		TableHeadCell,
 		TableSearch,
 		Button,
-		Checkbox,
-		Badge,
 		Modal
 	} from 'flowbite-svelte';
 	import { Section } from 'flowbite-svelte-blocks';
@@ -22,7 +20,6 @@
 		TrashBinOutline,
 		ExclamationCircleOutline
 	} from 'flowbite-svelte-icons';
-	import { accountSorter } from './expense_utils';
 	import AccountModal from './AccountModal.svelte';
 
 	let searchTerm = $state('');
@@ -83,13 +80,7 @@
 	// Filter accounts to show only current user's accounts plus synchronized accounts from other users
 	let filteredAccounts = $derived.by(() => {
 		let filtered = allAccounts.filter((account) => {
-			// Show accounts owned by current user
-			if (account.owner.name === currentUserName) return true;
-
-			// Show accounts from other users that have synchronization settings
-			if (account.synchronization) return true;
-
-			return false;
+			return account.owner.name === currentUserName;
 		});
 
 		// Apply search filter
@@ -409,9 +400,6 @@
 							style={account.color ? `background-color: ${account.color}` : undefined}
 						></span>
 						{account.name}
-						{#if account.owner.name !== currentUserName}
-							<span class="ml-2 text-xs text-gray-500">({account.owner.name})</span>
-						{/if}
 					</TableBodyCell>
 					<TableBodyCell class="max-w-96 truncate px-4 py-3">
 						{account.description || '-'}
@@ -512,7 +500,7 @@
 										{allAccounts.find((a) => a.id === account.synchronization!.account.id)?.name ||
 											'Unbekanntes Konto'}
 										{#if account.synchronization.invert}
-											<span class="ml-1 text-orange-600">(umgekehrt)</span>
+											<span class="ml-1">(umgekehrt)</span>
 										{/if}
 									</div>
 								{/if}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Modal, Label, Input, Textarea, Button, Select } from 'flowbite-svelte';
+	import { Modal, Label, Input, Textarea, Button, Select, Datepicker } from 'flowbite-svelte';
 	import ColorPicker from 'svelte-awesome-color-picker';
 
 	import { graphql, type AccountInput } from '$houdini';
@@ -15,8 +15,16 @@
 			readonly color: string | null;
 			readonly owner: { readonly name: string };
 			readonly iban: string | null;
-			readonly kind: 'CASH' | 'DEBIT' | 'CREDIT' | 'DEBT' | 'STOCKS' | 'REAL_ESTATE' | 'VIRTUAL' | 'OTHER';
-			readonly availability: 'IMMEDIATELY' | 'DAYS' | 'WEEKS' | 'MONTHS';
+			readonly kind:
+				| 'CASH'
+				| 'DEBIT'
+				| 'CREDIT'
+				| 'DEBT'
+				| 'STOCKS'
+				| 'REAL_ESTATE'
+				| 'VIRTUAL'
+				| 'OTHER';
+			readonly availability: 'IMMEDIATELY' | 'DAYS' | 'WEEKS' | 'MONTHS' | 'YEARS' | 'DECADES';
 			readonly risk: 'NONE' | 'SLIGHT' | 'LOW' | 'MEDIUM' | 'HIGH' | 'HUGE';
 			readonly opened: Date;
 			readonly closed: Date | null;
@@ -33,8 +41,16 @@
 			readonly color: string | null;
 			readonly owner: { readonly name: string };
 			readonly iban: string | null;
-			readonly kind: 'CASH' | 'DEBIT' | 'CREDIT' | 'DEBT' | 'STOCKS' | 'REAL_ESTATE' | 'VIRTUAL' | 'OTHER';
-			readonly availability: 'IMMEDIATELY' | 'DAYS' | 'WEEKS' | 'MONTHS';
+			readonly kind:
+				| 'CASH'
+				| 'DEBIT'
+				| 'CREDIT'
+				| 'DEBT'
+				| 'STOCKS'
+				| 'REAL_ESTATE'
+				| 'VIRTUAL'
+				| 'OTHER';
+			readonly availability: 'IMMEDIATELY' | 'DAYS' | 'WEEKS' | 'MONTHS' | 'YEARS' | 'DECADES';
 			readonly risk: 'NONE' | 'SLIGHT' | 'LOW' | 'MEDIUM' | 'HIGH' | 'HUGE';
 			readonly opened: Date;
 			readonly closed: Date | null;
@@ -52,7 +68,7 @@
 	let color = $derived(account?.color || '');
 	let iban = $derived(account?.iban || '');
 	let kind = $derived(account?.kind || 'CASH');
-	let availability = $derived<'IMMEDIATELY' | 'DAYS' | 'WEEKS' | 'MONTHS'>(
+	let availability = $derived<'IMMEDIATELY' | 'DAYS' | 'WEEKS' | 'MONTHS' | 'YEARS' | 'DECADES'>(
 		account?.availability || 'IMMEDIATELY'
 	);
 	let risk = $derived(account?.risk || 'NONE');
@@ -66,7 +82,7 @@
 
 	const nameError = $derived(!name.trim());
 	const descriptionError = $derived(false);
-	const colorError = $derived(false);
+	const colorError = $derived(!color);
 	const ibanError = $derived(false);
 	const kindError = $derived(false);
 	const availabilityError = $derived(false);
@@ -157,7 +173,7 @@
 			risk,
 			opened,
 			closed,
-			ownershipFraction: Number(ownershipFraction) / 100,
+			ownershipFraction: Number(ownershipFraction) / 100
 		};
 
 		console.log('account', account);
@@ -183,7 +199,7 @@
 				<Label for="name" class="mb-2">Name</Label>
 				<Input
 					id="name"
-					placeholder="Name"
+					placeholder=""
 					bind:value={name}
 					color={nameError ? 'red' : undefined}
 					required
@@ -194,7 +210,7 @@
 				<Textarea
 					id="description"
 					clearable
-					placeholder="Beschreibung (optional)"
+					placeholder=""
 					rows={description ? 3 : 1}
 					bind:value={description}
 					color={descriptionError ? 'red' : undefined}
@@ -205,7 +221,7 @@
 				<div class="flex gap-2">
 					<Input
 						id="color"
-						placeholder="#FF0000"
+						placeholder=""
 						bind:value={color}
 						color={colorError ? 'red' : undefined}
 						class="flex-1"
@@ -217,7 +233,7 @@
 				<Label for="iban" class="mb-2">IBAN</Label>
 				<Input
 					id="iban"
-					placeholder="DE89 3704 0044 0532 0130 00"
+					placeholder=""
 					bind:value={iban}
 					color={ibanError ? 'red' : undefined}
 				/>
@@ -257,7 +273,7 @@
 				<div class="relative">
 					<Input
 						id="ownershipFraction"
-						placeholder="100"
+						placeholder=""
 						bind:value={ownershipFraction}
 						step="1"
 						min="0"
@@ -272,26 +288,19 @@
 				</div>
 			</div>
 			<div>
-				<Label for="opened" class="mb-2">Eröffnet</Label>
-				<input
-					type="date"
-					id="opened"
+				<Label class="mb-2 block">Eröffnet</Label>
+				<Datepicker
 					bind:value={opened}
-					class={`w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:ring-blue-500 ${
-						openedError ? 'border-red-600 bg-red-100 text-red-400' : ''
-					}`}
-					required
+					placeholder=""
+					inputClass={openedError ? 'border-red-600 bg-red-100 text-red-400' : ''}
 				/>
 			</div>
 			<div>
-				<Label for="closed" class="mb-2">Geschlossen</Label>
-				<input
-					type="date"
-					id="closed"
+				<Label class="mb-2 block">Geschlossen</Label>
+				<Datepicker
 					bind:value={closed}
-					class={`w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:ring-blue-500 ${
-						closedError ? 'border-red-600 bg-red-100 text-red-400' : ''
-					}`}
+					placeholder=""
+					inputClass={closedError ? 'border-red-600 bg-red-100 text-red-400' : ''}
 				/>
 			</div>
 			<div class="sm:col-span-2">
