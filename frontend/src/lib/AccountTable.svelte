@@ -9,6 +9,10 @@
 		TableHeadCell,
 		TableSearch,
 		Button,
+		Dropdown,
+		Checkbox,
+		List,
+		Li,
 		Modal
 	} from 'flowbite-svelte';
 	import { Section } from 'flowbite-svelte-blocks';
@@ -18,7 +22,8 @@
 		ChevronDownOutline,
 		EditOutline,
 		TrashBinOutline,
-		ExclamationCircleOutline
+		ExclamationCircleOutline,
+		FilterSolid
 	} from 'flowbite-svelte-icons';
 	import AccountModal from './AccountModal.svelte';
 
@@ -31,6 +36,8 @@
 	let showDeleteAccountModal = $state(false);
 	let accountIdToEdit: string | undefined = $state(undefined);
 	let accountIdToDelete: string | undefined = $state(undefined);
+
+	let showClosedAccounts = $state(false);
 
 	// Get current user and all accounts
 	const basicStore = graphql(`
@@ -73,17 +80,19 @@
 	`);
 
 	const currentUserName = $derived($basicStore.data?.users.me?.name || '');
-	const totalCount = $derived($accountStore.data?.accounts.list?.length || 0);
+	const totalCount = $derived(($accountStore.data?.accounts.list || []).filter(account => account.owner.name === currentUserName).length);
 
 	let allAccounts = $derived($accountStore.data?.accounts.list || []);
 
-	// Filter accounts to show only current user's accounts plus synchronized accounts from other users
 	let filteredAccounts = $derived.by(() => {
 		let filtered = allAccounts.filter((account) => {
 			return account.owner.name === currentUserName;
 		});
 
-		// Apply search filter
+		if (!showClosedAccounts) {
+			filtered = filtered.filter((account) => !account.closed);
+		}
+
 		if (searchTerm) {
 			const searchLower = searchTerm.toLowerCase();
 			filtered = filtered.filter(
@@ -351,6 +360,15 @@
 				<Button onclick={() => (showNewAccountModal = true)}>
 					<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
 				</Button>
+				<Button size="lg" color="alternative">Filter<FilterSolid class="ml-2 h-3 w-3 " /></Button>
+				<Dropdown class="w-48 space-y-2 p-3 text-sm">
+					<h6 class="mb-3 text-sm font-medium text-gray-900 dark:text-white">Filter</h6>
+					<List tag="dl">
+						<Li>
+							<Checkbox bind:checked={showClosedAccounts}>Zeige Geschlossene Konten</Checkbox>
+						</Li>
+					</List>
+				</Dropdown>
 			</div>
 		{/snippet}
 
