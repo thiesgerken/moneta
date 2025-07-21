@@ -1,0 +1,372 @@
+<script lang="ts">
+	import { cache, graphql } from '$houdini';
+
+	import {
+		TableBody,
+		TableBodyCell,
+		TableBodyRow,
+		TableHead,
+		TableHeadCell,
+		TableSearch,
+		Button,
+		Checkbox,
+		Badge,
+		Modal
+	} from 'flowbite-svelte';
+	import { Section } from 'flowbite-svelte-blocks';
+	import {
+		PlusOutline,
+		ChevronRightOutline,
+		ChevronDownOutline,
+		EditOutline,
+		TrashBinOutline,
+		ExclamationCircleOutline
+	} from 'flowbite-svelte-icons';
+	import { categorySorter } from './expense_utils';
+	import CategoryModal from './CategoryModal.svelte';
+
+	let searchTerm = $state('');
+	let expandedRows = $state<String[]>([]);
+	let sortBy: { field: string; direction: number }[] = $state([{ field: 'name', direction: 1 }]);
+
+	let showNewCategoryModal = $state(false);
+	let showEditCategoryModal = $state(false);
+	let showDeleteCategoryModal = $state(false);
+	let categoryIdToEdit: string | undefined = $state(undefined);
+	let categoryIdToDelete: string | undefined = $state(undefined);
+
+	const categoryStore = graphql(`
+		query CategoryTableCategories @load {
+			categories {
+				list(limit: 1000) {
+					id
+					name
+					description
+					color
+					parent {
+						id
+						name
+					}
+					monthlyLimit
+				}
+			}
+		}
+	`);
+
+	const totalCount = $derived($categoryStore.data?.categories.list.length || 0);
+
+	let allCategories = $derived($categoryStore.data?.categories.list || []);
+
+	// Filter and sort categories locally
+	let filteredCategories = $derived.by(() => {
+		let filtered = allCategories;
+
+		// Apply search filter
+		if (searchTerm) {
+			const searchLower = searchTerm.toLowerCase();
+			filtered = filtered.filter(
+				(category) =>
+					category.name.toLowerCase().includes(searchLower) ||
+					(category.description && category.description.toLowerCase().includes(searchLower))
+			);
+		}
+
+		// Apply sorting
+		if (sortBy.length > 0) {
+			const { field, direction } = sortBy[0];
+			filtered = [...filtered].sort((a, b) => {
+				let aVal, bVal;
+
+				switch (field) {
+					case 'name':
+						aVal = a.name;
+						bVal = b.name;
+						break;
+					case 'description':
+						aVal = a.description || '';
+						bVal = b.description || '';
+						break;
+					case 'parent':
+						aVal = a.parent?.name || '';
+						bVal = b.parent?.name || '';
+						break;
+					case 'monthlyLimit':
+						aVal = a.monthlyLimit || 0;
+						bVal = b.monthlyLimit || 0;
+						break;
+					default:
+						return 0;
+				}
+
+				if (aVal < bVal) return direction;
+				if (aVal > bVal) return -direction;
+				return 0;
+			});
+		}
+
+		return filtered;
+	});
+
+	let categoryToEdit = $derived(allCategories.find((c) => c.id === categoryIdToEdit) || undefined);
+	let categoryToDelete = $derived(
+		allCategories.find((c) => c.id === categoryIdToDelete) || undefined
+	);
+
+	function toggleRow(id: String) {
+		if (expandedRows.includes(id)) expandedRows = expandedRows.filter((rowId) => rowId !== id);
+		else expandedRows = [...expandedRows, id];
+	}
+
+	function sortByField(field: string) {
+		const index = sortBy.findIndex(({ field: f }) => f === field);
+		if (index === -1) {
+			sortBy = [{ field, direction: 1 }];
+		} else {
+			sortBy = [{ field, direction: -sortBy[index].direction }];
+		}
+	}
+
+	function isSortedBy(field: string) {
+		const index = sortBy.findIndex(({ field: f }) => f === field);
+		if (index === -1) return null;
+		return sortBy[index].direction;
+	}
+
+	const DeleteCategory = graphql(`
+		mutation DeleteCategory($id: ObjectIdWrapper!) {
+			categories {
+				delete(id: $id)
+			}
+		}
+	`);
+
+	async function handleCategoryModalSubmit() {
+		cache.markStale('Category');
+		await categoryStore.fetch({});
+		expandedRows = [];
+	}
+
+	async function handleDeleteCategory() {
+		if (!categoryToDelete) return;
+		await DeleteCategory.mutate({ id: categoryToDelete.id });
+		categoryIdToDelete = undefined;
+		showDeleteCategoryModal = false;
+
+		cache.markStale('Category');
+		await categoryStore.fetch({});
+		expandedRows = [];
+	}
+</script>
+
+{#snippet sortIcon(field: string)}
+	{#if isSortedBy(field) === -1}
+		{'▲'}
+	{:else if isSortedBy(field) === 1}
+		{'▼'}
+	{/if}
+{/snippet}
+
+<Modal bind:open={showDeleteCategoryModal} size="xs">
+	<div class="text-center">
+		<ExclamationCircleOutline class="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-200" />
+		<h3 class="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
+			Soll die Kategorie <b>{categoryToDelete?.name}</b> wirklich gelöscht werden?
+		</h3>
+		<div class="space-x-2">
+			<Button type="submit" value="delete" color="red" onclick={handleDeleteCategory}
+				>Löschen</Button
+			>
+			<Button
+				type="submit"
+				value="cancel"
+				color="alternative"
+				onclick={() => {
+					showDeleteCategoryModal = false;
+					categoryIdToDelete = undefined;
+				}}
+			>
+				Abbrechen
+			</Button>
+		</div>
+	</div>
+</Modal>
+
+<CategoryModal
+	bind:open={showNewCategoryModal}
+	onsubmit={handleCategoryModalSubmit}
+	categories={allCategories.map((c) => ({
+		id: c.id.toString(),
+		name: c.name,
+		description: c.description,
+		color: c.color,
+		parent: c.parent ? { id: c.parent.id.toString() } : null,
+		monthlyLimit: c.monthlyLimit
+	}))}
+/>
+
+<CategoryModal
+	bind:open={showEditCategoryModal}
+	onsubmit={handleCategoryModalSubmit}
+	category={categoryToEdit}
+	categories={allCategories.map((c) => ({
+		id: c.id.toString(),
+		name: c.name,
+		description: c.description,
+		color: c.color,
+		parent: c.parent ? { id: c.parent.id.toString() } : null,
+		monthlyLimit: c.monthlyLimit
+	}))}
+/>
+
+<Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5">
+	<TableSearch
+		placeholder="Suchen"
+		hoverable={true}
+		striped={true}
+		bind:inputValue={searchTerm}
+		tableClass="w-full text-left text-sm"
+		divClass="bg-white dark:bg-gray-800 relative shadow-md sm:rounded-lg overflow-x-auto"
+		innerDivClass="flex flex-col md:flex-row items-center justify-between space-y-3 md:space-y-0 md:space-x-4 p-4"
+		searchClass="w-full md:w-1/2 relative"
+	>
+		{#snippet header()}
+			<div
+				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end space-y-2 md:w-auto md:flex-row md:items-center md:space-x-3 md:space-y-0"
+			>
+				<Button onclick={() => (showNewCategoryModal = true)}>
+					<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
+				</Button>
+			</div>
+		{/snippet}
+
+		<TableHead>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('name')}>
+				Name
+				{@render sortIcon('name')}
+			</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('description')}>
+				Beschreibung
+				{@render sortIcon('description')}
+			</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('parent')}>
+				Übergeordnet
+				{@render sortIcon('parent')}
+			</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('monthlyLimit')}>
+				Monatliches Limit
+				{@render sortIcon('monthlyLimit')}
+			</TableHeadCell>
+		</TableHead>
+		<TableBody class="divide-y">
+			{#each filteredCategories as category (category.id)}
+				<TableBodyRow onclick={() => toggleRow(category.id)}>
+					<TableBodyCell class="px-4 py-3">
+						<button type="button" class="mr-2 focus:outline-none">
+							{#if expandedRows.includes(category.id)}
+								<ChevronDownOutline class="inline h-4 w-4" />
+							{:else}
+								<ChevronRightOutline class="inline h-4 w-4" />
+							{/if}
+						</button>
+						<span
+							class="mr-2 inline-block h-3 w-3 rounded-full"
+							style={category.color ? `background-color: ${category.color}` : undefined}
+						></span>
+						{category.name}
+					</TableBodyCell>
+					<TableBodyCell class="max-w-96 truncate px-4 py-3">
+						{category.description || '-'}
+					</TableBodyCell>
+					<TableBodyCell class="px-4 py-3">
+						{category.parent?.name || '-'}
+					</TableBodyCell>
+					<TableBodyCell class="px-4 py-3">
+						{category.monthlyLimit ? (category.monthlyLimit / 100).toFixed(2) + '€' : '-'}
+					</TableBodyCell>
+				</TableBodyRow>
+				{#if expandedRows.includes(category.id)}
+					<tr>
+						<td colspan="4" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
+							<div class="flex flex-col gap-2">
+								<div>
+									<b>Name:</b>
+									{category.name}
+								</div>
+								{#if category.description}
+									<div>
+										<b>Beschreibung:</b>
+										{category.description}
+									</div>
+								{/if}
+								<div>
+									<b>Farbe:</b>
+									{#if category.color}
+										<span class="inline-flex items-center gap-2">
+											<div
+												class="h-4 w-4 rounded border border-gray-300"
+												style={`background-color: ${category.color}`}
+											></div>
+											{category.color}
+										</span>
+									{:else}
+										Keine
+									{/if}
+								</div>
+								<div>
+									<b>Übergeordnete Kategorie:</b>
+									{category.parent?.name || 'Keine'}
+								</div>
+								<div>
+									<b>Monatliches Limit:</b>
+									{category.monthlyLimit
+										? (category.monthlyLimit / 100).toFixed(2) + '€'
+										: 'Kein Limit'}
+								</div>
+
+								<div class="flex gap-2">
+									<Button
+										color="yellow"
+										size="xs"
+										onclick={() => {
+											categoryIdToEdit = category.id.toString();
+											showEditCategoryModal = true;
+										}}
+									>
+										<EditOutline class="mr-2 h-3.5 w-3.5" />
+										Bearbeiten
+									</Button>
+									<Button
+										color="red"
+										size="xs"
+										onclick={() => {
+											categoryIdToDelete = category.id.toString();
+											showDeleteCategoryModal = true;
+										}}
+									>
+										<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
+										Löschen
+									</Button>
+								</div>
+							</div>
+						</td>
+					</tr>
+				{/if}
+			{/each}
+		</TableBody>
+		{#snippet footer()}
+			<div
+				class="flex flex-col items-start justify-between space-y-3 p-4 md:flex-row md:items-center md:space-y-0"
+				aria-label="Table navigation"
+			>
+				<span class="text-sm font-normal text-gray-500 dark:text-gray-400">
+					Einträge
+					<span class="font-semibold text-gray-900 dark:text-white"
+						>{filteredCategories.length}</span
+					>
+					von
+					<span class="font-semibold text-gray-900 dark:text-white">{totalCount}</span>
+				</span>
+			</div>
+		{/snippet}
+	</TableSearch>
+</Section>
