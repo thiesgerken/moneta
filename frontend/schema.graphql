@@ -198,17 +198,26 @@ input ExpenseCategorizationInput {
   weight: Float!
 }
 
+type ExpenseChangelogConnection {
+  edges: [ExpenseChangelogNode!]!
+}
+
 type ExpenseChangelogEntry {
   automatic: Boolean!
   confidence: Float!
   date: DateTime!
   diff: String
+  id: ObjectIdWrapper!
   newState: Expense
   oldState: Expense
   targetId: ObjectIdWrapper!
   tool: String
   user: User
   userId: ObjectIdWrapper
+}
+
+type ExpenseChangelogNode {
+  node: ExpenseChangelogEntry!
 }
 
 type ExpenseConnection {
@@ -282,6 +291,7 @@ input ExpensePositionInput {
 }
 
 type ExpenseQuery {
+  changelog(limit: Int, skip: Int): ExpenseChangelogConnection!
   get(id: ObjectIdWrapper!): Expense!
   list(filter: String, limit: Int, skip: Int, sort: String): ExpenseConnection!
 }

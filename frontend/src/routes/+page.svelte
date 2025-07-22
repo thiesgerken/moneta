@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ExpenseChangelog from '$lib/ExpenseChangelog.svelte';
 	import type { PageData } from './$houdini';
 
 	interface Props {
@@ -16,7 +17,5 @@
 </script>
 
 <div class="p-8">
-	<h1 class="text-2xl font-bold">Dashboard</h1>
-	<p>Welcome to the dashboard</p>
-	<p>API Version: {$About.data?.apiVersion}</p>
+	<ExpenseChangelog />
 </div>

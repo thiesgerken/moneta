@@ -29,7 +29,10 @@
 
 	let searchTerm = $state('');
 	let expandedRows = $state<String[]>([]);
-	let sortBy: { field: string; direction: number }[] = $state([{ field: 'name', direction: 1 }]);
+	let sortBy: { field: string; direction: number }[] = $state([
+		{ field: 'opened', direction: 1 },
+		{ field: 'name', direction: 1 }
+	]);
 
 	let showNewAccountModal = $state(false);
 	let showEditAccountModal = $state(false);
@@ -80,7 +83,11 @@
 	`);
 
 	const currentUserName = $derived($basicStore.data?.users.me?.name || '');
-	const totalCount = $derived(($accountStore.data?.accounts.list || []).filter(account => account.owner.name === currentUserName).length);
+	const totalCount = $derived(
+		($accountStore.data?.accounts.list || []).filter(
+			(account) => account.owner.name === currentUserName
+		).length
+	);
 
 	let allAccounts = $derived($accountStore.data?.accounts.list || []);
 
@@ -397,6 +404,14 @@
 				Anteil
 				{@render sortIcon('ownershipFraction')}
 			</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('opened')}>
+				Eröffnet
+				{@render sortIcon('opened')}
+			</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('closed')}>
+				Geschlossen
+				{@render sortIcon('closed')}
+			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each filteredAccounts as account (account.id)}
@@ -431,6 +446,20 @@
 					</TableBodyCell>
 					<TableBodyCell class="px-4 py-3">
 						{(account.ownershipFraction * 100).toFixed(0)}%
+					</TableBodyCell>
+					<TableBodyCell class="px-4 py-3">
+						{account.opened.toLocaleDateString('de-DE', {
+							year: 'numeric',
+							month: '2-digit',
+							day: '2-digit'
+						})}
+					</TableBodyCell>
+					<TableBodyCell class="px-4 py-3">
+						{account.closed?.toLocaleDateString('de-DE', {
+							year: 'numeric',
+							month: '2-digit',
+							day: '2-digit'
+						})}
 					</TableBodyCell>
 				</TableBodyRow>
 				{#if expandedRows.includes(account.id)}

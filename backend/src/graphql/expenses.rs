@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 
 use crate::graphql::accounts::GraphQLAccount;
@@ -18,6 +19,7 @@ use crate::models::rendering::{
 use crate::models::{Account, Expense, ObjectIdWrapper};
 use crate::queries;
 
+use bson::Document;
 use chrono::DateTime;
 use chrono::Utc;
 use futures::TryStreamExt;
@@ -219,7 +221,7 @@ impl GraphQLExpense {
             .try_collect::<Vec<_>>()
             .await?
             .into_iter()
-            .map(GraphQLExpenseChangelogEntry::new)
+            .map(|entry| GraphQLExpenseChangelogEntry::new(entry, self.data.id.into()))
             .collect())
     }
 }
@@ -240,11 +242,12 @@ pub struct ExpenseNode {
 #[derive(Debug, Clone)]
 pub struct GraphQLExpenseChangelogEntry {
     data: ExpenseChangelogEntry,
+    rendered_id: ObjectId,
 }
 
 impl GraphQLExpenseChangelogEntry {
-    pub fn new(data: ExpenseChangelogEntry) -> Self {
-        GraphQLExpenseChangelogEntry { data }
+    pub fn new(data: ExpenseChangelogEntry, rendered_id: ObjectId) -> Self {
+        GraphQLExpenseChangelogEntry { data, rendered_id }
     }
 }
 
@@ -252,6 +255,9 @@ impl GraphQLExpenseChangelogEntry {
 impl GraphQLExpenseChangelogEntry {
     fn target_id(&self) -> ObjectIdWrapper {
         self.data.target_id
+    }
+    fn id(&self) -> ObjectIdWrapper {
+        self.rendered_id.into()
     }
     fn user_id(&self) -> Option<ObjectIdWrapper> {
         self.data.user_id
@@ -293,7 +299,6 @@ impl GraphQLExpenseChangelogEntry {
 #[derive(GraphQLObject)]
 #[graphql(context=Context)]
 pub struct ExpenseChangelogConnection {
-    pub total_count: i32,
     pub edges: Vec<ExpenseChangelogNode>,
 }
 
@@ -356,6 +361,73 @@ impl ExpenseQuery {
                 .ok_or_else(|| format!("Expense {id:?} not found"))?,
         ))
     }
+
+    pub async fn changelog(
+        context: &Context,
+        limit: Option<i32>,
+        skip: Option<i32>,
+    ) -> juniper::FieldResult<ExpenseChangelogConnection> {
+        let uid = require_user(context).await?;
+        let limit = limit.unwrap_or(50);
+        let skip = skip.unwrap_or(0);
+
+        // Get the last rendered expenses for the user, sorted by last updated
+        let rendered_collection = context
+            .connection
+            .collection::<RenderedExpense>("expenses_rendered");
+
+        let rendered_expenses = rendered_collection
+            .clone_with_type::<Document>()
+            .find(doc! {"userId": uid})
+            .sort(doc! {"updatedAt": -1})
+            .projection(doc! {"_id": 1, "upstreamId": 1, "updatedAt": 1})
+            .limit((skip + limit) as i64)
+            .await?
+            .try_collect::<Vec<Document>>()
+            .await?;
+
+        // Extract upstream IDs
+        let upstream_ids: Vec<ObjectId> = rendered_expenses
+            .iter()
+            .map(|expense| expense.get_object_id("upstreamId").unwrap())
+            .collect();
+
+        if upstream_ids.is_empty() {
+            return Ok(ExpenseChangelogConnection {
+                edges: vec![],
+            });
+        }
+
+        let upstream_id_to_rendered_id: HashMap<ObjectId, ObjectId> = rendered_expenses
+            .into_iter()
+            .map(|expense| (expense.get_object_id("upstreamId").unwrap(), expense.get_object_id("_id").unwrap()))
+            .collect();
+
+        // Query changelog entries for these upstream IDs
+        let changelog_collection = context
+            .connection
+            .collection::<ExpenseChangelogEntry>("expense_changes");
+
+        let changelog_entries = changelog_collection
+            .find(doc! {"targetId": {"$in": upstream_ids}})
+            .sort(doc! {"date": -1})
+            .skip(skip as u64)
+            .limit(limit as i64)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        Ok(ExpenseChangelogConnection {
+            edges: changelog_entries
+                .into_iter()
+                .map(|entry| {
+                    let rendered_id = upstream_id_to_rendered_id.get(&entry.target_id).unwrap().clone();
+                    ExpenseChangelogNode {
+                    node: GraphQLExpenseChangelogEntry::new(entry, rendered_id)}
+                })
+                .collect(),
+        })
+    }
 }
 pub struct ExpenseMutation;
 
@@ -394,7 +466,7 @@ impl ExpenseMutation {
         // create a changelog entry for this removal
         let changelog_entry = ExpenseChangelogEntry {
             user_id: Some(user_id.into()),
-            target_id: id,
+            target_id: upstream_entry.id,
             date: Utc::now(),
             old_state: Some(upstream_entry),
             new_state: None,
@@ -499,7 +571,7 @@ impl ExpenseMutation {
         // create a changelog entry for this update
         let changelog_entry = ExpenseChangelogEntry {
             user_id: Some(user_id.into()),
-            target_id: id,
+            target_id: upstream_entry.id,
             date: updated_upstream_entry.updated_at,
             old_state: Some(upstream_entry),
             new_state: Some(updated_upstream_entry.clone()),
