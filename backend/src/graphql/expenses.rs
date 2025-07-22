@@ -281,8 +281,10 @@ impl GraphQLExpenseChangelogEntry {
         self.data.new_state.clone()
     }
     fn diff(&self) -> Option<String> {
-        let old_state = self.data.old_state.as_ref()?;
+        let mut old_state = self.data.old_state.clone()?;
         let new_state = self.data.new_state.as_ref()?;
+
+        old_state.updated_at = new_state.updated_at;
         util::json_diff(&old_state, &new_state).ok()
     }
     async fn user(&self, context: &Context) -> FieldResult<Option<GraphQLUserInfo>> {
@@ -393,14 +395,17 @@ impl ExpenseQuery {
             .collect();
 
         if upstream_ids.is_empty() {
-            return Ok(ExpenseChangelogConnection {
-                edges: vec![],
-            });
+            return Ok(ExpenseChangelogConnection { edges: vec![] });
         }
 
         let upstream_id_to_rendered_id: HashMap<ObjectId, ObjectId> = rendered_expenses
             .into_iter()
-            .map(|expense| (expense.get_object_id("upstreamId").unwrap(), expense.get_object_id("_id").unwrap()))
+            .map(|expense| {
+                (
+                    expense.get_object_id("upstreamId").unwrap(),
+                    expense.get_object_id("_id").unwrap(),
+                )
+            })
             .collect();
 
         // Query changelog entries for these upstream IDs
@@ -421,9 +426,13 @@ impl ExpenseQuery {
             edges: changelog_entries
                 .into_iter()
                 .map(|entry| {
-                    let rendered_id = upstream_id_to_rendered_id.get(&entry.target_id).unwrap().clone();
+                    let rendered_id = upstream_id_to_rendered_id
+                        .get(&entry.target_id)
+                        .unwrap()
+                        .clone();
                     ExpenseChangelogNode {
-                    node: GraphQLExpenseChangelogEntry::new(entry, rendered_id)}
+                        node: GraphQLExpenseChangelogEntry::new(entry, rendered_id),
+                    }
                 })
                 .collect(),
         })

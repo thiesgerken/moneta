@@ -3,6 +3,9 @@
 
 	import { Timeline, TimelineItem } from 'flowbite-svelte';
 	import { CalendarWeekSolid } from 'flowbite-svelte-icons';
+	import { ChevronDownOutline, ChevronRightOutline } from 'flowbite-svelte-icons';
+
+	let expandedDiffs = $state<string[]>([]);
 
 	const changelogStore = graphql(`
 		query ExpenseChangelog @load {
@@ -43,6 +46,11 @@
 			(a, b) => b.node.date.getTime() - a.node.date.getTime()
 		)
 	);
+
+	const toggleDiff = (id: string) => {
+		if (expandedDiffs.includes(id)) expandedDiffs = expandedDiffs.filter((rowId) => rowId !== id);
+		else expandedDiffs = [...expandedDiffs, id];
+	};
 </script>
 
 <Timeline order="vertical">
@@ -73,9 +81,24 @@
 			</p>
 
 			{#if entry.node.oldState && entry.node.diff}
-				<p class="mb-4 text-base font-normal font-mono text-gray-500 dark:text-gray-400">
-					{entry.node.diff}
-				</p>
+				<div class="mb-4">
+					<button
+						class="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+						onclick={() => toggleDiff(entry.node.id.toString())}
+					>
+						{#if expandedDiffs.includes(entry.node.id.toString())}
+							<ChevronDownOutline class="h-3 w-3" />
+						{:else}
+							<ChevronRightOutline class="h-3 w-3" />
+						{/if}
+						<span>Show diff</span>
+					</button>
+					{#if expandedDiffs.includes(entry.node.id.toString())}
+						<pre
+							class="mt-2 whitespace-pre-wrap font-mono text-xs text-gray-500 dark:text-gray-400">{entry
+								.node.diff}</pre>
+					{/if}
+				</div>
 			{/if}
 		</TimelineItem>
 	{/each}

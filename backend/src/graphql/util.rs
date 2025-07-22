@@ -61,10 +61,9 @@ pub fn json_diff<T: serde::Serialize>(
     left: &T,
     right: &T,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let left_json = serde_json::to_string_pretty(left)?;
-    let right_json = serde_json::to_string_pretty(right)?;
+    let left_json = serde_json::to_string_pretty(left)? + "\n";
+    let right_json = serde_json::to_string_pretty(right)? + "\n";
 
     let diff = TextDiff::from_lines(&left_json, &right_json);
-
     Ok(diff.unified_diff().context_radius(3).to_string())
 }
