@@ -207,6 +207,7 @@ type ExpenseChangelogEntry {
   confidence: Float!
   date: DateTime!
   diff: String
+  expenseId: ObjectIdWrapper!
   id: ObjectIdWrapper!
   newState: Expense
   oldState: Expense

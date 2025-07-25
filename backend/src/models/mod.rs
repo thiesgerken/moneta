@@ -96,6 +96,9 @@ pub struct Balance {
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseChangelogEntry {
+    #[serde(rename = "_id", default)]
+    pub id: ObjectIdWrapper,
+
     pub target_id: ObjectIdWrapper,
     pub user_id: Option<ObjectIdWrapper>,
 

@@ -295,6 +295,7 @@
 								uri
 							}
 							changelog {
+								id
 								user {
 									name
 									firstName

@@ -257,6 +257,9 @@ impl GraphQLExpenseChangelogEntry {
         self.data.target_id
     }
     fn id(&self) -> ObjectIdWrapper {
+        self.data.id
+    }
+    fn expense_id(&self) -> ObjectIdWrapper {
         self.rendered_id.into()
     }
     fn user_id(&self) -> Option<ObjectIdWrapper> {
@@ -474,6 +477,7 @@ impl ExpenseMutation {
 
         // create a changelog entry for this removal
         let changelog_entry = ExpenseChangelogEntry {
+            id: ObjectId::new().into(),
             user_id: Some(user_id.into()),
             target_id: upstream_entry.id,
             date: Utc::now(),
@@ -510,6 +514,7 @@ impl ExpenseMutation {
 
         // create a changelog entry for this creation
         let changelog_entry = ExpenseChangelogEntry {
+            id: ObjectId::new().into(),
             user_id: Some(user_id.into()),
             target_id: entry.id,
             date: entry.created_at,
@@ -579,6 +584,7 @@ impl ExpenseMutation {
 
         // create a changelog entry for this update
         let changelog_entry = ExpenseChangelogEntry {
+            id: ObjectId::new().into(),
             user_id: Some(user_id.into()),
             target_id: upstream_entry.id,
             date: updated_upstream_entry.updated_at,

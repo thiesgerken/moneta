@@ -20,6 +20,7 @@
 					edges {
 						node {
 							id
+							expenseId
 							date
 							tool
 							diff

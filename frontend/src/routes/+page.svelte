@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ExpenseChangelog from '$lib/ExpenseChangelog.svelte';
+	import { Tabs, TabItem } from 'flowbite-svelte';
 	import type { PageData } from './$houdini';
 
 	interface Props {
@@ -16,6 +17,10 @@
 	});
 </script>
 
-<div class="p-8">
-	<ExpenseChangelog />
+<div class="pl-8 pr-8">
+	<Tabs tabStyle="underline">
+		<TabItem open title="Aktivität">
+			<ExpenseChangelog />
+		</TabItem>
+	</Tabs>
 </div>
