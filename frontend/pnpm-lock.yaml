@@ -49,10 +49,10 @@ importers:
         version: 1.10.15(rollup@4.45.1)(svelte@5.36.13)(tailwindcss@4.1.11)
       flowbite-svelte-blocks:
         specifier: ^2.0.0
-        version: 2.0.0(@sveltejs/kit@2.25.1(@sveltejs/vite-plugin-svelte@5.1.1(svelte@5.36.13)(vite@6.3.5(@types/node@24.0.15)(jiti@2.4.2)(lightningcss@1.30.1)))(svelte@5.36.13)(vite@6.3.5(@types/node@24.0.15)(jiti@2.4.2)(lightningcss@1.30.1)))(flowbite-svelte-icons@2.2.1(svelte@5.36.13))(flowbite-svelte@1.10.15(rollup@4.45.1)(svelte@5.36.13)(tailwindcss@4.1.11))(flowbite@3.1.2(rollup@4.45.1))(svelte@5.36.13)(tailwind-merge@3.3.1)(tailwindcss@4.1.11)
+        version: 2.0.0(@sveltejs/kit@2.25.1(@sveltejs/vite-plugin-svelte@5.1.1(svelte@5.36.13)(vite@6.3.5(@types/node@24.0.15)(jiti@2.4.2)(lightningcss@1.30.1)))(svelte@5.36.13)(vite@6.3.5(@types/node@24.0.15)(jiti@2.4.2)(lightningcss@1.30.1)))(flowbite-svelte-icons@3.0.0(svelte@5.36.13))(flowbite-svelte@1.10.15(rollup@4.45.1)(svelte@5.36.13)(tailwindcss@4.1.11))(flowbite@3.1.2(rollup@4.45.1))(svelte@5.36.13)(tailwind-merge@3.3.1)(tailwindcss@4.1.11)
       flowbite-svelte-icons:
-        specifier: ^2.2.1
-        version: 2.2.1(svelte@5.36.13)
+        specifier: ^3.0.0
+        version: 3.0.0(svelte@5.36.13)
       globals:
         specifier: ^16.3.0
         version: 16.3.0
@@ -1246,8 +1246,8 @@ packages:
       tailwind-merge: ^3.2.0
       tailwindcss: ^3.4.16
 
-  flowbite-svelte-icons@2.2.1:
-    resolution: {integrity: sha512-SH59319zN4TFpmvFMD7+0ETyDxez4Wyw3mgz7hkjhvrx8HawNAS3Fp7au84pZEs1gniX4hvXIg54U+4YybV2rA==}
+  flowbite-svelte-icons@3.0.0:
+    resolution: {integrity: sha512-7qm8vLOW4uHq1UeDDx0DLrLZXiE8H0i/XCFjGMsSAhIFfpkyIwlE4qXlmy8mjO4p+rzKNbVALQIoDEnuo8tPgg==}
     peerDependencies:
       svelte: ^5.0.0
 
@@ -3205,17 +3205,17 @@ snapshots:
     transitivePeerDependencies:
       - rollup
 
-  flowbite-svelte-blocks@2.0.0(@sveltejs/kit@2.25.1(@sveltejs/vite-plugin-svelte@5.1.1(svelte@5.36.13)(vite@6.3.5(@types/node@24.0.15)(jiti@2.4.2)(lightningcss@1.30.1)))(svelte@5.36.13)(vite@6.3.5(@types/node@24.0.15)(jiti@2.4.2)(lightningcss@1.30.1)))(flowbite-svelte-icons@2.2.1(svelte@5.36.13))(flowbite-svelte@1.10.15(rollup@4.45.1)(svelte@5.36.13)(tailwindcss@4.1.11))(flowbite@3.1.2(rollup@4.45.1))(svelte@5.36.13)(tailwind-merge@3.3.1)(tailwindcss@4.1.11):
+  flowbite-svelte-blocks@2.0.0(@sveltejs/kit@2.25.1(@sveltejs/vite-plugin-svelte@5.1.1(svelte@5.36.13)(vite@6.3.5(@types/node@24.0.15)(jiti@2.4.2)(lightningcss@1.30.1)))(svelte@5.36.13)(vite@6.3.5(@types/node@24.0.15)(jiti@2.4.2)(lightningcss@1.30.1)))(flowbite-svelte-icons@3.0.0(svelte@5.36.13))(flowbite-svelte@1.10.15(rollup@4.45.1)(svelte@5.36.13)(tailwindcss@4.1.11))(flowbite@3.1.2(rollup@4.45.1))(svelte@5.36.13)(tailwind-merge@3.3.1)(tailwindcss@4.1.11):
     dependencies:
       '@sveltejs/kit': 2.25.1(@sveltejs/vite-plugin-svelte@5.1.1(svelte@5.36.13)(vite@6.3.5(@types/node@24.0.15)(jiti@2.4.2)(lightningcss@1.30.1)))(svelte@5.36.13)(vite@6.3.5(@types/node@24.0.15)(jiti@2.4.2)(lightningcss@1.30.1))
       flowbite: 3.1.2(rollup@4.45.1)
       flowbite-svelte: 1.10.15(rollup@4.45.1)(svelte@5.36.13)(tailwindcss@4.1.11)
-      flowbite-svelte-icons: 2.2.1(svelte@5.36.13)
+      flowbite-svelte-icons: 3.0.0(svelte@5.36.13)
       svelte: 5.36.13
       tailwind-merge: 3.3.1
       tailwindcss: 4.1.11
 
-  flowbite-svelte-icons@2.2.1(svelte@5.36.13):
+  flowbite-svelte-icons@3.0.0(svelte@5.36.13):
     dependencies:
       clsx: 2.1.1
       svelte: 5.36.13
