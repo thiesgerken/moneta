@@ -43,7 +43,7 @@ services:
       - "127.0.0.1:27018:27017"
 
   traefik:
-    image: "traefik:v2.9"
+    image: "traefik:v2.11@sha256:247c456388728396fda0cb8e500c0d5d83d0624cc364623479cca4cb0fa5257c"
     container_name: "traefik"
     command:
       - "--providers.docker=true"
