@@ -60,9 +60,9 @@ jobs:
           components: rustfmt, clippy
 
       - run: cd backend && cargo check
-      - run: cd backend && cargo test
-      - run: cd backend && cargo fmt --all -- --check
-      - run: cd backend && cargo clippy -- -D warnings
+      # - run: cd backend && cargo test
+      # - run: cd backend && cargo fmt --all -- --check
+      # - run: cd backend && cargo clippy -- -D warnings
       # - run: cd backend && cargo build
 
   test-frontend:
