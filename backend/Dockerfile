@@ -16,6 +16,6 @@ RUN touch src/lib.rs && touch src/bin/moneta.rs && touch src/bin/sandbox.rs
 RUN cargo build --release
 RUN strip -s target/release/moneta
 
-FROM debian:bullseye-slim
+FROM debian:bullseye-slim@sha256:6d3c63184632046054ae709964befc943ecffa140adc697ca955a10002a79c08
 COPY --from=builder /build/target/release/moneta /bin/moneta
 CMD moneta
