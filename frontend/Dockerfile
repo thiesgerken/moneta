@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim@sha256:07a2fca567b37b38fe11eb6a38d0a6b33262d76607970ff76affc4b7a2581558 AS build
+FROM node:24-bookworm-slim@sha256:0f2d677a7152ee7ac390837bd4fc36aca12f595411df5d4209f972660e34a7b6 AS build
 
 ENV NODE_ENV=production
 WORKDIR /app
@@ -10,7 +10,7 @@ RUN pnpm i
 COPY . ./
 RUN pnpm build
 
-FROM node:24-bookworm-slim@sha256:07a2fca567b37b38fe11eb6a38d0a6b33262d76607970ff76affc4b7a2581558
+FROM node:24-bookworm-slim@sha256:0f2d677a7152ee7ac390837bd4fc36aca12f595411df5d4209f972660e34a7b6
 
 WORKDIR /app
 COPY --from=build /app .
