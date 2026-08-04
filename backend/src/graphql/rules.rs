@@ -6,7 +6,7 @@ use super::util;
 use crate::graphql::root::{Context, require_user};
 use crate::models::{
     AutomationRule, AutomationRuleInput, Expense, ExpenseDelivery, ObjectIdWrapper,
-    PeriodicInterval, PeriodicRule, PeriodicRuleInput, rendering::RenderedExpense,
+    PeriodicInterval, PeriodicRule, PeriodicRuleInput, SeenDelivery, rendering::RenderedExpense,
 };
 use crate::rules::DeliveryOutcome;
 
@@ -490,5 +490,77 @@ impl DeliveryMutation {
                 },
             })
             .collect())
+    }
+}
+
+/// A delivery that has been handed in, and what became of it.
+pub struct GraphQLSeenDelivery {
+    data: SeenDelivery,
+}
+
+#[graphql_object(Context = Context, name = "SeenDelivery")]
+impl GraphQLSeenDelivery {
+    fn id(&self) -> ObjectIdWrapper {
+        self.data.id
+    }
+    fn account_id(&self) -> ObjectIdWrapper {
+        self.data.account_id
+    }
+    fn date(&self) -> chrono::DateTime<Utc> {
+        self.data.date
+    }
+    fn amount(&self) -> i32 {
+        self.data.amount
+    }
+    fn statement(&self) -> &str {
+        &self.data.statement
+    }
+    fn created_at(&self) -> chrono::DateTime<Utc> {
+        self.data.created_at
+    }
+
+    /// false when no rule matched, which is the signal that a rule is missing
+    fn matched(&self) -> bool {
+        self.data.expense_id.is_some()
+    }
+
+    /// the expense this delivery produced, as this caller's rendered id
+    async fn expense_id(&self, context: &Context) -> juniper::FieldResult<Option<ObjectIdWrapper>> {
+        let Some(upstream) = self.data.expense_id else {
+            return Ok(None);
+        };
+
+        let user_id = require_user(context).await?;
+        rendered_template_id(context, user_id, upstream).await
+    }
+}
+
+pub struct DeliveryQuery;
+
+#[graphql_object(Context = Context)]
+impl DeliveryQuery {
+    pub async fn list(
+        context: &Context,
+        limit: Option<i32>,
+        skip: Option<i32>,
+        filter: Option<String>,
+        sort: Option<String>,
+    ) -> juniper::FieldResult<Vec<GraphQLSeenDelivery>> {
+        let user_id = require_user(context).await?;
+
+        Ok(util::list_query::<SeenDelivery>(
+            "seen_deliveries",
+            &context.connection,
+            limit,
+            skip,
+            filter,
+            sort,
+            Some(doc!("userId": user_id)),
+        )
+        .await?
+        .1
+        .into_iter()
+        .map(|data| GraphQLSeenDelivery { data })
+        .collect())
     }
 }

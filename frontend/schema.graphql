@@ -215,6 +215,10 @@ type DeliveryMutation {
   submit(deliveries: [ExpenseDelivery!]!): [ExpenseDeliveryResult!]!
 }
 
+type DeliveryQuery {
+  list(filter: String, limit: Int, skip: Int, sort: String): [SeenDelivery!]!
+}
+
 enum DeliveryStatus {
   """an expense was created"""
   CREATED
@@ -487,9 +491,25 @@ type Query {
   automationRules: AutomationRuleQuery!
   balances: BalanceQuery!
   categories: CategoryQuery!
+  deliveries: DeliveryQuery!
   expenses: ExpenseQuery!
   periodicRules: PeriodicRuleQuery!
   users: UserQuery!
+}
+
+type SeenDelivery {
+  accountId: ObjectIdWrapper!
+  amount: Int!
+  createdAt: DateTime!
+  date: DateTime!
+
+  """the expense this delivery produced, as this caller's rendered id"""
+  expenseId: ObjectIdWrapper
+  id: ObjectIdWrapper!
+
+  """false when no rule matched, which is the signal that a rule is missing"""
+  matched: Boolean!
+  statement: String!
 }
 
 type User {
