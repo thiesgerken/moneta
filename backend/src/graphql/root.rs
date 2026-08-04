@@ -11,7 +11,10 @@ use crate::graphql::{
     balances::{BalanceMutation, BalanceQuery},
     categories::{CategoryMutation, CategoryQuery},
     expenses::{ExpenseMutation, ExpenseQuery},
-    rules::{AutomationRuleMutation, AutomationRuleQuery, PeriodicRuleMutation, PeriodicRuleQuery},
+    rules::{
+        AutomationRuleMutation, AutomationRuleQuery, DeliveryMutation, PeriodicRuleMutation,
+        PeriodicRuleQuery,
+    },
     users::{UserMutation, UserQuery},
 };
 
@@ -156,5 +159,9 @@ impl Mutation {
 
     fn periodic_rules() -> PeriodicRuleMutation {
         PeriodicRuleMutation
+    }
+
+    fn deliveries() -> DeliveryMutation {
+        DeliveryMutation
     }
 }

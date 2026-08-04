@@ -205,6 +205,35 @@ See also [`chrono::DateTime`][2] for details.
 """
 scalar DateTime
 
+type DeliveryMutation {
+  """
+  Hands bank statement lines to the automation rules.
+  
+  Safe to call with overlapping batches: a line already delivered is reported as a
+  duplicate rather than creating a second expense.
+  """
+  submit(deliveries: [ExpenseDelivery!]!): [ExpenseDeliveryResult!]!
+}
+
+enum DeliveryStatus {
+  """an expense was created"""
+  CREATED
+
+  """already delivered before, so nothing was done"""
+  DUPLICATE
+
+  """
+  a rule matched but could not be applied, and the line was *not* remembered so that
+  fixing the rule and re-uploading picks it up
+  """
+  FAILED
+
+  """
+  no automation rule matched; the line is remembered but produced no expense
+  """
+  UNMATCHED
+}
+
 type Expense {
   bookingEnd: DateTime!
   bookingStart: DateTime!
@@ -264,6 +293,27 @@ type ExpenseChangelogNode {
 type ExpenseConnection {
   edges: [ExpenseNode!]!
   totalCount: Int!
+}
+
+"""
+A transaction handed to moneta from outside (a bank statement importer), before it is
+known which expense — if any — it belongs to.
+"""
+input ExpenseDelivery {
+  accountId: ObjectIdWrapper!
+
+  """in cents, using the same sign convention as expense transactions"""
+  amount: Int!
+  date: DateTime!
+  statement: String!
+}
+
+type ExpenseDeliveryResult {
+  """the created expense, as this caller's rendered id"""
+  expenseId: ObjectIdWrapper
+  message: String
+  ruleId: ObjectIdWrapper
+  status: DeliveryStatus!
 }
 
 input ExpenseInput {
@@ -373,6 +423,7 @@ type Mutation {
   automationRules: AutomationRuleMutation!
   balances: BalanceMutation!
   categories: CategoryMutation!
+  deliveries: DeliveryMutation!
   expenses: ExpenseMutation!
   periodicRules: PeriodicRuleMutation!
   users: UserMutation!

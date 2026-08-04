@@ -5,9 +5,10 @@ use mongodb::bson::{doc, oid::ObjectId};
 use super::util;
 use crate::graphql::root::{Context, require_user};
 use crate::models::{
-    AutomationRule, AutomationRuleInput, Expense, ObjectIdWrapper, PeriodicInterval, PeriodicRule,
-    PeriodicRuleInput, rendering::RenderedExpense,
+    AutomationRule, AutomationRuleInput, Expense, ExpenseDelivery, ObjectIdWrapper,
+    PeriodicInterval, PeriodicRule, PeriodicRuleInput, rendering::RenderedExpense,
 };
+use crate::rules::DeliveryOutcome;
 
 const AUTOMATION: &str = "automation_rules";
 const PERIODIC: &str = "periodic_rules";
@@ -377,5 +378,117 @@ impl PeriodicRuleMutation {
             .map_err(|e| e.to_string())?;
 
         Ok(count as i32)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, juniper::GraphQLEnum)]
+pub enum DeliveryStatus {
+    /// an expense was created
+    Created,
+    /// already delivered before, so nothing was done
+    Duplicate,
+    /// no automation rule matched; the line is remembered but produced no expense
+    Unmatched,
+    /// a rule matched but could not be applied, and the line was *not* remembered so that
+    /// fixing the rule and re-uploading picks it up
+    Failed,
+}
+
+pub struct DeliveryResult {
+    status: DeliveryStatus,
+    expense_id: Option<ObjectIdWrapper>,
+    rule_id: Option<ObjectIdWrapper>,
+    message: Option<String>,
+}
+
+#[graphql_object(Context = Context, name = "ExpenseDeliveryResult")]
+impl DeliveryResult {
+    fn status(&self) -> DeliveryStatus {
+        self.status
+    }
+
+    fn rule_id(&self) -> Option<ObjectIdWrapper> {
+        self.rule_id
+    }
+
+    fn message(&self) -> Option<&str> {
+        self.message.as_deref()
+    }
+
+    /// the created expense, as this caller's rendered id
+    async fn expense_id(&self, context: &Context) -> juniper::FieldResult<Option<ObjectIdWrapper>> {
+        let Some(upstream) = self.expense_id else {
+            return Ok(None);
+        };
+
+        let user_id = require_user(context).await?;
+        rendered_template_id(context, user_id, upstream).await
+    }
+}
+
+pub struct DeliveryMutation;
+
+#[graphql_object(Context = Context)]
+impl DeliveryMutation {
+    /// Hands bank statement lines to the automation rules.
+    ///
+    /// Safe to call with overlapping batches: a line already delivered is reported as a
+    /// duplicate rather than creating a second expense.
+    pub async fn submit(
+        context: &Context,
+        deliveries: Vec<ExpenseDelivery>,
+    ) -> juniper::FieldResult<Vec<DeliveryResult>> {
+        let user_id = require_user(context).await?;
+
+        // an account the caller does not own would let them probe other people's rules
+        for delivery in &deliveries {
+            let account = context
+                .account_loader
+                .try_load(delivery.account_id)
+                .await
+                .map_err(|_| "unknown account")?;
+
+            if *account.user_id != user_id {
+                return Err("cannot deliver to an account that is not yours".into());
+            }
+        }
+
+        let outcomes =
+            crate::rules::deliver_expenses(&context.connection, user_id, &deliveries, Utc::now())
+                .await
+                .map_err(|e| e.to_string())?;
+
+        Ok(outcomes
+            .into_iter()
+            .map(|o| match o {
+                DeliveryOutcome::Created {
+                    expense_id,
+                    rule_id,
+                } => DeliveryResult {
+                    status: DeliveryStatus::Created,
+                    expense_id: Some(expense_id),
+                    rule_id: Some(rule_id),
+                    message: None,
+                },
+                DeliveryOutcome::Duplicate => DeliveryResult {
+                    status: DeliveryStatus::Duplicate,
+                    expense_id: None,
+                    rule_id: None,
+                    message: None,
+                },
+                DeliveryOutcome::Unmatched => DeliveryResult {
+                    status: DeliveryStatus::Unmatched,
+                    expense_id: None,
+                    rule_id: None,
+                    message: None,
+                },
+                DeliveryOutcome::Failed { message } => DeliveryResult {
+                    status: DeliveryStatus::Failed,
+                    expense_id: None,
+                    rule_id: None,
+                    message: Some(message),
+                },
+            })
+            .collect())
     }
 }
