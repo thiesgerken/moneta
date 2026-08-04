@@ -68,6 +68,11 @@ documents get fresh ObjectIds on every re-render, so a rule storing one would br
 time anything re-renders. `graphql/rules.rs` resolves a caller's rendered id to the upstream
 id on write and back again on read; keep that translation if you touch it.
 
+**A modal inside a `<TabItem>` cannot close itself.** Writing to a `bind:open` prop from a
+component rendered inside flowbite's tabs does not reach the parent, so the rules page closes
+its modals from the parent's `onsubmit` callback instead. Modals on plain pages (categories,
+accounts) close themselves and are fine as they are.
+
 **Delivery dedup is amount + account + a 24h window, not statement text.** Banks reword the
 text between provisional and final bookings. Widening the comparison would duplicate
 expenses; narrowing it would drop real payments. There are tests for both directions.
@@ -101,8 +106,8 @@ data is therefore client-side only; there is no SSR of query results.
 ## Known gaps worth knowing before you plan work
 
 - No frontend tests, no integration tests against a real mongo.
-- There is no frontend for rules or deliveries; they are API- and CLI-only, and no upload
-  client exists to feed `deliveries.submit` from a real bank export.
+- No upload client feeds `deliveries.submit` from a real bank export; that is deliberately
+  someone else's program, since it is per-bank and needs credentials.
 - CORS is `AllowedOrigins::all()` with `allow_credentials(true)` in `graphql/mod.rs`, and
   `docker-compose.yaml` carries a committed `MONETA__API__SECRET_KEY`. Both are known and
   accepted for now — the deployment is private infrastructure.

@@ -106,8 +106,11 @@ Two kinds of rule create expenses by copying a *template* expense (`periodic_rul
   regex, exact amount and account; the highest `priority` match wins and its template is
   copied with the delivered data imposed on it.
 
-Run periodic generation with `moneta periodic --run` (a cron job in production) or the
-`periodicRules.run` mutation. It is idempotent — each rule's `lastCreation` only advances
+Run periodic generation with `moneta periodic --run`, the `periodicRules.run` mutation, or
+the button on the rules page. In production this is a scheduled job (k8s CronJob); the
+compose stack runs the same command from a `periodic` sidecar so both paths stay identical.
+Deliberately not an in-process timer: it would fire once per backend replica and hide its
+failures in the server log. It is idempotent — each rule's `lastCreation` only advances
 after its expenses are stored.
 
 Note that a template need not be flagged `isTemplate`: moneydb let ordinary past expenses
@@ -150,9 +153,13 @@ filter so it cannot be widened — see the tests there before changing it.
 
 ## Frontend layout
 
-Five pages (`expenses`, `balances`, `categories`, `accounts`, `login`) plus a dashboard that
-currently only shows the changelog. Each page is a thin route wrapping a `*Table.svelte`
-component in `src/lib/`, paired with a `*Modal.svelte` for create/edit.
+Seven pages (`expenses`, `balances`, `categories`, `accounts`, `rules`, `deliveries`,
+`login`) plus a dashboard that currently only shows the changelog. Each page is a thin route
+wrapping a `*Table.svelte` component in `src/lib/`, paired with a `*Modal.svelte` for
+create/edit.
+
+`rules` holds both rule kinds in tabs; `deliveries` lists what has been handed in, with a
+filter for the lines no rule claimed — that list is the queue of rules still to write.
 
 Queries are declared inline with `graphql(...)` and fetched explicitly:
 
@@ -200,6 +207,5 @@ Also working: periodic and automation rules, both imported from MoneyDB, with pe
 generation runnable from the CLI or the API.
 
 Missing: the analysis dashboard (MoneyDB had calendar, category sunburst, history, monthly
-overviews, prepayments, statements), the delivery endpoint that would let automation rules
-actually fire, receipts in the UI, push notifications, and any frontend for rules at all.
-See `TODO.md`.
+overviews, prepayments, statements), receipts in the UI, and push notifications. See
+`TODO.md`.

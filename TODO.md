@@ -4,7 +4,6 @@
 
 - upload client that feeds `deliveries.submit` from a bank export; could just be a python script.
   the api, matching rules and seen-delivery tracking are done (src/rules.rs).
-- frontend for periodic and automation rules (backend + api are done)
 - something to track recurring expenses (to show if they are missing / have been deducted twice or something like that)
   could also be implemented using budgets, maybe that makes more sense! ... but then we need another thing to track these, more fine-grained than categories -> category budgets to remember how much one is allowed to spend, warn based on that
 - Change stream query endpoint
