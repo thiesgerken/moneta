@@ -77,6 +77,46 @@ type AnalysisQuery {
   balances(date: DateTime): [ComputedBalance!]!
 }
 
+type AutomationRule {
+  createdAt: DateTime!
+  filterAccountId: ObjectIdWrapper
+  filterAmount: Int
+  id: ObjectIdWrapper!
+  lastDelivery: DateTime
+  priority: Int!
+  regexStatement: String
+  regexTime: String
+
+  """
+  null when the template has no rendered document for this user, which means the
+  template was deleted and the rule can no longer fire
+  """
+  templateId: ObjectIdWrapper
+  title: String!
+  updatedAt: DateTime!
+}
+
+input AutomationRuleInput {
+  filterAccountId: ObjectIdWrapper
+  filterAmount: Int
+  priority: Int!
+  regexStatement: String
+  regexTime: String
+  templateId: ObjectIdWrapper!
+  title: String!
+}
+
+type AutomationRuleMutation {
+  create(rule: AutomationRuleInput!): AutomationRule!
+  delete(id: ObjectIdWrapper!): Boolean!
+  update(id: ObjectIdWrapper!, rule: AutomationRuleInput!): AutomationRule!
+}
+
+type AutomationRuleQuery {
+  get(id: ObjectIdWrapper!): AutomationRule!
+  list(filter: String, limit: Int, skip: Int, sort: String): [AutomationRule!]!
+}
+
 type Balance {
   account: Account!
   amount: Int!
@@ -330,21 +370,74 @@ input ExpenseTransactionInput {
 
 type Mutation {
   accounts: AccountMutation!
+  automationRules: AutomationRuleMutation!
   balances: BalanceMutation!
   categories: CategoryMutation!
   expenses: ExpenseMutation!
+  periodicRules: PeriodicRuleMutation!
   users: UserMutation!
 }
 
 scalar ObjectIdWrapper
 
+enum PeriodicInterval {
+  DAILY
+  MONTHLY
+  WEEKLY
+  YEARLY
+}
+
+type PeriodicRule {
+  amountReplacement: Int
+  createdAt: DateTime!
+  id: ObjectIdWrapper!
+  lastCreation: DateTime!
+
+  """the instants this rule would generate expenses for on the next run"""
+  pending: [DateTime!]!
+  period: PeriodicInterval!
+
+  """see `AutomationRule.templateId`"""
+  templateId: ObjectIdWrapper
+  title: String!
+  titleReplacement: String
+  updatedAt: DateTime!
+}
+
+input PeriodicRuleInput {
+  amountReplacement: Int
+  lastCreation: DateTime!
+  period: PeriodicInterval!
+  templateId: ObjectIdWrapper!
+  title: String!
+  titleReplacement: String
+}
+
+type PeriodicRuleMutation {
+  create(rule: PeriodicRuleInput!): PeriodicRule!
+  delete(id: ObjectIdWrapper!): Boolean!
+
+  """
+  Generates every expense that is currently due, across all of this user's rules.
+  """
+  run: Int!
+  update(id: ObjectIdWrapper!, rule: PeriodicRuleInput!): PeriodicRule!
+}
+
+type PeriodicRuleQuery {
+  get(id: ObjectIdWrapper!): PeriodicRule!
+  list(filter: String, limit: Int, skip: Int, sort: String): [PeriodicRule!]!
+}
+
 type Query {
   accounts: AccountQuery!
   analysis: AnalysisQuery!
   apiVersion: String!
+  automationRules: AutomationRuleQuery!
   balances: BalanceQuery!
   categories: CategoryQuery!
   expenses: ExpenseQuery!
+  periodicRules: PeriodicRuleQuery!
   users: UserQuery!
 }
 
