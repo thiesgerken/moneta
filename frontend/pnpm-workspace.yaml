@@ -1,2 +1,7 @@
 allowBuilds:
+  '@tailwindcss/oxide': true
   esbuild: true
+  houdini-core: true
+  houdini-svelte: true
+minimumReleaseAgeExclude:
+  - '@rolldown/binding-android-arm64@1.2.2'
