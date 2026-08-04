@@ -31,6 +31,8 @@
 			)
 		},
 		yaxis: { labels: { formatter: (v: number) => Math.round(v) + ' €' } },
+		// the tooltip inherits the axis formatter otherwise, which rounds away the cents
+		tooltip: { y: { formatter: (v: number) => euro(v * 100) } },
 		legend: { position: 'top' }
 	} as ApexOptions;
 

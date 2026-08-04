@@ -5,6 +5,9 @@
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import { categoryTree, monthlyByCategory, overviews } from '$lib/analysis_mock';
 
+	const euro = (cents: number) =>
+		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+
 	let sign = $state('expenses');
 
 	const barOptions = $derived({
@@ -21,6 +24,8 @@
 			)
 		},
 		yaxis: { labels: { formatter: (v: number) => Math.round(v) + ' €' } },
+		// the tooltip inherits the axis formatter otherwise, which rounds away the cents
+		tooltip: { y: { formatter: (v: number) => euro(v * 100) } },
 		legend: { position: 'bottom' }
 	}) as ApexOptions;
 
@@ -38,7 +43,8 @@
 		colors: categoryTree.map((c) => c.color),
 		legend: { show: true, position: 'bottom' },
 		dataLabels: { enabled: true, style: { fontSize: '12px' } },
-		plotOptions: { treemap: { distributed: false, enableShades: true } }
+		plotOptions: { treemap: { distributed: false, enableShades: true } },
+		tooltip: { y: { formatter: (v: number) => euro(v * 100) } }
 	}) as ApexOptions;
 </script>
 

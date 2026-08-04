@@ -46,9 +46,12 @@ point of the view, so it stays.
 
 The wealth chart picks its step from the visible x-range, targeting ~120 points: zoomed out it
 samples monthly, zoomed in it goes down to daily. Points get markers so individual samples are
-visible, the hovered one enlarges, and the resolution in force is printed next to the title.
-Zooming sets the range and the resolution follows; a labelled reset button appears alongside
-apex's own toolbar once a zoom is active.
+visible, and the hovered one enlarges. Zooming sets the range and the resolution follows; a
+labelled reset button appears alongside apex's own toolbar once a zoom is active.
+
+Faint dashed verticals mark month starts, falling back to year starts beyond ~18 months so
+they stay subtle rather than becoming a second grid. Tooltips carry their own formatter — by
+default apex reuses the axis one, which rounds to `40k €`.
 
 This is why `history` takes a resolution rather than returning everything: the frontend asks
 for the density it can draw, instead of downloading years of daily points to throw most away.
@@ -84,10 +87,9 @@ too, but the missing amount is unknown, so there is no remaining balance to comp
 flag and what has been booked so far. Do not merge the two tables; a `Rest` column would be
 a lie for the incomplete ones.
 
-### Not yet decided
-
-Nothing validates `booking_end >= booking_start`, and the expense modal defaults the end to
-the start. Both want attention before booking periods carry meaning.
+`Expense::validate` already rejects a backwards period, and every write path runs it (the
+GraphQL mutations, both rule kinds, the importer), so the accrual maths cannot be handed a
+negative span. `backend/src/models/expense.rs` covers all three cases in tests.
 
 ## Transaction date vs booking period
 

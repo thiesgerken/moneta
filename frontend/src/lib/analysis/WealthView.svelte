@@ -56,15 +56,24 @@
 		return { indices: picked, step, min, max };
 	});
 
-	const resolutionLabel = $derived(
-		visible.step === 1
-			? 'täglich'
-			: visible.step < 7
-				? `alle ${visible.step} Tage`
-				: visible.step < 28
-					? `wöchentlich (${visible.step} Tage)`
-					: `alle ${Math.round(visible.step / 30)} Monate`
-	);
+	// Faint verticals on month starts to give the eye something to measure against. Beyond
+	// about 18 months there are too many to stay subtle, so they fall back to year starts.
+	const boundaries = $derived.by(() => {
+		const yearly = visible.max - visible.min > 550 * 86400000;
+		const from = new Date(visible.min);
+		const year = from.getFullYear();
+		const month = yearly ? 0 : from.getMonth();
+		const out: number[] = [];
+		// the month argument may overflow past 11; Date rolls it into the next year
+		for (let k = 0; k < 400; k++) {
+			const t = yearly
+				? new Date(year + k, 0, 1).getTime()
+				: new Date(year, month + k, 1).getTime();
+			if (t > visible.max) break;
+			if (t >= visible.min) out.push(t);
+		}
+		return out;
+	});
 
 	const series = $derived.by(() => {
 		if (split === 'account')
@@ -121,6 +130,14 @@
 			data: visible.indices.map((i) => [historyDates[i], s.amounts[i]])
 		})),
 		colors: series.map((s) => s.color),
+		annotations: {
+			xaxis: boundaries.map((x) => ({
+				x,
+				borderColor: '#cbd5e1',
+				strokeDashArray: 3,
+				opacity: 0.5
+			}))
+		},
 		dataLabels: { enabled: false },
 		stroke: { curve: 'smooth', width: 2 },
 		markers: { size: 3, strokeWidth: 0, hover: { size: 6 } },
@@ -148,7 +165,6 @@
 		<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
 			<div class="flex flex-wrap items-center gap-3">
 				<h3 class="text-lg font-semibold">Vermögensverlauf</h3>
-				<span class="text-xs text-gray-500 dark:text-gray-400">Auflösung: {resolutionLabel}</span>
 				{#if range}
 					<Button size="xs" color="alternative" onclick={() => (range = null)}>
 						<RefreshOutline class="mr-1 h-3 w-3" />Zoom zurücksetzen
@@ -201,8 +217,11 @@
 							{euro(b.amount)}
 						</TableBodyCell>
 						<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
-							{euro(b.referenceAmount)} am {b.referenceDate.toLocaleDateString('de-DE')},
-							{b.expenseCount === 1 ? '1 Ausgabe' : `${b.expenseCount} Ausgaben`} seitdem
+							{euro(b.referenceAmount)} am {b.referenceDate.toLocaleDateString(
+								'de-DE'
+							)}{b.expenseCount > 0
+								? ` + ${b.expenseCount} ${b.expenseCount === 1 ? 'Ausgabe' : 'Ausgaben'}`
+								: ''}
 						</TableBodyCell>
 					</TableBodyRow>
 				{/each}
