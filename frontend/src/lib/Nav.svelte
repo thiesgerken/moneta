@@ -43,6 +43,8 @@
 			<NavLi href="/balances">Kontostände</NavLi>
 			<NavLi href="/categories">Kategorien</NavLi>
 			<NavLi href="/accounts">Konten</NavLi>
+			<NavLi href="/rules">Regeln</NavLi>
+			<NavLi href="/deliveries">Lieferungen</NavLi>
 			<!-- <NavLi onclick={logout} href="/">Logout</NavLi> -->
 			<Avatar class="mr-0 ml-5" onclick={logout} href="/"
 				>{$basicStore.data?.users.me?.firstName?.[0]}{$basicStore.data?.users.me
