@@ -12,6 +12,27 @@ pub fn string_to_document(s: &str) -> Result<Document, Box<dyn Error>> {
     bson::serialize_to_document(&x).map_err(|e| e.into())
 }
 
+/// Merges a caller-supplied filter with the overrides that scope a query to its user.
+///
+/// The overrides are applied last on purpose: they carry the `userId` restriction, so a
+/// caller must not be able to widen their own scope by naming the same key in `filter`.
+pub fn merge_filter(
+    filter: Option<String>,
+    filter_overrides: Option<Document>,
+) -> Result<Document, Box<dyn Error>> {
+    let filter = filter
+        .map(|f| string_to_document(&f))
+        .transpose()
+        .map_err(|e| format!("Unable to parse filtering options: {}", e))?;
+
+    let mut filter = filter.unwrap_or_default();
+    if let Some(ov) = filter_overrides {
+        filter.extend(ov);
+    }
+
+    Ok(filter)
+}
+
 pub async fn list_query<T>(
     collection_name: &str,
     connection: &mongodb::Database,
@@ -24,18 +45,7 @@ pub async fn list_query<T>(
 where
     T: DeserializeOwned + Unpin + Send + Sync,
 {
-    let filter = filter
-        .map(|f| string_to_document(&f))
-        .transpose()
-        .map_err(|e| format!("Unable to parse filtering options: {}", e))?;
-
-    let filter = if let Some(ov) = filter_overrides {
-        let mut f = filter.unwrap_or_default();
-        f.extend(ov.into_iter());
-        f
-    } else {
-        filter.unwrap_or_default()
-    };
+    let filter = merge_filter(filter, filter_overrides)?;
 
     let sort = sort
         .map(|s| string_to_document(&s))
@@ -66,4 +76,96 @@ pub fn json_diff<T: serde::Serialize>(
 
     let diff = TextDiff::from_lines(&left_json, &right_json);
     Ok(diff.unified_diff().context_radius(3).to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mongodb::bson::{Bson, doc, oid::ObjectId};
+
+    #[test]
+    fn parses_json_filters() {
+        let d = string_to_document(r#"{"title": "Rewe", "isTemplate": false}"#).unwrap();
+        assert_eq!(d.get_str("title").unwrap(), "Rewe");
+        assert!(!d.get_bool("isTemplate").unwrap());
+    }
+
+    /// the frontend sends account and category ids as extended json
+    #[test]
+    fn decodes_extended_json_object_ids() {
+        let oid = ObjectId::new();
+        let d = string_to_document(&format!(
+            r#"{{"accountId": {{"$oid": "{}"}}}}"#,
+            oid.to_hex()
+        ))
+        .unwrap();
+
+        assert_eq!(d.get_object_id("accountId").unwrap(), oid);
+    }
+
+    #[test]
+    fn rejects_malformed_filters() {
+        assert!(string_to_document("not json").is_err());
+        assert!(string_to_document(r#"{"unterminated": "#).is_err());
+    }
+
+    #[test]
+    fn merges_filter_with_overrides() {
+        let uid = ObjectId::new();
+        let merged = merge_filter(
+            Some(r#"{"store": "Rewe"}"#.into()),
+            Some(doc!("userId": uid)),
+        )
+        .unwrap();
+
+        assert_eq!(merged.get_str("store").unwrap(), "Rewe");
+        assert_eq!(merged.get_object_id("userId").unwrap(), uid);
+    }
+
+    /// the override carries the authorization scope, so a caller naming `userId`
+    /// themselves must not be able to read another user's entries
+    #[test]
+    fn caller_cannot_override_the_user_scope() {
+        let own = ObjectId::new();
+        let someone_else = ObjectId::new();
+
+        let merged = merge_filter(
+            Some(format!(
+                r#"{{"userId": {{"$oid": "{}"}}}}"#,
+                someone_else.to_hex()
+            )),
+            Some(doc!("userId": own)),
+        )
+        .unwrap();
+
+        assert_eq!(merged.get_object_id("userId").unwrap(), own);
+    }
+
+    #[test]
+    fn keeps_operator_filters_alongside_the_user_scope() {
+        let uid = ObjectId::new();
+        let merged = merge_filter(
+            Some(r#"{"$or": [{"store": "Rewe"}, {"store": "Aldi"}]}"#.into()),
+            Some(doc!("userId": uid)),
+        )
+        .unwrap();
+
+        // both survive, so mongo ANDs them and the scope still applies
+        assert!(matches!(merged.get("$or"), Some(Bson::Array(a)) if a.len() == 2));
+        assert_eq!(merged.get_object_id("userId").unwrap(), uid);
+    }
+
+    #[test]
+    fn empty_filter_still_scopes_to_the_user() {
+        let uid = ObjectId::new();
+        let merged = merge_filter(None, Some(doc!("userId": uid))).unwrap();
+
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged.get_object_id("userId").unwrap(), uid);
+    }
+
+    #[test]
+    fn propagates_parse_errors() {
+        assert!(merge_filter(Some("{{{".into()), None).is_err());
+    }
 }
