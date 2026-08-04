@@ -23,7 +23,6 @@ fn from_input(s: &str) -> Result<ObjectIdWrapper, Box<str>> {
         .map_err(|e| format!("Failed to parse `ObjectIdWrapper`: {e}").into())
 }
 
-
 impl Deref for ObjectIdWrapper {
     type Target = ObjectId;
 

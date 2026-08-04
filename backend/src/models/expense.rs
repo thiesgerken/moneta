@@ -16,7 +16,11 @@ impl Expense {
             return Err("Expense categorizations must have positive weights".into());
         }
 
-        if self.positions.iter().any(|p| p.quantity.map(|x| x <= 0.0).unwrap_or(false)) {
+        if self
+            .positions
+            .iter()
+            .any(|p| p.quantity.map(|x| x <= 0.0).unwrap_or(false))
+        {
             return Err("Expense positions must have positive quantity".into());
         }
 

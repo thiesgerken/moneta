@@ -3,11 +3,11 @@ use juniper::{GraphQLInputObject, GraphQLObject};
 use serde::{Deserialize, Serialize};
 
 use super::{
+    ExpenseCategorization, ExpensePosition, ExpenseReceipt, ObjectIdWrapper,
     expense::{
         ExpenseCategorizationInput, ExpensePositionInput, ExpenseReceiptInput,
         ExpenseTransactionInput,
     },
-    ExpenseCategorization, ExpensePosition, ExpenseReceipt, ObjectIdWrapper,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]

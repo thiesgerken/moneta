@@ -288,7 +288,7 @@ impl GraphQLExpenseChangelogEntry {
         let new_state = self.data.new_state.as_ref()?;
 
         old_state.updated_at = new_state.updated_at;
-        util::json_diff(&old_state, &new_state).ok()
+        util::json_diff(&old_state, new_state).ok()
     }
     async fn user(&self, context: &Context) -> FieldResult<Option<GraphQLUserInfo>> {
         let Some(user_id) = self.data.user_id else {
@@ -429,10 +429,7 @@ impl ExpenseQuery {
             edges: changelog_entries
                 .into_iter()
                 .map(|entry| {
-                    let rendered_id = upstream_id_to_rendered_id
-                        .get(&entry.target_id)
-                        .unwrap()
-                        .clone();
+                    let rendered_id = *upstream_id_to_rendered_id.get(&entry.target_id).unwrap();
                     ExpenseChangelogNode {
                         node: GraphQLExpenseChangelogEntry::new(entry, rendered_id),
                     }

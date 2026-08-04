@@ -15,9 +15,9 @@ use crate::graphql::{
 };
 
 use super::{
-    accounts::{get_account_loader, AccountLoader},
-    categories::{get_category_loader, CategoryLoader},
-    users::{get_user_loader, UserLoader},
+    accounts::{AccountLoader, get_account_loader},
+    categories::{CategoryLoader, get_category_loader},
+    users::{UserLoader, get_user_loader},
 };
 
 pub struct Context {

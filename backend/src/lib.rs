@@ -11,9 +11,7 @@ extern crate rocket;
 
 use argon2::{
     Argon2,
-    password_hash::{
-        PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng,
-    },
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use models::rendering::{RenderedBalance, RenderedExpense};
 use mongodb::bson::doc;
@@ -87,23 +85,20 @@ pub async fn connect(
         .await?;
 
     db.collection::<RenderedBalance>("balances_rendered")
-        .create_indexes(
-            [
-                mongodb::IndexModel::builder()
-                    .keys(doc! {"upstreamId": 1})
-                    .build(),
-                mongodb::IndexModel::builder()
-                    .keys(doc! {"userId": 1})
-                    .build(),
-                mongodb::IndexModel::builder()
-                    .keys(doc! {"userId": 1, "date": 1})
-                    .build(),
-                mongodb::IndexModel::builder()
-                    .keys(doc! {"userId": 1, "accountId": 1, "date": 1})
-                    .build(),
-            ]
-            ,
-        )
+        .create_indexes([
+            mongodb::IndexModel::builder()
+                .keys(doc! {"upstreamId": 1})
+                .build(),
+            mongodb::IndexModel::builder()
+                .keys(doc! {"userId": 1})
+                .build(),
+            mongodb::IndexModel::builder()
+                .keys(doc! {"userId": 1, "date": 1})
+                .build(),
+            mongodb::IndexModel::builder()
+                .keys(doc! {"userId": 1, "accountId": 1, "date": 1})
+                .build(),
+        ])
         .await?;
 
     Ok(db)
@@ -118,7 +113,10 @@ mod tests {
         let h = hash_password("correct horse battery staple");
         assert!(verify_password("correct horse battery staple", &h));
         assert!(!verify_password("wrong horse battery staple", &h));
-        assert!(!verify_password("correct horse battery staple", "not a phc string"));
+        assert!(!verify_password(
+            "correct horse battery staple",
+            "not a phc string"
+        ));
     }
 
     /// hashes written by argonautica used different parameters; they must keep verifying

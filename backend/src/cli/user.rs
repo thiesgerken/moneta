@@ -10,7 +10,7 @@ use futures::TryStreamExt;
 use log::info;
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
-use prettytable::{row, Table};
+use prettytable::{Table, row};
 use std::io;
 
 pub fn build() -> Command {
@@ -118,7 +118,6 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             .update_one(
                 doc! {"_id": *user.id},
                 doc! {"$set": {"fullName":fname, "passwordHash": hash_password(password)}},
-
             )
             .await
             .expect("Could not update user");
@@ -132,9 +131,9 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
 
         let mut confirmation = String::new();
         println!(
-          "Do you really want to delete this user? If so, enter '{}'.\n Note that this will also delete relevant accounts and expenses!",
-          uname
-              );
+            "Do you really want to delete this user? If so, enter '{}'.\n Note that this will also delete relevant accounts and expenses!",
+            uname
+        );
         io::stdin().read_line(&mut confirmation).unwrap();
         let confirmation = confirmation.trim_end(); // Remove the trailing newline
         assert_eq!(confirmation, uname, "Confirmation failed");

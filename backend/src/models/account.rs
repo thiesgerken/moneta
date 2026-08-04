@@ -103,10 +103,10 @@ pub struct AccountSynchronization {
 
 impl AccountInput {
     pub fn validate(&self) -> Result<(), Box<dyn Error>> {
-        if let Some(closed) = self.closed {
-            if closed <= self.opened {
-                return Err("Account opening date must not be after account close date".into());
-            }
+        if let Some(closed) = self.closed
+            && closed <= self.opened
+        {
+            return Err("Account opening date must not be after account close date".into());
         }
 
         if self.ownership_fraction <= 0.0 || self.ownership_fraction > 1.0 {

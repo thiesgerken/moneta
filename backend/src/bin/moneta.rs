@@ -1,7 +1,7 @@
 use moneta::{cli, config::Config, graphql};
 
 use dotenvy::dotenv;
-use log::{debug, info, LevelFilter};
+use log::{LevelFilter, debug, info};
 use simplelog::{ColorChoice, SimpleLogger, TermLogger, TerminalMode};
 use tokio::runtime::Builder;
 
