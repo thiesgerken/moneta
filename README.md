@@ -51,6 +51,8 @@ moneta account --list x              # the flags take a dummy value, see below
 moneta account --sync <id1> <id2> [--invert x]
 moneta account --unsync <id>
 moneta account --rerender x          # rebuild every rendered document
+moneta periodic --list               # rules and how many expenses each is due for
+moneta periodic --run                # generate the expenses that are due
 moneta import [--clear] < moneydb-export.json
 ```
 
@@ -90,6 +92,31 @@ rendering logic, `moneta account --rerender x` rebuilds everything from scratch.
 Money is stored as integer cents (`amount: i32`). Computed values that involve fractions are
 `f64` (`calculatedAmount`, `effectiveAmount`).
 
+### Rules
+
+Two kinds of rule create expenses by copying a *template* expense (`periodic_rules`,
+`automation_rules`, logic in `src/rules.rs`):
+
+- **periodic rules** fire on a schedule (daily/weekly/monthly/yearly). Occurrences are
+  anchored on the template's `bookingStart`, so a monthly rule keeps its day of month however
+  long it lay dormant. `titleReplacement` substitutes `%d`/`%m`/`%y`, `amountReplacement`
+  replaces the reference amount and, when the template has exactly one fixed transaction,
+  that transaction too — the shape almost every shared expense has.
+- **automation rules** match a delivered bank transaction on any of statement regex, date
+  regex, exact amount and account; the highest `priority` match wins and its template is
+  copied with the delivered data imposed on it.
+
+Run periodic generation with `moneta periodic --run` (a cron job in production) or the
+`periodicRules.run` mutation. It is idempotent — each rule's `lastCreation` only advances
+after its expenses are stored.
+
+Note that a template need not be flagged `isTemplate`: moneydb let ordinary past expenses
+double as prototypes, and the import preserves that rather than rewriting history.
+
+**The delivery endpoint that feeds automation rules does not exist yet.** The matching and
+copying logic is implemented and tested, but nothing calls it until there is an API to
+accept bank statement lines.
+
 ## Backend layout
 
 ```
@@ -100,6 +127,7 @@ src/
   lib.rs            password hashing, db connection, index creation
   models/           upstream documents (+ models/rendering.rs for the rendered ones)
   rendering.rs      the money math; pure functions, well covered by tests
+  rules.rs          periodic and automation rules; pure parts well covered by tests
   queries.rs        shared mongo helpers, incl. the datetime serde adapters
   graphql/          one module per domain, root.rs wires the schema and auth
   import.rs         MoneyDB JSON import
@@ -158,9 +186,10 @@ bugs would actually hurt.
 Working: auth, CRUD for all four entities, the rendering pipeline, expense changelog with
 diffs, computed balances, MoneyDB import.
 
-Missing: the analysis dashboard (MoneyDB had calendar, category sunburst, history, monthly
-overviews, prepayments, statements), recurring/periodic expenses, automation rules, an
-ingestion API for bank statements, receipts in the UI, push notifications. See `TODO.md`.
+Also working: periodic and automation rules, both imported from MoneyDB, with periodic
+generation runnable from the CLI or the API.
 
-**Automation rules are not imported** (`import.rs:29` — the struct is commented out), so a
-migration from MoneyDB currently drops them.
+Missing: the analysis dashboard (MoneyDB had calendar, category sunburst, history, monthly
+overviews, prepayments, statements), the delivery endpoint that would let automation rules
+actually fire, receipts in the UI, push notifications, and any frontend for rules at all.
+See `TODO.md`.

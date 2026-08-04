@@ -63,6 +63,11 @@ Keep using those in `#[serde(with = ...)]` — the on-disk representation depend
 peer range at `^6`. `pnpm outdated` will keep suggesting 7; don't take it until the toolchain
 declares support.
 
+**Rules reference the *upstream* expense, but the API speaks *rendered* ids.** Rendered
+documents get fresh ObjectIds on every re-render, so a rule storing one would break the first
+time anything re-renders. `graphql/rules.rs` resolves a caller's rendered id to the upstream
+id on write and back again on read; keep that translation if you touch it.
+
 **`moneta import` reads the export on stdin and matches users by name**, so every user in the
 export must already exist in moneta or it panics. `--clear` wipes everything *except* users.
 
@@ -92,8 +97,9 @@ data is therefore client-side only; there is no SSR of query results.
 ## Known gaps worth knowing before you plan work
 
 - No frontend tests, no integration tests against a real mongo.
-- Automation rules are not imported from MoneyDB (`import.rs:29`, struct commented out), so a
-  migration drops them today.
+- Automation rules can be imported and matched, but nothing delivers transactions to them
+  yet — the ingestion endpoint is the missing half.
+- There is no frontend for either rule kind; they are API- and CLI-only.
 - CORS is `AllowedOrigins::all()` with `allow_credentials(true)` in `graphql/mod.rs`, and
   `docker-compose.yaml` carries a committed `MONETA__API__SECRET_KEY`. Both are known and
   accepted for now — the deployment is private infrastructure.
