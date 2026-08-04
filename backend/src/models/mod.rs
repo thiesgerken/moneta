@@ -17,7 +17,7 @@ pub use expense::{
 };
 pub use rules::{
     AutomationRule, AutomationRuleInput, ExpenseDelivery, PeriodicInterval, PeriodicRule,
-    PeriodicRuleInput,
+    PeriodicRuleInput, SeenDelivery,
 };
 
 use chrono::{DateTime, Utc};

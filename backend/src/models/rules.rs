@@ -182,6 +182,32 @@ pub struct ExpenseDelivery {
     pub statement: String,
 }
 
+/// A delivery that has already been processed.
+///
+/// Bank statement uploads overlap — the same lines get handed over again on the next run —
+/// so deliveries are remembered to keep re-uploads from duplicating expenses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SeenDelivery {
+    #[serde(rename = "_id", default)]
+    pub id: ObjectIdWrapper,
+
+    #[serde(default)]
+    pub user_id: ObjectIdWrapper,
+
+    pub account_id: ObjectIdWrapper,
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
+    pub date: DateTime<Utc>,
+    pub amount: i32,
+    pub statement: String,
+
+    /// the expense this delivery produced, absent when no rule matched
+    pub expense_id: Option<ObjectIdWrapper>,
+
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
+    pub created_at: DateTime<Utc>,
+}
+
 impl ExpenseDelivery {
     /// The representation `regex_time` is matched against. Kept identical to moneydb's so
     /// imported rules keep matching what they used to.

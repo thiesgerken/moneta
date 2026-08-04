@@ -15,7 +15,7 @@ use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use models::rendering::{RenderedBalance, RenderedExpense};
-use models::{AutomationRule, PeriodicRule};
+use models::{AutomationRule, PeriodicRule, SeenDelivery};
 use mongodb::bson::doc;
 
 /// Parameters are taken from the stored PHC string, so hashes written by older
@@ -117,6 +117,15 @@ pub async fn connect(
         .create_index(
             mongodb::IndexModel::builder()
                 .keys(doc! {"userId": 1, "priority": -1})
+                .build(),
+        )
+        .await?;
+
+    // deduplication looks up a user's history on the accounts being delivered to
+    db.collection::<SeenDelivery>("seen_deliveries")
+        .create_index(
+            mongodb::IndexModel::builder()
+                .keys(doc! {"userId": 1, "accountId": 1, "date": 1})
                 .build(),
         )
         .await?;

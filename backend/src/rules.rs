@@ -11,8 +11,8 @@ use regex::Regex;
 use std::error::Error;
 
 use crate::models::{
-    Account, AutomationRule, Expense, ExpenseChangelogEntry, ExpenseDelivery, PeriodicRule,
-    rendering::RenderedExpense,
+    Account, AutomationRule, Expense, ExpenseChangelogEntry, ExpenseDelivery, ObjectIdWrapper,
+    PeriodicRule, SeenDelivery, rendering::RenderedExpense,
 };
 
 /// The instants a rule is due for: stepping from the template's booking start by the rule's
@@ -187,9 +187,169 @@ pub fn impose(
     Ok(e)
 }
 
+/// How far apart two otherwise identical bank lines have to be to count as separate
+/// transactions. Statements carry no stable per-line id, so this is the only thing standing
+/// between a re-upload and a duplicated expense.
+///
+/// Inherited from moneydb. It does mean a genuine second identical payment on the same day
+/// is treated as a duplicate, which is the safer way round to be wrong.
+pub const DELIVERY_DEDUP_WINDOW: TimeDelta = TimeDelta::hours(24);
+
+/// Whether this delivery has already been processed: the same amount on the same account,
+/// close enough in time. The statement text is deliberately not compared — banks reword it
+/// between a provisional and a final booking of the same payment.
+pub fn is_duplicate(seen: &[SeenDelivery], delivery: &ExpenseDelivery) -> bool {
+    seen.iter().any(|s| {
+        s.account_id == delivery.account_id
+            && s.amount == delivery.amount
+            && (s.date - delivery.date).abs() < DELIVERY_DEDUP_WINDOW
+    })
+}
+
 /// How far ahead of `now` periodic expenses are generated, so a rule due later today is
 /// already visible.
 pub const PERIODIC_ADVANCE: TimeDelta = TimeDelta::hours(12);
+
+/// What happened to a single delivered transaction.
+#[derive(Debug, Clone)]
+pub enum DeliveryOutcome {
+    /// an expense was created from the named rule
+    Created {
+        expense_id: ObjectIdWrapper,
+        rule_id: ObjectIdWrapper,
+    },
+    /// already processed, most likely an overlapping re-upload
+    Duplicate,
+    /// nothing matched, so the line is recorded but no expense is created
+    Unmatched,
+    /// a rule matched but its template could not absorb the delivery
+    Failed { message: String },
+}
+
+/// Processes delivered bank transactions for one user: deduplicate, match against that
+/// user's automation rules, and create the resulting expenses.
+///
+/// Every delivery is recorded as seen, matched or not, so that re-uploading the same
+/// statement does not keep re-evaluating the same lines.
+pub async fn deliver_expenses(
+    connection: &mongodb::Database,
+    user_id: ObjectId,
+    deliveries: &[ExpenseDelivery],
+    now: DateTime<Utc>,
+) -> Result<Vec<DeliveryOutcome>, Box<dyn Error + Send + Sync>> {
+    let seen_collection = connection.collection::<SeenDelivery>("seen_deliveries");
+    let expense_collection = connection.collection::<Expense>("expenses");
+
+    let rules = connection
+        .collection::<AutomationRule>("automation_rules")
+        .find(doc!("userId": user_id))
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    let accounts = connection
+        .collection::<Account>("accounts")
+        .find(doc!())
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    // one query for the whole batch rather than per delivery; a user's history on the
+    // accounts being delivered to is small enough to filter in memory
+    let account_ids: Vec<_> = deliveries.iter().map(|d| *d.account_id).collect();
+    let mut seen = seen_collection
+        .find(doc! {
+            "userId": user_id,
+            "accountId": {"$in": &account_ids},
+            "date": {"$gte": bson::DateTime::from_chrono(now - TimeDelta::days(400))},
+        })
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+
+    let mut outcomes = Vec::with_capacity(deliveries.len());
+
+    for delivery in deliveries {
+        // deliveries within one batch can duplicate each other too, so `seen` grows as we go
+        if is_duplicate(&seen, delivery) {
+            outcomes.push(DeliveryOutcome::Duplicate);
+            continue;
+        }
+
+        let mut record = SeenDelivery {
+            id: ObjectId::new().into(),
+            user_id: user_id.into(),
+            account_id: delivery.account_id,
+            date: delivery.date,
+            amount: delivery.amount,
+            statement: delivery.statement.clone(),
+            expense_id: None,
+            created_at: now,
+        };
+
+        let outcome = match best_match(&rules, delivery) {
+            None => DeliveryOutcome::Unmatched,
+            Some(rule) => {
+                match expense_collection
+                    .find_one(doc!("_id": *rule.template_id))
+                    .await?
+                {
+                    None => DeliveryOutcome::Failed {
+                        message: format!("rule {} has no template expense", rule.title),
+                    },
+                    // stringified eagerly: a boxed dyn Error is not Send, and holding one
+                    // across the awaits below would make this future unspawnable
+                    Some(template) => match impose(&template, delivery, now)
+                        .and_then(|e| e.validate().map(|_| e))
+                        .map_err(|e| e.to_string())
+                    {
+                        Err(message) => DeliveryOutcome::Failed { message },
+                        Ok(expense) => {
+                            let rendered = expense.render(&accounts).map_err(|e| e.to_string())?;
+
+                            expense_collection.insert_one(&expense).await?;
+                            connection
+                                .collection::<ExpenseChangelogEntry>("expense_changes")
+                                .insert_one(changelog_entry(&expense, user_id, "moneta-automation"))
+                                .await?;
+                            if !rendered.is_empty() {
+                                connection
+                                    .collection::<RenderedExpense>("expenses_rendered")
+                                    .insert_many(&rendered)
+                                    .await?;
+                            }
+
+                            connection
+                                .collection::<AutomationRule>("automation_rules")
+                                .update_one(
+                                    doc!("_id": *rule.id),
+                                    doc!("$set": {"lastDelivery": bson::DateTime::from_chrono(now)}),
+                                )
+                                .await?;
+
+                            record.expense_id = Some(expense.id);
+                            DeliveryOutcome::Created {
+                                expense_id: expense.id,
+                                rule_id: rule.id,
+                            }
+                        }
+                    },
+                }
+            }
+        };
+
+        // a failed delivery is deliberately not recorded, so fixing the rule and
+        // re-uploading picks it up instead of silently swallowing it forever
+        if !matches!(outcome, DeliveryOutcome::Failed { .. }) {
+            seen_collection.insert_one(&record).await?;
+            seen.push(record);
+        }
+
+        outcomes.push(outcome);
+    }
+
+    Ok(outcomes)
+}
 
 /// Runs every periodic rule that is due, writing the generated expenses, their changelog
 /// entries and their rendered documents, then advancing each rule's `last_creation`.
@@ -594,6 +754,75 @@ mod tests {
     /// delivered account would otherwise yield an expense carrying the template's amounts,
     /// which is wrong money written silently — the same failure the periodic amount
     /// replacement had.
+    fn seen(account_id: ObjectId, amount: i32, date: DateTime<Utc>) -> SeenDelivery {
+        SeenDelivery {
+            id: ObjectId::new().into(),
+            user_id: ObjectId::new().into(),
+            account_id: account_id.into(),
+            date,
+            amount,
+            statement: "whatever".into(),
+            expense_id: None,
+            created_at: date,
+        }
+    }
+
+    #[test]
+    fn an_identical_line_on_the_same_day_is_a_duplicate() {
+        let account = ObjectId::new();
+        let history = vec![seen(account, -4237, at(2025, 3, 4))];
+
+        assert!(is_duplicate(&history, &delivery(account, -4237, "REWE")));
+    }
+
+    /// banks reword the statement between a provisional and a final booking of the same
+    /// payment, so the text must not decide identity
+    #[test]
+    fn a_reworded_statement_is_still_a_duplicate() {
+        let account = ObjectId::new();
+        let history = vec![seen(account, -4237, at(2025, 3, 4))];
+
+        let mut d = delivery(account, -4237, "KARTENZAHLUNG REWE SAGT DANKE 04.03.");
+        d.date = at(2025, 3, 4);
+
+        assert!(is_duplicate(&history, &d));
+    }
+
+    #[test]
+    fn a_different_amount_or_account_is_not_a_duplicate() {
+        let account = ObjectId::new();
+        let history = vec![seen(account, -4237, at(2025, 3, 4))];
+
+        assert!(!is_duplicate(&history, &delivery(account, -4238, "REWE")));
+        assert!(!is_duplicate(
+            &history,
+            &delivery(ObjectId::new(), -4237, "REWE")
+        ));
+    }
+
+    /// the same standing order next month is a real second payment
+    #[test]
+    fn the_same_amount_outside_the_window_is_not_a_duplicate() {
+        let account = ObjectId::new();
+        let history = vec![seen(account, -4237, at(2025, 2, 4))];
+
+        assert!(!is_duplicate(&history, &delivery(account, -4237, "REWE")));
+    }
+
+    /// a bank moving a booking by a few hours must not produce a second expense
+    #[test]
+    fn a_delivery_shifted_within_the_window_is_a_duplicate() {
+        let account = ObjectId::new();
+        let history = vec![seen(account, -4237, at(2025, 3, 4) - TimeDelta::hours(20))];
+
+        assert!(is_duplicate(&history, &delivery(account, -4237, "REWE")));
+    }
+
+    #[test]
+    fn an_empty_history_never_matches() {
+        assert!(!is_duplicate(&[], &delivery(ObjectId::new(), -100, "x")));
+    }
+
     #[test]
     fn imposing_a_delivery_for_an_unbooked_account_is_refused() {
         let tpl = template(vec![transaction(ObjectId::new(), Some(-100))]);
