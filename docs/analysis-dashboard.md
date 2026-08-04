@@ -1,20 +1,21 @@
 # Analysis dashboard
 
-Port of MoneyDB's `analysis` section. A mock UI lives at `/analysis` (four tabs, hardcoded
+Port of MoneyDB's `analysis` section. A mock UI lives at `/analysis` (five tabs, hardcoded
 numbers from `frontend/src/lib/analysis_mock.ts`); this document records what it should show
 and what the backend still owes it.
 
 ## Displays
 
-MoneyDB had seven tabs. Four survive the port, because several of them were different views
+MoneyDB had seven tabs. Five survive the port, because several of them were different views
 of the same numbers.
 
-| Tab             | MoneyDB origin                                    | Shows                                                                                                                   |
-| --------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **Vermögen**    | `computed_balances` + `history`                   | net worth over time (total, or stacked per account), availability totals, and a per-account table of computed balances    |
-| **Monate**      | `monthly_overviews`                               | income/expenses bar chart, plus a table per month: wealth start/end, delta, expense count, integration error              |
-| **Kategorien**  | `categories` + `sunburst`                         | stacked bars per category per month, and a treemap of the whole period; toggle between expenses and income                |
-| **Kalender**    | `calendar`                                        | month grid, expenses per day with a daily sum                                                                             |
+| Tab                  | MoneyDB origin                  | Shows                                                                                                                 |
+| -------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Vermögen**         | `computed_balances` + `history` | net worth over time (total, per account, or per availability), availability totals, per-account computed balances       |
+| **Monate**           | `monthly_overviews`             | income/expenses bar chart and a table per month, each row linking to its own page                                       |
+| **Kategorien**       | `categories` + `sunburst`       | stacked bars per category per month, and a treemap of the whole period; toggle between expenses and income              |
+| **Kalender**         | `calendar`                      | month grid, expenses per day with a daily sum                                                                           |
+| **Vorauszahlungen**  | `prepayments`                   | what is still unconsumed at a chosen date, plus the separate list of incomplete expenses                                |
 
 Merged away:
 
@@ -26,7 +27,13 @@ Dropped:
 
 - **Kontoauszüge** — the expenses page already filters by account and date. It is missing only a
   running-balance column, which belongs there rather than in a second table.
-- **Vorauszahlungen** — blocked on the data model, see below.
+
+### Month pages
+
+Each month gets its own route (`/analysis/[year]/[month]`) rather than an expandable row:
+summary cards, the category treemap, a per-account breakdown and the biggest expenses.
+MoneyDB nested a second DataTable inside an expanded row, which is the part that does not
+survive a narrow screen.
 
 ### Integration error
 
@@ -35,24 +42,69 @@ integrating expenses forward from the month's start, and the balance actually me
 gap does not mean the arithmetic drifted — it means an expense is missing. That is the whole
 point of the view, so it stays.
 
-### Prepayments are blocked
+### Chart resolution
 
-MoneyDB found prepayments through an `AccountKind = Prepayment` and cancelled them out with a
-`Compensated` expense flag. moneta has neither: `AccountKind` is
-Cash/Debit/Credit/Debt/Stocks/RealEstate/Virtual/Other, and there is no per-expense flag for
-"this settles an earlier prepayment". Reviving the view needs a modelling decision first —
-either add the kind and flag back, or express prepayments as a synchronized account pair and
-detect settlement from the balance returning to zero.
+The wealth chart picks its step from the visible x-range, targeting ~120 points: zoomed out it
+samples monthly, zoomed in it goes down to daily. Points get markers so individual samples are
+visible, the hovered one enlarges, and the resolution in force is printed next to the title.
+Zooming sets the range and the resolution follows; a labelled reset button appears alongside
+apex's own toolbar once a zoom is active.
 
-Note that the imported data already has an account named *Vorauszahlungen*, so the concept
-survived the import as an ordinary account; only the automatic detection is gone.
+This is why `history` takes a resolution rather than returning everything: the frontend asks
+for the density it can draw, instead of downloading years of daily points to throw most away.
+
+## Prepayments
+
+Not blocked after all — the model already has the necessary axis, it is just unused.
+
+`Expense` carries **`booking_start`/`booking_end`** (a period) while each `ExpenseTransaction`
+carries its own **`date`** (when the cash moved). MoneyDB had only a single `valueDate`, which
+is why it needed `AccountKind = Prepayment` plus a `Compensated` flag to net the two halves of
+a prepayment against each other.
+
+With the period, a prepayment needs no special machinery: it is an expense whose money left on
+the transaction date and whose value is consumed across the booking period. **Consumption is
+linear.** At date *t*:
+
+```
+consumed  = clamp((t - booking_start) / (booking_end - booking_start), 0, 1)
+remaining = amount * (1 - consumed)
+```
+
+A zero-length period — which is what every imported expense currently has, since the importer
+sets `booking_start` and `booking_end` to the same date — degenerates to an ordinary expense
+that is fully consumed the moment it starts. So switching this on changes nothing until
+somebody actually widens a booking period.
+
+The same mechanism spreads an annual premium across twelve months instead of spiking one of
+them, which is worth having in `Monate` independently of the prepayment view.
+
+`is_incomplete` expenses appear on the same page but in their own table: they are open items
+too, but the missing amount is unknown, so there is no remaining balance to compute — only a
+flag and what has been booked so far. Do not merge the two tables; a `Rest` column would be
+a lie for the incomplete ones.
+
+### Not yet decided
+
+Nothing validates `booking_end >= booking_start`, and the expense modal defaults the end to
+the start. Both want attention before booking periods carry meaning.
+
+## Transaction date vs booking period
+
+Balances and most analysis follow **transaction dates** — that is when the money actually
+moved, and it is what a bank statement agrees with. The booking period drives the prepayment
+view and the accrual-based spread of costs across months.
+
+Some views want both, so they should carry a toggle rather than a hardcoded choice. Which
+ones is still open; the monthly overviews are the obvious first candidate, since "what did I
+spend in March" has two defensible answers.
 
 ## Backend
 
 `analysis.balances(date)` already exists (`backend/src/graphql/analysis.rs`) and covers the
-balance table in **Vermögen**. Two endpoints are missing.
+balance table in **Vermögen**. Three endpoints are missing.
 
-### `analysis.history(from, to, pointsPerMonth)`
+### `analysis.history(from, to, stepDays)`
 
 ```graphql
 type History {
@@ -62,9 +114,32 @@ type History {
 }
 ```
 
-Repeats the `analysis.balances` computation at each sampled date. MoneyDB sampled at month
-starts with an optional subdivision (`pointspermonth`), which is worth keeping — a year of
-daily points is 365 simulations for a chart that cannot resolve them.
+Repeats the `analysis.balances` computation at each sampled date. `stepDays` comes from the
+chart's visible range rather than being fixed: zoomed out it lands on ~30, zoomed all the way
+in on 1. MoneyDB's `pointspermonth` said the same thing more awkwardly, since it could not
+express "one point per day" without knowing the month length.
+
+Cap the returned point count server-side too — `from`/`to`/`stepDays` are user input, and a
+decade at `stepDays: 1` is ~3650 simulations.
+
+### `analysis.prepayments(at)`
+
+```graphql
+type Prepayment {
+  expenseId: ObjectIdWrapper!
+  title: String!
+  amount: Int!                       # cents, as booked
+  paidOn: DateTime!                  # transaction date
+  bookingStart: DateTime!
+  bookingEnd: DateTime!
+  consumedFraction: Float!
+  remaining: Int!                    # cents still unconsumed at `at`
+}
+```
+
+Returns only expenses with `remaining != 0`, so a zero-length booking period drops out on its
+own. The incomplete list is just the expense query filtered on `isIncomplete`, so it needs no
+endpoint.
 
 ### `analysis.overviews(from, to)`
 

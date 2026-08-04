@@ -8,8 +8,10 @@
 		TableHead,
 		TableHeadCell,
 		Input,
-		Label
+		Label,
+		Button
 	} from 'flowbite-svelte';
+	import { RefreshOutline } from 'flowbite-svelte-icons';
 	import type { ApexOptions } from 'apexcharts';
 	import Chart from '$lib/Chart.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
@@ -28,7 +30,41 @@
 	let date = $state(new Date().toISOString().slice(0, 10));
 	let split = $state('total');
 
+	// null = full range. Set from apex's zoom event so the resolution can follow it.
+	let range: { min: number; max: number } | null = $state(null);
+
 	const total = $derived(availabilityTotals.reduce((a, b) => a + b.amount, 0));
+
+	// The visible window decides the step, so zooming in exposes finer detail instead of
+	// magnifying the same monthly points. The real endpoint gets asked for this resolution
+	// rather than shipping every day and thinning it here.
+	const TARGET_POINTS = 120;
+
+	const visible = $derived.by(() => {
+		const zoom: { min: number; max: number } | null = range;
+		const min = zoom ? zoom.min : historyDates[0];
+		const max = zoom ? zoom.max : historyDates[historyDates.length - 1];
+		const indices = historyDates
+			.map((d, i) => ({ d, i }))
+			.filter(({ d }) => d >= min && d <= max)
+			.map(({ i }) => i);
+		const step = Math.max(1, Math.ceil(indices.length / TARGET_POINTS));
+		// always keep the last point, otherwise the line stops short of the range end
+		const picked = indices.filter((_, k) => k % step === 0);
+		const last = indices.at(-1);
+		if (last !== undefined && picked.at(-1) !== last) picked.push(last);
+		return { indices: picked, step, min, max };
+	});
+
+	const resolutionLabel = $derived(
+		visible.step === 1
+			? 'täglich'
+			: visible.step < 7
+				? `alle ${visible.step} Tage`
+				: visible.step < 28
+					? `wöchentlich (${visible.step} Tage)`
+					: `alle ${Math.round(visible.step / 30)} Monate`
+	);
 
 	const series = $derived.by(() => {
 		if (split === 'account')
@@ -51,18 +87,51 @@
 	});
 
 	const chartOptions = $derived({
-		chart: { type: 'area', height: 340, toolbar: { show: false }, stacked: split !== 'total' },
+		chart: {
+			type: 'area',
+			height: 340,
+			stacked: split !== 'total',
+			zoom: { enabled: true, type: 'x', autoScaleYaxis: true },
+			toolbar: {
+				show: true,
+				tools: {
+					download: false,
+					selection: true,
+					zoom: true,
+					zoomin: true,
+					zoomout: true,
+					pan: false,
+					reset: true
+				}
+			},
+			events: {
+				zoomed: (_c: unknown, o: { xaxis: { min?: number; max?: number } }) => {
+					range =
+						o.xaxis.min == null || o.xaxis.max == null
+							? null
+							: { min: o.xaxis.min, max: o.xaxis.max };
+				},
+				beforeResetZoom: () => {
+					range = null;
+				}
+			}
+		},
 		series: series.map((s) => ({
 			name: s.name,
-			data: historyDates.map((d, i) => [d, s.amounts[i]])
+			data: visible.indices.map((i) => [historyDates[i], s.amounts[i]])
 		})),
 		colors: series.map((s) => s.color),
 		dataLabels: { enabled: false },
 		stroke: { curve: 'smooth', width: 2 },
+		markers: { size: 3, strokeWidth: 0, hover: { size: 6 } },
 		fill: { type: 'gradient', gradient: { opacityFrom: 0.4, opacityTo: 0.05 } },
-		xaxis: { type: 'datetime' },
+		xaxis: { type: 'datetime', min: visible.min, max: visible.max },
 		yaxis: { labels: { formatter: (v: number) => Math.round(v / 1000) + 'k €' } },
-		tooltip: { x: { format: 'MMM yyyy' } },
+		tooltip: {
+			x: { format: visible.step < 28 ? 'dd.MM.yyyy' : 'MMM yyyy' },
+			// without this the tooltip inherits the axis formatter and reports "40k €"
+			y: { formatter: (v: number) => euro(v * 100) }
+		},
 		legend: { show: split !== 'total' }
 	}) as ApexOptions;
 </script>
@@ -77,7 +146,15 @@
 
 	<Card class="max-w-none p-4">
 		<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-			<h3 class="text-lg font-semibold">Vermögensverlauf</h3>
+			<div class="flex flex-wrap items-center gap-3">
+				<h3 class="text-lg font-semibold">Vermögensverlauf</h3>
+				<span class="text-xs text-gray-500 dark:text-gray-400">Auflösung: {resolutionLabel}</span>
+				{#if range}
+					<Button size="xs" color="alternative" onclick={() => (range = null)}>
+						<RefreshOutline class="mr-1 h-3 w-3" />Zoom zurücksetzen
+					</Button>
+				{/if}
+			</div>
 			<ToggleGroup
 				bind:value={split}
 				options={[
