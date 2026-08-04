@@ -10,6 +10,7 @@
 		Badge
 	} from 'flowbite-svelte';
 	import type { ApexOptions } from 'apexcharts';
+	import { resolve } from '$app/paths';
 	import Chart from '$lib/Chart.svelte';
 	import { overviews } from '$lib/analysis_mock';
 
@@ -62,7 +63,15 @@
 				{#each overviews.toReversed() as o (o.month.getTime())}
 					<TableBodyRow>
 						<TableBodyCell class="px-4 py-3">
-							{o.month.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}
+							<a
+								class="text-primary-600 dark:text-primary-500 font-medium hover:underline"
+								href={resolve('/analysis/[year]/[month]', {
+									year: `${o.month.getFullYear()}`,
+									month: `${o.month.getMonth() + 1}`
+								})}
+							>
+								{o.month.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}
+							</a>
 						</TableBodyCell>
 						<TableBodyCell class="px-4 py-3">{euro(o.startTotal)}</TableBodyCell>
 						<TableBodyCell class="px-4 py-3">{euro(o.endTotal)}</TableBodyCell>

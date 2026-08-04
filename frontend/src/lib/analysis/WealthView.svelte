@@ -8,16 +8,16 @@
 		TableHead,
 		TableHeadCell,
 		Input,
-		Label,
-		Toggle
+		Label
 	} from 'flowbite-svelte';
 	import type { ApexOptions } from 'apexcharts';
 	import Chart from '$lib/Chart.svelte';
+	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import {
-		accounts,
 		availabilityTotals,
 		computedBalances,
 		historyByAccount,
+		historyByAvailability,
 		historyDates,
 		historyTotal
 	} from '$lib/analysis_mock';
@@ -26,26 +26,44 @@
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
 	let date = $state(new Date().toISOString().slice(0, 10));
-	let perAccount = $state(false);
+	let split = $state('total');
 
 	const total = $derived(availabilityTotals.reduce((a, b) => a + b.amount, 0));
 
+	const series = $derived.by(() => {
+		if (split === 'account')
+			return historyByAccount.map((a) => ({
+				name: a.name,
+				color: a.color,
+				amounts: a.amounts
+			}));
+		if (split === 'availability')
+			return historyByAvailability.map((a) => ({
+				name: a.label,
+				// availability has no colour of its own; a ramp keeps the stack ordered
+				// from liquid at the bottom to illiquid at the top
+				color: ['#f05a28', '#f0a428', '#7db35b', '#4a90c2', '#8e6cbf', '#bf6c8e'][
+					historyByAvailability.indexOf(a)
+				],
+				amounts: a.amounts
+			}));
+		return [{ name: 'Gesamt', color: '#f05a28', amounts: historyTotal }];
+	});
+
 	const chartOptions = $derived({
-		chart: { type: 'area', height: 340, toolbar: { show: false }, stacked: perAccount },
-		series: perAccount
-			? historyByAccount.map((a) => ({
-					name: a.name,
-					data: historyDates.map((d, i) => [d, a.amounts[i]])
-				}))
-			: [{ name: 'Gesamt', data: historyDates.map((d, i) => [d, historyTotal[i]]) }],
-		colors: perAccount ? accounts.map((a) => a.color) : ['#f05a28'],
+		chart: { type: 'area', height: 340, toolbar: { show: false }, stacked: split !== 'total' },
+		series: series.map((s) => ({
+			name: s.name,
+			data: historyDates.map((d, i) => [d, s.amounts[i]])
+		})),
+		colors: series.map((s) => s.color),
 		dataLabels: { enabled: false },
 		stroke: { curve: 'smooth', width: 2 },
 		fill: { type: 'gradient', gradient: { opacityFrom: 0.4, opacityTo: 0.05 } },
 		xaxis: { type: 'datetime' },
 		yaxis: { labels: { formatter: (v: number) => Math.round(v / 1000) + 'k €' } },
 		tooltip: { x: { format: 'MMM yyyy' } },
-		legend: { show: perAccount }
+		legend: { show: split !== 'total' }
 	}) as ApexOptions;
 </script>
 
@@ -55,11 +73,20 @@
 			<span>Stichtag</span>
 			<Input type="date" bind:value={date} class="w-48" />
 		</Label>
-		<Toggle bind:checked={perAccount}>Nach Konten aufschlüsseln</Toggle>
 	</div>
 
 	<Card class="max-w-none p-4">
-		<h3 class="mb-2 text-lg font-semibold">Vermögensverlauf</h3>
+		<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+			<h3 class="text-lg font-semibold">Vermögensverlauf</h3>
+			<ToggleGroup
+				bind:value={split}
+				options={[
+					{ value: 'total', label: 'Gesamt' },
+					{ value: 'account', label: 'Nach Konto' },
+					{ value: 'availability', label: 'Nach Verfügbarkeit' }
+				]}
+			/>
+		</div>
 		<Chart options={chartOptions} />
 	</Card>
 
@@ -78,8 +105,7 @@
 			<TableHead>
 				<TableHeadCell class="px-4 py-3">Konto</TableHeadCell>
 				<TableHeadCell class="px-4 py-3">Stand</TableHeadCell>
-				<TableHeadCell class="px-4 py-3">Basis</TableHeadCell>
-				<TableHeadCell class="px-4 py-3">Seitdem</TableHeadCell>
+				<TableHeadCell class="px-4 py-3">Berechnet aus</TableHeadCell>
 			</TableHead>
 			<TableBody class="divide-y">
 				{#each computedBalances as b (b.id)}
@@ -98,17 +124,14 @@
 							{euro(b.amount)}
 						</TableBodyCell>
 						<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
-							{euro(b.referenceAmount)} am {b.referenceDate.toLocaleDateString('de-DE')}
-						</TableBodyCell>
-						<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
-							{b.expenseCount} Ausgaben
+							{euro(b.referenceAmount)} am {b.referenceDate.toLocaleDateString('de-DE')},
+							{b.expenseCount === 1 ? '1 Ausgabe' : `${b.expenseCount} Ausgaben`} seitdem
 						</TableBodyCell>
 					</TableBodyRow>
 				{/each}
 				<TableBodyRow>
 					<TableBodyCell class="px-4 py-3 font-semibold">Gesamt</TableBodyCell>
 					<TableBodyCell class="px-4 py-3 font-semibold">{euro(total)}</TableBodyCell>
-					<TableBodyCell class="px-4 py-3"></TableBodyCell>
 					<TableBodyCell class="px-4 py-3"></TableBodyCell>
 				</TableBodyRow>
 			</TableBody>

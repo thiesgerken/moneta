@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { Card, ButtonGroup, Button } from 'flowbite-svelte';
+	import { Card } from 'flowbite-svelte';
 	import type { ApexOptions } from 'apexcharts';
 	import Chart from '$lib/Chart.svelte';
+	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import { categoryTree, monthlyByCategory, overviews } from '$lib/analysis_mock';
 
-	let sign: 'expenses' | 'income' = $state('expenses');
+	let sign = $state('expenses');
 
 	const barOptions = $derived({
 		chart: { type: 'bar', height: 340, toolbar: { show: false }, stacked: true },
@@ -42,15 +43,13 @@
 </script>
 
 <div class="space-y-4">
-	<ButtonGroup>
-		<Button
-			color={sign === 'expenses' ? 'primary' : 'alternative'}
-			onclick={() => (sign = 'expenses')}>Ausgaben</Button
-		>
-		<Button color={sign === 'income' ? 'primary' : 'alternative'} onclick={() => (sign = 'income')}
-			>Einnahmen</Button
-		>
-	</ButtonGroup>
+	<ToggleGroup
+		bind:value={sign}
+		options={[
+			{ value: 'expenses', label: 'Ausgaben' },
+			{ value: 'income', label: 'Einnahmen' }
+		]}
+	/>
 
 	<Card class="max-w-none p-4">
 		<h3 class="mb-2 text-lg font-semibold">Nach Kategorie je Monat</h3>

@@ -43,6 +43,29 @@ export const historyTotal = historyDates.map((_, i) =>
 	historyByAccount.reduce((sum, a) => sum + a.amounts[i], 0)
 );
 
+export const AVAILABILITY_LABELS: Record<string, string> = {
+	IMMEDIATELY: 'Sofort',
+	DAYS: 'Tage',
+	WEEKS: 'Wochen',
+	MONTHS: 'Monate',
+	YEARS: 'Jahre',
+	DECADES: 'Jahrzehnte'
+};
+
+// the availability order the backend enum declares; a total for "verfügbar in Tagen"
+// includes everything more liquid than that, so the order has to be preserved
+const AVAILABILITY_ORDER = ['IMMEDIATELY', 'DAYS', 'WEEKS', 'MONTHS', 'YEARS', 'DECADES'];
+
+export const historyByAvailability = AVAILABILITY_ORDER.filter((av) =>
+	accounts.some((a) => a.availability === av)
+).map((av) => ({
+	availability: av,
+	label: AVAILABILITY_LABELS[av],
+	amounts: historyDates.map((_, i) =>
+		historyByAccount.filter((a) => a.availability === av).reduce((sum, a) => sum + a.amounts[i], 0)
+	)
+}));
+
 export const availabilityTotals = [
 	{ availability: 'IMMEDIATELY', label: 'Sofort', amount: 1889012 },
 	{ availability: 'DAYS', label: 'Tage', amount: 1102400 },
@@ -92,6 +115,55 @@ export const categoryTree = categories.map((c, ci) => ({
 		{ title: `Rest (+${11 + ci})`, amount: 62000 - ci * 4000 }
 	]
 }));
+
+// A month page shows whatever month the URL names, including ones outside the mocked
+// range, so this is a function of (year, month) rather than a lookup into `overviews`.
+export function monthDetail(year: number, month: number) {
+	const seed = year * 12 + month;
+	const income = 480000 + Math.round(wobble(seed, 3) * 40000);
+	const expenses = -(350000 + Math.round(wobble(seed, 5) * 60000));
+	const startTotal = 5600000 + seed * 11000;
+	const endTotal = startTotal + income + expenses;
+
+	return {
+		date: new Date(year, month - 1, 1),
+		income,
+		expenses,
+		startTotal,
+		endTotal,
+		endTotalApprox: endTotal + Math.round(wobble(seed, 9) * 3000),
+		expenseCount: 60 + Math.round(Math.abs(wobble(seed, 7)) * 30),
+		byAccount: accounts.map((a, ai) => {
+			const start = [1400000, 30000, -40000, 900000, 2100000, 1200000][ai] + seed * 900;
+			const delta = Math.round(wobble(seed, ai) * 90000);
+			return {
+				...a,
+				start,
+				end: start + delta,
+				endApprox: start + delta + Math.round(wobble(seed, ai + 20) * 1200),
+				delta,
+				expenseCount: [37, 4, 12, 1, 0, 0][ai]
+			};
+		}),
+		byCategory: categories.map((c, ci) => ({
+			...c,
+			amount: Math.round(40000 + wobble(seed, ci * 2) * 25000 + ci * 6000),
+			children: [
+				{ title: 'Wocheneinkauf', amount: 18000 - ci * 1200 },
+				{ title: 'Restaurant', amount: 9000 - ci * 700 },
+				{ title: 'Bäcker', amount: 4100 - ci * 300 },
+				{ title: `Rest (+${4 + ci})`, amount: 6200 - ci * 400 }
+			]
+		})),
+		biggest: [
+			{ id: 'b1', title: 'Miete', amount: -95000, categoryId: 'c2' },
+			{ id: 'b2', title: 'Jahresbeitrag Versicherung', amount: -48000, categoryId: 'c2' },
+			{ id: 'b3', title: 'Wocheneinkauf', amount: -12450, categoryId: 'c1' },
+			{ id: 'b4', title: 'Tanken', amount: -6500, categoryId: 'c4' },
+			{ id: 'b5', title: 'Strom', amount: -3790, categoryId: 'c2' }
+		]
+	};
+}
 
 export const calendarExpenses = Array.from({ length: 46 }, (_, i) => ({
 	id: `e${i}`,
