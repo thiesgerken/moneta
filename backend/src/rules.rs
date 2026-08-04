@@ -138,7 +138,11 @@ pub fn best_match<'a>(
 
 /// Builds the expense an automation rule produces, imposing the delivered transaction's
 /// data onto the template.
-pub fn impose(template: &Expense, delivery: &ExpenseDelivery, now: DateTime<Utc>) -> Expense {
+pub fn impose(
+    template: &Expense,
+    delivery: &ExpenseDelivery,
+    now: DateTime<Utc>,
+) -> Result<Expense, Box<dyn Error>> {
     let mut e = template.clone();
     e.id = ObjectId::new().into();
     e.is_template = false;
@@ -154,23 +158,33 @@ pub fn impose(template: &Expense, delivery: &ExpenseDelivery, now: DateTime<Utc>
         t.date += shift;
     }
 
-    // the delivered line replaces the template's own booking against that account
-    if let Some(t) = e
+    // The delivered line replaces the template's own booking against that account. Without
+    // such a booking there is nowhere to put the delivered amount, and carrying on would
+    // produce an expense holding the template's amounts instead of the real ones — wrong
+    // money, silently. That means the rule is pointed at the wrong template, so refuse.
+    let Some(t) = e
         .transactions
         .iter_mut()
         .find(|t| t.account_id == delivery.account_id)
-    {
-        t.amount = Some(delivery.amount);
-        t.fraction = None;
-        t.date = delivery.date;
-        t.statement = delivery.statement.clone();
-    }
+    else {
+        return Err(format!(
+            "template {:?} books nothing against account {:?}, so the delivered amount has nowhere to go",
+            template.id, delivery.account_id
+        )
+        .into());
+    };
 
+    t.amount = Some(delivery.amount);
+    t.fraction = None;
+    t.date = delivery.date;
+    t.statement = delivery.statement.clone();
+
+    // the remaining fractional transactions are shares of the delivered amount
     if e.transactions.iter().any(|t| t.fraction.is_some()) {
         e.reference_amount = Some(delivery.amount);
     }
 
-    e
+    Ok(e)
 }
 
 /// How far ahead of `now` periodic expenses are generated, so a rule due later today is
@@ -576,6 +590,124 @@ mod tests {
         );
     }
 
+    /// The delivered amount has to land somewhere. A template that books nothing against the
+    /// delivered account would otherwise yield an expense carrying the template's amounts,
+    /// which is wrong money written silently — the same failure the periodic amount
+    /// replacement had.
+    #[test]
+    fn imposing_a_delivery_for_an_unbooked_account_is_refused() {
+        let tpl = template(vec![transaction(ObjectId::new(), Some(-100))]);
+
+        let err = impose(&tpl, &delivery(ObjectId::new(), -4237, "x"), at(2025, 3, 5));
+
+        assert!(err.is_err());
+    }
+
+    /// the counter-bookings are shares of the delivered amount, so they must stay fractional
+    /// and follow the new reference amount rather than keeping the template's numbers
+    #[test]
+    fn imposing_a_delivery_rescales_the_shares() {
+        let account = ObjectId::new();
+        let mut tpl = template(vec![
+            transaction(account, Some(-1000)),
+            transaction(ObjectId::new(), None),
+        ]);
+        tpl.transactions[1].fraction = Some(-0.5);
+        tpl.reference_amount = Some(-1000);
+
+        let e = impose(&tpl, &delivery(account, -4237, "REWE"), at(2025, 3, 5)).unwrap();
+
+        assert_eq!(e.transactions[0].amount, Some(-4237));
+        assert_eq!(e.reference_amount, Some(-4237));
+        assert_eq!(e.transactions[1].fraction, Some(-0.5));
+        assert_eq!(e.transactions[1].amount, None);
+    }
+
+    /// a template booking the delivered account fractionally becomes a fixed booking, and
+    /// the result still has to satisfy the expense invariants
+    #[test]
+    fn imposing_a_delivery_onto_a_fractional_booking_stays_valid() {
+        let account = ObjectId::new();
+        let mut tpl = template(vec![
+            transaction(account, None),
+            transaction(ObjectId::new(), None),
+        ]);
+        tpl.transactions[0].fraction = Some(1.0);
+        tpl.transactions[1].fraction = Some(-0.5);
+        tpl.reference_amount = Some(-1000);
+
+        let e = impose(&tpl, &delivery(account, -4237, "x"), at(2025, 3, 5)).unwrap();
+
+        assert_eq!(e.transactions[0].amount, Some(-4237));
+        assert_eq!(e.transactions[0].fraction, None);
+        assert!(e.validate().is_ok());
+    }
+
+    /// every generated expense goes through validate() before being stored, so imposing must
+    /// not produce one that would be rejected
+    #[test]
+    fn imposed_expenses_are_valid() {
+        let account = ObjectId::new();
+        let tpl = template(vec![transaction(account, Some(-100))]);
+
+        let e = impose(&tpl, &delivery(account, -4237, "x"), at(2025, 3, 5)).unwrap();
+
+        assert!(e.validate().is_ok());
+    }
+
+    #[test]
+    fn instantiated_expenses_are_valid() {
+        let rule = periodic(PeriodicInterval::Monthly, at(2025, 3, 1));
+        let tpl = template(vec![transaction(ObjectId::new(), Some(-500))]);
+
+        let e = instantiate(&rule, &tpl, at(2025, 4, 15));
+
+        assert!(e.validate().is_ok());
+    }
+
+    /// ties on priority must not depend on whatever order mongo hands the rules back in
+    #[test]
+    fn equal_priorities_resolve_deterministically() {
+        let a = automation("aaa", 5);
+        let b = automation("bbb", 5);
+        let d = delivery(ObjectId::new(), -100, "x");
+
+        let forwards = best_match(&[a.clone(), b.clone()], &d)
+            .unwrap()
+            .title
+            .clone();
+        let backwards = best_match(&[b, a], &d).unwrap().title.clone();
+
+        assert_eq!(forwards, backwards);
+    }
+
+    /// all filters are ANDed: matching the statement is not enough if the amount disagrees
+    #[test]
+    fn filters_combine_conjunctively() {
+        let account = ObjectId::new();
+        let mut rule = automation("both", 1);
+        rule.regex_statement = Some("REWE".into());
+        rule.filter_amount = Some(-4237);
+
+        assert!(matches(&rule, &delivery(account, -4237, "REWE SAGT DANKE")));
+        assert!(!matches(&rule, &delivery(account, -100, "REWE SAGT DANKE")));
+        assert!(!matches(&rule, &delivery(account, -4237, "ALDI")));
+    }
+
+    /// moneydb wrote its regexes against `dd.mm.yyyy HH:MM`; a different format would stop
+    /// every imported regexTime rule from matching
+    #[test]
+    fn delivery_date_format_matches_moneydb() {
+        let d = ExpenseDelivery {
+            account_id: ObjectId::new().into(),
+            date: Utc.with_ymd_and_hms(2025, 3, 4, 9, 5, 0).unwrap(),
+            amount: -100,
+            statement: String::new(),
+        };
+
+        assert_eq!(d.formatted_date(), "04.03.2025 09:05");
+    }
+
     #[test]
     fn imposing_a_delivery_overwrites_the_matching_transaction() {
         let account = ObjectId::new();
@@ -586,7 +718,7 @@ mod tests {
         ]);
 
         let d = delivery(account, -4237, "LASTSCHRIFT REWE");
-        let e = impose(&tpl, &d, at(2025, 3, 5));
+        let e = impose(&tpl, &d, at(2025, 3, 5)).unwrap();
 
         assert!(!e.is_template);
         assert!(e.is_unchecked);
@@ -620,7 +752,7 @@ mod tests {
         tpl.transactions[1].fraction = Some(0.5);
         tpl.reference_amount = Some(-100);
 
-        let e = impose(&tpl, &delivery(account, -4237, "x"), at(2025, 3, 5));
+        let e = impose(&tpl, &delivery(account, -4237, "x"), at(2025, 3, 5)).unwrap();
 
         assert_eq!(e.reference_amount, Some(-4237));
     }
