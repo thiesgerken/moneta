@@ -68,6 +68,10 @@ documents get fresh ObjectIds on every re-render, so a rule storing one would br
 time anything re-renders. `graphql/rules.rs` resolves a caller's rendered id to the upstream
 id on write and back again on read; keep that translation if you touch it.
 
+**Delivery dedup is amount + account + a 24h window, not statement text.** Banks reword the
+text between provisional and final bookings. Widening the comparison would duplicate
+expenses; narrowing it would drop real payments. There are tests for both directions.
+
 **`moneta import` reads the export on stdin and matches users by name**, so every user in the
 export must already exist in moneta or it panics. `--clear` wipes everything *except* users.
 
@@ -97,9 +101,8 @@ data is therefore client-side only; there is no SSR of query results.
 ## Known gaps worth knowing before you plan work
 
 - No frontend tests, no integration tests against a real mongo.
-- Automation rules can be imported and matched, but nothing delivers transactions to them
-  yet — the ingestion endpoint is the missing half.
-- There is no frontend for either rule kind; they are API- and CLI-only.
+- There is no frontend for rules or deliveries; they are API- and CLI-only, and no upload
+  client exists to feed `deliveries.submit` from a real bank export.
 - CORS is `AllowedOrigins::all()` with `allow_credentials(true)` in `graphql/mod.rs`, and
   `docker-compose.yaml` carries a committed `MONETA__API__SECRET_KEY`. Both are known and
   accepted for now — the deployment is private infrastructure.

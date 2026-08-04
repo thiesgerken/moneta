@@ -113,9 +113,19 @@ after its expenses are stored.
 Note that a template need not be flagged `isTemplate`: moneydb let ordinary past expenses
 double as prototypes, and the import preserves that rather than rewriting history.
 
-**The delivery endpoint that feeds automation rules does not exist yet.** The matching and
-copying logic is implemented and tested, but nothing calls it until there is an API to
-accept bank statement lines.
+Bank statement lines are handed in through the `deliveries.submit` mutation, which
+deduplicates, matches, and creates the resulting expenses. Each line comes back as `CREATED`,
+`DUPLICATE`, `UNMATCHED` or `FAILED`.
+
+Statements carry no stable per-line id, so a delivery counts as already seen when the same
+amount hits the same account within 24 hours. The statement text is deliberately not part of
+that comparison — banks reword it between a provisional and a final booking of the same
+payment. The consequence is that a genuine second identical payment on the same day is
+treated as a duplicate, which is the safer way round to be wrong.
+
+Every line is remembered whether or not a rule matched, so re-uploading an overlapping
+statement is cheap and safe. `FAILED` lines are the exception: they are not remembered, so
+fixing the rule and uploading again picks them up.
 
 ## Backend layout
 
