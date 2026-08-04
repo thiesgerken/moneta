@@ -11,59 +11,22 @@ on:
       - devel
 
 jobs:
-  # build-docker:
-  #   # needs: [test-backend, test-frontend]
-  #   runs-on: ubuntu-latest
-  #   if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/devel')
-  #   steps:
-  #     - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
-
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
-
-  #     - name: Login to Gitea Container Registry
-  #       uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3
-  #       with:
-  #         registry: gitea.gerken.haus
-  #         username: thies
-  #         password: ${{ secrets.DOCKER_REGISTRY_GITEA }}
-
-  #     - name: Login to Docker Hub
-  #       uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3
-  #       with:
-  #         username: thies@thiesgerken.de
-  #         password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-  #     - name: Build and push
-  #       uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
-  #       with:
-  #         context: .
-  #         push: ${{ github.event_name != 'pull_request' }}
-  #         tags: |
-  #           gitea.gerken.haus/thies/moneta:${{ github.ref_name }}
-  #         cache-from: type=registry,ref=gitea.gerken.haus/thies/moneta:${{ github.ref_name }}
-  #         cache-to: type=inline
-
   test-backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Install dependencies
-        run: |
-          apt-get update -y && apt-get install -y --no-install-recommends libssl-dev gcc clang
-          mkdir -p web/build
-          touch web/build/index.html
+        run: apt-get update -y && apt-get install -y --no-install-recommends libssl-dev gcc
 
       - uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1
         with:
           components: rustfmt, clippy
+          workspaces: backend
 
-      - run: cd backend && cargo check
-      # - run: cd backend && cargo test
-      # - run: cd backend && cargo fmt --all -- --check
-      # - run: cd backend && cargo clippy -- -D warnings
-      # - run: cd backend && cargo build
+      - run: cd backend && cargo fmt --all -- --check
+      - run: cd backend && cargo clippy --all-targets -- -D warnings
+      - run: cd backend && cargo test
 
   test-frontend:
     runs-on: ubuntu-latest
@@ -74,8 +37,39 @@ jobs:
           node-version: "24"
       - run: npm install -g pnpm
 
-      - name: Install dependencies and test
-        run: |
-          cd frontend
-          pnpm i
-          pnpm build
+      - name: Install dependencies
+        run: cd frontend && pnpm install --frozen-lockfile
+
+      # build first: it runs houdini codegen, which lint and check both need
+      - run: cd frontend && pnpm build
+      - run: cd frontend && pnpm check
+      - run: cd frontend && pnpm lint
+
+  build-docker:
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/devel')
+    strategy:
+      matrix:
+        component: [backend, frontend]
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
+
+      - name: Login to Gitea Container Registry
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3
+        with:
+          registry: git.gerken.haus
+          username: thies
+          password: ${{ secrets.DOCKER_REGISTRY_GITEA }}
+
+      - name: Build and push
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        with:
+          context: ./${{ matrix.component }}
+          push: true
+          tags: git.gerken.haus/thies/moneta/${{ matrix.component }}:${{ github.ref_name }}
+          cache-from: type=registry,ref=git.gerken.haus/thies/moneta/${{ matrix.component }}:${{ github.ref_name }}
+          cache-to: type=inline

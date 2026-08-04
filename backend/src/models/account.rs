@@ -57,7 +57,7 @@ pub struct Account {
 
     // when the account was opened and possibly closed. Used to determine whether to hide the account or not.
     // at its opening, it is implicitly assumed that the account had a balance of zero.
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub opened: DateTime<Utc>,
     #[serde(with = "crate::queries::optional_chrono_datetime_as_bson_datetime")]
     pub closed: Option<DateTime<Utc>>,
@@ -82,7 +82,7 @@ pub struct AccountInput {
 
     // when the account was opened and possibly closed. Used to determine whether to hide the account or not.
     // at its opening, it is implicitly assumed that the account had a balance of zero.
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub opened: DateTime<Utc>,
     #[serde(with = "crate::queries::optional_chrono_datetime_as_bson_datetime")]
     pub closed: Option<DateTime<Utc>>,
@@ -103,10 +103,10 @@ pub struct AccountSynchronization {
 
 impl AccountInput {
     pub fn validate(&self) -> Result<(), Box<dyn Error>> {
-        if let Some(closed) = self.closed {
-            if closed <= self.opened {
-                return Err("Account opening date must not be after account close date".into());
-            }
+        if let Some(closed) = self.closed
+            && closed <= self.opened
+        {
+            return Err("Account opening date must not be after account close date".into());
         }
 
         if self.ownership_fraction <= 0.0 || self.ownership_fraction > 1.0 {

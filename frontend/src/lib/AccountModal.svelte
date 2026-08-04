@@ -2,7 +2,8 @@
 	import { Modal, Label, Input, Textarea, Button, Select, Datepicker } from 'flowbite-svelte';
 	import ColorPicker from 'svelte-awesome-color-picker';
 
-	import { graphql, type AccountInput } from '$houdini';
+	import { graphql } from '$houdini';
+	import type { AccountInput } from '$houdini/graphql/inputs';
 	import { EditOutline, PlusOutline } from 'flowbite-svelte-icons';
 
 	interface Props {
@@ -16,14 +17,7 @@
 			readonly owner: { readonly name: string };
 			readonly iban: string | null;
 			readonly kind:
-				| 'CASH'
-				| 'DEBIT'
-				| 'CREDIT'
-				| 'DEBT'
-				| 'STOCKS'
-				| 'REAL_ESTATE'
-				| 'VIRTUAL'
-				| 'OTHER';
+				'CASH' | 'DEBIT' | 'CREDIT' | 'DEBT' | 'STOCKS' | 'REAL_ESTATE' | 'VIRTUAL' | 'OTHER';
 			readonly availability: 'IMMEDIATELY' | 'DAYS' | 'WEEKS' | 'MONTHS' | 'YEARS' | 'DECADES';
 			readonly risk: 'NONE' | 'SLIGHT' | 'LOW' | 'MEDIUM' | 'HIGH' | 'HUGE';
 			readonly opened: Date;
@@ -35,28 +29,21 @@
 			} | null;
 		}[];
 		account?: {
-			readonly id: String;
+			readonly id: string;
 			readonly name: string;
 			readonly description: string | null;
 			readonly color: string | null;
 			readonly owner: { readonly name: string };
 			readonly iban: string | null;
 			readonly kind:
-				| 'CASH'
-				| 'DEBIT'
-				| 'CREDIT'
-				| 'DEBT'
-				| 'STOCKS'
-				| 'REAL_ESTATE'
-				| 'VIRTUAL'
-				| 'OTHER';
+				'CASH' | 'DEBIT' | 'CREDIT' | 'DEBT' | 'STOCKS' | 'REAL_ESTATE' | 'VIRTUAL' | 'OTHER';
 			readonly availability: 'IMMEDIATELY' | 'DAYS' | 'WEEKS' | 'MONTHS' | 'YEARS' | 'DECADES';
 			readonly risk: 'NONE' | 'SLIGHT' | 'LOW' | 'MEDIUM' | 'HIGH' | 'HUGE';
 			readonly opened: Date;
 			readonly closed: Date | null;
 			readonly ownershipFraction: number;
 			readonly synchronization: {
-				readonly account: { readonly id: String };
+				readonly account: { readonly id: string };
 				readonly invert: boolean;
 			} | null;
 		};
@@ -231,12 +218,7 @@
 			</div>
 			<div>
 				<Label for="iban" class="mb-2">IBAN</Label>
-				<Input
-					id="iban"
-					placeholder=""
-					bind:value={iban}
-					color={ibanError ? 'red' : undefined}
-				/>
+				<Input id="iban" placeholder="" bind:value={iban} color={ibanError ? 'red' : undefined} />
 			</div>
 			<div>
 				<Label for="kind" class="mb-2">Typ</Label>
@@ -282,7 +264,7 @@
 						color={ownershipFractionError ? 'red' : undefined}
 						required
 					/>
-					<span class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+					<span class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
 						>%</span
 					>
 				</div>

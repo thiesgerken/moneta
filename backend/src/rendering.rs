@@ -63,7 +63,7 @@ pub async fn rerender_multiple_balances(
 
     let mut rendered_balances = Vec::new();
     while let Some(b) = cursor.try_next().await? {
-        rendered_balances.extend(b.render(&accounts)?.into_iter());
+        rendered_balances.extend(b.render(&accounts)?);
     }
 
     let r = rendered_balances_collection
@@ -99,7 +99,7 @@ pub async fn rerender_multiple_expenses(
 
     let mut rendered_expenses = Vec::new();
     while let Some(e) = cursor.try_next().await? {
-        rendered_expenses.extend(e.render(&accounts)?.into_iter());
+        rendered_expenses.extend(e.render(&accounts)?);
     }
 
     let r = rendered_expenses_collection
@@ -376,5 +376,275 @@ impl Expense {
             r.deleted_count, &self.id
         );
         Ok(r)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{
+        AccountAvailability, AccountKind, AccountRisk, AccountSynchronization, ExpenseTransaction,
+    };
+    use chrono::TimeZone;
+
+    fn date() -> chrono::DateTime<Utc> {
+        Utc.with_ymd_and_hms(2025, 6, 1, 12, 0, 0).unwrap()
+    }
+
+    fn account(user_id: ObjectId, ownership_fraction: f64) -> Account {
+        Account {
+            id: ObjectId::new().into(),
+            user_id: user_id.into(),
+            name: "test".into(),
+            description: String::new(),
+            color: None,
+            iban: None,
+            kind: AccountKind::Debit,
+            availability: AccountAvailability::Immediately,
+            risk: AccountRisk::None,
+            opened: date(),
+            closed: None,
+            ownership_fraction,
+            synchronization: None,
+        }
+    }
+
+    /// links `a` and `b` so each renders into the other's owner's view
+    fn synchronize(a: &mut Account, b: &mut Account, invert: bool) {
+        a.synchronization = Some(AccountSynchronization {
+            account_id: b.id,
+            invert,
+        });
+        b.synchronization = Some(AccountSynchronization {
+            account_id: a.id,
+            invert,
+        });
+    }
+
+    fn transaction(
+        account: &Account,
+        amount: Option<i32>,
+        fraction: Option<f64>,
+    ) -> ExpenseTransaction {
+        ExpenseTransaction {
+            account_id: account.id,
+            date: date(),
+            amount,
+            fraction,
+            comments: String::new(),
+            statement: String::new(),
+        }
+    }
+
+    fn expense(transactions: Vec<ExpenseTransaction>, reference_amount: Option<i32>) -> Expense {
+        Expense {
+            id: ObjectId::new().into(),
+            title: "test".into(),
+            store: String::new(),
+            description: String::new(),
+            comments: String::new(),
+            booking_start: date(),
+            booking_end: date(),
+            reference_amount,
+            is_template: false,
+            is_tax_relevant: false,
+            is_unchecked: false,
+            is_incomplete: false,
+            is_extraordinary: false,
+            receipts: vec![],
+            categories: vec![],
+            transactions,
+            positions: vec![],
+            created_at: date(),
+            updated_at: date(),
+        }
+    }
+
+    fn balance(account: &Account, amount: i32) -> Balance {
+        Balance {
+            id: ObjectId::new().into(),
+            date: date(),
+            account_id: account.id,
+            amount,
+            comments: String::new(),
+            created_at: date(),
+            updated_at: date(),
+        }
+    }
+
+    #[test]
+    fn renders_a_wholly_owned_expense_at_face_value() {
+        let uid = ObjectId::new();
+        let acc = account(uid, 1.0);
+        let e = expense(vec![transaction(&acc, Some(-1250), None)], None);
+
+        let rendered = e.render(&[acc]).unwrap();
+
+        assert_eq!(rendered.len(), 1);
+        assert_eq!(rendered[0].effective_amount, -1250.0);
+        assert_eq!(rendered[0].transactions[0].calculated_amount, -1250.0);
+    }
+
+    /// a jointly owned account only contributes its owner's share to the totals
+    #[test]
+    fn applies_the_ownership_fraction_to_the_effective_amount() {
+        let uid = ObjectId::new();
+        let acc = account(uid, 0.5);
+        let e = expense(vec![transaction(&acc, Some(-1000), None)], None);
+
+        let rendered = e.render(&[acc]).unwrap();
+
+        // the transaction itself is unchanged, only the user's share of it shrinks
+        assert_eq!(rendered[0].transactions[0].calculated_amount, -1000.0);
+        assert_eq!(rendered[0].effective_amount, -500.0);
+    }
+
+    #[test]
+    fn resolves_fractional_transactions_against_the_reference_amount() {
+        let uid = ObjectId::new();
+        let acc = account(uid, 1.0);
+        let e = expense(vec![transaction(&acc, None, Some(0.25))], Some(-2000));
+
+        let rendered = e.render(&[acc]).unwrap();
+
+        assert_eq!(rendered[0].transactions[0].calculated_amount, -500.0);
+    }
+
+    #[test]
+    fn rejects_a_fractional_transaction_without_a_reference_amount() {
+        let uid = ObjectId::new();
+        let acc = account(uid, 1.0);
+        let e = expense(vec![transaction(&acc, None, Some(0.25))], None);
+
+        assert!(e.render(&[acc]).is_err());
+    }
+
+    #[test]
+    fn sums_effective_amounts_across_transactions() {
+        let uid = ObjectId::new();
+        let acc = account(uid, 1.0);
+        let e = expense(
+            vec![
+                transaction(&acc, Some(-1000), None),
+                transaction(&acc, Some(-500), None),
+            ],
+            None,
+        );
+
+        let rendered = e.render(&[acc]).unwrap();
+
+        assert_eq!(rendered[0].effective_amount, -1500.0);
+    }
+
+    /// an expense touching two users' accounts is stored once per user
+    #[test]
+    fn renders_one_document_per_involved_user() {
+        let (mine, theirs) = (ObjectId::new(), ObjectId::new());
+        let my_account = account(mine, 1.0);
+        let their_account = account(theirs, 1.0);
+
+        let e = expense(
+            vec![
+                transaction(&my_account, Some(-1000), None),
+                transaction(&their_account, Some(-400), None),
+            ],
+            None,
+        );
+
+        let rendered = e.render(&[my_account, their_account]).unwrap();
+        assert_eq!(rendered.len(), 2);
+
+        // each user sees only what their own account contributed
+        let for_me = rendered.iter().find(|r| *r.user_id == mine).unwrap();
+        let for_them = rendered.iter().find(|r| *r.user_id == theirs).unwrap();
+        assert_eq!(for_me.effective_amount, -1000.0);
+        assert_eq!(for_them.effective_amount, -400.0);
+    }
+
+    /// an inverted sync models a debt: what one side pays, the other side owes
+    #[test]
+    fn inverted_synchronization_flips_the_sign_for_the_other_user() {
+        let (mine, theirs) = (ObjectId::new(), ObjectId::new());
+        let mut my_account = account(mine, 1.0);
+        let mut their_account = account(theirs, 1.0);
+        synchronize(&mut my_account, &mut their_account, true);
+
+        let e = expense(vec![transaction(&my_account, Some(-1000), None)], None);
+        let rendered = e
+            .render(&[my_account.clone(), their_account.clone()])
+            .unwrap();
+
+        assert_eq!(rendered.len(), 2);
+        let for_me = rendered.iter().find(|r| *r.user_id == mine).unwrap();
+        let for_them = rendered.iter().find(|r| *r.user_id == theirs).unwrap();
+
+        assert_eq!(for_me.effective_amount, -1000.0);
+        assert_eq!(for_them.effective_amount, 1000.0);
+        // the other user sees it booked against their own account, not mine
+        assert_eq!(for_them.transactions[0].account_id, their_account.id);
+        assert_eq!(for_them.transactions[0].amount, Some(1000));
+    }
+
+    #[test]
+    fn plain_synchronization_keeps_the_sign_for_the_other_user() {
+        let (mine, theirs) = (ObjectId::new(), ObjectId::new());
+        let mut my_account = account(mine, 1.0);
+        let mut their_account = account(theirs, 1.0);
+        synchronize(&mut my_account, &mut their_account, false);
+
+        let e = expense(vec![transaction(&my_account, Some(-1000), None)], None);
+        let rendered = e.render(&[my_account, their_account]).unwrap();
+
+        let for_them = rendered.iter().find(|r| *r.user_id == theirs).unwrap();
+        assert_eq!(for_them.effective_amount, -1000.0);
+    }
+
+    #[test]
+    fn renders_a_balance_for_its_owner() {
+        let uid = ObjectId::new();
+        let acc = account(uid, 1.0);
+        let b = balance(&acc, 5000);
+
+        let rendered = b.render(std::slice::from_ref(&acc)).unwrap();
+
+        assert_eq!(rendered.len(), 1);
+        assert_eq!(rendered[0].amount, 5000);
+        assert_eq!(*rendered[0].user_id, uid);
+        assert_eq!(rendered[0].upstream_id, b.id);
+    }
+
+    #[test]
+    fn inverted_synchronization_flips_the_balance_for_the_other_user() {
+        let (mine, theirs) = (ObjectId::new(), ObjectId::new());
+        let mut my_account = account(mine, 1.0);
+        let mut their_account = account(theirs, 1.0);
+        synchronize(&mut my_account, &mut their_account, true);
+
+        let b = balance(&my_account, 5000);
+        let rendered = b.render(&[my_account, their_account]).unwrap();
+
+        assert_eq!(rendered.len(), 2);
+        assert_eq!(
+            rendered.iter().find(|r| *r.user_id == mine).unwrap().amount,
+            5000
+        );
+        assert_eq!(
+            rendered
+                .iter()
+                .find(|r| *r.user_id == theirs)
+                .unwrap()
+                .amount,
+            -5000
+        );
+    }
+
+    #[test]
+    fn fails_when_an_account_referenced_by_a_transaction_is_missing() {
+        let uid = ObjectId::new();
+        let acc = account(uid, 1.0);
+        let e = expense(vec![transaction(&acc, Some(-100), None)], None);
+
+        // rendering without the account it points at must not silently produce nothing
+        assert!(e.render_for_user(uid, &[]).is_err());
     }
 }

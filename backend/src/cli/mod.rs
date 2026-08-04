@@ -2,7 +2,7 @@ pub mod account;
 pub mod import;
 pub mod user;
 
-use clap::{crate_authors, crate_name, crate_version, Arg, ArgAction, Command};
+use clap::{Arg, ArgAction, Command, crate_authors, crate_name, crate_version};
 
 pub fn build() -> Command {
     Command::new(crate_name!())

@@ -159,16 +159,15 @@ impl AnalysisQuery {
                 .iter()
                 .filter(|t| t.calculated_amount != 0.0 && t.date < date)
             {
-                if let Some(newest_balance) = newest_balances.get(&transaction.account_id) {
-                    if transaction.date >= newest_balance.date {
-                        let computed_amount =
-                            computed_amounts.get_mut(&transaction.account_id).unwrap();
-                        let expense_count =
-                            expense_counts.get_mut(&transaction.account_id).unwrap();
+                if let Some(newest_balance) = newest_balances.get(&transaction.account_id)
+                    && transaction.date >= newest_balance.date
+                {
+                    let computed_amount =
+                        computed_amounts.get_mut(&transaction.account_id).unwrap();
+                    let expense_count = expense_counts.get_mut(&transaction.account_id).unwrap();
 
-                        *computed_amount += transaction.calculated_amount;
-                        *expense_count += 1;
-                    }
+                    *computed_amount += transaction.calculated_amount;
+                    *expense_count += 1;
                 }
             }
         }

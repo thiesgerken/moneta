@@ -23,7 +23,7 @@
 	import CategoryModal from './CategoryModal.svelte';
 
 	let searchTerm = $state('');
-	let expandedRows = $state<String[]>([]);
+	let expandedRows = $state<string[]>([]);
 	let sortBy: { field: string; direction: number }[] = $state([{ field: 'name', direction: 1 }]);
 
 	let showNewCategoryModal = $state(false);
@@ -33,7 +33,7 @@
 	let categoryIdToDelete: string | undefined = $state(undefined);
 
 	const categoryStore = graphql(`
-		query CategoryTableCategories @load {
+		query CategoryTableCategories {
 			categories {
 				list(limit: 1000) {
 					id
@@ -49,6 +49,8 @@
 			}
 		}
 	`);
+
+	$effect(() => void categoryStore.fetch());
 
 	const totalCount = $derived($categoryStore.data?.categories.list.length || 0);
 
@@ -109,7 +111,7 @@
 		allCategories.find((c) => c.id === categoryIdToDelete) || undefined
 	);
 
-	function toggleRow(id: String) {
+	function toggleRow(id: string) {
 		if (expandedRows.includes(id)) expandedRows = expandedRows.filter((rowId) => rowId !== id);
 		else expandedRows = [...expandedRows, id];
 	}
@@ -157,9 +159,9 @@
 
 {#snippet sortIcon(field: string)}
 	{#if isSortedBy(field) === -1}
-		{'▲'}
+		▲
 	{:else if isSortedBy(field) === 1}
-		{'▼'}
+		▼
 	{/if}
 {/snippet}
 
@@ -228,7 +230,7 @@
 	>
 		{#snippet header()}
 			<div
-				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end space-y-2 md:w-auto md:flex-row md:items-center md:space-x-3 md:space-y-0"
+				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end space-y-2 md:w-auto md:flex-row md:items-center md:space-y-0 md:space-x-3"
 			>
 				<Button onclick={() => (showNewCategoryModal = true)}>
 					<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu

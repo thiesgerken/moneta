@@ -1,27 +1,27 @@
 use std::collections::HashMap;
 use std::error::Error;
 
-use crate::graphql::root::require_user;
 use crate::graphql::root::Context;
+use crate::graphql::root::require_user;
 use crate::graphql::util::{self};
-use crate::models::rendering::{RenderedBalance, RenderedExpense};
 use crate::models::AccountAvailability;
 use crate::models::AccountKind;
 use crate::models::AccountRisk;
 use crate::models::AccountSynchronization;
+use crate::models::rendering::{RenderedBalance, RenderedExpense};
 use crate::models::{Account, AccountCreateInput, AccountUpdateInput, ObjectIdWrapper};
 
 use chrono::DateTime;
 use chrono::Utc;
-use dataloader::cached::Loader;
 use dataloader::BatchFn;
+use dataloader::cached::Loader;
 use futures::TryStreamExt;
-use juniper::graphql_object;
 use juniper::FieldResult;
+use juniper::graphql_object;
 use log::debug;
+use mongodb::Database;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
-use mongodb::Database;
 
 use super::users::GraphQLUserInfo;
 #[derive(Debug, Clone)]
@@ -108,7 +108,10 @@ impl GraphQLAccount {
     }
 
     fn synchronization(&self) -> Option<GraphQLAccountSynchronization> {
-        self.data.synchronization.as_ref().map(|d| GraphQLAccountSynchronization{data: d.clone()})
+        self.data
+            .synchronization
+            .as_ref()
+            .map(|d| GraphQLAccountSynchronization { data: d.clone() })
     }
 }
 
@@ -141,7 +144,8 @@ impl AccountQuery {
 
         context
             .account_loader
-            .prime_many(accounts.iter().map(|a| (a.id, a.clone()))).await;
+            .prime_many(accounts.iter().map(|a| (a.id, a.clone())))
+            .await;
 
         Ok(accounts.into_iter().map(GraphQLAccount::new).collect())
     }
@@ -250,8 +254,7 @@ impl AccountMutation {
         let count = collection
             .update_one(
                 doc! {"_id":*id,"userId": user_id},
-                doc! {"$set":  bson::to_bson(&account).unwrap()},
-
+                doc! {"$set":  bson::serialize_to_bson(&account).unwrap()},
             )
             .await?
             .modified_count;
@@ -268,10 +271,7 @@ pub async fn get_many(
 
     let collection = connection.collection::<Account>("accounts");
     let accounts = collection
-        .find(
-            doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<ObjectId>>()}},
-
-        )
+        .find(doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<ObjectId>>()}})
         .await?
         .try_collect::<Vec<_>>()
         .await?;

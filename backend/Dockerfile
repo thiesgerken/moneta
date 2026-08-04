@@ -1,7 +1,7 @@
-FROM rust:1.89-bullseye@sha256:8f72d971a31b278cebdb2eb64a44c3900ff27c716a4ef6f4db05946d10c9ae4e AS builder
+FROM rust:1.96-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663 AS builder
 
 RUN apt-get update -y && apt-get dist-upgrade -y \
-  && apt-get update -y && apt-get install -y --no-install-recommends libc-dev libssl-dev pkg-config gcc clang \
+  && apt-get update -y && apt-get install -y --no-install-recommends libc-dev libssl-dev pkg-config gcc \
   && rm -Rf /var/cache/apt
 
 WORKDIR /build
@@ -16,6 +16,6 @@ RUN touch src/lib.rs && touch src/bin/moneta.rs && touch src/bin/sandbox.rs
 RUN cargo build --release
 RUN strip -s target/release/moneta
 
-FROM debian:bullseye-slim@sha256:cd1bc32f233a49f1b82149c9edb8ef34fb1e6c45f37211445c51a97603468604
+FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 COPY --from=builder /build/target/release/moneta /bin/moneta
 CMD moneta

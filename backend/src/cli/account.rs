@@ -9,7 +9,7 @@ use log::info;
 use mongodb::bson;
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
-use prettytable::{row, Table};
+use prettytable::{Table, row};
 use std::str::FromStr;
 
 pub fn build() -> Command {
@@ -52,9 +52,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
     if let Some(account_id_values) = sub_matches.get_many::<String>("sync") {
         assert!(account_id_values.len() == 2);
         let account_ids: Vec<ObjectId> = account_id_values
-            .into_iter()
-            .cloned()
-            .map(|s| ObjectId::from_str(&s))
+            .map(|s| ObjectId::from_str(s))
             .collect::<Result<_, _>>()
             .expect("error parsing object ids");
 
@@ -76,7 +74,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             account_collection
             .update_one(
                 doc! {"_id": *accounts[i ].id},
-                doc! {"$set": {"synchronization": bson::to_bson(&Some(AccountSynchronization{ account_id: accounts[(i+1)%2].id, invert })).unwrap()}},
+                doc! {"$set": {"synchronization": bson::serialize_to_bson(&Some(AccountSynchronization{ account_id: accounts[(i+1)%2].id, invert })).unwrap()}},
 
             )
             .await
@@ -105,7 +103,6 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             .update_many(
                 doc! {"_id": {"$in":& account_ids}},
                 doc! {"$unset": {"synchronization":1}},
-
             )
             .await
             .expect("Could not update accounts");

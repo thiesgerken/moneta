@@ -8,7 +8,7 @@
 	let expandedDiffs = $state<string[]>([]);
 
 	const changelogStore = graphql(`
-		query ExpenseChangelog @load {
+		query ExpenseChangelog {
 			users {
 				me {
 					name
@@ -42,6 +42,8 @@
 		}
 	`);
 
+	$effect(() => void changelogStore.fetch());
+
 	const changelogEntries = $derived(
 		($changelogStore.data?.expenses.changelog.edges || []).sort(
 			(a, b) => b.node.date.getTime() - a.node.date.getTime()
@@ -55,11 +57,11 @@
 </script>
 
 <Timeline order="vertical">
-	{#each changelogEntries as entry}
+	{#each changelogEntries as entry (entry.node.id)}
 		<TimelineItem
 			title={(entry.node.newState?.title || '') +
 				(' (' + entry.node.newState?.bookingStart.toLocaleDateString() + ')')}
-			dateFormat={'full-date'}
+			dateFormat="full-date"
 			date={`${entry.node.date.getFullYear()}-${String(entry.node.date.getMonth() + 1).padStart(2, '0')}-${String(entry.node.date.getDate()).padStart(2, '0')}`}
 		>
 			{#snippet orientationSlot()}
@@ -96,7 +98,7 @@
 					</button>
 					{#if expandedDiffs.includes(entry.node.id.toString())}
 						<pre
-							class="mt-2 whitespace-pre-wrap font-mono text-xs text-gray-500 dark:text-gray-400">{entry
+							class="mt-2 font-mono text-xs whitespace-pre-wrap text-gray-500 dark:text-gray-400">{entry
 								.node.diff}</pre>
 					{/if}
 				</div>

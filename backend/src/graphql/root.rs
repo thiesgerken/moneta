@@ -15,9 +15,9 @@ use crate::graphql::{
 };
 
 use super::{
-    accounts::{get_account_loader, AccountLoader},
-    categories::{get_category_loader, CategoryLoader},
-    users::{get_user_loader, UserLoader},
+    accounts::{AccountLoader, get_account_loader},
+    categories::{CategoryLoader, get_category_loader},
+    users::{UserLoader, get_user_loader},
 };
 
 pub struct Context {
@@ -35,7 +35,7 @@ pub struct Query;
 
 pub struct Mutation;
 
-pub type Schema = juniper::RootNode<'static, Query, Mutation, juniper::EmptySubscription<Context>>;
+pub type Schema = juniper::RootNode<Query, Mutation, juniper::EmptySubscription<Context>>;
 
 pub async fn require_user(context: &Context) -> juniper::FieldResult<ObjectId> {
     context.user_id.read().await.ok_or(juniper::FieldError::new(

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { graphql } from '$houdini';
 	import { fail } from '@sveltejs/kit';
-	import { Section, Register } from 'flowbite-svelte-blocks';
+	import { Section } from 'flowbite-svelte-blocks';
 	import { Button, Label, Input } from 'flowbite-svelte';
 
 	async function login(event: Event) {

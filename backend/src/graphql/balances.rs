@@ -1,8 +1,8 @@
 use std::error::Error;
 
 use crate::graphql::accounts::GraphQLAccount;
-use crate::graphql::root::require_user;
 use crate::graphql::root::Context;
+use crate::graphql::root::require_user;
 use crate::graphql::util::{self};
 use crate::models::rendering::{
     RenderedBalance, RenderedBalanceCreateInput, RenderedBalanceInput, RenderedBalanceUpdateInput,
@@ -12,9 +12,9 @@ use crate::queries;
 
 use chrono::DateTime;
 use chrono::Utc;
-use juniper::graphql_object;
 use juniper::FieldResult;
 use juniper::GraphQLObject;
+use juniper::graphql_object;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{self, doc};
 
@@ -221,8 +221,7 @@ impl BalanceMutation {
         upstream_collection
             .update_one(
                 doc!("_id": &*updated_upstream_entry.id),
-                doc! {"$set":  bson::to_bson(&updated_upstream_entry).unwrap()}
-            ,
+                doc! {"$set":  bson::serialize_to_bson(&updated_upstream_entry).unwrap()},
             )
             .await?;
 

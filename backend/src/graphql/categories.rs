@@ -166,7 +166,7 @@ impl CategoryMutation {
         let count = collection
             .update_one(
                 doc! {"_id":*id},
-                doc! {"$set":  bson::to_bson(&category).unwrap()},
+                doc! {"$set":  bson::serialize_to_bson(&category).unwrap()},
             )
             .await?
             .modified_count;

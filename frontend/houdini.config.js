@@ -2,6 +2,10 @@
 
 /** @type {import('houdini').ConfigFile} */
 const config = {
+	// `url` ships in the client bundle, so it stays relative and is routed to the
+	// backend by the vite proxy in dev and by traefik in production
+	url: '/graphql',
+	schemaPath: './schema.graphql',
 	watchSchema: {
 		url: 'http://localhost:8181/graphql'
 	},
@@ -13,7 +17,7 @@ const config = {
 	},
 	scalars: {
 		ObjectIdWrapper: {
-			type: 'String'
+			type: 'string'
 		},
 		DateTime: {
 			type: 'Date',
@@ -24,9 +28,7 @@ const config = {
 				return date && date.toISOString();
 			}
 		}
-	} ,features: {
-        imperativeCache: true,
-    }
+	}
 };
 
 export default config;

@@ -1,9 +1,6 @@
 use std::ops::Deref;
 
-use juniper::{
-    GraphQLScalar, InputValue, ScalarValue, Value,
-
-};
+use juniper::GraphQLScalar;
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 
@@ -11,27 +8,20 @@ use serde::{Deserialize, Serialize};
 #[graphql(
     to_output_with = to_output,
     from_input_with = from_input,
-    parse_token( String)
+    parse_token(String)
 )]
 #[derive(Debug, Copy, Clone, Hash, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct ObjectIdWrapper(pub ObjectId);
 
-
-fn to_output<S: ScalarValue>(v: &ObjectIdWrapper) -> Value<S> {
-    Value::scalar(v.0.to_hex())
+fn to_output(v: &ObjectIdWrapper) -> String {
+    v.0.to_hex()
 }
 
-fn from_input<S: ScalarValue>(v: &InputValue<S>) -> Result<ObjectIdWrapper, String> {
-    match *v {
-        InputValue::Scalar(ref s) => s
-            .as_string()
-            .and_then(|s| ObjectId::parse_str(s).ok())
-            .map(ObjectIdWrapper)
-            .ok_or_else(|| format!("Expected a string or integer, got {:?}", v)),
-        _ => Err(format!("Expected a string or integer, got {:?}", v)),
-    }
+fn from_input(s: &str) -> Result<ObjectIdWrapper, Box<str>> {
+    ObjectId::parse_str(s)
+        .map(ObjectIdWrapper)
+        .map_err(|e| format!("Failed to parse `ObjectIdWrapper`: {e}").into())
 }
-
 
 impl Deref for ObjectIdWrapper {
     type Target = ObjectId;
