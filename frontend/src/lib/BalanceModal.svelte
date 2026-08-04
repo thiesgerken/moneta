@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Modal, Label, Input, Textarea, Button, Datepicker, Select } from 'flowbite-svelte';
 
-	import { graphql, type BalanceInput } from '$houdini';
+	import { graphql } from '$houdini';
+	import type { BalanceInput } from '$houdini/graphql/inputs';
 	import { formatAccount } from './expense_utils';
 	import { EditOutline, PlusOutline } from 'flowbite-svelte-icons';
 
@@ -16,12 +17,12 @@
 			readonly owner: { readonly name: string; readonly firstName: string | null };
 		}[];
 		balance?: {
-			readonly id: String;
+			readonly id: string;
 			readonly comments: string;
 			readonly amount: number;
 			readonly date: Date;
 			readonly account: {
-				readonly id: String;
+				readonly id: string;
 			};
 		};
 	}
@@ -108,7 +109,7 @@
 						color={amountError ? 'red' : undefined}
 						required
 					/>
-					<span class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+					<span class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
 						>€</span
 					>
 				</div>

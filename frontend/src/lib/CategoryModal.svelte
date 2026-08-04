@@ -2,7 +2,8 @@
 	import { Modal, Label, Input, Textarea, Button, Select } from 'flowbite-svelte';
 	import ColorPicker from 'svelte-awesome-color-picker';
 
-	import { graphql, type CategoryInput } from '$houdini';
+	import { graphql } from '$houdini';
+	import type { CategoryInput } from '$houdini/graphql/inputs';
 	import { EditOutline, PlusOutline } from 'flowbite-svelte-icons';
 
 	interface Props {
@@ -17,11 +18,11 @@
 			readonly monthlyLimit: number | null;
 		}[];
 		category?: {
-			readonly id: String;
+			readonly id: string;
 			readonly name: string;
 			readonly description: string | null;
 			readonly color: string | null;
-			readonly parent: { readonly id: String } | null;
+			readonly parent: { readonly id: string } | null;
 			readonly monthlyLimit: number | null;
 		};
 	}
@@ -141,7 +142,7 @@
 						class="no-spinner pr-6"
 						color={monthlyLimitError ? 'red' : undefined}
 					/>
-					<span class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+					<span class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
 						>€</span
 					>
 				</div>

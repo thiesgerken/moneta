@@ -30,7 +30,6 @@
 		TrashBinOutline,
 		ExclamationCircleOutline
 	} from 'flowbite-svelte-icons';
-	import type { ExpenseTableExpensesVariables } from './$houdini';
 	import {
 		accountSorter,
 		categorySorter,
@@ -45,7 +44,7 @@
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
 	let searchTerm = $state('');
-	let expandedRows = $state<String[]>([]);
+	let expandedRows = $state<string[]>([]);
 	let sortBy: { field: string; direction: number }[] = $state([
 		{ field: 'status', direction: -1 },
 		{ field: 'bookingStart', direction: -1 }
@@ -72,7 +71,7 @@
 	let showIncomplete = $state(true);
 	let showNormal = $state(true);
 
-	export const _ExpenseTableExpensesVariables: ExpenseTableExpensesVariables = () => {
+	const expenseVariables = () => {
 		let filters = [];
 		if (searchTerm) {
 			const re = {
@@ -80,7 +79,7 @@
 				$options: 'i'
 			};
 
-			const searchFilters: any[] = [
+			const searchFilters: Record<string, unknown>[] = [
 				{
 					title: re
 				},
@@ -202,7 +201,7 @@
 
 		if (filterDateRange.to) filters.push({ bookingEnd: { $lte: { $date: filterDateRange.to } } });
 
-		let currentSort: any = {};
+		let currentSort: Record<string, number> = {};
 		for (const { field, direction } of sortBy) {
 			switch (field) {
 				case 'status':
@@ -222,7 +221,6 @@
 				case 'description':
 				case 'comments':
 				case 'effectiveAmount':
-				case 'categories':
 					currentSort[field] = direction;
 					break;
 				default:
@@ -240,7 +238,7 @@
 
 	// Stuff that we always need independently of the current page and sorting and so on
 	const basicStore = graphql(`
-		query ExpenseTableBasic @load {
+		query ExpenseTableBasic {
 			users {
 				me {
 					name
@@ -272,7 +270,7 @@
 	`);
 
 	const expenseStore = graphql(`
-		query ExpenseTableExpenses($limit: Int, $offset: Int, $filter: String, $sort: String) @load {
+		query ExpenseTableExpenses($limit: Int, $offset: Int, $filter: String, $sort: String) {
 			expenses {
 				list(limit: $limit, skip: $offset, filter: $filter, sort: $sort) {
 					totalCount
@@ -384,7 +382,7 @@
 	let expenseToEdit = $derived(expenses.find((e) => e.id === expenseIdToEdit) || undefined);
 	let expenseToDelete = $derived(expenses.find((e) => e.id === expenseIdToDelete) || undefined);
 
-	function toggleRow(id: String) {
+	function toggleRow(id: string) {
 		if (expandedRows.includes(id)) expandedRows = expandedRows.filter((rowId) => rowId !== id);
 		else expandedRows = [...expandedRows, id];
 	}
@@ -404,6 +402,9 @@
 		return sortBy[index].direction;
 	}
 
+	$effect(() => void basicStore.fetch());
+	$effect(() => void expenseStore.fetch({ variables: expenseVariables() }));
+
 	const DeleteExpense = graphql(`
 		mutation DeleteExpense($id: ObjectIdWrapper!) {
 			expenses {
@@ -414,7 +415,7 @@
 
 	async function handleExpenseModalSubmit() {
 		cache.markStale('Expense');
-		await expenseStore.fetch({});
+		await expenseStore.fetch({ variables: expenseVariables() });
 		expandedRows = [];
 	}
 
@@ -425,16 +426,16 @@
 		showDeleteExpenseModal = false;
 
 		cache.markStale('Expense');
-		await expenseStore.fetch({});
+		await expenseStore.fetch({ variables: expenseVariables() });
 		expandedRows = [];
 	}
 </script>
 
 {#snippet sortIcon(field: string)}
 	{#if isSortedBy(field) === -1}
-		{'▲'}
+		▲
 	{:else if isSortedBy(field) === 1}
-		{'▼'}
+		▼
 	{/if}
 {/snippet}
 
@@ -510,7 +511,7 @@
 	>
 		{#snippet header()}
 			<div
-				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end space-y-2 md:w-auto md:flex-row md:items-center md:space-x-3 md:space-y-0"
+				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end space-y-2 md:w-auto md:flex-row md:items-center md:space-y-0 md:space-x-3"
 			>
 				<Button onclick={() => (showNewExpenseModal = true)}>
 					<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
@@ -729,7 +730,7 @@
 									<div>
 										<b>Kategorien:</b>
 										<ul class="ml-6 list-disc">
-											{#each expense.categories as category}
+											{#each expense.categories as category (category.category.id)}
 												<li>
 													<span class="rounded-md px-1" style={makeCategoryColor([category])}>
 														{category.category.name}
@@ -745,7 +746,7 @@
 									<div>
 										<b>Positionen:</b>
 										<ul class="ml-6 list-disc">
-											{#each expense.positions as position}
+											{#each expense.positions as position, i (i)}
 												<li>
 													{#if position.quantity && position.quantity > 1}
 														{position.quantity}
@@ -769,7 +770,7 @@
 								<div>
 									<b>Transaktionen:</b>
 									<ul class="ml-6 list-disc">
-										{#each expense.transactions.toSorted((a, b) => Math.abs(b.effectiveAmount) - Math.abs(a.effectiveAmount)) as transaction}
+										{#each expense.transactions.toSorted((a, b) => Math.abs(b.effectiveAmount) - Math.abs(a.effectiveAmount)) as transaction, i (i)}
 											<li>
 												<span
 													class="rounded-md px-1.5 py-0.5"
@@ -808,7 +809,8 @@
 									<div>
 										<b>Belege:</b>
 										<ul class="ml-6 list-disc">
-											{#each expense.receipts as receipt}
+											{#each expense.receipts as receipt (receipt.uri)}
+												<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- receipt uris point outside the app (dms, file store) -->
 												<li><a href={receipt.uri} target="_blank">{receipt.uri}</a></li>
 											{/each}
 										</ul>
@@ -818,7 +820,7 @@
 								<div>
 									<b>Changelog:</b>
 									<ul class="ml-6 list-disc">
-										{#each expense.changelog.toReversed() as change}
+										{#each expense.changelog.toReversed() as change (change.id)}
 											<li>
 												{change.user!.name == $basicStore.data?.users.me.name
 													? 'Du'
@@ -899,7 +901,7 @@
 						<Button disabled={currentPage === 1} onclick={() => (currentPage = 1)}>1</Button>
 						<Button disabled>...</Button>
 					{/if}
-					{#each [currentPage - 2, currentPage - 1, currentPage, currentPage + 1, currentPage + 2].filter((page) => page > 0 && page <= totalPages) as pageNumber}
+					{#each [currentPage - 2, currentPage - 1, currentPage, currentPage + 1, currentPage + 2].filter((page) => page > 0 && page <= totalPages) as pageNumber (pageNumber)}
 						<Button disabled={currentPage === pageNumber} onclick={() => (currentPage = pageNumber)}
 							>{pageNumber}</Button
 						>

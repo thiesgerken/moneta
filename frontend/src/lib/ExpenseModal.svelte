@@ -10,7 +10,8 @@
 		Select
 	} from 'flowbite-svelte';
 
-	import { graphql, type ExpenseInput } from '$houdini';
+	import { graphql } from '$houdini';
+	import type { ExpenseInput } from '$houdini/graphql/inputs';
 	import { formatAccount } from './expense_utils';
 	import {
 		CircleMinusOutline,
@@ -35,7 +36,7 @@
 			readonly color: string | null;
 		}[];
 		expense?: {
-			readonly id: String;
+			readonly id: string;
 			readonly title: string;
 			readonly description: string;
 			readonly store: string;
@@ -61,7 +62,7 @@
 			readonly categories: {
 				readonly weight: number;
 				readonly category: {
-					readonly id: String;
+					readonly id: string;
 				};
 			}[];
 			readonly referenceAmount: number | null;
@@ -72,7 +73,7 @@
 				readonly date: Date;
 				readonly statement: string;
 				readonly account: {
-					readonly id: String;
+					readonly id: string;
 				};
 			}[];
 		};
@@ -438,7 +439,7 @@
 							color={referenceAmountError ? 'red' : undefined}
 						/>
 						<span
-							class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+							class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
 							>€</span
 						>
 					</div>
@@ -478,7 +479,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each transactions as tx, i}
+							{#each transactions as tx, i (i)}
 								<tr>
 									<td class="border border-gray-300 px-3 py-2">
 										<Datepicker
@@ -525,7 +526,7 @@
 														color={transactionErrors[i]?.amount ? 'red' : undefined}
 													/>
 													<span
-														class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+														class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
 														>€</span
 													>
 												</div>
@@ -541,7 +542,7 @@
 														step="0.01"
 													/>
 													<span
-														class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+														class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
 														>%</span
 													>
 												</div>
@@ -615,7 +616,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each expenseCategories as cat, i}
+							{#each expenseCategories as cat, i (i)}
 								<tr>
 									<td class="border border-gray-300 px-3 py-2">
 										<Select
@@ -713,7 +714,7 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each positions as pos, i}
+								{#each positions as pos, i (i)}
 									<tr>
 										<td class="border border-gray-300 px-3 py-2">
 											<Input
@@ -734,7 +735,7 @@
 													color={positionErrors[i]?.totalAmount ? 'red' : undefined}
 												/>
 												<span
-													class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
+													class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
 													>€</span
 												>
 											</div>

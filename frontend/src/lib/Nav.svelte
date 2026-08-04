@@ -3,7 +3,7 @@
 	import { Navbar, NavBrand, NavHamburger, NavUl, NavLi, Avatar, Tooltip } from 'flowbite-svelte';
 
 	const basicStore = graphql(`
-		query UserInformation @load {
+		query UserInformation {
 			users {
 				me {
 					name
@@ -13,6 +13,8 @@
 			}
 		}
 	`);
+
+	$effect(() => void basicStore.fetch());
 
 	async function logout() {
 		const logoutMutation = graphql(`
@@ -31,7 +33,7 @@
 <Navbar>
 	<NavBrand href="/">
 		<!-- <img src="/images/flowbite-svelte-icon-logo.svg" class="me-3 h-6 sm:h-9" alt="Flowbite Logo" /> -->
-		<span class="self-center whitespace-nowrap text-xl font-semibold dark:text-white">Moneta</span>
+		<span class="self-center text-xl font-semibold whitespace-nowrap dark:text-white">Moneta</span>
 	</NavBrand>
 	<NavHamburger />
 	<NavUl>
@@ -42,7 +44,7 @@
 			<NavLi href="/categories">Kategorien</NavLi>
 			<NavLi href="/accounts">Konten</NavLi>
 			<!-- <NavLi onclick={logout} href="/">Logout</NavLi> -->
-			<Avatar class="ml-5 mr-0" onclick={logout} href="/"
+			<Avatar class="mr-0 ml-5" onclick={logout} href="/"
 				>{$basicStore.data?.users.me?.firstName?.[0]}{$basicStore.data?.users.me
 					?.lastName?.[0]}</Avatar
 			>
