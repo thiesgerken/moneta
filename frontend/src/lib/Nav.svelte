@@ -39,6 +39,7 @@
 	<NavUl>
 		{#if $basicStore.data?.users.me}
 			<NavLi href="/">Dashboard</NavLi>
+			<NavLi href="/analysis">Auswertung</NavLi>
 			<NavLi href="/expenses">Ausgaben</NavLi>
 			<NavLi href="/balances">Kontostände</NavLi>
 			<NavLi href="/categories">Kategorien</NavLi>

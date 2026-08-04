@@ -1,0 +1,64 @@
+<script lang="ts">
+	import { Card, ButtonGroup, Button } from 'flowbite-svelte';
+	import type { ApexOptions } from 'apexcharts';
+	import Chart from '$lib/Chart.svelte';
+	import { categoryTree, monthlyByCategory, overviews } from '$lib/analysis_mock';
+
+	let sign: 'expenses' | 'income' = $state('expenses');
+
+	const barOptions = $derived({
+		chart: { type: 'bar', height: 340, toolbar: { show: false }, stacked: true },
+		series: monthlyByCategory.map((c) => ({
+			name: c.name,
+			data: c.amounts.map((a) => (sign === 'expenses' ? a : Math.round(a * 0.4)) / 100)
+		})),
+		colors: monthlyByCategory.map((c) => c.color),
+		dataLabels: { enabled: false },
+		xaxis: {
+			categories: overviews.map((o) =>
+				o.month.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' })
+			)
+		},
+		yaxis: { labels: { formatter: (v: number) => Math.round(v) + ' €' } },
+		legend: { position: 'bottom' }
+	}) as ApexOptions;
+
+	// a treemap rather than MoneyDB's sunburst: same category -> expense hierarchy, but
+	// readable at the sizes where a sunburst's outer ring becomes unlabelable slivers
+	const treemapOptions = $derived({
+		chart: { type: 'treemap', height: 420, toolbar: { show: false } },
+		series: categoryTree.map((c) => ({
+			name: c.name,
+			data: c.children.map((e) => ({
+				x: e.title,
+				y: (sign === 'expenses' ? e.amount : Math.round(e.amount * 0.4)) / 100
+			}))
+		})),
+		colors: categoryTree.map((c) => c.color),
+		legend: { show: true, position: 'bottom' },
+		dataLabels: { enabled: true, style: { fontSize: '12px' } },
+		plotOptions: { treemap: { distributed: false, enableShades: true } }
+	}) as ApexOptions;
+</script>
+
+<div class="space-y-4">
+	<ButtonGroup>
+		<Button
+			color={sign === 'expenses' ? 'primary' : 'alternative'}
+			onclick={() => (sign = 'expenses')}>Ausgaben</Button
+		>
+		<Button color={sign === 'income' ? 'primary' : 'alternative'} onclick={() => (sign = 'income')}
+			>Einnahmen</Button
+		>
+	</ButtonGroup>
+
+	<Card class="max-w-none p-4">
+		<h3 class="mb-2 text-lg font-semibold">Nach Kategorie je Monat</h3>
+		<Chart options={barOptions} />
+	</Card>
+
+	<Card class="max-w-none p-4">
+		<h3 class="mb-2 text-lg font-semibold">Gesamter Zeitraum</h3>
+		<Chart options={treemapOptions} />
+	</Card>
+</div>
