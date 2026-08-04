@@ -1,4 +1,4 @@
-import houdini from "houdini/vite";
+import houdini from 'houdini/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
