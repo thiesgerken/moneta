@@ -48,7 +48,7 @@ services:
       - "traefik.http.routers.moneta-frontend.entrypoints=web"
 
   mongo:
-    image: mongo:8@sha256:3a7947f3211e70c045ebff7e94293298bc3fa4e08e5cfcb8cb32ca0d06e06635
+    image: mongo:8@sha256:d6566e93e6a913cdb622ebe34e0ae7937d50efa60e92363fb4a84404dc890415
     volumes:
       - ./volumes/mongo:/data/db
     restart: unless-stopped
