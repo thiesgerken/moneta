@@ -51,7 +51,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt-get update -y && apt-get install -y --no-install-recommends libssl-dev gcc clang
+          apt-get update -y && apt-get install -y --no-install-recommends libssl-dev gcc
           mkdir -p web/build
           touch web/build/index.html
 

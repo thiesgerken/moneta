@@ -1,6 +1,6 @@
 use moneta::{cli, config::Config, graphql};
 
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use log::{debug, info, LevelFilter};
 use simplelog::{ColorChoice, SimpleLogger, TermLogger, TerminalMode};
 use tokio::runtime::Builder;

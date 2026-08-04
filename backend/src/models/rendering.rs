@@ -31,9 +31,9 @@ pub struct RenderedExpense {
 
     pub reference_amount: Option<i32>,
 
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub booking_start: DateTime<Utc>,
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub booking_end: DateTime<Utc>,
 
     /// set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis
@@ -56,9 +56,9 @@ pub struct RenderedExpense {
     // (sum of the effective_amounts of all the rendered transactions of this rendered expense)
     pub effective_amount: f64,
 
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -67,7 +67,7 @@ pub struct RenderedExpense {
 #[graphql(name = "ExpenseTransaction")]
 pub struct RenderedExpenseTransaction {
     pub account_id: ObjectIdWrapper,
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub date: DateTime<Utc>,
 
     pub amount: Option<i32>,
@@ -97,16 +97,16 @@ pub struct RenderedBalance {
     #[serde(default)]
     pub user_id: ObjectIdWrapper,
 
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
 
     pub account_id: ObjectIdWrapper,
     pub amount: i32, // cents
     pub comments: String,
 
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -114,7 +114,7 @@ pub struct RenderedBalance {
 #[graphql(name = "BalanceInput")]
 #[serde(rename_all = "camelCase")]
 pub struct RenderedBalanceInput {
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
 
     pub account_id: ObjectIdWrapper,
@@ -136,9 +136,9 @@ pub struct RenderedExpenseInput {
 
     pub reference_amount: Option<i32>,
 
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub booking_start: DateTime<Utc>,
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub booking_end: DateTime<Utc>,
 
     /// set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis

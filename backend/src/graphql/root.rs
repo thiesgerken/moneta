@@ -35,7 +35,7 @@ pub struct Query;
 
 pub struct Mutation;
 
-pub type Schema = juniper::RootNode<'static, Query, Mutation, juniper::EmptySubscription<Context>>;
+pub type Schema = juniper::RootNode<Query, Mutation, juniper::EmptySubscription<Context>>;
 
 pub async fn require_user(context: &Context) -> juniper::FieldResult<ObjectId> {
     context.user_id.read().await.ok_or(juniper::FieldError::new(

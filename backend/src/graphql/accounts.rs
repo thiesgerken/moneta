@@ -250,7 +250,7 @@ impl AccountMutation {
         let count = collection
             .update_one(
                 doc! {"_id":*id,"userId": user_id},
-                doc! {"$set":  bson::to_bson(&account).unwrap()},
+                doc! {"$set":  bson::serialize_to_bson(&account).unwrap()},
 
             )
             .await?

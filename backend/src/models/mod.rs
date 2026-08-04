@@ -80,16 +80,16 @@ pub struct Balance {
     #[serde(rename = "_id", default)]
     pub id: ObjectIdWrapper,
 
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
 
     pub account_id: ObjectIdWrapper,
     pub amount: i32, // cents
     pub comments: String,
 
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -102,7 +102,7 @@ pub struct ExpenseChangelogEntry {
     pub target_id: ObjectIdWrapper,
     pub user_id: Option<ObjectIdWrapper>,
 
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub date: DateTime<Utc>,
 
     /// name of the program that was used to make the change (e.g. web app, CLI, ...)

@@ -221,7 +221,7 @@ impl BalanceMutation {
         upstream_collection
             .update_one(
                 doc!("_id": &*updated_upstream_entry.id),
-                doc! {"$set":  bson::to_bson(&updated_upstream_entry).unwrap()}
+                doc! {"$set":  bson::serialize_to_bson(&updated_upstream_entry).unwrap()}
             ,
             )
             .await?;

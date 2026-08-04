@@ -9,7 +9,7 @@ use similar::TextDiff;
 pub fn string_to_document(s: &str) -> Result<Document, Box<dyn Error>> {
     // also handles EJSON (i.e. decodes {$oid: "..."} as ObjectId if possible)
     let x: serde_json::Value = serde_json::from_str(s)?;
-    bson::to_document(&x).map_err(|e| e.into())
+    bson::serialize_to_document(&x).map_err(|e| e.into())
 }
 
 pub async fn list_query<T>(

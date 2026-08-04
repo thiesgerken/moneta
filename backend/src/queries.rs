@@ -4,6 +4,29 @@ use serde::de::DeserializeOwned;
 
 use crate::models::{Account, Category, User};
 
+/// bson 3 dropped its `serde(with = ...)` datetime helpers in favour of `serde_with`
+/// adapters; this keeps the attribute style (and the on-disk representation) unchanged.
+pub mod chrono_datetime_as_bson_datetime {
+    use chrono::Utc;
+    use mongodb::bson;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::result::Result;
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<chrono::DateTime<Utc>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(bson::DateTime::deserialize(deserializer)?.to_chrono())
+    }
+
+    pub fn serialize<S: Serializer>(
+        val: &chrono::DateTime<Utc>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        bson::DateTime::from_chrono(*val).serialize(serializer)
+    }
+}
+
 pub mod optional_chrono_datetime_as_bson_datetime {
     use chrono::Utc;
     use mongodb::bson;

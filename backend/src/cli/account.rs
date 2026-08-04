@@ -76,7 +76,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             account_collection
             .update_one(
                 doc! {"_id": *accounts[i ].id},
-                doc! {"$set": {"synchronization": bson::to_bson(&Some(AccountSynchronization{ account_id: accounts[(i+1)%2].id, invert })).unwrap()}},
+                doc! {"$set": {"synchronization": bson::serialize_to_bson(&Some(AccountSynchronization{ account_id: accounts[(i+1)%2].id, invert })).unwrap()}},
 
             )
             .await

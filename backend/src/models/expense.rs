@@ -66,9 +66,9 @@ pub struct Expense {
     /// reference for fractional transactions, can be None if only fixed transactions are used
     pub reference_amount: Option<i32>,
 
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub booking_start: DateTime<Utc>,
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub booking_end: DateTime<Utc>,
 
     /// set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis
@@ -87,9 +87,9 @@ pub struct Expense {
     pub transactions: Vec<ExpenseTransaction>, // must not be empty
     pub positions: Vec<ExpensePosition>,
 
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -97,7 +97,7 @@ pub struct Expense {
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseTransaction {
     pub account_id: ObjectIdWrapper,
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub date: DateTime<Utc>,
 
     // constraint: amount is null OR fraction is null
@@ -141,7 +141,7 @@ pub struct ExpenseReceipt {
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseTransactionInput {
     pub account_id: ObjectIdWrapper,
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub date: DateTime<Utc>,
 
     // constraint: amount is null OR fraction is null
