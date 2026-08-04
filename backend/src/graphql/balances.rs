@@ -272,14 +272,14 @@ pub async fn validate_and_unrender(
         .ok_or_else(|| {
             format!(
                 "user {:?} tried to create a balance with unknown account {:?}",
-                uid, &balance.account_id
+                uid, balance.account_id
             )
         })?;
 
     if *account.user_id != uid {
         return Err(format!(
             "user {:?} tried to create a balance with foreign account {:?}",
-            uid, &balance.account_id
+            uid, balance.account_id
         )
         .into());
     }

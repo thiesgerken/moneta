@@ -60,7 +60,7 @@ fn main() {
                 matches
                     .get_one::<u8>("verbosity")
                     .map(|x| *x as i64)
-                    .and_then(|x| if x != 0 { Some(x) } else { None }),
+                    .filter(|&x| x != 0),
             )
             .unwrap();
 
@@ -70,7 +70,7 @@ fn main() {
             .expect("unable to parse settings into Config struct");
 
         initialize_logging(config.verbosity);
-        debug!("config={:?}", &config);
+        debug!("config={:?}", config);
 
         let connection = moneta::connect(&config.database.url, &config.database.name, "moneta-web")
             .await

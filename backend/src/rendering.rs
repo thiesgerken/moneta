@@ -128,7 +128,7 @@ impl Balance {
         let main_account = accounts
             .iter()
             .find(|a| a.id == self.account_id)
-            .ok_or_else(|| format!("Cannot find main account of {:?}", &self))?;
+            .ok_or_else(|| format!("Cannot find main account of {:?}", self))?;
 
         let mut res = vec![RenderedBalance {
             id: ObjectId::new().into(),
@@ -146,9 +146,7 @@ impl Balance {
             let other_account = accounts
                 .iter()
                 .find(|a| a.id == sync.account_id)
-                .ok_or_else(|| {
-                    format!("Cannot find synchronized account of {:?}", &main_account)
-                })?;
+                .ok_or_else(|| format!("Cannot find synchronized account of {:?}", main_account))?;
 
             res.push(RenderedBalance {
                 id: ObjectId::new().into(),
@@ -234,9 +232,7 @@ impl ExpenseTransaction {
             let other_account = accounts
                 .iter()
                 .find(|a| a.id == sync.account_id)
-                .ok_or_else(|| {
-                    format!("Cannot find synchronized account of {:?}", &main_account)
-                })?;
+                .ok_or_else(|| format!("Cannot find synchronized account of {:?}", main_account))?;
 
             if *other_account.user_id == user_id {
                 res.account_id = other_account.id;
