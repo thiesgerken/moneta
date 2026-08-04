@@ -80,6 +80,8 @@ fn main() {
             cli::user::handle(connection, sub_matches).await;
         } else if let Some(sub_matches) = matches.subcommand_matches("account") {
             cli::account::handle(connection, sub_matches).await;
+        } else if let Some(sub_matches) = matches.subcommand_matches("periodic") {
+            cli::periodic::handle(connection, sub_matches).await;
         } else if let Some(sub_matches) = matches.subcommand_matches("import") {
             cli::import::handle(connection, sub_matches).await;
         } else if matches.subcommand_matches("serve").is_some() {

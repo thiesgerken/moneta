@@ -1,5 +1,6 @@
 pub mod account;
 pub mod import;
+pub mod periodic;
 pub mod user;
 
 use clap::{Arg, ArgAction, Command, crate_authors, crate_name, crate_version};
@@ -19,5 +20,6 @@ pub fn build() -> Command {
         .subcommand(user::build())
         .subcommand(import::build())
         .subcommand(account::build())
+        .subcommand(periodic::build())
         .subcommand(Command::new("serve").about("serve web interface"))
 }
