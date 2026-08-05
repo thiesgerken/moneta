@@ -28,6 +28,32 @@ jobs:
       - run: cd backend && cargo clippy --all-targets -- -D warnings
       - run: cd backend && cargo test
 
+  test-schema:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # uuidv7() as a column default needs 18
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: moneta
+          POSTGRES_PASSWORD: moneta
+          POSTGRES_DB: moneta
+        options: >-
+          --health-cmd "pg_isready -U moneta"
+          --health-interval 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install psql
+        run: apt-get update -y && apt-get install -y --no-install-recommends postgresql-client
+
+      # applies every migration to an empty database, then asserts that the rendered views and
+      # the CHECK constraints still do what they claim
+      - run: backend/tests/run-sql-tests.sh
+        env:
+          PGURL: postgres://moneta:moneta@postgres:5432/moneta
+
   test-frontend:
     runs-on: ubuntu-latest
     steps:
@@ -46,7 +72,7 @@ jobs:
       - run: cd frontend && pnpm lint
 
   build-docker:
-    needs: [test-backend, test-frontend]
+    needs: [test-backend, test-schema, test-frontend]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/devel')
     strategy:

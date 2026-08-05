@@ -196,12 +196,16 @@ cd frontend && pnpm exec houdini pull-schema
 
 ```sh
 cd backend  && cargo test && cargo clippy --all-targets -- -D warnings && cargo fmt --all -- --check
+cd backend  && PGURL=postgres://moneta:moneta@localhost:5433/moneta tests/run-sql-tests.sh
 cd frontend && pnpm build && pnpm check && pnpm lint
 ```
 
+`tests/run-sql-tests.sh` applies every migration to an empty database and then asserts that
+the rendered views and the CHECK constraints do what they claim — the views carry the money
+math, so they are where a mistake would be expensive.
+
 CI (`.gitea/workflows/ci.yml`) runs exactly those, then builds and pushes both images on
-pushes to `main`/`devel`. There are no frontend tests, and `tests/sql/` — which checks the
-rendered views and the constraints against a real postgres — is run by hand rather than in CI.
+pushes to `main`/`devel`. There are no frontend tests.
 
 ## Status
 

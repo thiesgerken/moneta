@@ -7,8 +7,13 @@ file is the operational stuff: what to run, and the traps that have already been
 
 ```sh
 cd backend  && cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test
+cd backend  && PGURL=postgres://moneta:moneta@localhost:5433/moneta tests/run-sql-tests.sh
 cd frontend && pnpm build && pnpm check && pnpm lint
 ```
+
+The SQL tests need an empty postgres 18 (`docker compose up -d postgres` gives you one on
+5433, but they apply the migrations themselves, so point them at a scratch database rather
+than one holding real data).
 
 CI runs exactly these and is strict — `clippy -D warnings` and `fmt --check` both fail the
 build, including on test code.
@@ -114,7 +119,8 @@ data is therefore client-side only; there is no SSR of query results.
 
 ## Known gaps worth knowing before you plan work
 
-- No frontend tests. `tests/sql/` runs against a real postgres but by hand, not in CI.
+- No frontend tests. `tests/sql/` covers the views and constraints, but nothing exercises
+  the GraphQL resolvers against a database.
 - No upload client feeds `deliveries.submit` from a real bank export; that is deliberately
   someone else's program, since it is per-bank and needs credentials.
 - CORS is `AllowedOrigins::all()` with `allow_credentials(true)` in `graphql/mod.rs`, and
