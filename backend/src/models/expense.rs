@@ -1,5 +1,5 @@
-use uuid::Uuid;
 use std::error::Error;
+use uuid::Uuid;
 
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
@@ -401,7 +401,10 @@ mod tests {
         let err = expense(vec![], None)
             .validate()
             .expect_err("an expense without transactions must be rejected");
-        assert!(err.to_string().contains("at least one transaction"), "{err}");
+        assert!(
+            err.to_string().contains("at least one transaction"),
+            "{err}"
+        );
     }
 
     #[test]
@@ -425,7 +428,10 @@ mod tests {
     #[test]
     fn splitting_numbers_the_transactions_in_order() {
         let e = expense(
-            vec![transaction(Some(-1000), None), transaction(Some(-500), None)],
+            vec![
+                transaction(Some(-1000), None),
+                transaction(Some(-500), None),
+            ],
             None,
         );
         let (row, transactions, _) = e.split();

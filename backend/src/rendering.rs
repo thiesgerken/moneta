@@ -7,8 +7,8 @@
 //! followed by an `insert_many`, with no transaction around it) is gone with it. The cases it
 //! used to be tested for are covered in `tests/sql/rendered_views.sql`.
 
-use uuid::Uuid;
 use chrono::Utc;
+use uuid::Uuid;
 
 use crate::models::{
     Balance, Expense, ExpenseCategorizationInput, ExpensePositionInput, ExpenseReceiptInput,

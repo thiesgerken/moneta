@@ -21,9 +21,6 @@ use diesel_async::{
     pooled_connection::{AsyncDieselConnectionManager, ManagerConfig, deadpool},
 };
 use futures::FutureExt;
-use models::rendering::{RenderedBalance, RenderedExpense};
-use models::{AutomationRule, PeriodicRule, SeenDelivery};
-use mongodb::bson::doc;
 
 pub type Pool = deadpool::Pool<AsyncPgConnection>;
 
@@ -76,104 +73,6 @@ pub fn hash_password(pw: &str) -> String {
         .hash_password(pw.as_bytes(), &SaltString::generate(&mut OsRng))
         .expect("unable to hash password")
         .to_string()
-}
-
-/// Only used by `moneta migrate-mongo`; drop with the mongo dependency once the cutover is
-/// done.
-pub async fn connect_mongo(
-    database_url: &str,
-    database_name: &str,
-    app_name: &str,
-) -> Result<mongodb::Database, mongodb::error::Error> {
-    let mut client_options = mongodb::options::ClientOptions::parse(database_url).await?;
-    client_options.app_name = Some(app_name.to_owned());
-
-    let client = mongodb::Client::with_options(client_options)?;
-    let db = client.database(database_name);
-
-    db.collection::<RenderedExpense>("expenses_rendered")
-        .create_indexes(
-            [
-                mongodb::IndexModel::builder()
-                    .keys(doc! {"upstreamId": 1})
-                    .build(),
-                mongodb::IndexModel::builder()
-                    .keys(doc! {"userId": 1})
-                    .build(),
-                mongodb::IndexModel::builder()
-                    .keys(doc! {"userId": 1, "bookingStart": 1})
-                    .build(),
-                mongodb::IndexModel::builder()
-                    .keys(doc! {"userId": 1, "bookingEnd": 1})
-                    .build(),
-                mongodb::IndexModel::builder()
-                    .keys(doc! {"userId": 1, "isTemplate": 1, "isUnchecked": 1, "isIncomplete": 1, "bookingStart": -1})
-                    .build(),
-                mongodb::IndexModel::builder()
-                    .keys(doc! {"userId": 1, "isTemplate": 1, "isUnchecked": 1, "isIncomplete": 1, "bookingEnd": -1})
-                    .build(),
-                mongodb::IndexModel::builder()
-                    .keys(doc! {"userId": 1, "isTemplate": 1, "isUnchecked": -1, "isIncomplete": -1, "bookingStart": -1})
-                    .build(),
-                mongodb::IndexModel::builder()
-                    .keys(doc! {"userId": 1, "isTemplate": 1, "isUnchecked": -1, "isIncomplete": -1, "bookingEnd": -1})
-                    .build(),
-                mongodb::IndexModel::builder()
-                    .keys(doc! {"userId": 1, "transactions.date": 1})
-                    .build(),
-                mongodb::IndexModel::builder()
-                    .keys(doc! {"userId": 1, "transactions.accountId": 1, "transactions.date": 1})
-                    .build(),
-            ]
-            ,
-        )
-        .await?;
-
-    db.collection::<RenderedBalance>("balances_rendered")
-        .create_indexes([
-            mongodb::IndexModel::builder()
-                .keys(doc! {"upstreamId": 1})
-                .build(),
-            mongodb::IndexModel::builder()
-                .keys(doc! {"userId": 1})
-                .build(),
-            mongodb::IndexModel::builder()
-                .keys(doc! {"userId": 1, "date": 1})
-                .build(),
-            mongodb::IndexModel::builder()
-                .keys(doc! {"userId": 1, "accountId": 1, "date": 1})
-                .build(),
-        ])
-        .await?;
-
-    // both rule kinds are only ever read per user, and automation additionally in priority
-    // order because the highest-priority match wins
-    db.collection::<PeriodicRule>("periodic_rules")
-        .create_index(
-            mongodb::IndexModel::builder()
-                .keys(doc! {"userId": 1})
-                .build(),
-        )
-        .await?;
-
-    db.collection::<AutomationRule>("automation_rules")
-        .create_index(
-            mongodb::IndexModel::builder()
-                .keys(doc! {"userId": 1, "priority": -1})
-                .build(),
-        )
-        .await?;
-
-    // deduplication looks up a user's history on the accounts being delivered to
-    db.collection::<SeenDelivery>("seen_deliveries")
-        .create_index(
-            mongodb::IndexModel::builder()
-                .keys(doc! {"userId": 1, "accountId": 1, "date": 1})
-                .build(),
-        )
-        .await?;
-
-    Ok(db)
 }
 
 #[cfg(test)]

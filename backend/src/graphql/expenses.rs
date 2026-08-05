@@ -72,7 +72,10 @@ impl GraphQLExpenseTransaction {
 impl GraphQLExpenseTransaction {
     async fn account(&self, context: &Context) -> FieldResult<GraphQLAccount> {
         Ok(GraphQLAccount::new(
-            context.account_loader.try_load(self.data.account_id).await?,
+            context
+                .account_loader
+                .try_load(self.data.account_id)
+                .await?,
         ))
     }
 
@@ -762,9 +765,10 @@ fn check_references(
         .iter()
         .any(|t| !related_accounts.iter().any(|a| a.id == t.account_id))
     {
-        return Err(
-            format!("user {user_id} tried to create an expense with unknown account id(s)").into(),
-        );
+        return Err(format!(
+            "user {user_id} tried to create an expense with unknown account id(s)"
+        )
+        .into());
     }
 
     if related_accounts.iter().all(|a| a.user_id != user_id) {
@@ -778,9 +782,10 @@ fn check_references(
         .iter()
         .any(|c| !categories.iter().any(|k| k.id == c.category_id))
     {
-        return Err(
-            format!("user {user_id} tried to create an expense with unknown category id(s)").into(),
-        );
+        return Err(format!(
+            "user {user_id} tried to create an expense with unknown category id(s)"
+        )
+        .into());
     }
 
     Ok(())

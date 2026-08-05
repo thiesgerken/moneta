@@ -53,7 +53,10 @@ impl GraphQLBalance {
 
     async fn account(&self, context: &Context) -> FieldResult<GraphQLAccount> {
         Ok(GraphQLAccount::new(
-            context.account_loader.try_load(self.data.account_id).await?,
+            context
+                .account_loader
+                .try_load(self.data.account_id)
+                .await?,
         ))
     }
 }
@@ -111,6 +114,7 @@ pub struct BalanceQuery;
     Context = Context,
 )]
 impl BalanceQuery {
+    #[allow(clippy::too_many_arguments)]
     pub async fn list(
         context: &Context,
         limit: Option<i32>,
@@ -204,7 +208,9 @@ impl BalanceMutation {
 
         require_own_balance(conn, user_id, id).await?;
 
-        let count = diesel::delete(balances::table.find(id)).execute(conn).await?;
+        let count = diesel::delete(balances::table.find(id))
+            .execute(conn)
+            .await?;
         Ok(count == 1)
     }
 

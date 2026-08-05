@@ -72,21 +72,19 @@ fn main() {
         initialize_logging(config.verbosity);
         debug!("config={:?}", config);
 
-        let connection =
-            moneta::connect_mongo(&config.database.url, &config.database.name, "moneta-web")
-                .await
-                .expect("error connecting and migrating to db");
+        let pool =
+            moneta::pool(&config.database.url, "moneta").expect("error connecting to the database");
 
         if let Some(sub_matches) = matches.subcommand_matches("user") {
-            cli::user::handle(connection, sub_matches).await;
+            cli::user::handle(pool, sub_matches).await;
         } else if let Some(sub_matches) = matches.subcommand_matches("account") {
-            cli::account::handle(connection, sub_matches).await;
+            cli::account::handle(pool, sub_matches).await;
         } else if let Some(sub_matches) = matches.subcommand_matches("periodic") {
-            cli::periodic::handle(connection, sub_matches).await;
+            cli::periodic::handle(pool, sub_matches).await;
         } else if let Some(sub_matches) = matches.subcommand_matches("import") {
-            cli::import::handle(connection, sub_matches).await;
+            cli::import::handle(pool, sub_matches).await;
         } else if matches.subcommand_matches("serve").is_some() {
-            graphql::handle(config, connection).await;
+            graphql::handle(config, pool).await;
         } else {
             cli::build()
                 .print_long_help()

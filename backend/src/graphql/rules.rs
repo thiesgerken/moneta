@@ -637,7 +637,8 @@ impl DeliveryQuery {
             .filter(seen_deliveries::user_id.eq(user_id));
 
         if let Some(term) = search.filter(|s| !s.trim().is_empty()) {
-            query = query.filter(seen_deliveries::statement.ilike(util::ilike_pattern(term.trim())));
+            query =
+                query.filter(seen_deliveries::statement.ilike(util::ilike_pattern(term.trim())));
         }
         if only_unmatched.unwrap_or(false) {
             query = query.filter(seen_deliveries::expense_id.is_null());

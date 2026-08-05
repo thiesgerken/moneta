@@ -218,10 +218,7 @@ pub const PERIODIC_ADVANCE: TimeDelta = TimeDelta::hours(12);
 #[derive(Debug, Clone)]
 pub enum DeliveryOutcome {
     /// an expense was created from the named rule
-    Created {
-        expense_id: Uuid,
-        rule_id: Uuid,
-    },
+    Created { expense_id: Uuid, rule_id: Uuid },
     /// already processed, most likely an overlapping re-upload
     Duplicate,
     /// nothing matched, so the line is recorded but no expense is created
@@ -647,11 +644,7 @@ mod tests {
 
         assert!(matches(
             &rule,
-            &delivery(
-                Uuid::now_v7(),
-                -100,
-                "LASTSCHRIFT Muster Stadtreinigung AG"
-            )
+            &delivery(Uuid::now_v7(), -100, "LASTSCHRIFT Muster Stadtreinigung AG")
         ));
         assert!(!matches(
             &rule,
@@ -685,10 +678,7 @@ mod tests {
         let mut rule = automation("broken", 1);
         rule.regex_statement = Some("([unclosed".into());
 
-        assert!(!matches(
-            &rule,
-            &delivery(Uuid::now_v7(), -100, "anything")
-        ));
+        assert!(!matches(&rule, &delivery(Uuid::now_v7(), -100, "anything")));
     }
 
     #[test]
@@ -933,7 +923,7 @@ mod tests {
         let untouched = e
             .transactions
             .iter()
-            .find(|t| *t.account_id == other)
+            .find(|t| t.account_id == other)
             .unwrap();
         assert_eq!(untouched.amount, Some(-100));
     }

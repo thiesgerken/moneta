@@ -1,6 +1,6 @@
-use uuid::Uuid;
 use diesel::prelude::*;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
+use uuid::Uuid;
 
 use crate::models::{
     Account, Category, Expense, ExpenseCategorizationRow, ExpenseRow, ExpenseTransactionRow, User,
@@ -108,9 +108,11 @@ pub async fn replace_expense(conn: &mut AsyncPgConnection, expense: &Expense) ->
         .execute(conn)
         .await?;
 
-    diesel::delete(expense_transactions::table.filter(expense_transactions::expense_id.eq(expense.id)))
-        .execute(conn)
-        .await?;
+    diesel::delete(
+        expense_transactions::table.filter(expense_transactions::expense_id.eq(expense.id)),
+    )
+    .execute(conn)
+    .await?;
     diesel::delete(
         expense_categorizations::table.filter(expense_categorizations::expense_id.eq(expense.id)),
     )

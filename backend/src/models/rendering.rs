@@ -4,11 +4,11 @@
 //! `Insertable`. The nested lists arrive as jsonb the view aggregated, which is why they are
 //! wrapped in [`Json`] rather than being separate queries.
 
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use juniper::{GraphQLInputObject, GraphQLObject};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::{
     ExpenseCategorization, ExpensePosition, ExpenseReceipt, Json,

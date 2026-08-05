@@ -35,7 +35,10 @@ impl GraphQLAccountSynchronization {
 
     async fn account(&self, context: &Context) -> FieldResult<GraphQLAccount> {
         Ok(GraphQLAccount::new(
-            context.account_loader.try_load(self.data.account_id).await?,
+            context
+                .account_loader
+                .try_load(self.data.account_id)
+                .await?,
         ))
     }
 }
@@ -153,7 +156,11 @@ impl AccountQuery {
             );
         }
         if only_open.unwrap_or(false) {
-            query = query.filter(accounts::closed.is_null().or(accounts::closed.gt(Utc::now())));
+            query = query.filter(
+                accounts::closed
+                    .is_null()
+                    .or(accounts::closed.gt(Utc::now())),
+            );
         }
 
         let query = match sort_by.unwrap_or_default() {
@@ -243,9 +250,13 @@ impl AccountMutation {
             ).into());
         }
 
-        let count = diesel::delete(accounts::table.find(id).filter(accounts::user_id.eq(user_id)))
-            .execute(conn)
-            .await?;
+        let count = diesel::delete(
+            accounts::table
+                .find(id)
+                .filter(accounts::user_id.eq(user_id)),
+        )
+        .execute(conn)
+        .await?;
         Ok(count == 1)
     }
 
@@ -278,21 +289,25 @@ impl AccountMutation {
         account.validate()?;
 
         // The synchronization pair is not part of the input, so it is left alone here.
-        let count = diesel::update(accounts::table.find(id).filter(accounts::user_id.eq(user_id)))
-            .set((
-                accounts::name.eq(account.name),
-                accounts::description.eq(account.description),
-                accounts::color.eq(account.color),
-                accounts::iban.eq(account.iban),
-                accounts::kind.eq(account.kind),
-                accounts::availability.eq(account.availability),
-                accounts::risk.eq(account.risk),
-                accounts::opened.eq(account.opened),
-                accounts::closed.eq(account.closed),
-                accounts::ownership_fraction.eq(account.ownership_fraction),
-            ))
-            .execute(conn)
-            .await?;
+        let count = diesel::update(
+            accounts::table
+                .find(id)
+                .filter(accounts::user_id.eq(user_id)),
+        )
+        .set((
+            accounts::name.eq(account.name),
+            accounts::description.eq(account.description),
+            accounts::color.eq(account.color),
+            accounts::iban.eq(account.iban),
+            accounts::kind.eq(account.kind),
+            accounts::availability.eq(account.availability),
+            accounts::risk.eq(account.risk),
+            accounts::opened.eq(account.opened),
+            accounts::closed.eq(account.closed),
+            accounts::ownership_fraction.eq(account.ownership_fraction),
+        ))
+        .execute(conn)
+        .await?;
 
         Ok(count == 1)
     }
@@ -304,7 +319,10 @@ pub struct AccountBatcher {
 
 impl BatchFn<Uuid, Account> for AccountBatcher {
     async fn load(&mut self, keys: &[Uuid]) -> HashMap<Uuid, Account> {
-        debug!("Performing a coalesced account query for {} ids", keys.len());
+        debug!(
+            "Performing a coalesced account query for {} ids",
+            keys.len()
+        );
 
         let Ok(mut conn) = self.pool.get().await else {
             return HashMap::new();

@@ -1,5 +1,5 @@
-use uuid::Uuid;
 use std::sync::Arc;
+use uuid::Uuid;
 
 use juniper::graphql_object;
 use log::info;

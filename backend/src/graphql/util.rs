@@ -35,7 +35,10 @@ macro_rules! order_by {
 pub fn page(limit: Option<i32>, skip: Option<i32>) -> (i64, i64) {
     const MAX_LIMIT: i64 = 1000;
 
-    let limit = limit.map(i64::from).unwrap_or(MAX_LIMIT).clamp(0, MAX_LIMIT);
+    let limit = limit
+        .map(i64::from)
+        .unwrap_or(MAX_LIMIT)
+        .clamp(0, MAX_LIMIT);
     let offset = skip.map(i64::from).unwrap_or(0).max(0);
 
     (limit, offset)

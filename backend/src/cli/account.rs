@@ -1,15 +1,15 @@
-use uuid::Uuid;
-use crate::models::rendering::{RenderedBalance, RenderedExpense};
-use crate::models::*;
-use crate::rendering::rerender_multiple;
+use std::str::FromStr;
+
+use crate::models::Account;
+use crate::schema::accounts;
 
 use clap::ArgMatches;
 use clap::{Arg, ArgGroup, Command};
+use diesel::prelude::*;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use log::info;
-use mongodb::bson;
-use mongodb::bson::doc;
 use prettytable::{Table, row};
-use std::str::FromStr;
+use uuid::Uuid;
 
 pub fn build() -> Command {
     Command::new("account")
@@ -32,133 +32,99 @@ pub fn build() -> Command {
                 .long("invert")
                 .help("for --sync, make it so that the two accounts mirror each other"),
         )
-        .arg(
-            Arg::new("rerender")
-                .long("rerender")
-                .help("rerender balances and expenses"),
-        )
         .arg(Arg::new("list").long("list").help("list accounts"))
         .group(
             ArgGroup::new("action")
-                .args(["sync", "list", "unsync", "rerender"])
+                .args(["sync", "list", "unsync"])
                 .required(true),
         )
 }
 
-pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
-    let account_collection = connection.collection::<Account>("accounts");
+pub async fn handle(pool: crate::Pool, sub_matches: &ArgMatches) {
+    let conn = &mut pool.get().await.expect("Could not get a connection");
 
     if let Some(account_id_values) = sub_matches.get_many::<String>("sync") {
         assert!(account_id_values.len() == 2);
         let account_ids: Vec<Uuid> = account_id_values
             .map(|s| Uuid::from_str(s))
             .collect::<Result<_, _>>()
-            .expect("error parsing object ids");
+            .expect("error parsing account ids");
 
-        let accounts: Vec<_> = account_collection
-            .find(doc!("_id": {"$in": &account_ids}))
-            .await
-            .expect("Error loading accounts")
-            .try_collect()
+        let found: Vec<Account> = accounts::table
+            .filter(accounts::id.eq_any(&account_ids))
+            .select(Account::as_select())
+            .load(conn)
             .await
             .expect("Error loading accounts");
 
-        assert!(accounts.len() == 2);
-        assert!(accounts.iter().all(|a| a.synchronization.is_none()));
-        assert!(accounts[0].user_id != accounts[1].user_id);
+        assert!(found.len() == 2);
+        assert!(found.iter().all(|a| a.synchronization().is_none()));
+        assert!(found[0].user_id != found[1].user_id);
 
         let invert = sub_matches.contains_id("invert");
 
-        for i in 0..2 {
-            account_collection
-            .update_one(
-                doc! {"_id": *accounts[i ].id},
-                doc! {"$set": {"synchronization": bson::serialize_to_bson(&Some(AccountSynchronization{ account_id: accounts[(i+1)%2].id, invert })).unwrap()}},
+        // Both directions have to be set or neither: the mirror is a pair of rows and no
+        // constraint can see across them.
+        conn.transaction::<_, diesel::result::Error, _>(async |conn| {
+            for i in 0..2 {
+                diesel::update(accounts::table.find(found[i].id))
+                    .set((
+                        accounts::sync_account_id.eq(found[(i + 1) % 2].id),
+                        accounts::sync_invert.eq(invert),
+                    ))
+                    .execute(conn)
+                    .await?;
+            }
+            Ok(())
+        })
+        .await
+        .expect("Could not update accounts");
 
-            )
-            .await
-            .expect("Could not update account");
-        }
         info!(
             "Updated accounts {:?} so that they are synchronized, invert={}",
-            accounts, invert
+            account_ids, invert
         );
-
-        rerender_multiple(connection, &account_ids)
-            .await
-            .expect("Could not rerender entities");
     } else if let Some(account_id_value) = sub_matches.get_one::<String>("unsync") {
-        let account_id = Uuid::from_str(account_id_value).expect("error parsing object id");
-        let account = account_collection
-            .find_one(doc!("_id": account_id))
+        let account_id = Uuid::from_str(account_id_value).expect("error parsing account id");
+        let account: Account = accounts::table
+            .find(account_id)
+            .select(Account::as_select())
+            .first(conn)
             .await
-            .expect("Error loading accounts")
-            .expect("Error loading accounts");
+            .expect("Error loading account");
 
-        assert!(account.synchronization.is_some());
-        let account_ids = vec![account_id, *account.synchronization.unwrap().account_id];
+        let sync = account
+            .synchronization()
+            .expect("account is not synchronized");
+        let account_ids = vec![account_id, sync.account_id];
 
-        account_collection
-            .update_many(
-                doc! {"_id": {"$in":& account_ids}},
-                doc! {"$unset": {"synchronization":1}},
-            )
+        diesel::update(accounts::table.filter(accounts::id.eq_any(&account_ids)))
+            .set((
+                accounts::sync_account_id.eq(None::<Uuid>),
+                accounts::sync_invert.eq(None::<bool>),
+            ))
+            .execute(conn)
             .await
             .expect("Could not update accounts");
 
         info!("Removed the synchronization of accounts {:?}", account_ids);
-
-        rerender_multiple(connection, &account_ids)
-            .await
-            .expect("Could not rerender entities");
-    } else if sub_matches.contains_id("rerender") {
-        let rendered_expenses_collection =
-            connection.collection::<RenderedExpense>("expenses_rendered");
-        let rendered_balances_collection =
-            connection.collection::<RenderedBalance>("balances_rendered");
-        let expense_count = rendered_expenses_collection
-            .count_documents(doc!())
-            .await
-            .expect("Error counting rendered expenses");
-        let balance_count = rendered_balances_collection
-            .count_documents(doc!())
-            .await
-            .expect("Error counting rendered balances");
-
-        info!("Database has {} rendered balances", balance_count);
-        info!("Database has {} rendered expenses", expense_count);
-
-        let accounts: Vec<_> = account_collection
-            .find(doc!())
-            .await
-            .expect("Error loading accounts")
-            .try_collect()
-            .await
-            .expect("Error loading accounts");
-        let account_ids: Vec<_> = accounts.iter().map(|a| *a.id).collect();
-
-        rerender_multiple(connection, &account_ids)
-            .await
-            .expect("Could not rerender entities");
     } else if sub_matches.contains_id("list") {
-        let mut account_cursor = account_collection
-            .find(doc! {})
+        let found: Vec<Account> = accounts::table
+            .order_by(accounts::name.asc())
+            .select(Account::as_select())
+            .load(conn)
             .await
-            .expect("Could not obtain users");
+            .expect("Could not obtain accounts");
 
         let mut table = Table::new();
         table.add_row(row!["ID", "Name", "Owner", "Synchronization"]);
 
-        while let Some(a) = account_cursor
-            .try_next()
-            .await
-            .expect("error loading accounts")
-        {
+        for a in found {
             table.add_row(row![
                 a.id,
                 a.name,
                 a.user_id,
-                format!("{:?}", a.synchronization)
+                format!("{:?}", a.synchronization())
             ]);
         }
 

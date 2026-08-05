@@ -34,20 +34,12 @@ diesel-async = { version = "0.9", features = [
 ] }
 diesel_migrations = "2.3"
 uuid = { version = "1", features = ["v7", "serde"] }
-# only used by `moneta migrate-mongo`; drop once the postgres cutover is done
-mongodb = { version = "3.8", default-features = false, features = [
-    "bson-3",
-    "compat-3-3-0",
-    "rustls-tls",
-    "dns-resolver",
-] }
 dataloader = { version = "0.18", default-features = false, features = [
     "runtime-tokio",
 ] }
 juniper = { version = "0.17", features = ["chrono", "uuid"] }
 juniper_rocket = "0.10"
 dotenvy = "0.15"
-bson = { version = "3.1", features = ["chrono-0_4"] }
 rocket_cors = "0.6.0"
 similar = "3.1"
 

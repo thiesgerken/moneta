@@ -3,13 +3,12 @@
 //! Two kinds, both inherited from moneydb: periodic rules fire on a schedule, automation
 //! rules fire when a matching transaction is delivered from a bank statement.
 
-use uuid::Uuid;
 use chrono::{DateTime, Datelike, Months, TimeDelta, Timelike, Utc};
 use diesel::prelude::*;
 use diesel::{deserialize::FromSqlRow, expression::AsExpression};
 use juniper::{GraphQLEnum, GraphQLInputObject, GraphQLObject};
 use serde::{Deserialize, Serialize};
-
+use uuid::Uuid;
 
 use super::text_enum;
 
@@ -85,12 +84,7 @@ pub struct PeriodicRuleInput {
 }
 
 impl PeriodicRuleInput {
-    pub fn upgrade(
-        self,
-        id: Uuid,
-        user_id: Uuid,
-        now: DateTime<Utc>,
-    ) -> PeriodicRule {
+    pub fn upgrade(self, id: Uuid, user_id: Uuid, now: DateTime<Utc>) -> PeriodicRule {
         PeriodicRule {
             id,
             user_id,

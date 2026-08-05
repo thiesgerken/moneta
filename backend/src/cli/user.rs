@@ -1,16 +1,18 @@
-use uuid::Uuid;
+use std::io;
+
 use crate::hash_password;
-use crate::models::rendering::RenderedBalance;
-use crate::models::rendering::RenderedExpense;
-use crate::models::*;
+use crate::models::User;
 use crate::queries;
+use crate::schema::{accounts, users};
+use crate::schema_views::{balances_rendered, expenses_rendered};
 
 use clap::ArgMatches;
 use clap::{Arg, ArgAction, ArgGroup, Command};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use log::info;
-use mongodb::bson::doc;
 use prettytable::{Table, row};
-use std::io;
+use uuid::Uuid;
 
 pub fn build() -> Command {
     Command::new("user")
@@ -46,30 +48,29 @@ pub fn build() -> Command {
         )
 }
 
-pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
-    let user_collection = connection.collection::<User>("users");
+fn prompt(message: &str) -> String {
+    let mut line = String::new();
+    println!("{message}");
+    io::stdin().read_line(&mut line).unwrap();
+    line.trim_end().to_owned()
+}
+
+pub async fn handle(pool: crate::Pool, sub_matches: &ArgMatches) {
+    let conn = &mut pool.get().await.expect("Could not get a connection");
 
     if let Some(uname) = sub_matches.get_one::<String>("add") {
-        // check if this username is taken
-        if let Some(user) = queries::query_user_by_name(&connection, uname)
+        if let Some(user) = queries::query_user_by_name(conn, uname)
             .await
             .expect("Cannot query users")
         {
             panic!(
-                "there is already a user (_id: {}) with name '{}'!",
-                *user.id, uname
+                "there is already a user ({}) with name '{}'!",
+                user.id, uname
             );
         }
 
-        let mut fname = String::new();
-        println!("Please enter the full name of the new user");
-        io::stdin().read_line(&mut fname).unwrap();
-        let fname = fname.trim_end(); // Remove the trailing newline
-
-        let mut password = String::new();
-        println!("Please enter a password for the new user");
-        io::stdin().read_line(&mut password).unwrap();
-        let password = password.trim_end(); // Remove the trailing newline
+        let fname = prompt("Please enter the full name of the new user");
+        let password = prompt("Please enter a password for the new user");
 
         assert!(
             password.len() >= 8,
@@ -77,77 +78,70 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         );
 
         let u = User {
-            id: Uuid(Uuid::now_v7()),
+            id: Uuid::now_v7(),
             name: uname.to_string(),
-            full_name: fname.to_string(),
-            password_hash: hash_password(password),
+            full_name: fname,
+            password_hash: hash_password(&password),
         };
 
-        user_collection
-            .insert_one(&u)
+        diesel::insert_into(users::table)
+            .values(&u)
+            .execute(conn)
             .await
             .expect("Error saving new user");
-        info!("Created user {:?}", u);
+        info!("Created user {} ({})", u.name, u.id);
     } else if let Some(uname) = sub_matches.get_one::<String>("update") {
-        // check if this user even exists
-        let user = queries::query_user_by_name(&connection, uname)
+        let user = queries::query_user_by_name(conn, uname)
             .await
             .expect("Error loading users")
             .expect("User does not exist!");
 
-        let mut fname = String::new();
-        println!(
+        let fname = prompt(&format!(
             "Please enter a new full name for the user {} (current: {})",
             user.name, user.full_name
-        );
-        io::stdin().read_line(&mut fname).unwrap();
-        let fname = fname.trim_end(); // Remove the trailing newline
-
-        let mut password = String::new();
-        println!("Please enter a new password for the user {}", user.name);
-        io::stdin().read_line(&mut password).unwrap();
-        let password = password.trim_end(); // Remove the trailing newline
+        ));
+        let password = prompt(&format!(
+            "Please enter a new password for the user {}",
+            user.name
+        ));
 
         assert!(
             password.len() >= 8,
             "Password has to be at least 8 characters long!"
         );
 
-        user_collection
-            .update_one(
-                doc! {"_id": *user.id},
-                doc! {"$set": {"fullName":fname, "passwordHash": hash_password(password)}},
-            )
+        diesel::update(users::table.find(user.id))
+            .set((
+                users::full_name.eq(fname),
+                users::password_hash.eq(hash_password(&password)),
+            ))
+            .execute(conn)
             .await
             .expect("Could not update user");
         info!("Updated user {}", uname);
     } else if let Some(uname) = sub_matches.get_one::<String>("remove") {
-        // check if this user even exists
-        let user = queries::query_user_by_name(&connection, uname)
+        let user = queries::query_user_by_name(conn, uname)
             .await
             .expect("Error loading users")
             .expect("User does not exist!");
 
-        let mut confirmation = String::new();
-        println!(
-            "Do you really want to delete this user? If so, enter '{}'.\n Note that this will also delete relevant accounts and expenses!",
-            uname
-        );
-        io::stdin().read_line(&mut confirmation).unwrap();
-        let confirmation = confirmation.trim_end(); // Remove the trailing newline
-        assert_eq!(confirmation, uname, "Confirmation failed");
+        let confirmation = prompt(&format!(
+            "Do you really want to delete this user? If so, enter '{uname}'.\n Note that the accounts foreign key is ON DELETE RESTRICT, so this fails while they still own any."
+        ));
+        assert_eq!(confirmation, *uname, "Confirmation failed");
 
-        // TODO: also need to remove orphaned accounts, expenses, ..., re-render stuff, ...
-        let delete_res = user_collection
-            .delete_one(doc! {"_id": *user.id})
+        let count = diesel::delete(users::table.find(user.id))
+            .execute(conn)
             .await
             .expect("Could not delete user");
 
-        assert!(delete_res.deleted_count == 1);
+        assert!(count == 1);
         info!("deleted user '{}'", uname);
     } else if sub_matches.contains_id("list") {
-        let mut user_cursor = user_collection
-            .find(doc! {})
+        let found: Vec<User> = users::table
+            .order_by(users::name.asc())
+            .select(User::as_select())
+            .load(conn)
             .await
             .expect("Could not obtain users");
 
@@ -157,46 +151,39 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             "Name",
             "Full Name",
             "# Accounts",
-            "# Categories",
             "# Expenses",
             "# Balances"
         ]);
 
-        while let Some(u) = user_cursor.try_next().await.expect("error loading user") {
-            let r_expense_collection =
-                connection.collection::<RenderedExpense>("expenses_rendered");
-            let r_expense_count = r_expense_collection
-                .count_documents(doc! {"userId": *u.id})
-                .await
-                .expect("Could not obtain expenses of user");
-
-            let r_balance_collection =
-                connection.collection::<RenderedBalance>("balances_rendered");
-            let r_balance_count = r_balance_collection
-                .count_documents(doc! {"userId": *u.id})
-                .await
-                .expect("Could not obtain balances of user");
-
-            let account_collection = connection.collection::<Account>("accounts");
-            let account_count = account_collection
-                .count_documents(doc! {"userId": *u.id})
+        for u in found {
+            let account_count: i64 = accounts::table
+                .filter(accounts::user_id.eq(u.id))
+                .count()
+                .get_result(conn)
                 .await
                 .expect("Could not obtain accounts of user");
 
-            let category_collection = connection.collection::<Category>("categories");
-            let category_count = category_collection
-                .count_documents(doc! {"userId": *u.id})
+            let expense_count: i64 = expenses_rendered::table
+                .filter(expenses_rendered::user_id.eq(u.id))
+                .count()
+                .get_result(conn)
                 .await
-                .expect("Could not obtain categories of user");
+                .expect("Could not obtain expenses of user");
+
+            let balance_count: i64 = balances_rendered::table
+                .filter(balances_rendered::user_id.eq(u.id))
+                .count()
+                .get_result(conn)
+                .await
+                .expect("Could not obtain balances of user");
 
             table.add_row(row![
                 u.id,
                 u.name,
                 u.full_name,
                 account_count,
-                category_count,
-                r_expense_count,
-                r_balance_count
+                expense_count,
+                balance_count
             ]);
         }
 
