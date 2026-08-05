@@ -437,12 +437,13 @@ impl PeriodicRuleMutation {
         Ok(count > 0)
     }
 
-    /// Generates every expense that is currently due, across all of this user's rules.
+    /// Generates every expense that is currently due from this user's own rules. The scheduled
+    /// job covers everybody; this is the button for not waiting for it.
     pub async fn run(context: &Context) -> FieldResult<i32> {
-        require_user(context).await?;
+        let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let count = crate::rules::generate_periodic_expenses(conn, Utc::now())
+        let count = crate::rules::generate_periodic_expenses(conn, Some(user_id), Utc::now())
             .await
             .map_err(|e| e.to_string())?;
 

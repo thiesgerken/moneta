@@ -8,6 +8,7 @@ use std::error::Error;
 
 use chrono::{DateTime, Datelike, TimeDelta, Utc};
 use diesel::prelude::*;
+use diesel::sql_types::BigInt;
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 use regex::Regex;
 use uuid::Uuid;
@@ -338,86 +339,98 @@ pub async fn deliver_expenses(
     Ok(outcomes)
 }
 
+/// An arbitrary but stable key for `pg_advisory_xact_lock`. Advisory locks share one
+/// namespace per database, so the only thing that matters is that nothing else picks it.
+const PERIODIC_LOCK: i64 = 0x6d6f6e_65746131;
+
 /// Runs every periodic rule that is due, writing the generated expenses and their changelog
 /// entries, then advancing each rule's `last_creation`.
+///
+/// `user_id` restricts the run to one user's rules; `None` runs all of them, which is what the
+/// scheduled job does.
 ///
 /// Idempotent: running it twice in a row generates nothing the second time.
 pub async fn generate_periodic_expenses(
     conn: &mut AsyncPgConnection,
+    user_id: Option<Uuid>,
     now: DateTime<Utc>,
 ) -> Result<usize, Box<dyn Error + Send + Sync>> {
-    let rules = periodic_rules::table
-        .select(PeriodicRule::as_select())
-        .load(conn)
-        .await?;
-    if rules.is_empty() {
-        return Ok(0);
-    }
-
     let until = now + PERIODIC_ADVANCE;
-    let mut generated = Vec::new();
-    let mut advanced = Vec::new();
 
-    for rule in &rules {
-        let Some(template) = queries::load_expense(conn, rule.template_id).await? else {
-            warn!(
-                "periodic rule {} ({}) points at a template that no longer exists, skipping",
-                rule.id, rule.title
-            );
-            continue;
-        };
+    // The whole run is one transaction, reads included. `last_creation` is what decides which
+    // occurrences are due, so two runs that both read it before either commits would generate
+    // the same expenses twice -- and the advisory lock is taken before the first read for the
+    // same reason. It is released when the transaction ends, whichever way it ends.
+    //
+    // The lock is global rather than per user even when the run is scoped, so that a user
+    // triggering their own generation still excludes the scheduled run over everybody's rules.
+    let count = conn
+        .transaction::<_, diesel::result::Error, _>(async |conn| {
 
-        let times = occurrences(rule, &template, until);
-        if times.is_empty() {
-            continue;
-        }
+            diesel::sql_query("SELECT pg_advisory_xact_lock($1)")
+                .bind::<BigInt, _>(PERIODIC_LOCK)
+                .execute(conn)
+                .await?;
 
-        for t in &times {
-            let expense = instantiate(rule, &template, *t);
-            if let Err(e) = expense.validate() {
-                warn!(
-                    "periodic rule {} ({}) would produce an invalid expense, skipping: {}",
-                    rule.id, rule.title, e
-                );
-                continue;
+            let mut query = periodic_rules::table.into_boxed();
+            if let Some(user_id) = user_id {
+                query = query.filter(periodic_rules::user_id.eq(user_id));
             }
-            generated.push((expense, rule.user_id));
-        }
+            let rules = query.select(PeriodicRule::as_select()).load(conn).await?;
 
-        advanced.push((rule.id, *times.last().unwrap()));
-    }
+            let mut generated = Vec::new();
+            let mut advanced = Vec::new();
 
-    if generated.is_empty() {
-        return Ok(0);
-    }
+            for rule in &rules {
+                let Some(template) = queries::load_expense(conn, rule.template_id).await? else {
+                    warn!(
+                        "periodic rule {} ({}) points at a template that no longer exists, skipping",
+                        rule.id, rule.title
+                    );
+                    continue;
+                };
 
-    let count = generated.len();
+                let times = occurrences(rule, &template, until);
+                if times.is_empty() {
+                    continue;
+                }
 
-    // One transaction for the whole run: an expense without its changelog entry, or a rule
-    // advanced past expenses that were never written, both leave the books wrong in a way
-    // nothing later notices.
-    conn.transaction::<_, diesel::result::Error, _>(async |conn| {
-        for (expense, user_id) in &generated {
-            queries::insert_expense(conn, expense).await?;
-            diesel::insert_into(expense_changes::table)
-                .values(changelog_entry(expense, *user_id, "moneta-periodic"))
-                .execute(conn)
-                .await?;
-        }
+                for t in &times {
+                    let expense = instantiate(rule, &template, *t);
+                    if let Err(e) = expense.validate() {
+                        warn!(
+                            "periodic rule {} ({}) would produce an invalid expense, skipping: {}",
+                            rule.id, rule.title, e
+                        );
+                        continue;
+                    }
+                    generated.push((expense, rule.user_id));
+                }
 
-        for (id, last) in &advanced {
-            diesel::update(periodic_rules::table.find(id))
-                .set((
-                    periodic_rules::last_creation.eq(last),
-                    periodic_rules::updated_at.eq(now),
-                ))
-                .execute(conn)
-                .await?;
-        }
+                advanced.push((rule.id, *times.last().unwrap()));
+            }
 
-        Ok(())
-    })
-    .await?;
+            for (expense, owner) in &generated {
+                queries::insert_expense(conn, expense).await?;
+                diesel::insert_into(expense_changes::table)
+                    .values(changelog_entry(expense, *owner, "moneta-periodic"))
+                    .execute(conn)
+                    .await?;
+            }
+
+            for (id, last) in &advanced {
+                diesel::update(periodic_rules::table.find(id))
+                    .set((
+                        periodic_rules::last_creation.eq(last),
+                        periodic_rules::updated_at.eq(now),
+                    ))
+                    .execute(conn)
+                    .await?;
+            }
+
+            Ok(generated.len())
+        })
+        .await?;
 
     Ok(count)
 }

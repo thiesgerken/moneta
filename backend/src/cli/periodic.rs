@@ -32,7 +32,8 @@ pub async fn handle(pool: crate::Pool, sub_matches: &ArgMatches) {
     let conn = &mut pool.get().await.expect("Could not get a connection");
 
     if sub_matches.get_flag("run") {
-        let count = generate_periodic_expenses(conn, Utc::now())
+        // the scheduled run covers everybody
+        let count = generate_periodic_expenses(conn, None, Utc::now())
             .await
             .expect("could not generate periodic expenses");
 
