@@ -1,19 +1,20 @@
 # Analysis dashboard
 
-Port of MoneyDB's `analysis` section. A mock UI lives at `/analysis` (five tabs, hardcoded
+Port of MoneyDB's `analysis` section. A mock UI lives at `/analysis` (six tabs, hardcoded
 numbers from `frontend/src/lib/analysis_mock.ts`); this document records what it should show
 and what the backend still owes it.
 
 ## Displays
 
-MoneyDB had seven tabs. Five survive the port, because several of them were different views
-of the same numbers.
+MoneyDB had seven tabs. Six survive the port, because two of them were different views of
+the same numbers.
 
 | Tab                  | MoneyDB origin                  | Shows                                                                                                                 |
 | -------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | **Vermögen**         | `computed_balances` + `history` | net worth over time (total, per account, or per availability), availability totals, per-account computed balances       |
 | **Monate**           | `monthly_overviews`             | income/expenses bar chart and a table per month, each row linking to its own page                                       |
 | **Kategorien**       | `categories` + `sunburst`       | stacked bars per category per month, and a treemap of the whole period; toggle between expenses and income              |
+| **Kontoauszug**      | `statements`                    | one account's ledger over a range: opening balance, expenses and recorded balances interleaved, running total, CSV      |
 | **Kalender**         | `calendar`                      | month grid, expenses per day with a daily sum                                                                           |
 | **Vorauszahlungen**  | `prepayments`                   | what is still unconsumed at a chosen date, plus the separate list of incomplete expenses                                |
 
@@ -23,10 +24,24 @@ Merged away:
   once sampled over a range and once at a single date. Splitting them meant picking a date twice.
 - **sunburst** into **Kategorien** — it was already a component of that tab, not a tab itself.
 
-Dropped:
+### Kontoauszug is not the expenses page with a filter
 
-- **Kontoauszüge** — the expenses page already filters by account and date. It is missing only a
-  running-balance column, which belongs there rather than in a second table.
+This was briefly written off as one, which was wrong. It is a reconciliation view, and three
+things distinguish it:
+
+- It **interleaves three sources** into one chronological ledger: the simulated opening balance
+  at the range start, every expense touching the account, and the balances actually *recorded*
+  for it.
+- **Recorded balances re-anchor the running total.** Where a recorded balance disagrees with the
+  total carried into it, the ledger jumps — and that jump is the signal that an expense is
+  missing. The mock surfaces it explicitly as a badge rather than letting it pass silently,
+  which is the same idea as the Integrationsfehler in **Monate**.
+- The amount shown is the **account's own share**, not the expense total. moneta gets this for
+  free where MoneyDB did not: rendering already flattens sharing into per-account transactions,
+  so the relevant amount is just the sum of `calculatedAmount` over transactions naming the
+  account. MoneyDB had to walk a separate `sharing` array.
+
+CSV export is part of it — that is how a range gets handed to anything outside moneta.
 
 ### Month pages
 
@@ -155,6 +170,31 @@ type Overviews {
 Per-month category stats live on `MonthOverview`, which is what feeds the stacked bars — so
 **Kategorien** needs no endpoint of its own. **Kalender** needs none either; it is the existing
 expense list filtered to a month.
+
+### `analysis.statement(accountId, from, to)`
+
+```graphql
+type StatementEntry {
+  kind: StatementEntryKind!          # OPENING | EXPENSE | BALANCE
+  date: DateTime!                    # transaction date for expenses
+  bookingDate: DateTime              # null while the bank has not booked it
+  title: String!
+  store: String!
+  expenseId: ObjectIdWrapper         # null on balance rows
+  amount: Int                        # this account's share in cents; null on balance rows
+  balance: Int!                      # running total, re-anchored on recorded balances
+  drift: Int                         # recorded minus carried, when a balance disagrees
+}
+```
+
+Assemblable from what already exists — `analysis.balance(accountId, date)` for the opening row,
+plus the rendered expense and balance collections filtered by account and range — so it could
+start life in the frontend. It belongs on the server anyway: the running total and the drift
+have to be computed in one pass over a correctly ordered sequence, and that ordering (value
+date, balances after the expenses of the same instant) is exactly the sort of rule that goes
+wrong quietly when two clients each reimplement it.
+
+Sort ascending to accumulate, return descending — newest first is what you want to read.
 
 ### Implementation note
 

@@ -275,6 +275,119 @@ export const incompleteExpenses = [
 	}
 ];
 
+export type StatementRow = {
+	id: string;
+	kind: 'opening' | 'expense' | 'balance';
+	date: Date;
+	bookingDate: Date | null;
+	title: string;
+	store: string;
+	/// what this row moved the account by; null for rows that only assert a balance
+	amount: number | null;
+	balance: number;
+	/// set on recorded balances that disagree with the running total carried into them
+	drift: number | null;
+};
+
+// One chronological ledger per account: the simulated opening balance, every expense that
+// touches the account, and the balances actually recorded for it. Recorded balances re-anchor
+// the running total, so a disagreement with the carried total is visible instead of silently
+// absorbed -- that reconciliation is the point of the view.
+export function statement(accountId: string, from: Date, to: Date): StatementRow[] {
+	const account = accounts.find((a) => a.id === accountId) ?? accounts[0];
+	const seed = accounts.indexOf(account);
+	const day = 86400000;
+	const spanDays = Math.max(1, Math.round((to.getTime() - from.getTime()) / day));
+
+	const rows: StatementRow[] = [
+		{
+			id: 'opening',
+			kind: 'opening',
+			date: from,
+			bookingDate: null,
+			title: 'Kontostand (berechnet)',
+			store: '',
+			amount: null,
+			balance: [1420000, 31000, -42000, 903000, 2110000, 1204000][seed],
+			drift: null
+		}
+	];
+
+	const titles = [
+		['Lebensmittel', 'REWE'],
+		['Bäcker', 'Bäcker im Rewe'],
+		['Tanken', 'Aral'],
+		['Miete', 'Hausverwaltung'],
+		['Gehalt', 'Arbeitgeber'],
+		['Apotheke', 'Beispiel-Apotheke'],
+		['Strom', 'Beispielstrom']
+	];
+
+	// recurring costs have a fixed amount; everything else varies
+	const fixedAmounts: Record<string, number> = {
+		Miete: -95000,
+		Strom: -8900,
+		Gehalt: 320000
+	};
+
+	for (let d = 1; d <= spanDays; d++) {
+		const date = new Date(from.getTime() + d * day);
+
+		// roughly every third day carries a booking, deterministically
+		if (Math.abs(Math.sin(d * 1.9 + seed)) >= 0.62) {
+			const [title, store] = titles[(d + seed) % titles.length];
+			const amount =
+				fixedAmounts[title] ?? -(400 + Math.round(Math.abs(wobble(d, seed + 4)) * 9000));
+			rows.push({
+				id: `s${d}`,
+				kind: 'expense',
+				date,
+				// banks book a day or two after the value date, and sometimes not at all yet
+				bookingDate: d % 5 === 0 ? null : new Date(date.getTime() + day),
+				title,
+				store,
+				amount,
+				balance: 0,
+				drift: null
+			});
+		}
+
+		// a recorded balance every few weeks, independent of whether that day booked anything
+		if (d % 23 === 0) {
+			rows.push({
+				id: `b${d}`,
+				kind: 'balance',
+				date: new Date(date.getTime() + day / 2),
+				bookingDate: null,
+				title: 'Kontostand',
+				store: '',
+				amount: null,
+				balance: 0,
+				drift: null
+			});
+		}
+	}
+
+	rows.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+	let running = rows[0].balance;
+	for (const row of rows) {
+		if (row.kind === 'opening') continue;
+		if (row.kind === 'expense') {
+			running += row.amount ?? 0;
+			row.balance = running;
+			continue;
+		}
+		// pretend the recorded balance is mostly right but sometimes off by a missing expense
+		const recorded = running + (Number(row.id.slice(1)) % 46 === 0 ? -2450 : 0);
+		row.drift = recorded - running;
+		row.balance = recorded;
+		running = recorded;
+	}
+
+	return rows.reverse();
+}
+
 export const calendarExpenses = Array.from({ length: 46 }, (_, i) => ({
 	id: `e${i}`,
 	day: ((i * 5) % 30) + 1,

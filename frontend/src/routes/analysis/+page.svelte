@@ -5,6 +5,7 @@
 	import CategoriesView from '$lib/analysis/CategoriesView.svelte';
 	import CalendarView from '$lib/analysis/CalendarView.svelte';
 	import PrepaymentsView from '$lib/analysis/PrepaymentsView.svelte';
+	import StatementView from '$lib/analysis/StatementView.svelte';
 </script>
 
 <div class="space-y-4 pr-8 pl-8">
@@ -22,6 +23,9 @@
 		</TabItem>
 		<TabItem title="Kategorien">
 			<CategoriesView />
+		</TabItem>
+		<TabItem title="Kontoauszug">
+			<StatementView />
 		</TabItem>
 		<TabItem title="Kalender">
 			<CalendarView />
