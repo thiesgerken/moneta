@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use std::collections::HashMap;
 use std::error::Error;
 
@@ -25,7 +26,6 @@ use chrono::Utc;
 use juniper::FieldResult;
 use juniper::GraphQLObject;
 use juniper::graphql_object;
-use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct GraphQLExpenseCategorization {

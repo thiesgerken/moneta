@@ -4,12 +4,12 @@
 //! instants a periodic rule is due for, what the generated expense looks like, and which
 //! automation rule a delivered transaction matches.
 
+use uuid::Uuid;
 use chrono::{DateTime, Datelike, TimeDelta, Utc};
 use regex::Regex;
 use std::error::Error;
 
 use crate::models::{
-use uuid::Uuid;
     Account, AutomationRule, Expense, ExpenseChangelogEntry, ExpenseDelivery, Uuid,
     PeriodicRule, SeenDelivery, rendering::RenderedExpense,
 };

@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use std::sync::Arc;
 
 use juniper::graphql_object;
@@ -18,14 +19,13 @@ use crate::graphql::{
 };
 
 use super::{
-use uuid::Uuid;
     accounts::{AccountLoader, get_account_loader},
     categories::{CategoryLoader, get_category_loader},
     users::{UserLoader, get_user_loader},
 };
 
 pub struct Context {
-    pub connection: mongodb::Database,
+    pub pool: crate::Pool,
     pub config: crate::config::Config,
     pub user_id: Arc<RwLock<Option<Uuid>>>,
 
@@ -41,6 +41,18 @@ pub struct Mutation;
 
 pub type Schema = juniper::RootNode<Query, Mutation, juniper::EmptySubscription<Context>>;
 
+impl Context {
+    /// Checking out a connection can fail (the pool is bounded), so resolvers go through
+    /// this rather than unwrapping in a dozen places.
+    pub async fn conn(
+        &self,
+    ) -> juniper::FieldResult<
+        diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
+    > {
+        Ok(self.pool.get().await?)
+    }
+}
+
 pub async fn require_user(context: &Context) -> juniper::FieldResult<Uuid> {
     context.user_id.read().await.ok_or(juniper::FieldError::new(
         "User is not logged in",
@@ -49,7 +61,7 @@ pub async fn require_user(context: &Context) -> juniper::FieldResult<Uuid> {
 }
 
 pub async fn graphql_handler(
-    connection: &rocket::State<mongodb::Database>,
+    pool: &rocket::State<crate::Pool>,
     config: &rocket::State<crate::config::Config>,
     cookies: &rocket::http::CookieJar<'_>,
     request: juniper_rocket::GraphQLRequest,
@@ -65,11 +77,11 @@ pub async fn graphql_handler(
             schema,
             &Context {
                 config: (*config).clone(),
-                connection: (*connection).clone(),
+                pool: (*pool).clone(),
                 user_id: user_id_writer.clone(),
-                account_loader: get_account_loader((*connection).clone()),
-                category_loader: get_category_loader((*connection).clone()),
-                user_loader: get_user_loader((*connection).clone()),
+                account_loader: get_account_loader((*pool).clone()),
+                category_loader: get_category_loader((*pool).clone()),
+                user_loader: get_user_loader((*pool).clone()),
             },
         )
         .await;

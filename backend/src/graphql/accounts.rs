@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use std::collections::HashMap;
 use std::error::Error;
 
@@ -20,7 +21,6 @@ use juniper::graphql_object;
 use log::debug;
 
 use super::users::GraphQLUserInfo;
-use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct GraphQLAccountSynchronization {
     pub data: AccountSynchronization,

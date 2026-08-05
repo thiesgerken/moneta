@@ -1,10 +1,10 @@
+use uuid::Uuid;
 use std::error::Error;
 
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use juniper::{GraphQLInputObject, GraphQLObject};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use super::Json;
 

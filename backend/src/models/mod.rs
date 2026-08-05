@@ -22,10 +22,10 @@ pub use rules::{
     PeriodicRuleInput, SeenDelivery,
 };
 
+use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use juniper::{GraphQLInputObject, GraphQLObject};
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Queryable, Selectable, Insertable)]
 #[diesel(table_name = crate::schema::users, check_for_backend(diesel::pg::Pg))]

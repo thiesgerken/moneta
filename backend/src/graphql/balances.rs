@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use std::error::Error;
 
 use crate::graphql::accounts::GraphQLAccount;
@@ -15,7 +16,6 @@ use chrono::Utc;
 use juniper::FieldResult;
 use juniper::GraphQLObject;
 use juniper::graphql_object;
-use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct GraphQLBalance {

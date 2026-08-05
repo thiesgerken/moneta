@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use crate::models::rendering::{RenderedBalance, RenderedExpense};
 use crate::models::*;
 use crate::rendering::rerender_multiple;
@@ -9,7 +10,6 @@ use mongodb::bson;
 use mongodb::bson::doc;
 use prettytable::{Table, row};
 use std::str::FromStr;
-use uuid::Uuid;
 
 pub fn build() -> Command {
     Command::new("account")

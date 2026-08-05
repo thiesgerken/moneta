@@ -1,70 +1,54 @@
-use std::error::Error;
-
-use futures::{StreamExt, TryStreamExt};
-use mongodb::options::FindOptions;
-use serde::de::DeserializeOwned;
+use juniper::GraphQLEnum;
 use similar::TextDiff;
-use uuid::Uuid;
 
-pub fn string_to_document(s: &str) -> Result<Document, Box<dyn Error>> {
-    // also handles EJSON (i.e. decodes {$oid: "..."} as Uuid if possible)
-    let x: serde_json::Value = serde_json::from_str(s)?;
-    bson::serialize_to_document(&x).map_err(|e| e.into())
-}
-
-/// Merges a caller-supplied filter with the overrides that scope a query to its user.
+/// Which way a list is ordered.
 ///
-/// The overrides are applied last on purpose: they carry the `userId` restriction, so a
-/// caller must not be able to widen their own scope by naming the same key in `filter`.
-pub fn merge_filter(
-    filter: Option<String>,
-    filter_overrides: Option<Document>,
-) -> Result<Document, Box<dyn Error>> {
-    let filter = filter
-        .map(|f| string_to_document(&f))
-        .transpose()
-        .map_err(|e| format!("Unable to parse filtering options: {}", e))?;
-
-    let mut filter = filter.unwrap_or_default();
-    if let Some(ov) = filter_overrides {
-        filter.extend(ov);
-    }
-
-    Ok(filter)
+/// Lists used to take a mongo sort document built in the browser (`{"bookingStart": -1}`) and
+/// a mongo filter document alongside it. Both are gone: the client now names a column from a
+/// per-entity enum and a direction, so nothing it sends can reach a column the resolver did
+/// not offer, and there is no query language to parse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, GraphQLEnum)]
+pub enum SortDirection {
+    #[default]
+    Asc,
+    Desc,
 }
 
-pub async fn list_query<T>(
-    collection_name: &str,
-    connection: &mongodb::Database,
-    limit: Option<i32>,
-    skip: Option<i32>,
-    filter: Option<String>,
-    sort: Option<String>,
-    filter_overrides: Option<Document>,
-) -> Result<(u64, Vec<T>), Box<dyn Error>>
-where
-    T: DeserializeOwned + Unpin + Send + Sync,
-{
-    let filter = merge_filter(filter, filter_overrides)?;
+/// Applies `.order_by()` in the requested direction.
+///
+/// diesel's ascending and descending orderings are different types, so a plain `if` cannot
+/// return both arms; each has to be applied to an already-boxed query.
+#[macro_export]
+macro_rules! order_by {
+    ($query:expr, $direction:expr, $column:expr) => {
+        match $direction {
+            $crate::graphql::util::SortDirection::Asc => $query.order_by($column.asc()),
+            $crate::graphql::util::SortDirection::Desc => $query.order_by($column.desc()),
+        }
+    };
+}
 
-    let sort = sort
-        .map(|s| string_to_document(&s))
-        .transpose()
-        .map_err(|e| format!("Unable to parse sorting options: {}", e))?;
-    let find_options = sort.map(|s| FindOptions::builder().sort(s).build());
+/// Clamps the window a list query may ask for.
+///
+/// Without a ceiling a client can pull the whole expense table in one request; without a
+/// floor a negative limit reaches diesel as a nonsensical LIMIT.
+pub fn page(limit: Option<i32>, skip: Option<i32>) -> (i64, i64) {
+    const MAX_LIMIT: i64 = 1000;
 
-    let collection = connection.collection::<T>(collection_name);
-    let total_count = collection.count_documents(filter.clone()).await?;
-    let cursor = collection
-        .find(filter)
-        .with_options(find_options)
-        .await?
-        .skip(usize::try_from(skip.unwrap_or(0))?)
-        .take(usize::try_from(limit.unwrap_or(i32::MAX))?);
+    let limit = limit.map(i64::from).unwrap_or(MAX_LIMIT).clamp(0, MAX_LIMIT);
+    let offset = skip.map(i64::from).unwrap_or(0).max(0);
 
-    let edges = cursor.try_collect::<Vec<_>>().await?;
+    (limit, offset)
+}
 
-    Ok((total_count, edges))
+/// Wraps a free-text term for a case-insensitive `ILIKE`, escaping the wildcards so that
+/// searching for a literal `%` does not match every row.
+pub fn ilike_pattern(term: &str) -> String {
+    let escaped = term
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    format!("%{escaped}%")
 }
 
 pub fn json_diff<T: serde::Serialize>(
@@ -83,88 +67,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_json_filters() {
-        let d = string_to_document(r#"{"title": "Rewe", "isTemplate": false}"#).unwrap();
-        assert_eq!(d.get_str("title").unwrap(), "Rewe");
-        assert!(!d.get_bool("isTemplate").unwrap());
-    }
-
-    /// the frontend sends account and category ids as extended json
-    #[test]
-    fn decodes_extended_json_object_ids() {
-        let oid = Uuid::now_v7();
-        let d = string_to_document(&format!(
-            r#"{{"accountId": {{"$oid": "{}"}}}}"#,
-            oid.to_hex()
-        ))
-        .unwrap();
-
-        assert_eq!(d.get_object_id("accountId").unwrap(), oid);
+    fn a_search_term_cannot_smuggle_wildcards() {
+        // otherwise searching for "50%" matches every row
+        assert_eq!(ilike_pattern("50%"), r"%50\%%");
+        assert_eq!(ilike_pattern("a_b"), r"%a\_b%");
+        assert_eq!(ilike_pattern(r"back\slash"), r"%back\\slash%");
     }
 
     #[test]
-    fn rejects_malformed_filters() {
-        assert!(string_to_document("not json").is_err());
-        assert!(string_to_document(r#"{"unterminated": "#).is_err());
+    fn paging_is_bounded() {
+        assert_eq!(page(None, None), (1000, 0));
+        assert_eq!(page(Some(50), Some(10)), (50, 10));
+        // a client cannot ask for the whole table, nor for a negative window
+        assert_eq!(page(Some(i32::MAX), None), (1000, 0));
+        assert_eq!(page(Some(-5), Some(-5)), (0, 0));
     }
 
     #[test]
-    fn merges_filter_with_overrides() {
-        let uid = Uuid::now_v7();
-        let merged = merge_filter(
-            Some(r#"{"store": "Rewe"}"#.into()),
-            Some(doc!("userId": uid)),
-        )
-        .unwrap();
+    fn json_diff_reports_only_what_changed() {
+        let a = serde_json::json!({"title": "Rewe", "amount": -1000});
+        let b = serde_json::json!({"title": "Rewe", "amount": -1200});
+        let d = json_diff(&a, &b).unwrap();
 
-        assert_eq!(merged.get_str("store").unwrap(), "Rewe");
-        assert_eq!(merged.get_object_id("userId").unwrap(), uid);
-    }
-
-    /// the override carries the authorization scope, so a caller naming `userId`
-    /// themselves must not be able to read another user's entries
-    #[test]
-    fn caller_cannot_override_the_user_scope() {
-        let own = Uuid::now_v7();
-        let someone_else = Uuid::now_v7();
-
-        let merged = merge_filter(
-            Some(format!(
-                r#"{{"userId": {{"$oid": "{}"}}}}"#,
-                someone_else.to_hex()
-            )),
-            Some(doc!("userId": own)),
-        )
-        .unwrap();
-
-        assert_eq!(merged.get_object_id("userId").unwrap(), own);
-    }
-
-    #[test]
-    fn keeps_operator_filters_alongside_the_user_scope() {
-        let uid = Uuid::now_v7();
-        let merged = merge_filter(
-            Some(r#"{"$or": [{"store": "Rewe"}, {"store": "Aldi"}]}"#.into()),
-            Some(doc!("userId": uid)),
-        )
-        .unwrap();
-
-        // both survive, so mongo ANDs them and the scope still applies
-        assert!(matches!(merged.get("$or"), Some(Bson::Array(a)) if a.len() == 2));
-        assert_eq!(merged.get_object_id("userId").unwrap(), uid);
-    }
-
-    #[test]
-    fn empty_filter_still_scopes_to_the_user() {
-        let uid = Uuid::now_v7();
-        let merged = merge_filter(None, Some(doc!("userId": uid))).unwrap();
-
-        assert_eq!(merged.len(), 1);
-        assert_eq!(merged.get_object_id("userId").unwrap(), uid);
-    }
-
-    #[test]
-    fn propagates_parse_errors() {
-        assert!(merge_filter(Some("{{{".into()), None).is_err());
+        assert!(d.contains("-1000"), "{d}");
+        assert!(d.contains("-1200"), "{d}");
     }
 }

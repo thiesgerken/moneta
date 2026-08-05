@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use chrono::Utc;
 use futures::stream::TryStreamExt;
 use log::{LevelFilter, info};
@@ -5,7 +6,6 @@ use moneta::models::Balance;
 use mongodb::bson::doc;
 use simplelog::{ColorChoice, SimpleLogger, TermLogger, TerminalMode};
 use tokio::runtime::Builder;
-use uuid::Uuid;
 
 pub fn initialize_logging(verbosity: i8) {
     let level = match verbosity {

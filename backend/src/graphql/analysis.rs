@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use std::collections::HashMap;
 
 use crate::graphql::root::Context;
@@ -15,7 +16,6 @@ use mongodb::bson::doc;
 
 use super::accounts::GraphQLAccount;
 use super::balances::GraphQLBalance;
-use uuid::Uuid;
 
 #[derive(Debug, Clone, GraphQLObject)]
 #[graphql(context = Context)]

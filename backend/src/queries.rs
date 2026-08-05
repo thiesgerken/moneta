@@ -1,6 +1,6 @@
+use uuid::Uuid;
 use diesel::prelude::*;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
-use uuid::Uuid;
 
 use crate::models::{Account, Category, User};
 use crate::schema::{accounts, categories, users};

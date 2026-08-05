@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use std::{collections::HashMap, error::Error};
 
 use crate::{
@@ -14,7 +15,6 @@ use mongodb::{
 };
 
 use super::root::{Context, require_user};
-use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct GraphQLUserInfo {

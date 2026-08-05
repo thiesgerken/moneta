@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use chrono::Utc;
 use juniper::graphql_object;
 
@@ -8,7 +9,6 @@ use crate::models::{
     PeriodicInterval, PeriodicRule, PeriodicRuleInput, SeenDelivery, rendering::RenderedExpense,
 };
 use crate::rules::DeliveryOutcome;
-use uuid::Uuid;
 
 const AUTOMATION: &str = "automation_rules";
 const PERIODIC: &str = "periodic_rules";

@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use std::error::Error;
 
 use chrono::{DateTime, Utc};
@@ -6,7 +7,6 @@ use diesel::{deserialize::FromSqlRow, expression::AsExpression};
 use juniper::{GraphQLEnum, GraphQLInputObject, GraphQLObject};
 use serde::{Deserialize, Serialize};
 
-use uuid::Uuid;
 
 use super::text_enum;
 

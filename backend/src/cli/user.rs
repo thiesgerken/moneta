@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use crate::hash_password;
 use crate::models::rendering::RenderedBalance;
 use crate::models::rendering::RenderedExpense;
@@ -10,7 +11,6 @@ use log::info;
 use mongodb::bson::doc;
 use prettytable::{Table, row};
 use std::io;
-use uuid::Uuid;
 
 pub fn build() -> Command {
     Command::new("user")
