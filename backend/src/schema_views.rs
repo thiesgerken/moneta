@@ -90,10 +90,12 @@ diesel::allow_tables_to_appear_in_same_query!(
 );
 
 // the macro only takes bare identifiers, so the upstream tables have to be in scope by name
-use crate::schema::{accounts, categories, expenses};
+use crate::schema::{accounts, categories, expense_categorizations, expense_changes, expenses};
 
 diesel::allow_tables_to_appear_in_same_query!(expenses_rendered, accounts);
 diesel::allow_tables_to_appear_in_same_query!(expenses_rendered, categories);
 diesel::allow_tables_to_appear_in_same_query!(expenses_rendered, expenses);
+diesel::allow_tables_to_appear_in_same_query!(expenses_rendered, expense_categorizations);
+diesel::allow_tables_to_appear_in_same_query!(expenses_rendered, expense_changes);
 diesel::allow_tables_to_appear_in_same_query!(balances_rendered, accounts);
 diesel::allow_tables_to_appear_in_same_query!(expense_transactions_rendered, accounts);

@@ -127,6 +127,52 @@ impl Expense {
 
         (row, transactions, categories)
     }
+
+    /// Inverse of [`split`](Self::split). The transactions have to arrive in `idx` order, since
+    /// the aggregate carries their order in the list rather than in a field.
+    pub fn join(
+        row: ExpenseRow,
+        transactions: Vec<ExpenseTransactionRow>,
+        categories: Vec<ExpenseCategorizationRow>,
+    ) -> Self {
+        Self {
+            id: row.id,
+            title: row.title,
+            store: row.store,
+            description: row.description,
+            comments: row.comments,
+            reference_amount: row.reference_amount,
+            booking_start: row.booking_start,
+            booking_end: row.booking_end,
+            is_template: row.is_template,
+            is_tax_relevant: row.is_tax_relevant,
+            is_unchecked: row.is_unchecked,
+            is_incomplete: row.is_incomplete,
+            is_extraordinary: row.is_extraordinary,
+            receipts: row.receipts.0,
+            positions: row.positions.0,
+            transactions: transactions
+                .into_iter()
+                .map(|t| ExpenseTransaction {
+                    account_id: t.account_id,
+                    date: t.date,
+                    amount: t.amount,
+                    fraction: t.fraction,
+                    comments: t.comments,
+                    statement: t.statement,
+                })
+                .collect(),
+            categories: categories
+                .into_iter()
+                .map(|c| ExpenseCategorization {
+                    category_id: c.category_id,
+                    weight: c.weight,
+                })
+                .collect(),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Queryable, Selectable, Insertable, AsChangeset)]
@@ -394,6 +440,37 @@ mod tests {
             [Some(-1000), Some(-500)]
         );
         assert!(transactions.iter().all(|t| t.expense_id == e.id));
+    }
+
+    #[test]
+    fn splitting_and_rejoining_gives_back_the_same_expense() {
+        let mut e = expense(
+            vec![
+                transaction(Some(-1000), None),
+                transaction(None, Some(0.5)),
+                transaction(Some(-250), None),
+            ],
+            Some(-2000),
+        );
+        e.categories = vec![ExpenseCategorization {
+            category_id: Uuid::now_v7(),
+            weight: 0.25,
+        }];
+        e.positions = vec![ExpensePosition {
+            amount: Some(-500),
+            quantity: Some(2.0),
+            unit: Some("kg".into()),
+            title: "Kartoffeln".into(),
+            comments: String::new(),
+        }];
+
+        let (row, transactions, categories) = e.split();
+        let rejoined = Expense::join(row, transactions, categories);
+
+        assert_eq!(
+            serde_json::to_value(&e).unwrap(),
+            serde_json::to_value(&rejoined).unwrap()
+        );
     }
 
     #[test]
