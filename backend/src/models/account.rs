@@ -1,12 +1,14 @@
 use std::error::Error;
 
 use chrono::{DateTime, Utc};
+use diesel::{deserialize::FromSqlRow, expression::AsExpression};
 use juniper::{GraphQLEnum, GraphQLInputObject, GraphQLObject};
 use serde::{Deserialize, Serialize};
 
-use super::ObjectIdWrapper;
+use super::{ObjectIdWrapper, text_enum};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, GraphQLEnum)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, GraphQLEnum, AsExpression, FromSqlRow)]
+#[diesel(sql_type = diesel::sql_types::Text)]
 pub enum AccountAvailability {
     Immediately,
     Days,
@@ -16,7 +18,17 @@ pub enum AccountAvailability {
     Decades,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, GraphQLEnum)]
+text_enum!(AccountAvailability {
+    Immediately => "immediately",
+    Days => "days",
+    Weeks => "weeks",
+    Months => "months",
+    Years => "years",
+    Decades => "decades",
+});
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, GraphQLEnum, AsExpression, FromSqlRow)]
+#[diesel(sql_type = diesel::sql_types::Text)]
 pub enum AccountRisk {
     None,
     Slight,
@@ -26,7 +38,17 @@ pub enum AccountRisk {
     Huge,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, GraphQLEnum)]
+text_enum!(AccountRisk {
+    None => "none",
+    Slight => "slight",
+    Low => "low",
+    Medium => "medium",
+    High => "high",
+    Huge => "huge",
+});
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, GraphQLEnum, AsExpression, FromSqlRow)]
+#[diesel(sql_type = diesel::sql_types::Text)]
 pub enum AccountKind {
     Cash,
     Debit,
@@ -37,6 +59,17 @@ pub enum AccountKind {
     Virtual,
     Other,
 }
+
+text_enum!(AccountKind {
+    Cash => "cash",
+    Debit => "debit",
+    Credit => "credit",
+    Debt => "debt",
+    Stocks => "stocks",
+    RealEstate => "real_estate",
+    Virtual => "virtual",
+    Other => "other",
+});
 
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]

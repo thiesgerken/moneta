@@ -6,6 +6,8 @@ pub mod models;
 pub mod queries;
 pub mod rendering;
 pub mod rules;
+pub mod schema;
+pub mod schema_views;
 
 #[macro_use]
 extern crate rocket;
@@ -14,9 +16,48 @@ use argon2::{
     Argon2,
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
+use diesel_async::{
+    AsyncConnection, AsyncPgConnection, SimpleAsyncConnection,
+    pooled_connection::{AsyncDieselConnectionManager, ManagerConfig, deadpool},
+};
+use futures::FutureExt;
 use models::rendering::{RenderedBalance, RenderedExpense};
 use models::{AutomationRule, PeriodicRule, SeenDelivery};
 use mongodb::bson::doc;
+
+pub type Pool = deadpool::Pool<AsyncPgConnection>;
+
+pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
+    diesel_migrations::embed_migrations!("migrations");
+
+pub fn pool(database_url: &str, app_name: &str) -> Result<Pool, Box<dyn std::error::Error>> {
+    let app_name = app_name.to_owned();
+
+    let mut config = ManagerConfig::default();
+    config.custom_setup = Box::new(move |url| {
+        let app_name = app_name.clone();
+        async move {
+            let mut conn = AsyncPgConnection::establish(url).await?;
+
+            // The rendered views embed timestamps in jsonb, where the text carries the
+            // session's UTC offset. chrono reads any offset, so this is about keeping the
+            // representation identical wherever the backend runs.
+            conn.batch_execute(&format!(
+                "SET TIME ZONE 'UTC'; SET application_name = '{}'",
+                app_name.replace('\'', "")
+            ))
+            .await
+            .map_err(diesel::ConnectionError::CouldntSetupConfiguration)?;
+
+            Ok(conn)
+        }
+        .boxed()
+    });
+
+    let manager =
+        AsyncDieselConnectionManager::<AsyncPgConnection>::new_with_config(database_url, config);
+    Ok(deadpool::Pool::builder(manager).build()?)
+}
 
 /// Parameters are taken from the stored PHC string, so hashes written by older
 /// versions (argonautica, m=4096/t=32/p=num_cpus) keep verifying.
@@ -37,7 +78,9 @@ pub fn hash_password(pw: &str) -> String {
         .to_string()
 }
 
-pub async fn connect(
+/// Only used by `moneta migrate-mongo`; drop with the mongo dependency once the cutover is
+/// done.
+pub async fn connect_mongo(
     database_url: &str,
     database_name: &str,
     app_name: &str,

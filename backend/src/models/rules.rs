@@ -4,18 +4,29 @@
 //! rules fire when a matching transaction is delivered from a bank statement.
 
 use chrono::{DateTime, Datelike, Months, TimeDelta, Timelike, Utc};
+use diesel::{deserialize::FromSqlRow, expression::AsExpression};
 use juniper::{GraphQLEnum, GraphQLInputObject, GraphQLObject};
 use serde::{Deserialize, Serialize};
 
-use super::ObjectIdWrapper;
+use super::{ObjectIdWrapper, text_enum};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, GraphQLEnum)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, GraphQLEnum, AsExpression, FromSqlRow,
+)]
+#[diesel(sql_type = diesel::sql_types::Text)]
 pub enum PeriodicInterval {
     Daily,
     Weekly,
     Monthly,
     Yearly,
 }
+
+text_enum!(PeriodicInterval {
+    Daily => "daily",
+    Weekly => "weekly",
+    Monthly => "monthly",
+    Yearly => "yearly",
+});
 
 impl PeriodicInterval {
     /// The next occurrence after `t`. Monthly and yearly clamp to the end of the month, so a

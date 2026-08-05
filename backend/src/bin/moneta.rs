@@ -72,9 +72,10 @@ fn main() {
         initialize_logging(config.verbosity);
         debug!("config={:?}", config);
 
-        let connection = moneta::connect(&config.database.url, &config.database.name, "moneta-web")
-            .await
-            .expect("error connecting and migrating to db");
+        let connection =
+            moneta::connect_mongo(&config.database.url, &config.database.name, "moneta-web")
+                .await
+                .expect("error connecting and migrating to db");
 
         if let Some(sub_matches) = matches.subcommand_matches("user") {
             cli::user::handle(connection, sub_matches).await;

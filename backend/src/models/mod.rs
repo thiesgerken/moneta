@@ -1,10 +1,14 @@
 mod account;
 mod expense;
+mod json;
 mod oid;
 pub mod rendering;
 mod rules;
+mod text_enum;
 
+pub use json::Json;
 pub use oid::ObjectIdWrapper;
+pub(crate) use text_enum::text_enum;
 
 pub use account::{
     Account, AccountAvailability, AccountCreateInput, AccountInput, AccountKind, AccountRisk,

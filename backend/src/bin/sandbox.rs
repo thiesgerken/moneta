@@ -48,7 +48,7 @@ fn main() {
     runtime.block_on(async {
         initialize_logging(1);
 
-        let db = moneta::connect(
+        let db = moneta::connect_mongo(
             "mongodb://localhost:27017",
             "moneta_sandbox",
             "moneta-sandbox",

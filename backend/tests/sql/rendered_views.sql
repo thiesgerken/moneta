@@ -31,7 +31,9 @@ INSERT INTO expenses (id, title, store, description, comments, reference_amount,
     ('00000000-0000-7000-8000-0000000000e4', 'e4', '', '', '', NULL,  '2025-06-01T12:00:00Z', '2025-06-01T12:00:00Z'),
     ('00000000-0000-7000-8000-0000000000e5', 'e5', '', '', '', NULL,  '2025-06-01T12:00:00Z', '2025-06-01T12:00:00Z'),
     ('00000000-0000-7000-8000-0000000000e6', 'e6', '', '', '', NULL,  '2025-06-01T12:00:00Z', '2025-06-01T12:00:00Z'),
-    ('00000000-0000-7000-8000-0000000000e7', 'e7', '', '', '', NULL,  '2025-06-01T12:00:00Z', '2025-06-01T12:00:00Z');
+    ('00000000-0000-7000-8000-0000000000e7', 'e7', '', '', '', NULL,  '2025-06-01T12:00:00Z', '2025-06-01T12:00:00Z'),
+    -- a fractional transaction with nothing to resolve against; rendering it is impossible
+    ('00000000-0000-7000-8000-0000000000e8', 'e8', '', '', '', NULL,  '2025-06-01T12:00:00Z', '2025-06-01T12:00:00Z');
 
 INSERT INTO expense_transactions (expense_id, account_id, idx, date, amount, fraction, comments, statement) VALUES
     ('00000000-0000-7000-8000-0000000000e1', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-01T12:00:00Z', -1250, NULL, '', ''),
@@ -42,7 +44,8 @@ INSERT INTO expense_transactions (expense_id, account_id, idx, date, amount, fra
     ('00000000-0000-7000-8000-0000000000e5', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-01T12:00:00Z', -1000, NULL, '', ''),
     ('00000000-0000-7000-8000-0000000000e5', '00000000-0000-7000-8000-0000000000a7', 1, '2025-06-01T12:00:00Z',  -400, NULL, '', ''),
     ('00000000-0000-7000-8000-0000000000e6', '00000000-0000-7000-8000-0000000000a3', 0, '2025-06-01T12:00:00Z', -1000, NULL, '', ''),
-    ('00000000-0000-7000-8000-0000000000e7', '00000000-0000-7000-8000-0000000000a5', 0, '2025-06-01T12:00:00Z', -1000, NULL, '', '');
+    ('00000000-0000-7000-8000-0000000000e7', '00000000-0000-7000-8000-0000000000a5', 0, '2025-06-01T12:00:00Z', -1000, NULL, '', ''),
+    ('00000000-0000-7000-8000-0000000000e8', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-01T12:00:00Z', NULL, 0.25, '', '');
 
 INSERT INTO balances (id, account_id, date, amount, comments) VALUES
     ('00000000-0000-7000-8000-0000000000b1', '00000000-0000-7000-8000-0000000000a1', '2025-06-01T12:00:00Z', 5000, ''),
@@ -84,6 +87,12 @@ BEGIN
 
             -- plain_synchronization_keeps_the_sign_for_the_other_user
             UNION ALL SELECT 'e7 for theirs', (SELECT effective_amount FROM expenses_rendered WHERE upstream_id = '00000000-0000-7000-8000-0000000000e7' AND user_id = '00000000-0000-7000-8000-000000000002'), -1000.0
+
+            -- rejects_a_fractional_transaction_without_a_reference_amount: nothing to resolve
+            -- against has to stay null all the way up, so the Rust side errors on the read
+            -- rather than reading a transaction that silently contributes nothing
+            UNION ALL SELECT 'e8 calculated is null', (SELECT CASE WHEN calculated_amount IS NULL THEN 1 ELSE 0 END FROM expense_transactions_rendered WHERE expense_id = '00000000-0000-7000-8000-0000000000e8'), 1
+            UNION ALL SELECT 'e8 effective is null', (SELECT CASE WHEN effective_amount IS NULL THEN 1 ELSE 0 END FROM expenses_rendered WHERE upstream_id = '00000000-0000-7000-8000-0000000000e8'), 1
 
             -- renders_a_balance_for_its_owner
             UNION ALL SELECT 'b1 rows', (SELECT count(*) FROM balances_rendered WHERE upstream_id = '00000000-0000-7000-8000-0000000000b1'), 1

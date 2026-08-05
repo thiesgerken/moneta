@@ -86,8 +86,11 @@ SELECT
     e.positions,
 
     coalesce(cat.categories, '[]'::jsonb) AS categories,
-    coalesce(tx.transactions, '[]'::jsonb) AS transactions,
-    coalesce(tx.effective_amount, 0) AS effective_amount,
+
+    -- not coalesced: expense_users only yields a row where a transaction exists, so an empty
+    -- list here would mean the view is wrong and should surface rather than read as "none"
+    tx.transactions,
+    tx.effective_amount,
 
     e.created_at,
     e.updated_at
@@ -113,7 +116,11 @@ LEFT JOIN LATERAL (
             'calculatedAmount', r.calculated_amount,
             'effectiveAmount', r.effective_amount
         ) ORDER BY r.idx) AS transactions,
-        sum(r.effective_amount) AS effective_amount
+
+        -- sum() skips nulls, which would quietly drop an unresolvable transaction out of the
+        -- total instead of reporting one. Propagate the null so the read fails loudly.
+        CASE WHEN bool_or(r.effective_amount IS NULL) THEN NULL
+             ELSE sum(r.effective_amount) END AS effective_amount
     FROM expense_transactions_rendered r
     WHERE r.expense_id = e.id AND r.user_id = eu.user_id
 ) tx ON true;
