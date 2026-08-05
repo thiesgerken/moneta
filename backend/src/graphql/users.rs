@@ -1,18 +1,15 @@
-use uuid::Uuid;
-use std::{collections::HashMap, error::Error};
+use std::collections::HashMap;
 
-use crate::{
-    models::{Uuid, User},
-    queries, verify_password,
-};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
+use uuid::Uuid;
+
+use crate::graphql::util;
+use crate::schema::users;
+use crate::{models::User, queries, verify_password};
 
 use dataloader::{BatchFn, cached::Loader};
-use futures::{StreamExt, TryStreamExt};
 use juniper::graphql_object;
-use mongodb::{
-    Database,
-    bson::{doc, oid::Uuid},
-};
 
 use super::root::{Context, require_user};
 
@@ -65,9 +62,14 @@ pub struct UserQuery;
 impl UserQuery {
     async fn me(context: &Context) -> juniper::FieldResult<GraphQLUserInfo> {
         let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        let user = queries::query_element_by_id(&context.connection, "users", user_id)
-            .await?
+        let user = users::table
+            .find(user_id)
+            .select(User::as_select())
+            .first(conn)
+            .await
+            .optional()?
             .ok_or_else(|| {
                 juniper::FieldError::new("User does not exist anymore", juniper::Value::null())
             })?;
@@ -88,22 +90,23 @@ impl UserQuery {
         skip: Option<i32>,
     ) -> juniper::FieldResult<Vec<GraphQLUserInfo>> {
         require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        let collection = &context.connection.collection::<User>("users");
-        let cursor = collection
-            .find(doc!())
-            .await?
-            .skip(usize::try_from(skip.unwrap_or(0))?)
-            .take(usize::try_from(limit.unwrap_or(i32::MAX))?);
-
-        let users = cursor.try_collect::<Vec<_>>().await?;
+        let (limit, offset) = util::page(limit, skip);
+        let found = users::table
+            .order_by(users::name.asc())
+            .limit(limit)
+            .offset(offset)
+            .select(User::as_select())
+            .load(conn)
+            .await?;
 
         context
             .user_loader
-            .prime_many(users.iter().map(|a| (a.id, a.clone())))
+            .prime_many(found.iter().map(|a| (a.id, a.clone())))
             .await;
 
-        Ok(users.into_iter().map(GraphQLUserInfo::new).collect())
+        Ok(found.into_iter().map(GraphQLUserInfo::new).collect())
     }
 }
 
@@ -118,11 +121,13 @@ impl UserMutation {
         name: String,
         password: String,
     ) -> juniper::FieldResult<GraphQLUserInfo> {
-        if let Some(user) = queries::query_user_by_name(&context.connection, &name).await? {
+        let conn = &mut context.conn().await?;
+
+        if let Some(user) = queries::query_user_by_name(conn, &name).await? {
             if verify_password(&password, &user.password_hash) {
                 info!("Successful login with username '{}'", &name);
                 let mut user_id = context.user_id.write().await;
-                *user_id = Some(user.id.0);
+                *user_id = Some(user.id);
                 Ok(GraphQLUserInfo::new(user))
             } else {
                 warn!("Attempt to login with wrong password for user '{}'", &name);
@@ -147,40 +152,30 @@ impl UserMutation {
     }
 }
 
-pub async fn get_many(
-    connection: &Database,
-    ids: &[Uuid],
-) -> Result<HashMap<Uuid, User>, Box<dyn Error>> {
-    debug!(
-        "Performing a coalesced category query for {} ids",
-        ids.len()
-    );
-
-    let collection = connection.collection::<User>("users");
-    let users = collection
-        .find(doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<Uuid>>()}})
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
-
-    Ok(users
-        .into_iter()
-        .map(|a| (a.id, a))
-        .collect::<HashMap<_, _>>())
-}
-
 pub struct UserBatcher {
-    connection: Database,
+    pool: crate::Pool,
 }
 
 impl BatchFn<Uuid, User> for UserBatcher {
     async fn load(&mut self, keys: &[Uuid]) -> HashMap<Uuid, User> {
-        get_many(&self.connection, keys).await.unwrap_or_default()
+        debug!("Performing a coalesced user query for {} ids", keys.len());
+
+        let Ok(mut conn) = self.pool.get().await else {
+            return HashMap::new();
+        };
+
+        users::table
+            .filter(users::id.eq_any(keys))
+            .select(User::as_select())
+            .load(&mut conn)
+            .await
+            .map(|found| found.into_iter().map(|u| (u.id, u)).collect())
+            .unwrap_or_default()
     }
 }
 
 pub type UserLoader = Loader<Uuid, User, UserBatcher>;
 
-pub fn get_user_loader(connection: Database) -> UserLoader {
-    Loader::new(UserBatcher { connection })
+pub fn get_user_loader(pool: crate::Pool) -> UserLoader {
+    Loader::new(UserBatcher { pool })
 }
