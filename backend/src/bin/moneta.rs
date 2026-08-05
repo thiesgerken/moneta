@@ -72,6 +72,10 @@ fn main() {
         initialize_logging(config.verbosity);
         debug!("config={:?}", config);
 
+        moneta::migrate(&config.database.url)
+            .await
+            .expect("error migrating the database");
+
         let pool =
             moneta::pool(&config.database.url, "moneta").expect("error connecting to the database");
 

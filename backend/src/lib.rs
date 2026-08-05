@@ -27,6 +27,26 @@ pub type Pool = deadpool::Pool<AsyncPgConnection>;
 pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
     diesel_migrations::embed_migrations!("migrations");
 
+/// Brings the schema up to date, on a connection of its own.
+///
+/// diesel's migration harness is synchronous, so it runs on a blocking thread through the
+/// async connection wrapper rather than on the pool.
+pub async fn migrate(database_url: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
+    use diesel_migrations::MigrationHarness;
+
+    let conn = AsyncPgConnection::establish(database_url).await?;
+    let mut wrapper = AsyncConnectionWrapper::<AsyncPgConnection>::from(conn);
+
+    tokio::task::spawn_blocking(move || {
+        for name in wrapper.run_pending_migrations(MIGRATIONS)? {
+            info!("applied migration {name}");
+        }
+        Ok(())
+    })
+    .await?
+}
+
 pub fn pool(database_url: &str, app_name: &str) -> Result<Pool, Box<dyn std::error::Error>> {
     let app_name = app_name.to_owned();
 
