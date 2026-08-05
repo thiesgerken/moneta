@@ -97,10 +97,12 @@ SELECT
 FROM expenses e
 JOIN expense_users eu ON eu.expense_id = e.id
 LEFT JOIN LATERAL (
+    -- ordered only so the rendered document is stable between reads; categorizations are a
+    -- set and nothing downstream depends on which comes first
     SELECT jsonb_agg(jsonb_build_object(
         'categoryId', ec.category_id,
         'weight', ec.weight
-    )) AS categories
+    ) ORDER BY ec.category_id) AS categories
     FROM expense_categorizations ec
     WHERE ec.expense_id = e.id
 ) cat ON true
