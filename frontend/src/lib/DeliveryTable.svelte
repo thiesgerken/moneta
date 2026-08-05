@@ -17,9 +17,9 @@
 	let onlyUnmatched = $state(false);
 
 	const deliveryStore = graphql(`
-		query DeliveryList($filter: String, $sort: String) {
+		query DeliveryList($onlyUnmatched: Boolean) {
 			deliveries {
-				list(limit: 200, filter: $filter, sort: $sort) {
+				list(limit: 200, onlyUnmatched: $onlyUnmatched, sortBy: DATE, sortDir: DESC) {
 					id
 					accountId
 					date
@@ -40,11 +40,7 @@
 
 	// unmatched deliveries are the interesting ones: each is a transaction that arrived and
 	// no rule claimed, so it is the queue of rules still to write
-	const filter = $derived(onlyUnmatched ? JSON.stringify({ expenseId: null }) : undefined);
-
-	$effect(
-		() => void deliveryStore.fetch({ variables: { filter, sort: JSON.stringify({ date: -1 }) } })
-	);
+	$effect(() => void deliveryStore.fetch({ variables: { onlyUnmatched } }));
 
 	const allDeliveries = $derived($deliveryStore.data?.deliveries.list || []);
 	const accountNames = $derived(

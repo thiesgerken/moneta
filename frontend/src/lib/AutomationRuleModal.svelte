@@ -56,7 +56,7 @@
 		}
 	`);
 	const UpdateAutomationRule = graphql(`
-		mutation UpdateAutomationRule($id: ObjectIdWrapper!, $input: AutomationRuleInput!) {
+		mutation UpdateAutomationRule($id: UUID!, $input: AutomationRuleInput!) {
 			automationRules {
 				update(id: $id, rule: $input) {
 					id

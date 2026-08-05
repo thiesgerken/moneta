@@ -194,7 +194,7 @@
 	}
 
 	const DeleteAccount = graphql(`
-		mutation DeleteAccount($id: ObjectIdWrapper!) {
+		mutation DeleteAccount($id: UUID!) {
 			accounts {
 				delete(id: $id)
 			}

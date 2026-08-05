@@ -43,7 +43,7 @@
 	const formHasErrors = $derived(!!(commentsError || amountError || dateError || accountError));
 
 	const UpdateBalance = graphql(`
-		mutation UpdateBalance($id: ObjectIdWrapper!, $input: BalanceInput!) {
+		mutation UpdateBalance($id: UUID!, $input: BalanceInput!) {
 			balances {
 				update(id: $id, balance: $input) {
 					id

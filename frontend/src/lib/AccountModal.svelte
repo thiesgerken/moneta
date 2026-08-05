@@ -130,7 +130,7 @@
 	];
 
 	const UpdateAccount = graphql(`
-		mutation UpdateAccount($id: ObjectIdWrapper!, $input: AccountInput!) {
+		mutation UpdateAccount($id: UUID!, $input: AccountInput!) {
 			accounts {
 				update(id: $id, account: $input)
 			}

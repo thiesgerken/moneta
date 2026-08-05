@@ -4,7 +4,7 @@ type Account {
   color: String
   description: String!
   iban: String
-  id: ObjectIdWrapper!
+  id: UUID!
   kind: AccountKind!
   name: String!
   opened: DateTime!
@@ -49,13 +49,13 @@ enum AccountKind {
 
 type AccountMutation {
   create(account: AccountInput!): Account!
-  delete(id: ObjectIdWrapper!): Boolean!
-  update(account: AccountInput!, id: ObjectIdWrapper!): Boolean!
+  delete(id: UUID!): Boolean!
+  update(account: AccountInput!, id: UUID!): Boolean!
 }
 
 type AccountQuery {
-  get(id: ObjectIdWrapper!): Account!
-  list(filter: String, limit: Int, skip: Int, sort: String): [Account!]!
+  get(id: UUID!): Account!
+  list(limit: Int, onlyOpen: Boolean, search: String, skip: Int, sortBy: AccountSortField, sortDir: SortDirection): [Account!]!
 }
 
 enum AccountRisk {
@@ -67,54 +67,69 @@ enum AccountRisk {
   SLIGHT
 }
 
+enum AccountSortField {
+  AVAILABILITY
+  CLOSED
+  KIND
+  NAME
+  OPENED
+  RISK
+}
+
 type AccountSynchronization {
   account: Account!
   invert: Boolean!
 }
 
 type AnalysisQuery {
-  balance(accountId: ObjectIdWrapper!, date: DateTime): ComputedBalance!
+  balance(accountId: UUID!, date: DateTime): ComputedBalance!
   balances(date: DateTime): [ComputedBalance!]!
 }
 
 type AutomationRule {
   createdAt: DateTime!
-  filterAccountId: ObjectIdWrapper
+  filterAccountId: UUID
   filterAmount: Int
-  id: ObjectIdWrapper!
+  id: UUID!
   lastDelivery: DateTime
   priority: Int!
   regexStatement: String
   regexTime: String
 
   """
-  null when the template has no rendered document for this user, which means the
-  template was deleted and the rule can no longer fire
+  null when the caller can no longer see the template, which means the rule cannot fire
+  for them
   """
-  templateId: ObjectIdWrapper
+  templateId: UUID
   title: String!
   updatedAt: DateTime!
 }
 
 input AutomationRuleInput {
-  filterAccountId: ObjectIdWrapper
+  filterAccountId: UUID
   filterAmount: Int
   priority: Int!
   regexStatement: String
   regexTime: String
-  templateId: ObjectIdWrapper!
+  templateId: UUID!
   title: String!
 }
 
 type AutomationRuleMutation {
   create(rule: AutomationRuleInput!): AutomationRule!
-  delete(id: ObjectIdWrapper!): Boolean!
-  update(id: ObjectIdWrapper!, rule: AutomationRuleInput!): AutomationRule!
+  delete(id: UUID!): Boolean!
+  update(id: UUID!, rule: AutomationRuleInput!): AutomationRule!
 }
 
 type AutomationRuleQuery {
-  get(id: ObjectIdWrapper!): AutomationRule!
-  list(filter: String, limit: Int, skip: Int, sort: String): [AutomationRule!]!
+  get(id: UUID!): AutomationRule!
+  list(limit: Int, search: String, skip: Int, sortBy: AutomationRuleSortField, sortDir: SortDirection): [AutomationRule!]!
+}
+
+enum AutomationRuleSortField {
+  LAST_DELIVERY
+  PRIORITY
+  TITLE
 }
 
 type Balance {
@@ -122,8 +137,8 @@ type Balance {
   amount: Int!
   comments: String!
   date: DateTime!
-  id: ObjectIdWrapper!
-  upstreamId: ObjectIdWrapper!
+  id: UUID!
+  upstreamId: UUID!
 }
 
 type BalanceConnection {
@@ -132,16 +147,18 @@ type BalanceConnection {
 }
 
 input BalanceInput {
-  accountId: ObjectIdWrapper!
+  accountId: UUID!
   amount: Int!
   comments: String!
+
+  """includes expenses with date < this value"""
   date: DateTime!
 }
 
 type BalanceMutation {
   create(balance: BalanceInput!): Balance!
-  delete(id: ObjectIdWrapper!): Boolean!
-  update(balance: BalanceInput!, id: ObjectIdWrapper!): Balance!
+  delete(id: UUID!): Boolean!
+  update(balance: BalanceInput!, id: UUID!): Balance!
 }
 
 type BalanceNode {
@@ -149,15 +166,24 @@ type BalanceNode {
 }
 
 type BalanceQuery {
-  get(id: ObjectIdWrapper!): Balance!
-  list(filter: String, limit: Int, skip: Int, sort: String): BalanceConnection!
+  get(id: UUID!): Balance!
+  list(accountIds: [UUID!], after: DateTime, before: DateTime, limit: Int, search: String, skip: Int, sortBy: BalanceSortField, sortDir: SortDirection): BalanceConnection!
+}
+
+enum BalanceSortField {
+  ACCOUNT
+  AMOUNT
+  COMMENTS
+  DATE
 }
 
 type Category {
   color: String
   description: String!
-  id: ObjectIdWrapper!
-  monthlyLimit: Float
+  id: UUID!
+
+  """desired maximum spending per month, in cents"""
+  monthlyLimit: Int
   name: String!
   parent: Category
 }
@@ -165,20 +191,25 @@ type Category {
 input CategoryInput {
   color: String
   description: String!
-  monthlyLimit: Float
+  monthlyLimit: Int
   name: String!
-  parent: ObjectIdWrapper
+  parentId: UUID
 }
 
 type CategoryMutation {
   create(category: CategoryInput!): Category!
-  delete(id: ObjectIdWrapper!): Boolean!
-  update(category: CategoryInput!, id: ObjectIdWrapper!): Boolean!
+  delete(id: UUID!): Boolean!
+  update(category: CategoryInput!, id: UUID!): Boolean!
 }
 
 type CategoryQuery {
-  get(id: ObjectIdWrapper!): Category!
-  list(filter: String, limit: Int, skip: Int, sort: String): [Category!]!
+  get(id: UUID!): Category!
+  list(limit: Int, search: String, skip: Int, sortBy: CategorySortField, sortDir: SortDirection): [Category!]!
+}
+
+enum CategorySortField {
+  MONTHLY_LIMIT
+  NAME
 }
 
 type ComputedBalance {
@@ -216,7 +247,12 @@ type DeliveryMutation {
 }
 
 type DeliveryQuery {
-  list(filter: String, limit: Int, skip: Int, sort: String): [SeenDelivery!]!
+  list(limit: Int, onlyUnmatched: Boolean, search: String, skip: Int, sortBy: DeliverySortField, sortDir: SortDirection): [SeenDelivery!]!
+}
+
+enum DeliverySortField {
+  AMOUNT
+  DATE
 }
 
 enum DeliveryStatus {
@@ -246,7 +282,7 @@ type Expense {
   comments: String!
   description: String!
   effectiveAmount: Float!
-  id: ObjectIdWrapper!
+  id: UUID!
   isExtraordinary: Boolean!
   isIncomplete: Boolean!
   isTaxRelevant: Boolean!
@@ -258,7 +294,7 @@ type Expense {
   store: String!
   title: String!
   transactions: [ExpenseTransaction!]!
-  upstreamId: ObjectIdWrapper!
+  upstreamId: UUID!
 }
 
 type ExpenseCategorization {
@@ -267,7 +303,7 @@ type ExpenseCategorization {
 }
 
 input ExpenseCategorizationInput {
-  categoryId: ObjectIdWrapper!
+  categoryId: UUID!
   weight: Float!
 }
 
@@ -280,14 +316,19 @@ type ExpenseChangelogEntry {
   confidence: Float!
   date: DateTime!
   diff: String
-  expenseId: ObjectIdWrapper!
-  id: ObjectIdWrapper!
+
+  """
+  The rendering a reader sees carries the upstream id, so this is the same value as
+  `targetId`; it stays because the frontend keys its changelog rows on it.
+  """
+  expenseId: UUID!
+  id: UUID!
   newState: Expense
   oldState: Expense
-  targetId: ObjectIdWrapper!
+  targetId: UUID!
   tool: String
   user: User
-  userId: ObjectIdWrapper
+  userId: UUID
 }
 
 type ExpenseChangelogNode {
@@ -304,7 +345,7 @@ A transaction handed to moneta from outside (a bank statement importer), before 
 known which expense — if any — it belongs to.
 """
 input ExpenseDelivery {
-  accountId: ObjectIdWrapper!
+  accountId: UUID!
 
   """in cents, using the same sign convention as expense transactions"""
   amount: Int!
@@ -313,11 +354,24 @@ input ExpenseDelivery {
 }
 
 type ExpenseDeliveryResult {
-  """the created expense, as this caller's rendered id"""
-  expenseId: ObjectIdWrapper
+  """the created expense, or null if the caller cannot see it"""
+  expenseId: UUID
   message: String
-  ruleId: ObjectIdWrapper
+  ruleId: UUID
   status: DeliveryStatus!
+}
+
+"""
+The flag checkboxes above the expense table. Each one being off means "hide the expenses
+that carry this flag"; `normal` off means "show only expenses that carry some flag".
+"""
+input ExpenseFlagFilter {
+  extraordinary: Boolean!
+  incomplete: Boolean!
+  normal: Boolean!
+  taxRelevant: Boolean!
+  templates: Boolean!
+  unchecked: Boolean!
 }
 
 input ExpenseInput {
@@ -361,8 +415,8 @@ input ExpenseInput {
 
 type ExpenseMutation {
   create(expense: ExpenseInput!): Expense!
-  delete(id: ObjectIdWrapper!): Boolean!
-  update(expense: ExpenseInput!, id: ObjectIdWrapper!): Expense!
+  delete(id: UUID!): Boolean!
+  update(expense: ExpenseInput!, id: UUID!): Expense!
 }
 
 type ExpenseNode {
@@ -387,8 +441,8 @@ input ExpensePositionInput {
 
 type ExpenseQuery {
   changelog(limit: Int, skip: Int): ExpenseChangelogConnection!
-  get(id: ObjectIdWrapper!): Expense!
-  list(filter: String, limit: Int, skip: Int, sort: String): ExpenseConnection!
+  get(id: UUID!): Expense!
+  list(accountIds: [UUID!], bookedAfter: DateTime, bookedBefore: DateTime, categoryIds: [UUID!], flags: ExpenseFlagFilter, limit: Int, search: String, skip: Int, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
 }
 
 type ExpenseReceipt {
@@ -400,6 +454,20 @@ type ExpenseReceipt {
 input ExpenseReceiptInput {
   ocr: String
   uri: String!
+}
+
+enum ExpenseSortField {
+  ACCOUNTS
+  BOOKING_START
+  CATEGORIES
+  COMMENTS
+  DESCRIPTION
+  EFFECTIVE_AMOUNT
+
+  """template first, then the entries still needing attention"""
+  STATUS
+  STORE
+  TITLE
 }
 
 type ExpenseTransaction {
@@ -414,7 +482,7 @@ type ExpenseTransaction {
 }
 
 input ExpenseTransactionInput {
-  accountId: ObjectIdWrapper!
+  accountId: UUID!
   amount: Int
   comments: String!
   date: DateTime!
@@ -433,8 +501,6 @@ type Mutation {
   users: UserMutation!
 }
 
-scalar ObjectIdWrapper
-
 enum PeriodicInterval {
   DAILY
   MONTHLY
@@ -445,7 +511,7 @@ enum PeriodicInterval {
 type PeriodicRule {
   amountReplacement: Int
   createdAt: DateTime!
-  id: ObjectIdWrapper!
+  id: UUID!
   lastCreation: DateTime!
 
   """the instants this rule would generate expenses for on the next run"""
@@ -453,7 +519,7 @@ type PeriodicRule {
   period: PeriodicInterval!
 
   """see `AutomationRule.templateId`"""
-  templateId: ObjectIdWrapper
+  templateId: UUID
   title: String!
   titleReplacement: String
   updatedAt: DateTime!
@@ -463,25 +529,31 @@ input PeriodicRuleInput {
   amountReplacement: Int
   lastCreation: DateTime!
   period: PeriodicInterval!
-  templateId: ObjectIdWrapper!
+  templateId: UUID!
   title: String!
   titleReplacement: String
 }
 
 type PeriodicRuleMutation {
   create(rule: PeriodicRuleInput!): PeriodicRule!
-  delete(id: ObjectIdWrapper!): Boolean!
+  delete(id: UUID!): Boolean!
 
   """
   Generates every expense that is currently due, across all of this user's rules.
   """
   run: Int!
-  update(id: ObjectIdWrapper!, rule: PeriodicRuleInput!): PeriodicRule!
+  update(id: UUID!, rule: PeriodicRuleInput!): PeriodicRule!
 }
 
 type PeriodicRuleQuery {
-  get(id: ObjectIdWrapper!): PeriodicRule!
-  list(filter: String, limit: Int, skip: Int, sort: String): [PeriodicRule!]!
+  get(id: UUID!): PeriodicRule!
+  list(limit: Int, search: String, skip: Int, sortBy: PeriodicRuleSortField, sortDir: SortDirection): [PeriodicRule!]!
+}
+
+enum PeriodicRuleSortField {
+  LAST_CREATION
+  PERIOD
+  TITLE
 }
 
 type Query {
@@ -498,24 +570,52 @@ type Query {
 }
 
 type SeenDelivery {
-  accountId: ObjectIdWrapper!
+  accountId: UUID!
   amount: Int!
   createdAt: DateTime!
   date: DateTime!
 
-  """the expense this delivery produced, as this caller's rendered id"""
-  expenseId: ObjectIdWrapper
-  id: ObjectIdWrapper!
+  """
+  the expense this delivery produced, or null if the caller cannot see it
+  """
+  expenseId: UUID
+  id: UUID!
 
   """false when no rule matched, which is the signal that a rule is missing"""
   matched: Boolean!
   statement: String!
 }
 
+"""
+Which way a list is ordered.
+
+Lists used to take a mongo sort document built in the browser (`{"bookingStart": -1}`) and
+a mongo filter document alongside it. Both are gone: the client now names a column from a
+per-entity enum and a direction, so nothing it sends can reach a column the resolver did
+not offer, and there is no query language to parse.
+"""
+enum SortDirection {
+  ASC
+  DESC
+}
+
+"""
+[Universally Unique Identifier][0] (UUID).
+
+[`UUID` scalar][1] compliant.
+
+See also [`uuid::Uuid`][2] for details.
+
+[0]: https://en.wikipedia.org/wiki/Universally_unique_identifier
+[1]: https://graphql-scalars.dev/docs/scalars/uuid
+[2]: https://docs.rs/uuid/*/uuid/struct.Uuid.html
+"""
+scalar UUID
+
 type User {
   firstName: String
   fullName: String!
-  id: ObjectIdWrapper!
+  id: UUID!
   lastName: String
   name: String!
 }
@@ -526,7 +626,7 @@ type UserMutation {
 }
 
 type UserQuery {
-  get(id: ObjectIdWrapper!): User!
+  get(id: UUID!): User!
   list(limit: Int, skip: Int): [User!]!
   me: User!
 }

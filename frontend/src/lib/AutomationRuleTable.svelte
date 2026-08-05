@@ -29,9 +29,9 @@
 	let ruleIdToDelete: string | undefined = $state(undefined);
 
 	const ruleStore = graphql(`
-		query AutomationRuleList($sort: String) {
+		query AutomationRuleList {
 			automationRules {
-				list(sort: $sort) {
+				list(sortBy: PRIORITY, sortDir: DESC) {
 					id
 					title
 					priority
@@ -52,7 +52,7 @@
 		}
 	`);
 
-	$effect(() => void ruleStore.fetch({ variables: { sort: JSON.stringify({ priority: -1 }) } }));
+	$effect(() => void ruleStore.fetch());
 
 	const allRules = $derived($ruleStore.data?.automationRules.list || []);
 	const accounts = $derived($ruleStore.data?.accounts.list || []);
@@ -72,7 +72,7 @@
 	const ruleToDelete = $derived(allRules.find((r) => r.id === ruleIdToDelete));
 
 	const DeleteAutomationRule = graphql(`
-		mutation DeleteAutomationRule($id: ObjectIdWrapper!) {
+		mutation DeleteAutomationRule($id: UUID!) {
 			automationRules {
 				delete(id: $id)
 			}

@@ -133,7 +133,7 @@
 	}
 
 	const DeleteCategory = graphql(`
-		mutation DeleteCategory($id: ObjectIdWrapper!) {
+		mutation DeleteCategory($id: UUID!) {
 			categories {
 				delete(id: $id)
 			}

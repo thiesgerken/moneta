@@ -67,7 +67,7 @@
 	};
 
 	const DeletePeriodicRule = graphql(`
-		mutation DeletePeriodicRule($id: ObjectIdWrapper!) {
+		mutation DeletePeriodicRule($id: UUID!) {
 			periodicRules {
 				delete(id: $id)
 			}

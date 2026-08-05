@@ -512,16 +512,21 @@ impl ExpenseQuery {
                 direction,
                 sql::<Text>("categories->0->>'categoryId'")
             ),
+            // the default the table opens with: what needs attention first, then newest.
+            // Without the booking date as a secondary key the id tiebreaker would order by
+            // insertion, which for an imported history is meaningless.
             ExpenseSortField::Status => match direction {
                 SortDirection::Asc => query.order_by((
                     expenses_rendered::is_template.desc(),
                     expenses_rendered::is_incomplete.asc(),
                     expenses_rendered::is_unchecked.asc(),
+                    expenses_rendered::booking_start.desc(),
                 )),
                 SortDirection::Desc => query.order_by((
                     expenses_rendered::is_template.asc(),
                     expenses_rendered::is_incomplete.desc(),
                     expenses_rendered::is_unchecked.desc(),
+                    expenses_rendered::booking_start.desc(),
                 )),
             },
         };

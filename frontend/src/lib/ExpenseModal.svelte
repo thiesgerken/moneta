@@ -291,7 +291,7 @@
 	);
 
 	const UpdateExpense = graphql(`
-		mutation UpdateExpense($id: ObjectIdWrapper!, $input: ExpenseInput!) {
+		mutation UpdateExpense($id: UUID!, $input: ExpenseInput!) {
 			expenses {
 				update(id: $id, expense: $input) {
 					id
