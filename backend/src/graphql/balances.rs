@@ -14,6 +14,7 @@ use crate::schema_views::balances_rendered;
 use chrono::DateTime;
 use chrono::Utc;
 use diesel::prelude::*;
+use diesel::sql_types::Bool;
 use diesel_async::RunQueryDsl;
 use juniper::{FieldResult, GraphQLEnum, GraphQLObject, graphql_object};
 
@@ -75,6 +76,33 @@ pub enum BalanceSortField {
     #[default]
     Date,
     Amount,
+    Comments,
+    Account,
+}
+
+type BalancePredicate =
+    Box<dyn BoxableExpression<balances_rendered::table, diesel::pg::Pg, SqlType = Bool>>;
+
+/// The comments, plus -- if the term reads as a number -- the amount in either sign, since a
+/// balance can be negative and the table shows it unsigned.
+fn search_predicate(term: &str) -> BalancePredicate {
+    let mut predicate: BalancePredicate =
+        Box::new(balances_rendered::comments.ilike(util::ilike_pattern(term)));
+
+    if let Ok(value) = term.replace(',', ".").parse::<f64>()
+        && value != 0.0
+    {
+        let lower = (value * 100.0).floor() as i32;
+        let upper = (value * 100.0).ceil() as i32;
+
+        predicate = Box::new(
+            predicate
+                .or(balances_rendered::amount.between(lower, upper))
+                .or(balances_rendered::amount.between(-upper, -lower)),
+        );
+    }
+
+    predicate
 }
 
 pub struct BalanceQuery;
@@ -88,7 +116,9 @@ impl BalanceQuery {
         limit: Option<i32>,
         skip: Option<i32>,
         search: Option<String>,
-        account_id: Option<Uuid>,
+        account_ids: Option<Vec<Uuid>>,
+        after: Option<DateTime<Utc>>,
+        before: Option<DateTime<Utc>>,
         sort_by: Option<BalanceSortField>,
         sort_dir: Option<SortDirection>,
     ) -> FieldResult<BalanceConnection> {
@@ -97,9 +127,7 @@ impl BalanceQuery {
 
         let (limit, offset) = util::page(limit, skip);
         let direction = sort_dir.unwrap_or_default();
-        let pattern = search
-            .filter(|s| !s.trim().is_empty())
-            .map(|s| util::ilike_pattern(s.trim()));
+        let search = search.filter(|s| !s.trim().is_empty());
 
         // A boxed query is consumed by the count, so the filter is built twice rather than
         // cloned.
@@ -108,11 +136,19 @@ impl BalanceQuery {
                 .into_boxed()
                 .filter(balances_rendered::user_id.eq(user_id));
 
-            if let Some(pattern) = &pattern {
-                query = query.filter(balances_rendered::comments.ilike(pattern.clone()));
+            if let Some(term) = &search {
+                query = query.filter(search_predicate(term.trim()));
             }
-            if let Some(account_id) = account_id {
-                query = query.filter(balances_rendered::account_id.eq(account_id));
+            if let Some(account_ids) = &account_ids
+                && !account_ids.is_empty()
+            {
+                query = query.filter(balances_rendered::account_id.eq_any(account_ids));
+            }
+            if let Some(after) = after {
+                query = query.filter(balances_rendered::date.ge(after));
+            }
+            if let Some(before) = before {
+                query = query.filter(balances_rendered::date.le(before));
             }
 
             query
@@ -120,12 +156,17 @@ impl BalanceQuery {
 
         let total_count: i64 = filtered().count().get_result(conn).await?;
 
+        let query = filtered();
         let query = match sort_by.unwrap_or_default() {
-            BalanceSortField::Date => order_by!(filtered(), direction, balances_rendered::date),
-            BalanceSortField::Amount => order_by!(filtered(), direction, balances_rendered::amount),
+            BalanceSortField::Date => order_by!(query, direction, balances_rendered::date),
+            BalanceSortField::Amount => order_by!(query, direction, balances_rendered::amount),
+            BalanceSortField::Comments => order_by!(query, direction, balances_rendered::comments),
+            BalanceSortField::Account => order_by!(query, direction, balances_rendered::account_id),
         };
 
         let found = query
+            // without a tiebreaker, two pages of an equal sort key can repeat or skip rows
+            .then_order_by(balances_rendered::id.asc())
             .limit(limit)
             .offset(offset)
             .select(RenderedBalance::as_select())
