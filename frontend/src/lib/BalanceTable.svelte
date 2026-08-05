@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { BalanceSortField$options, SortDirection$options } from '$houdini';
 	import { cache, graphql } from '$houdini';
 
 	import {
@@ -33,7 +34,7 @@
 	let itemsPerPage = $derived(15);
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
-	let sortBy: { field: string; direction: number }[] = $state([{ field: 'date', direction: -1 }]);
+	let sortBy: { field: string; direction: number } = $state({ field: 'date', direction: -1 });
 
 	let showNewBalanceModal = $state(false);
 	let showEditBalanceModal = $state(false);
@@ -48,73 +49,23 @@
 		to: undefined
 	});
 
-	const balanceVariables = () => {
-		let filters = [];
-		if (searchTerm) {
-			const re = {
-				$regex: searchTerm,
-				$options: 'i'
-			};
-
-			const searchFilters: Record<string, unknown>[] = [
-				{
-					comments: re
-				}
-			];
-
-			const searchFloat = parseFloat(searchTerm.trim());
-			if (!isNaN(searchFloat) && searchFloat) {
-				const lower = Math.floor(searchFloat * 100);
-				const upper = Math.ceil(searchFloat * 100);
-
-				searchFilters.push(
-					{
-						amount: { $gte: lower, $lte: upper }
-					},
-					{
-						amount: { $gte: -upper, $lte: -lower }
-					}
-				);
-			}
-
-			filters.push({
-				$or: searchFilters
-			});
-		}
-
-		if (filteredAccounts.length > 0) {
-			filters.push({
-				accountId: {
-					$in: filteredAccounts.map((account) => ({ $oid: account }))
-				}
-			});
-		}
-
-		if (filterDateRange.from) filters.push({ date: { $gte: { $date: filterDateRange.from } } });
-
-		if (filterDateRange.to) filters.push({ date: { $lte: { $date: filterDateRange.to } } });
-
-		let currentSort: Record<string, number> = {};
-		for (const { field, direction } of sortBy) {
-			switch (field) {
-				case 'date':
-				case 'amount':
-				case 'comments':
-				case 'account':
-					currentSort[field] = direction;
-					break;
-				default:
-					throw new Error(`Unknown sort field: ${field}`);
-			}
-		}
-
-		return {
-			limit: itemsPerPage || 10,
-			offset: ((currentPage || 1) - 1) * (itemsPerPage || 10),
-			filter: filters.length > 0 ? JSON.stringify({ $and: filters }) : undefined,
-			sort: JSON.stringify(currentSort)
-		};
+	const SORT_FIELDS: Record<string, BalanceSortField$options> = {
+		date: 'DATE',
+		amount: 'AMOUNT',
+		comments: 'COMMENTS',
+		account: 'ACCOUNT'
 	};
+
+	const balanceVariables = () => ({
+		limit: itemsPerPage || 10,
+		offset: ((currentPage || 1) - 1) * (itemsPerPage || 10),
+		search: searchTerm.trim() || undefined,
+		accountIds: filteredAccounts.length > 0 ? filteredAccounts : undefined,
+		after: filterDateRange.from,
+		before: filterDateRange.to,
+		sortBy: SORT_FIELDS[sortBy.field],
+		sortDir: (sortBy.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options
+	});
 
 	// Stuff that we always need independently of the current page and sorting and so on
 	const basicStore = graphql(`
@@ -140,9 +91,27 @@
 	`);
 
 	const balanceStore = graphql(`
-		query BalanceTableBalances($limit: Int, $offset: Int, $filter: String, $sort: String) {
+		query BalanceTableBalances(
+			$limit: Int
+			$offset: Int
+			$search: String
+			$accountIds: [UUID!]
+			$after: DateTime
+			$before: DateTime
+			$sortBy: BalanceSortField
+			$sortDir: SortDirection
+		) {
 			balances {
-				list(limit: $limit, skip: $offset, filter: $filter, sort: $sort) {
+				list(
+					limit: $limit
+					skip: $offset
+					search: $search
+					accountIds: $accountIds
+					after: $after
+					before: $before
+					sortBy: $sortBy
+					sortDir: $sortDir
+				) {
 					totalCount
 					edges {
 						node {
@@ -201,25 +170,18 @@
 	}
 
 	function sortByField(field: string) {
-		const index = sortBy.findIndex(({ field: f }) => f === field);
-		if (index === -1) {
-			sortBy = [{ field, direction: -1 }];
-		} else {
-			sortBy = [{ field, direction: -sortBy[index].direction }];
-		}
+		sortBy = { field, direction: sortBy.field === field ? -sortBy.direction : -1 };
 	}
 
 	function isSortedBy(field: string) {
-		const index = sortBy.findIndex(({ field: f }) => f === field);
-		if (index === -1) return null;
-		return sortBy[index].direction;
+		return sortBy.field === field ? sortBy.direction : null;
 	}
 
 	$effect(() => void basicStore.fetch());
 	$effect(() => void balanceStore.fetch({ variables: balanceVariables() }));
 
 	const DeleteBalance = graphql(`
-		mutation DeleteBalance($id: ObjectIdWrapper!) {
+		mutation DeleteBalance($id: UUID!) {
 			balances {
 				delete(id: $id)
 			}

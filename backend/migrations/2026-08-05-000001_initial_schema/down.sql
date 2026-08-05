@@ -1,0 +1,11 @@
+DROP TABLE seen_deliveries;
+DROP TABLE automation_rules;
+DROP TABLE periodic_rules;
+DROP TABLE expense_changes;
+DROP TABLE balances;
+DROP TABLE expense_categorizations;
+DROP TABLE expense_transactions;
+DROP TABLE expenses;
+DROP TABLE accounts;
+DROP TABLE categories;
+DROP TABLE users;

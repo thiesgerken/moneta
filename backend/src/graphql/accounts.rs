@@ -1,35 +1,33 @@
 use std::collections::HashMap;
-use std::error::Error;
 
-use crate::graphql::root::Context;
-use crate::graphql::root::require_user;
-use crate::graphql::util::{self};
+use uuid::Uuid;
+
+use crate::graphql::root::{Context, require_user};
+use crate::graphql::util::{self, SortDirection};
 use crate::models::AccountAvailability;
 use crate::models::AccountKind;
 use crate::models::AccountRisk;
 use crate::models::AccountSynchronization;
-use crate::models::rendering::{RenderedBalance, RenderedExpense};
-use crate::models::{Account, AccountCreateInput, AccountUpdateInput, ObjectIdWrapper};
+use crate::models::{Account, AccountCreateInput, AccountUpdateInput};
+use crate::order_by;
+use crate::schema::{accounts, balances, expense_transactions};
 
 use chrono::DateTime;
 use chrono::Utc;
 use dataloader::BatchFn;
 use dataloader::cached::Loader;
-use futures::TryStreamExt;
-use juniper::FieldResult;
-use juniper::graphql_object;
-use log::debug;
-use mongodb::Database;
-use mongodb::bson::oid::ObjectId;
-use mongodb::bson::{self, doc};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
+use juniper::{FieldResult, GraphQLEnum, graphql_object};
 
 use super::users::GraphQLUserInfo;
+
 #[derive(Debug, Clone)]
 pub struct GraphQLAccountSynchronization {
     pub data: AccountSynchronization,
 }
 
-#[graphql_object(    Context = Context,name = "AccountSynchronization")]
+#[graphql_object(Context = Context, name = "AccountSynchronization")]
 impl GraphQLAccountSynchronization {
     fn invert(&self) -> bool {
         self.data.invert
@@ -49,15 +47,16 @@ impl GraphQLAccountSynchronization {
 pub struct GraphQLAccount {
     pub data: Account,
 }
+
 impl GraphQLAccount {
     pub fn new(data: Account) -> Self {
         Self { data }
     }
 }
 
-#[graphql_object(    Context = Context,name = "Account")]
+#[graphql_object(Context = Context, name = "Account")]
 impl GraphQLAccount {
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
 
@@ -109,10 +108,20 @@ impl GraphQLAccount {
 
     fn synchronization(&self) -> Option<GraphQLAccountSynchronization> {
         self.data
-            .synchronization
-            .as_ref()
-            .map(|d| GraphQLAccountSynchronization { data: d.clone() })
+            .synchronization()
+            .map(|data| GraphQLAccountSynchronization { data })
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, GraphQLEnum)]
+pub enum AccountSortField {
+    #[default]
+    Name,
+    Kind,
+    Availability,
+    Risk,
+    Opened,
+    Closed,
 }
 
 pub struct AccountQuery;
@@ -125,35 +134,60 @@ impl AccountQuery {
         context: &Context,
         limit: Option<i32>,
         skip: Option<i32>,
-        filter: Option<String>,
-        sort: Option<String>,
-    ) -> juniper::FieldResult<Vec<GraphQLAccount>> {
+        search: Option<String>,
+        only_open: Option<bool>,
+        sort_by: Option<AccountSortField>,
+        sort_dir: Option<SortDirection>,
+    ) -> FieldResult<Vec<GraphQLAccount>> {
         require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        let accounts = util::list_query::<Account>(
-            "accounts",
-            &context.connection,
-            limit,
-            skip,
-            filter,
-            sort,
-            None,
-        )
-        .await?
-        .1;
+        let (limit, offset) = util::page(limit, skip);
+        let direction = sort_dir.unwrap_or_default();
+
+        let mut query = accounts::table.into_boxed();
+        if let Some(term) = search.filter(|s| !s.trim().is_empty()) {
+            let pattern = util::ilike_pattern(term.trim());
+            query = query.filter(
+                accounts::name
+                    .ilike(pattern.clone())
+                    .or(accounts::description.ilike(pattern.clone()))
+                    .or(accounts::iban.ilike(pattern)),
+            );
+        }
+        if only_open.unwrap_or(false) {
+            query = query.filter(
+                accounts::closed
+                    .is_null()
+                    .or(accounts::closed.gt(Utc::now())),
+            );
+        }
+
+        let query = match sort_by.unwrap_or_default() {
+            AccountSortField::Name => order_by!(query, direction, accounts::name),
+            AccountSortField::Kind => order_by!(query, direction, accounts::kind),
+            AccountSortField::Availability => order_by!(query, direction, accounts::availability),
+            AccountSortField::Risk => order_by!(query, direction, accounts::risk),
+            AccountSortField::Opened => order_by!(query, direction, accounts::opened),
+            AccountSortField::Closed => order_by!(query, direction, accounts::closed),
+        };
+
+        let found = query
+            .limit(limit)
+            .offset(offset)
+            .select(Account::as_select())
+            .load(conn)
+            .await?;
 
         context
             .account_loader
-            .prime_many(accounts.iter().map(|a| (a.id, a.clone())))
+            .prime_many(found.iter().map(|a| (a.id, a.clone())))
             .await;
 
-        Ok(accounts.into_iter().map(GraphQLAccount::new).collect())
+        Ok(found.into_iter().map(GraphQLAccount::new).collect())
     }
 
-    pub async fn get(
-        context: &Context,
-        id: ObjectIdWrapper,
-    ) -> juniper::FieldResult<GraphQLAccount> {
+    pub async fn get(context: &Context, id: Uuid) -> FieldResult<GraphQLAccount> {
         require_user(context).await?;
         Ok(GraphQLAccount::new(
             context.account_loader.try_load(id).await?,
@@ -167,133 +201,145 @@ pub struct AccountMutation;
     Context = Context,
 )]
 impl AccountMutation {
-    pub async fn delete(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<bool> {
+    pub async fn delete(context: &Context, id: Uuid) -> FieldResult<bool> {
         let user_id = require_user(context).await?;
-        let collection = context.connection.collection::<Account>("accounts");
+        let conn = &mut context.conn().await?;
 
-        let account = collection
-            .find_one(doc! {"_id":*id, "userId": user_id})
-            .await?
+        let account = accounts::table
+            .find(id)
+            .filter(accounts::user_id.eq(user_id))
+            .select(Account::as_select())
+            .first(conn)
+            .await
+            .optional()?
             .ok_or("entry to delete not found")?;
 
-        if account.synchronization.is_some() {
+        if account.synchronization().is_some() {
             return Err(format!(
-                "Deletion of synchronized accounts is unsupported, tried to remove {:?}",
-                id
+                "Deletion of synchronized accounts is unsupported, tried to remove {id}"
             )
             .into());
         }
 
-        // check that no rendered balances reference this entry
-        let rendered_balances_collection = context
-            .connection
-            .collection::<RenderedBalance>("balances_rendered");
-        let balance_count = rendered_balances_collection
-            .count_documents(doc!("account_id": *account.id))
+        // Balances are ON DELETE CASCADE, so nothing stops this at the database level -- they
+        // would just disappear along with the account. Refuse instead, since losing them is not
+        // what someone deleting an account is asking for.
+        let balance_count: i64 = balances::table
+            .filter(balances::account_id.eq(id))
+            .count()
+            .get_result(conn)
             .await?;
 
         if balance_count > 0 {
             return Err(format!(
-                "Tried to remove account {:?}, but it still has {} (rendered) balances attached to it",
-                id, balance_count
+                "Tried to remove account {id}, but it still has {balance_count} balances attached to it"
             ).into());
         }
 
-        // check that no rendered expenses reference this entry
-        let rendered_expenses_collection = context
-            .connection
-            .collection::<RenderedExpense>("expenses_rendered");
-        let expense_count = rendered_expenses_collection
-            .count_documents(doc!("account_id": *account.id))
+        // The foreign key is ON DELETE RESTRICT; this only turns the constraint name into a
+        // number the user can act on.
+        let transaction_count: i64 = expense_transactions::table
+            .filter(expense_transactions::account_id.eq(id))
+            .count()
+            .get_result(conn)
             .await?;
-        if expense_count > 0 {
-            return Err( format!(
-                "Tried to remove account {:?}, but it still has {} (rendered) expenses attached to it",
-                id, expense_count
+
+        if transaction_count > 0 {
+            return Err(format!(
+                "Tried to remove account {id}, but it still has {transaction_count} expense transactions attached to it"
             ).into());
         }
 
-        // everything seems to be in order, proceed with the deletion
-        let count = collection
-            .delete_one(doc! {"_id":*id, "userId": user_id})
-            .await?
-            .deleted_count;
+        let count = diesel::delete(
+            accounts::table
+                .find(id)
+                .filter(accounts::user_id.eq(user_id)),
+        )
+        .execute(conn)
+        .await?;
         Ok(count == 1)
     }
 
     pub async fn create(
         context: &Context,
         account: AccountCreateInput,
-    ) -> juniper::FieldResult<Account> {
+    ) -> FieldResult<GraphQLAccount> {
         let user_id = require_user(context).await?;
-        let collection = context.connection.collection::<Account>("accounts");
+        let conn = &mut context.conn().await?;
 
         account.validate()?;
 
-        let account = account.upgrade(ObjectId::new().into(), user_id.into());
-        collection.insert_one(&account).await?;
+        let account = account.upgrade(Uuid::now_v7(), user_id);
+        diesel::insert_into(accounts::table)
+            .values(&account)
+            .execute(conn)
+            .await?;
 
-        Ok(account)
+        Ok(GraphQLAccount::new(account))
     }
 
     pub async fn update(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
         account: AccountUpdateInput,
-    ) -> juniper::FieldResult<bool> {
+    ) -> FieldResult<bool> {
         let user_id = require_user(context).await?;
-        let collection = context.connection.collection::<Account>("accounts");
-
-        collection
-            .find_one(doc! {"_id":*id, "userId": user_id})
-            .await?
-            .ok_or("entry to update not found")?;
+        let conn = &mut context.conn().await?;
 
         account.validate()?;
 
-        let count = collection
-            .update_one(
-                doc! {"_id":*id,"userId": user_id},
-                doc! {"$set":  bson::serialize_to_bson(&account).unwrap()},
-            )
-            .await?
-            .modified_count;
+        // The synchronization pair is not part of the input, so it is left alone here.
+        let count = diesel::update(
+            accounts::table
+                .find(id)
+                .filter(accounts::user_id.eq(user_id)),
+        )
+        .set((
+            accounts::name.eq(account.name),
+            accounts::description.eq(account.description),
+            accounts::color.eq(account.color),
+            accounts::iban.eq(account.iban),
+            accounts::kind.eq(account.kind),
+            accounts::availability.eq(account.availability),
+            accounts::risk.eq(account.risk),
+            accounts::opened.eq(account.opened),
+            accounts::closed.eq(account.closed),
+            accounts::ownership_fraction.eq(account.ownership_fraction),
+        ))
+        .execute(conn)
+        .await?;
 
         Ok(count == 1)
     }
 }
 
-pub async fn get_many(
-    connection: &Database,
-    ids: &[ObjectIdWrapper],
-) -> Result<HashMap<ObjectIdWrapper, Account>, Box<dyn Error>> {
-    debug!("Performing a coalesced account query for {} ids", ids.len());
-
-    let collection = connection.collection::<Account>("accounts");
-    let accounts = collection
-        .find(doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<ObjectId>>()}})
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
-
-    Ok(accounts
-        .into_iter()
-        .map(|a| (a.id, a))
-        .collect::<HashMap<_, _>>())
-}
-
 pub struct AccountBatcher {
-    connection: Database,
+    pool: crate::Pool,
 }
 
-impl BatchFn<ObjectIdWrapper, Account> for AccountBatcher {
-    async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, Account> {
-        get_many(&self.connection, keys).await.unwrap_or_default()
+impl BatchFn<Uuid, Account> for AccountBatcher {
+    async fn load(&mut self, keys: &[Uuid]) -> HashMap<Uuid, Account> {
+        debug!(
+            "Performing a coalesced account query for {} ids",
+            keys.len()
+        );
+
+        let Ok(mut conn) = self.pool.get().await else {
+            return HashMap::new();
+        };
+
+        accounts::table
+            .filter(accounts::id.eq_any(keys))
+            .select(Account::as_select())
+            .load(&mut conn)
+            .await
+            .map(|found| found.into_iter().map(|a| (a.id, a)).collect())
+            .unwrap_or_default()
     }
 }
 
-pub type AccountLoader = Loader<ObjectIdWrapper, Account, AccountBatcher>;
+pub type AccountLoader = Loader<Uuid, Account, AccountBatcher>;
 
-pub fn get_account_loader(connection: Database) -> AccountLoader {
-    Loader::new(AccountBatcher { connection })
+pub fn get_account_loader(pool: crate::Pool) -> AccountLoader {
+    Loader::new(AccountBatcher { pool })
 }

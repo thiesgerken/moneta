@@ -10,7 +10,6 @@ mod util;
 
 use rocket_cors::{AllowedOrigins, CorsOptions};
 
-use mongodb::bson::doc;
 use rocket::State;
 use rocket::config::LogLevel;
 use rocket::data::{Limits, ToByteUnit};
@@ -25,27 +24,27 @@ fn graphiql() -> rocket::response::content::RawHtml<String> {
 
 #[rocket::get("/graphql?<request>")]
 async fn get_graphql_handler(
-    connection: &State<mongodb::Database>,
+    pool: &State<crate::Pool>,
     config: &State<crate::config::Config>,
     cookies: &CookieJar<'_>,
     request: juniper_rocket::GraphQLRequest,
     schema: &State<root::Schema>,
 ) -> juniper_rocket::GraphQLResponse {
-    root::graphql_handler(connection, config, cookies, request, schema).await
+    root::graphql_handler(pool, config, cookies, request, schema).await
 }
 
 #[rocket::post("/graphql", data = "<request>")]
 async fn post_graphql_handler(
-    connection: &State<mongodb::Database>,
+    pool: &State<crate::Pool>,
     config: &State<crate::config::Config>,
     cookies: &CookieJar<'_>,
     request: juniper_rocket::GraphQLRequest,
     schema: &State<root::Schema>,
 ) -> juniper_rocket::GraphQLResponse {
-    root::graphql_handler(connection, config, cookies, request, schema).await
+    root::graphql_handler(pool, config, cookies, request, schema).await
 }
 
-pub async fn handle(config: Config, connection: mongodb::Database) {
+pub async fn handle(config: Config, pool: crate::Pool) {
     let level = match config.verbosity {
         -1 => LogLevel::Critical,
         0 => LogLevel::Normal,
@@ -84,7 +83,7 @@ pub async fn handle(config: Config, connection: mongodb::Database) {
 
     let _rocket = rocket::custom(rocket_config)
         .manage(config.clone())
-        .manage(connection.clone())
+        .manage(pool.clone())
         .manage(root::Schema::new(
             root::Query,
             root::Mutation,

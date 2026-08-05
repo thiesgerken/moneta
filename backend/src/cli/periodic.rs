@@ -1,11 +1,13 @@
-use crate::models::{Expense, PeriodicRule};
+use crate::models::PeriodicRule;
+use crate::queries;
 use crate::rules::{PERIODIC_ADVANCE, generate_periodic_expenses, occurrences};
+use crate::schema::periodic_rules;
 
 use chrono::Utc;
 use clap::{Arg, ArgAction, ArgGroup, ArgMatches, Command};
-use futures::TryStreamExt;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use log::info;
-use mongodb::bson::doc;
 use prettytable::{Table, row};
 
 pub fn build() -> Command {
@@ -26,9 +28,12 @@ pub fn build() -> Command {
         .group(ArgGroup::new("action").args(["list", "run"]).required(true))
 }
 
-pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
+pub async fn handle(pool: crate::Pool, sub_matches: &ArgMatches) {
+    let conn = &mut pool.get().await.expect("Could not get a connection");
+
     if sub_matches.get_flag("run") {
-        let count = generate_periodic_expenses(&connection, Utc::now())
+        // the scheduled run covers everybody
+        let count = generate_periodic_expenses(conn, None, Utc::now())
             .await
             .expect("could not generate periodic expenses");
 
@@ -36,24 +41,20 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         return;
     }
 
-    let rules = connection
-        .collection::<PeriodicRule>("periodic_rules")
-        .find(doc!())
-        .await
-        .expect("could not load periodic rules")
-        .try_collect::<Vec<_>>()
+    let rules: Vec<PeriodicRule> = periodic_rules::table
+        .order_by(periodic_rules::title.asc())
+        .select(PeriodicRule::as_select())
+        .load(conn)
         .await
         .expect("could not load periodic rules");
 
-    let expense_collection = connection.collection::<Expense>("expenses");
     let until = Utc::now() + PERIODIC_ADVANCE;
 
     let mut table = Table::new();
     table.add_row(row!["ID", "Title", "Period", "Last creation", "Due"]);
 
     for rule in &rules {
-        let template = expense_collection
-            .find_one(doc!("_id": *rule.template_id))
+        let template = queries::load_expense(conn, rule.template_id)
             .await
             .expect("could not load template expense");
 

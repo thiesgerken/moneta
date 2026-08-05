@@ -1,20 +1,18 @@
 use std::collections::HashMap;
-use std::error::Error;
 
-use crate::graphql::root::Context;
-use crate::graphql::root::require_user;
-use crate::graphql::util;
-use crate::models::rendering::RenderedExpense;
-use crate::models::{Category, CategoryCreateInput, CategoryUpdateInput, ObjectIdWrapper};
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
+use uuid::Uuid;
+
+use crate::graphql::root::{Context, require_user};
+use crate::graphql::util::{self, SortDirection};
+use crate::models::{Category, CategoryCreateInput, CategoryUpdateInput};
+use crate::order_by;
+use crate::schema::{categories, expense_categorizations};
 
 use dataloader::BatchFn;
 use dataloader::cached::Loader;
-use futures::TryStreamExt;
-use juniper::FieldResult;
-use juniper::graphql_object;
-use mongodb::Database;
-use mongodb::bson::oid::ObjectId;
-use mongodb::bson::{self, doc};
+use juniper::{FieldResult, GraphQLEnum, graphql_object};
 
 #[derive(Debug, Clone)]
 pub struct GraphQLCategory {
@@ -29,7 +27,7 @@ impl GraphQLCategory {
 
 #[graphql_object(Context = Context, name = "Category")]
 impl GraphQLCategory {
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
 
@@ -46,7 +44,7 @@ impl GraphQLCategory {
     }
 
     async fn parent(&self, context: &Context) -> FieldResult<Option<GraphQLCategory>> {
-        if let Some(parent) = self.data.parent {
+        if let Some(parent) = self.data.parent_id {
             Ok(Some(GraphQLCategory::new(
                 context.category_loader.try_load(parent).await?,
             )))
@@ -55,9 +53,17 @@ impl GraphQLCategory {
         }
     }
 
-    fn monthly_limit(&self) -> Option<f64> {
+    /// desired maximum spending per month, in cents
+    fn monthly_limit(&self) -> Option<i32> {
         self.data.monthly_limit
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, GraphQLEnum)]
+pub enum CategorySortField {
+    #[default]
+    Name,
+    MonthlyLimit,
 }
 
 pub struct CategoryQuery;
@@ -70,35 +76,49 @@ impl CategoryQuery {
         context: &Context,
         limit: Option<i32>,
         skip: Option<i32>,
-        filter: Option<String>,
-        sort: Option<String>,
-    ) -> juniper::FieldResult<Vec<GraphQLCategory>> {
+        search: Option<String>,
+        sort_by: Option<CategorySortField>,
+        sort_dir: Option<SortDirection>,
+    ) -> FieldResult<Vec<GraphQLCategory>> {
         require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        let categories = util::list_query::<Category>(
-            "categories",
-            &context.connection,
-            limit,
-            skip,
-            filter,
-            sort,
-            None,
-        )
-        .await?
-        .1;
+        let (limit, offset) = util::page(limit, skip);
+        let direction = sort_dir.unwrap_or_default();
+
+        let mut query = categories::table.into_boxed();
+        if let Some(term) = search.filter(|s| !s.trim().is_empty()) {
+            let pattern = util::ilike_pattern(term.trim());
+            query = query.filter(
+                categories::name
+                    .ilike(pattern.clone())
+                    .or(categories::description.ilike(pattern)),
+            );
+        }
+
+        let query = match sort_by.unwrap_or_default() {
+            CategorySortField::Name => order_by!(query, direction, categories::name),
+            CategorySortField::MonthlyLimit => {
+                order_by!(query, direction, categories::monthly_limit)
+            }
+        };
+
+        let found = query
+            .limit(limit)
+            .offset(offset)
+            .select(Category::as_select())
+            .load(conn)
+            .await?;
 
         context
             .category_loader
-            .prime_many(categories.iter().map(|a| (a.id, a.clone())))
+            .prime_many(found.iter().map(|a| (a.id, a.clone())))
             .await;
 
-        Ok(categories.into_iter().map(GraphQLCategory::new).collect())
+        Ok(found.into_iter().map(GraphQLCategory::new).collect())
     }
 
-    pub async fn get(
-        context: &Context,
-        id: ObjectIdWrapper,
-    ) -> juniper::FieldResult<GraphQLCategory> {
+    pub async fn get(context: &Context, id: Uuid) -> FieldResult<GraphQLCategory> {
         require_user(context).await?;
         Ok(GraphQLCategory::new(
             context.category_loader.try_load(id).await?,
@@ -112,103 +132,90 @@ pub struct CategoryMutation;
     Context = Context,
 )]
 impl CategoryMutation {
-    pub async fn delete(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<bool> {
+    pub async fn delete(context: &Context, id: Uuid) -> FieldResult<bool> {
         require_user(context).await?;
-        let collection = context.connection.collection::<Category>("categories");
+        let conn = &mut context.conn().await?;
 
-        let category = collection
-            .find_one(doc! {"_id":*id})
-            .await?
-            .ok_or("entry to delete not found")?;
-
-        // check that no rendered expenses reference this entry
-        let rendered_expenses_collection = context
-            .connection
-            .collection::<RenderedExpense>("expenses_rendered");
-        let expense_count = rendered_expenses_collection
-            .count_documents(doc!("categories.category_id": *category.id))
+        // The foreign key is ON DELETE RESTRICT, so the database refuses this regardless. The
+        // check stays so the user is told how many expenses are in the way rather than a
+        // constraint name they cannot act on.
+        let attached: i64 = expense_categorizations::table
+            .filter(expense_categorizations::category_id.eq(id))
+            .count()
+            .get_result(conn)
             .await?;
 
-        if expense_count > 0 {
+        if attached > 0 {
             return Err(format!(
-            "Tried to remove category {:?}, but it still has {} (rendered) expenses attached to it",
-            id, expense_count
-        )
+                "Tried to remove category {id}, but it still has {attached} expenses attached to it"
+            )
             .into());
         }
 
-        // everything seems to be in order, proceed with the deletion
-        let count = collection.delete_one(doc! {"_id":*id}).await?.deleted_count;
+        let count = diesel::delete(categories::table.find(id))
+            .execute(conn)
+            .await?;
         Ok(count == 1)
     }
 
-    pub async fn create(
-        context: &Context,
-        category: CategoryCreateInput,
-    ) -> juniper::FieldResult<Category> {
+    pub async fn create(context: &Context, category: CategoryCreateInput) -> FieldResult<Category> {
         require_user(context).await?;
-        let collection = context.connection.collection::<Category>("categories");
+        let conn = &mut context.conn().await?;
 
-        let category = category.upgrade(ObjectId::new().into());
-        collection.insert_one(&category).await?;
+        let category = category.upgrade(Uuid::now_v7());
+        diesel::insert_into(categories::table)
+            .values(&category)
+            .execute(conn)
+            .await?;
 
         Ok(category)
     }
 
     pub async fn update(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
         category: CategoryUpdateInput,
-    ) -> juniper::FieldResult<bool> {
+    ) -> FieldResult<bool> {
         require_user(context).await?;
-        let collection = context.connection.collection::<Category>("categories");
+        let conn = &mut context.conn().await?;
 
-        let count = collection
-            .update_one(
-                doc! {"_id":*id},
-                doc! {"$set":  bson::serialize_to_bson(&category).unwrap()},
-            )
-            .await?
-            .modified_count;
+        let count = diesel::update(categories::table.find(id))
+            .set((
+                categories::name.eq(category.name),
+                categories::description.eq(category.description),
+                categories::color.eq(category.color),
+                categories::parent_id.eq(category.parent_id),
+                categories::monthly_limit.eq(category.monthly_limit),
+            ))
+            .execute(conn)
+            .await?;
 
         Ok(count == 1)
     }
 }
 
-pub async fn get_many(
-    connection: &Database,
-    ids: &[ObjectIdWrapper],
-) -> Result<HashMap<ObjectIdWrapper, Category>, Box<dyn Error>> {
-    debug!(
-        "Performing a coalesced category query for {} ids",
-        ids.len()
-    );
-
-    let collection = connection.collection::<Category>("categories");
-    let categories = collection
-        .find(doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<ObjectId>>()}})
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
-
-    Ok(categories
-        .into_iter()
-        .map(|a| (a.id, a))
-        .collect::<HashMap<_, _>>())
-}
-
 pub struct CategoryBatcher {
-    connection: Database,
+    pool: crate::Pool,
 }
 
-impl BatchFn<ObjectIdWrapper, Category> for CategoryBatcher {
-    async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, Category> {
-        get_many(&self.connection, keys).await.unwrap_or_default()
+impl BatchFn<Uuid, Category> for CategoryBatcher {
+    async fn load(&mut self, keys: &[Uuid]) -> HashMap<Uuid, Category> {
+        let Ok(mut conn) = self.pool.get().await else {
+            return HashMap::new();
+        };
+
+        categories::table
+            .filter(categories::id.eq_any(keys))
+            .select(Category::as_select())
+            .load(&mut conn)
+            .await
+            .map(|found| found.into_iter().map(|c| (c.id, c)).collect())
+            .unwrap_or_default()
     }
 }
 
-pub type CategoryLoader = Loader<ObjectIdWrapper, Category, CategoryBatcher>;
+pub type CategoryLoader = Loader<Uuid, Category, CategoryBatcher>;
 
-pub fn get_category_loader(connection: Database) -> CategoryLoader {
-    Loader::new(CategoryBatcher { connection })
+pub fn get_category_loader(pool: crate::Pool) -> CategoryLoader {
+    Loader::new(CategoryBatcher { pool })
 }

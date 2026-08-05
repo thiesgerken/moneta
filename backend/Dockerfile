@@ -8,11 +8,13 @@ WORKDIR /build
 
 COPY Cargo.toml .
 COPY Cargo.lock .
-RUN mkdir -p src/bin && touch src/lib.rs && touch src/bin/moneta.rs && touch src/bin/sandbox.rs && cargo build --lib --release
+RUN mkdir -p src/bin && touch src/lib.rs && touch src/bin/moneta.rs && cargo build --lib --release
 
+# embed_migrations! reads these at compile time, so they have to be here before the real build
+COPY migrations ./migrations
 COPY src ./src
 
-RUN touch src/lib.rs && touch src/bin/moneta.rs && touch src/bin/sandbox.rs
+RUN touch src/lib.rs && touch src/bin/moneta.rs
 RUN cargo build --release
 RUN strip -s target/release/moneta
 

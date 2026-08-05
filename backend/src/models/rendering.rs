@@ -1,28 +1,34 @@
+//! The per-user view of the upstream data.
+//!
+//! These are read out of the `*_rendered` views rather than stored, so none of them is
+//! `Insertable`. The nested lists arrive as jsonb the view aggregated, which is why they are
+//! wrapped in [`Json`] rather than being separate queries.
+
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
 use juniper::{GraphQLInputObject, GraphQLObject};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::{
-    ExpenseCategorization, ExpensePosition, ExpenseReceipt, ObjectIdWrapper,
+    ExpenseCategorization, ExpensePosition, ExpenseReceipt, Json,
     expense::{
         ExpenseCategorizationInput, ExpensePositionInput, ExpenseReceiptInput,
         ExpenseTransactionInput,
     },
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
-#[serde(rename_all = "camelCase")]
-#[graphql(name = "Expense")]
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = crate::schema_views::expenses_rendered)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct RenderedExpense {
-    #[serde(rename = "_id", default)]
-    pub id: ObjectIdWrapper,
+    /// A reader only ever sees their own rendering, so the upstream id identifies it for
+    /// them; the view returns the same value for both.
+    pub id: Uuid,
+    pub upstream_id: Uuid,
 
-    /// id of the expense that was rendered
-    pub upstream_id: ObjectIdWrapper,
-
-    /// user for whom this expense was rendered
-    #[serde(default)]
-    pub user_id: ObjectIdWrapper,
+    /// user this was rendered for
+    pub user_id: Uuid,
 
     pub title: String,
     pub store: String,
@@ -31,43 +37,35 @@ pub struct RenderedExpense {
 
     pub reference_amount: Option<i32>,
 
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub booking_start: DateTime<Utc>,
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub booking_end: DateTime<Utc>,
 
-    /// set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis
     pub is_template: bool,
-    /// to track expenses that should be looked at again when preparing tax forms
     pub is_tax_relevant: bool,
-    /// needs to be looked at by a user first (missing info, low confidence, ...)
     pub is_unchecked: bool,
-    /// if we anticipate more transactions to appear before this can be completed; e.g. payback when a order hasn't arrived
     pub is_incomplete: bool,
-    /// if this expense should not be considered for monthly spending and so on
     pub is_extraordinary: bool,
 
-    pub receipts: Vec<ExpenseReceipt>,
-    pub categories: Vec<ExpenseCategorization>,
-    pub transactions: Vec<RenderedExpenseTransaction>,
-    pub positions: Vec<ExpensePosition>,
+    pub receipts: Json<Vec<ExpenseReceipt>>,
+    pub positions: Json<Vec<ExpensePosition>>,
+    pub categories: Json<Vec<ExpenseCategorization>>,
+    pub transactions: Json<Vec<RenderedExpenseTransaction>>,
 
-    // how much the total wealth of the user this was rendered for changed by this expense
-    // (sum of the effective_amounts of all the rendered transactions of this rendered expense)
+    /// how much the total wealth of the user this was rendered for changed by this expense
+    /// (sum of the effective_amounts of all its rendered transactions)
     pub effective_amount: f64,
 
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
 }
 
+/// Comes out of the aggregated jsonb rather than from a row, so the field names have to match
+/// what `expenses_rendered` builds.
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 #[graphql(name = "ExpenseTransaction")]
 pub struct RenderedExpenseTransaction {
-    pub account_id: ObjectIdWrapper,
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
+    pub account_id: Uuid,
     pub date: DateTime<Utc>,
 
     pub amount: Option<i32>,
@@ -78,46 +76,39 @@ pub struct RenderedExpenseTransaction {
 
     pub calculated_amount: f64,
 
-    // how much the total wealth of the user this was rendered for changed by this transaction
-    // (takes into account if the account belongs to the user and looks at the ownership fractions)
+    /// how much the total wealth of the user this was rendered for changed by this
+    /// transaction (accounts for whether the account belongs to them, and for ownership
+    /// fractions)
     pub effective_amount: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
-#[serde(rename_all = "camelCase")]
-#[graphql(name = "Balance")]
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = crate::schema_views::balances_rendered)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct RenderedBalance {
-    #[serde(rename = "_id", default)]
-    pub id: ObjectIdWrapper,
+    pub id: Uuid,
+    pub upstream_id: Uuid,
+    pub user_id: Uuid,
 
-    /// id of the balance that was rendered
-    pub upstream_id: ObjectIdWrapper,
+    /// includes expenses with date < this value (i.e. what happened the same instant is not
+    /// included)
+    pub date: DateTime<Utc>,
 
-    /// user for whom this balance was rendered
-    #[serde(default)]
-    pub user_id: ObjectIdWrapper,
-
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
-    pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
-
-    pub account_id: ObjectIdWrapper,
+    pub account_id: Uuid,
     pub amount: i32, // cents
     pub comments: String,
 
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, GraphQLInputObject)]
+#[derive(Debug, Clone, GraphQLInputObject)]
 #[graphql(name = "BalanceInput")]
-#[serde(rename_all = "camelCase")]
 pub struct RenderedBalanceInput {
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
-    pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
+    /// includes expenses with date < this value
+    pub date: DateTime<Utc>,
 
-    pub account_id: ObjectIdWrapper,
+    pub account_id: Uuid,
     pub amount: i32, // cents
     pub comments: String,
 }
@@ -125,9 +116,8 @@ pub struct RenderedBalanceInput {
 pub type RenderedBalanceUpdateInput = RenderedBalanceInput;
 pub type RenderedBalanceCreateInput = RenderedBalanceInput;
 
-#[derive(Debug, Clone, Serialize, Deserialize, GraphQLInputObject)]
+#[derive(Debug, Clone, GraphQLInputObject)]
 #[graphql(name = "ExpenseInput")]
-#[serde(rename_all = "camelCase")]
 pub struct RenderedExpenseInput {
     pub title: String,
     pub store: String,
@@ -136,9 +126,7 @@ pub struct RenderedExpenseInput {
 
     pub reference_amount: Option<i32>,
 
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub booking_start: DateTime<Utc>,
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub booking_end: DateTime<Utc>,
 
     /// set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis

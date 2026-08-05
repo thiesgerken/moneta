@@ -49,7 +49,7 @@
 	);
 
 	const UpdateCategory = graphql(`
-		mutation UpdateCategory($id: ObjectIdWrapper!, $input: CategoryInput!) {
+		mutation UpdateCategory($id: UUID!, $input: CategoryInput!) {
 			categories {
 				update(id: $id, category: $input)
 			}
@@ -73,7 +73,7 @@
 			name: name.trim(),
 			description: description.trim(),
 			color: color.trim() || null,
-			parent: parentId || null,
+			parentId: parentId || null,
 			monthlyLimit: monthlyLimit ? Number(monthlyLimit) * 100 : null
 		};
 

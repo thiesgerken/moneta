@@ -1,48 +1,43 @@
-use chrono::Utc;
-use juniper::graphql_object;
-use mongodb::bson::{doc, oid::ObjectId};
+use uuid::Uuid;
 
-use super::util;
+use chrono::Utc;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
+use juniper::{FieldResult, GraphQLEnum, graphql_object};
+
+use super::util::{self, SortDirection};
 use crate::graphql::root::{Context, require_user};
 use crate::models::{
-    AutomationRule, AutomationRuleInput, Expense, ExpenseDelivery, ObjectIdWrapper,
-    PeriodicInterval, PeriodicRule, PeriodicRuleInput, SeenDelivery, rendering::RenderedExpense,
+    AutomationRule, AutomationRuleInput, ExpenseDelivery, PeriodicInterval, PeriodicRule,
+    PeriodicRuleInput, SeenDelivery,
 };
+use crate::order_by;
+use crate::queries;
 use crate::rules::DeliveryOutcome;
+use crate::schema::{automation_rules, periodic_rules, seen_deliveries};
+use crate::schema_views::expenses_rendered;
 
-const AUTOMATION: &str = "automation_rules";
-const PERIODIC: &str = "periodic_rules";
+type Conn = diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>;
 
-/// Callers address expenses by their *rendered* id, like everywhere else in this API, but a
-/// rule has to reference the upstream expense because that is what gets copied. Looking the
-/// rendered document up scoped by user resolves the id and authorizes in one step.
-async fn resolve_template(
-    context: &Context,
-    user_id: ObjectId,
-    rendered_id: ObjectIdWrapper,
-) -> juniper::FieldResult<ObjectIdWrapper> {
-    let rendered = context
-        .connection
-        .collection::<RenderedExpense>("expenses_rendered")
-        .find_one(doc! {"_id": *rendered_id, "userId": user_id})
-        .await?
-        .ok_or("template expense not found")?;
-
-    Ok(rendered.upstream_id)
+/// Whether this user can see the expense a rule points at.
+///
+/// Callers address expenses by their rendered id, which is the upstream id -- a reader only
+/// ever sees their own rendering. What still has to be checked is that they see it at all,
+/// since a rule pointing at somebody else's expense would copy money they cannot read.
+async fn visible_expense(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<Option<Uuid>> {
+    Ok(expenses_rendered::table
+        .filter(expenses_rendered::id.eq(id))
+        .filter(expenses_rendered::user_id.eq(user_id))
+        .select(expenses_rendered::upstream_id)
+        .first(conn)
+        .await
+        .optional()?)
 }
 
-/// The reverse: the caller's own rendered view of the expense a rule copies.
-async fn rendered_template_id(
-    context: &Context,
-    user_id: ObjectId,
-    upstream_id: ObjectIdWrapper,
-) -> juniper::FieldResult<Option<ObjectIdWrapper>> {
-    Ok(context
-        .connection
-        .collection::<RenderedExpense>("expenses_rendered")
-        .find_one(doc! {"upstreamId": *upstream_id, "userId": user_id})
+async fn require_visible_expense(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<Uuid> {
+    visible_expense(conn, user_id, id)
         .await?
-        .map(|r| r.id))
+        .ok_or_else(|| "template expense not found".into())
 }
 
 /// Both rule types are wrapped rather than derived so `templateId` can be handed back as the
@@ -55,7 +50,7 @@ pub struct GraphQLAutomationRule {
 
 #[graphql_object(Context = Context, name = "AutomationRule")]
 impl GraphQLAutomationRule {
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
     fn title(&self) -> &str {
@@ -73,7 +68,7 @@ impl GraphQLAutomationRule {
     fn filter_amount(&self) -> Option<i32> {
         self.data.filter_amount
     }
-    fn filter_account_id(&self) -> Option<ObjectIdWrapper> {
+    fn filter_account_id(&self) -> Option<Uuid> {
         self.data.filter_account_id
     }
     fn last_delivery(&self) -> Option<chrono::DateTime<Utc>> {
@@ -86,14 +81,12 @@ impl GraphQLAutomationRule {
         self.data.updated_at
     }
 
-    /// null when the template has no rendered document for this user, which means the
-    /// template was deleted and the rule can no longer fire
-    async fn template_id(
-        &self,
-        context: &Context,
-    ) -> juniper::FieldResult<Option<ObjectIdWrapper>> {
+    /// null when the caller can no longer see the template, which means the rule cannot fire
+    /// for them
+    async fn template_id(&self, context: &Context) -> FieldResult<Option<Uuid>> {
         let user_id = require_user(context).await?;
-        rendered_template_id(context, user_id, self.data.template_id).await
+        let conn = &mut context.conn().await?;
+        visible_expense(conn, user_id, self.data.template_id).await
     }
 }
 
@@ -104,7 +97,7 @@ pub struct GraphQLPeriodicRule {
 
 #[graphql_object(Context = Context, name = "PeriodicRule")]
 impl GraphQLPeriodicRule {
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
     fn title(&self) -> &str {
@@ -130,24 +123,18 @@ impl GraphQLPeriodicRule {
     }
 
     /// see `AutomationRule.templateId`
-    async fn template_id(
-        &self,
-        context: &Context,
-    ) -> juniper::FieldResult<Option<ObjectIdWrapper>> {
+    async fn template_id(&self, context: &Context) -> FieldResult<Option<Uuid>> {
         let user_id = require_user(context).await?;
-        rendered_template_id(context, user_id, self.data.template_id).await
+        let conn = &mut context.conn().await?;
+        visible_expense(conn, user_id, self.data.template_id).await
     }
 
     /// the instants this rule would generate expenses for on the next run
-    async fn pending(&self, context: &Context) -> juniper::FieldResult<Vec<chrono::DateTime<Utc>>> {
+    async fn pending(&self, context: &Context) -> FieldResult<Vec<chrono::DateTime<Utc>>> {
         require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        let Some(template) = context
-            .connection
-            .collection::<Expense>("expenses")
-            .find_one(doc! {"_id": *self.data.template_id})
-            .await?
-        else {
+        let Some(template) = queries::load_expense(conn, self.data.template_id).await? else {
             return Ok(vec![]);
         };
 
@@ -159,6 +146,14 @@ impl GraphQLPeriodicRule {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, GraphQLEnum)]
+pub enum AutomationRuleSortField {
+    #[default]
+    Priority,
+    Title,
+    LastDelivery,
+}
+
 pub struct AutomationRuleQuery;
 
 #[graphql_object(Context = Context)]
@@ -167,38 +162,62 @@ impl AutomationRuleQuery {
         context: &Context,
         limit: Option<i32>,
         skip: Option<i32>,
-        filter: Option<String>,
-        sort: Option<String>,
-    ) -> juniper::FieldResult<Vec<GraphQLAutomationRule>> {
+        search: Option<String>,
+        sort_by: Option<AutomationRuleSortField>,
+        sort_dir: Option<SortDirection>,
+    ) -> FieldResult<Vec<GraphQLAutomationRule>> {
         let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        Ok(util::list_query::<AutomationRule>(
-            AUTOMATION,
-            &context.connection,
-            limit,
-            skip,
-            filter,
-            sort,
-            Some(doc!("userId": user_id)),
-        )
-        .await?
-        .1
-        .into_iter()
-        .map(|data| GraphQLAutomationRule { data })
-        .collect())
+        let (limit, offset) = util::page(limit, skip);
+        let direction = sort_dir.unwrap_or_default();
+
+        let mut query = automation_rules::table
+            .into_boxed()
+            .filter(automation_rules::user_id.eq(user_id));
+
+        if let Some(term) = search.filter(|s| !s.trim().is_empty()) {
+            let pattern = util::ilike_pattern(term.trim());
+            query = query.filter(
+                automation_rules::title
+                    .ilike(pattern.clone())
+                    .or(automation_rules::regex_statement.ilike(pattern)),
+            );
+        }
+
+        let query = match sort_by.unwrap_or_default() {
+            AutomationRuleSortField::Priority => {
+                order_by!(query, direction, automation_rules::priority)
+            }
+            AutomationRuleSortField::Title => order_by!(query, direction, automation_rules::title),
+            AutomationRuleSortField::LastDelivery => {
+                order_by!(query, direction, automation_rules::last_delivery)
+            }
+        };
+
+        Ok(query
+            .then_order_by(automation_rules::id.asc())
+            .limit(limit)
+            .offset(offset)
+            .select(AutomationRule::as_select())
+            .load(conn)
+            .await?
+            .into_iter()
+            .map(|data| GraphQLAutomationRule { data })
+            .collect())
     }
 
-    pub async fn get(
-        context: &Context,
-        id: ObjectIdWrapper,
-    ) -> juniper::FieldResult<GraphQLAutomationRule> {
+    pub async fn get(context: &Context, id: Uuid) -> FieldResult<GraphQLAutomationRule> {
         let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        let data = context
-            .connection
-            .collection::<AutomationRule>(AUTOMATION)
-            .find_one(doc! {"_id": *id, "userId": user_id})
-            .await?
+        let data = automation_rules::table
+            .find(id)
+            .filter(automation_rules::user_id.eq(user_id))
+            .select(AutomationRule::as_select())
+            .first(conn)
+            .await
+            .optional()?
             .ok_or("automation rule not found")?;
 
         Ok(GraphQLAutomationRule { data })
@@ -212,16 +231,18 @@ impl AutomationRuleMutation {
     pub async fn create(
         context: &Context,
         rule: AutomationRuleInput,
-    ) -> juniper::FieldResult<GraphQLAutomationRule> {
+    ) -> FieldResult<GraphQLAutomationRule> {
         let user_id = require_user(context).await?;
-        let template_id = resolve_template(context, user_id, rule.template_id).await?;
+        let conn = &mut context.conn().await?;
 
-        let mut data = rule.upgrade(ObjectId::new().into(), user_id.into(), None, Utc::now());
+        let template_id = require_visible_expense(conn, user_id, rule.template_id).await?;
+
+        let mut data = rule.upgrade(Uuid::now_v7(), user_id, None, Utc::now());
         data.template_id = template_id;
-        context
-            .connection
-            .collection::<AutomationRule>(AUTOMATION)
-            .insert_one(&data)
+
+        diesel::insert_into(automation_rules::table)
+            .values(&data)
+            .execute(conn)
             .await?;
 
         Ok(GraphQLAutomationRule { data })
@@ -229,40 +250,58 @@ impl AutomationRuleMutation {
 
     pub async fn update(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
         rule: AutomationRuleInput,
-    ) -> juniper::FieldResult<GraphQLAutomationRule> {
+    ) -> FieldResult<GraphQLAutomationRule> {
         let user_id = require_user(context).await?;
-        let template_id = resolve_template(context, user_id, rule.template_id).await?;
+        let conn = &mut context.conn().await?;
 
-        let collection = context.connection.collection::<AutomationRule>(AUTOMATION);
-        let existing = collection
-            .find_one(doc! {"_id": *id, "userId": user_id})
-            .await?
+        let template_id = require_visible_expense(conn, user_id, rule.template_id).await?;
+
+        let existing = automation_rules::table
+            .find(id)
+            .filter(automation_rules::user_id.eq(user_id))
+            .select(AutomationRule::as_select())
+            .first(conn)
+            .await
+            .optional()?
             .ok_or("automation rule not found")?;
 
         // last_delivery is bookkeeping the rule engine owns, not something callers set
-        let mut data = rule.upgrade(id, user_id.into(), existing.last_delivery, Utc::now());
+        let mut data = rule.upgrade(id, user_id, existing.last_delivery, Utc::now());
         data.template_id = template_id;
-        collection
-            .replace_one(doc! {"_id": *id, "userId": user_id}, &data)
+        data.created_at = existing.created_at;
+
+        diesel::update(automation_rules::table.find(id))
+            .set(&data)
+            .execute(conn)
             .await?;
 
         Ok(GraphQLAutomationRule { data })
     }
 
-    pub async fn delete(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<bool> {
+    pub async fn delete(context: &Context, id: Uuid) -> FieldResult<bool> {
         let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        let count = context
-            .connection
-            .collection::<AutomationRule>(AUTOMATION)
-            .delete_one(doc! {"_id": *id, "userId": user_id})
-            .await?
-            .deleted_count;
+        let count = diesel::delete(
+            automation_rules::table
+                .find(id)
+                .filter(automation_rules::user_id.eq(user_id)),
+        )
+        .execute(conn)
+        .await?;
 
         Ok(count > 0)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, GraphQLEnum)]
+pub enum PeriodicRuleSortField {
+    #[default]
+    Title,
+    Period,
+    LastCreation,
 }
 
 pub struct PeriodicRuleQuery;
@@ -273,38 +312,55 @@ impl PeriodicRuleQuery {
         context: &Context,
         limit: Option<i32>,
         skip: Option<i32>,
-        filter: Option<String>,
-        sort: Option<String>,
-    ) -> juniper::FieldResult<Vec<GraphQLPeriodicRule>> {
+        search: Option<String>,
+        sort_by: Option<PeriodicRuleSortField>,
+        sort_dir: Option<SortDirection>,
+    ) -> FieldResult<Vec<GraphQLPeriodicRule>> {
         let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        Ok(util::list_query::<PeriodicRule>(
-            PERIODIC,
-            &context.connection,
-            limit,
-            skip,
-            filter,
-            sort,
-            Some(doc!("userId": user_id)),
-        )
-        .await?
-        .1
-        .into_iter()
-        .map(|data| GraphQLPeriodicRule { data })
-        .collect())
+        let (limit, offset) = util::page(limit, skip);
+        let direction = sort_dir.unwrap_or_default();
+
+        let mut query = periodic_rules::table
+            .into_boxed()
+            .filter(periodic_rules::user_id.eq(user_id));
+
+        if let Some(term) = search.filter(|s| !s.trim().is_empty()) {
+            query = query.filter(periodic_rules::title.ilike(util::ilike_pattern(term.trim())));
+        }
+
+        let query = match sort_by.unwrap_or_default() {
+            PeriodicRuleSortField::Title => order_by!(query, direction, periodic_rules::title),
+            PeriodicRuleSortField::Period => order_by!(query, direction, periodic_rules::period),
+            PeriodicRuleSortField::LastCreation => {
+                order_by!(query, direction, periodic_rules::last_creation)
+            }
+        };
+
+        Ok(query
+            .then_order_by(periodic_rules::id.asc())
+            .limit(limit)
+            .offset(offset)
+            .select(PeriodicRule::as_select())
+            .load(conn)
+            .await?
+            .into_iter()
+            .map(|data| GraphQLPeriodicRule { data })
+            .collect())
     }
 
-    pub async fn get(
-        context: &Context,
-        id: ObjectIdWrapper,
-    ) -> juniper::FieldResult<GraphQLPeriodicRule> {
+    pub async fn get(context: &Context, id: Uuid) -> FieldResult<GraphQLPeriodicRule> {
         let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        let data = context
-            .connection
-            .collection::<PeriodicRule>(PERIODIC)
-            .find_one(doc! {"_id": *id, "userId": user_id})
-            .await?
+        let data = periodic_rules::table
+            .find(id)
+            .filter(periodic_rules::user_id.eq(user_id))
+            .select(PeriodicRule::as_select())
+            .first(conn)
+            .await
+            .optional()?
             .ok_or("periodic rule not found")?;
 
         Ok(GraphQLPeriodicRule { data })
@@ -318,16 +374,18 @@ impl PeriodicRuleMutation {
     pub async fn create(
         context: &Context,
         rule: PeriodicRuleInput,
-    ) -> juniper::FieldResult<GraphQLPeriodicRule> {
+    ) -> FieldResult<GraphQLPeriodicRule> {
         let user_id = require_user(context).await?;
-        let template_id = resolve_template(context, user_id, rule.template_id).await?;
+        let conn = &mut context.conn().await?;
 
-        let mut data = rule.upgrade(ObjectId::new().into(), user_id.into(), Utc::now());
+        let template_id = require_visible_expense(conn, user_id, rule.template_id).await?;
+
+        let mut data = rule.upgrade(Uuid::now_v7(), user_id, Utc::now());
         data.template_id = template_id;
-        context
-            .connection
-            .collection::<PeriodicRule>(PERIODIC)
-            .insert_one(&data)
+
+        diesel::insert_into(periodic_rules::table)
+            .values(&data)
+            .execute(conn)
             .await?;
 
         Ok(GraphQLPeriodicRule { data })
@@ -335,45 +393,57 @@ impl PeriodicRuleMutation {
 
     pub async fn update(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
         rule: PeriodicRuleInput,
-    ) -> juniper::FieldResult<GraphQLPeriodicRule> {
+    ) -> FieldResult<GraphQLPeriodicRule> {
         let user_id = require_user(context).await?;
-        let template_id = resolve_template(context, user_id, rule.template_id).await?;
+        let conn = &mut context.conn().await?;
 
-        let collection = context.connection.collection::<PeriodicRule>(PERIODIC);
-        collection
-            .find_one(doc! {"_id": *id, "userId": user_id})
-            .await?
+        let template_id = require_visible_expense(conn, user_id, rule.template_id).await?;
+
+        let existing = periodic_rules::table
+            .find(id)
+            .filter(periodic_rules::user_id.eq(user_id))
+            .select(PeriodicRule::as_select())
+            .first(conn)
+            .await
+            .optional()?
             .ok_or("periodic rule not found")?;
 
-        let mut data = rule.upgrade(id, user_id.into(), Utc::now());
+        let mut data = rule.upgrade(id, user_id, Utc::now());
         data.template_id = template_id;
-        collection
-            .replace_one(doc! {"_id": *id, "userId": user_id}, &data)
+        data.created_at = existing.created_at;
+
+        diesel::update(periodic_rules::table.find(id))
+            .set(&data)
+            .execute(conn)
             .await?;
 
         Ok(GraphQLPeriodicRule { data })
     }
 
-    pub async fn delete(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<bool> {
+    pub async fn delete(context: &Context, id: Uuid) -> FieldResult<bool> {
         let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        let count = context
-            .connection
-            .collection::<PeriodicRule>(PERIODIC)
-            .delete_one(doc! {"_id": *id, "userId": user_id})
-            .await?
-            .deleted_count;
+        let count = diesel::delete(
+            periodic_rules::table
+                .find(id)
+                .filter(periodic_rules::user_id.eq(user_id)),
+        )
+        .execute(conn)
+        .await?;
 
         Ok(count > 0)
     }
 
-    /// Generates every expense that is currently due, across all of this user's rules.
-    pub async fn run(context: &Context) -> juniper::FieldResult<i32> {
-        require_user(context).await?;
+    /// Generates every expense that is currently due from this user's own rules. The scheduled
+    /// job covers everybody; this is the button for not waiting for it.
+    pub async fn run(context: &Context) -> FieldResult<i32> {
+        let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        let count = crate::rules::generate_periodic_expenses(&context.connection, Utc::now())
+        let count = crate::rules::generate_periodic_expenses(conn, Some(user_id), Utc::now())
             .await
             .map_err(|e| e.to_string())?;
 
@@ -381,7 +451,7 @@ impl PeriodicRuleMutation {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, juniper::GraphQLEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, GraphQLEnum)]
 pub enum DeliveryStatus {
     /// an expense was created
     Created,
@@ -396,8 +466,8 @@ pub enum DeliveryStatus {
 
 pub struct DeliveryResult {
     status: DeliveryStatus,
-    expense_id: Option<ObjectIdWrapper>,
-    rule_id: Option<ObjectIdWrapper>,
+    expense_id: Option<Uuid>,
+    rule_id: Option<Uuid>,
     message: Option<String>,
 }
 
@@ -407,7 +477,7 @@ impl DeliveryResult {
         self.status
     }
 
-    fn rule_id(&self) -> Option<ObjectIdWrapper> {
+    fn rule_id(&self) -> Option<Uuid> {
         self.rule_id
     }
 
@@ -415,14 +485,15 @@ impl DeliveryResult {
         self.message.as_deref()
     }
 
-    /// the created expense, as this caller's rendered id
-    async fn expense_id(&self, context: &Context) -> juniper::FieldResult<Option<ObjectIdWrapper>> {
+    /// the created expense, or null if the caller cannot see it
+    async fn expense_id(&self, context: &Context) -> FieldResult<Option<Uuid>> {
         let Some(upstream) = self.expense_id else {
             return Ok(None);
         };
 
         let user_id = require_user(context).await?;
-        rendered_template_id(context, user_id, upstream).await
+        let conn = &mut context.conn().await?;
+        visible_expense(conn, user_id, upstream).await
     }
 }
 
@@ -437,7 +508,7 @@ impl DeliveryMutation {
     pub async fn submit(
         context: &Context,
         deliveries: Vec<ExpenseDelivery>,
-    ) -> juniper::FieldResult<Vec<DeliveryResult>> {
+    ) -> FieldResult<Vec<DeliveryResult>> {
         let user_id = require_user(context).await?;
 
         // an account the caller does not own would let them probe other people's rules
@@ -448,15 +519,15 @@ impl DeliveryMutation {
                 .await
                 .map_err(|_| "unknown account")?;
 
-            if *account.user_id != user_id {
+            if account.user_id != user_id {
                 return Err("cannot deliver to an account that is not yours".into());
             }
         }
 
-        let outcomes =
-            crate::rules::deliver_expenses(&context.connection, user_id, &deliveries, Utc::now())
-                .await
-                .map_err(|e| e.to_string())?;
+        let conn = &mut context.conn().await?;
+        let outcomes = crate::rules::deliver_expenses(conn, user_id, &deliveries, Utc::now())
+            .await
+            .map_err(|e| e.to_string())?;
 
         Ok(outcomes
             .into_iter()
@@ -500,10 +571,10 @@ pub struct GraphQLSeenDelivery {
 
 #[graphql_object(Context = Context, name = "SeenDelivery")]
 impl GraphQLSeenDelivery {
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
-    fn account_id(&self) -> ObjectIdWrapper {
+    fn account_id(&self) -> Uuid {
         self.data.account_id
     }
     fn date(&self) -> chrono::DateTime<Utc> {
@@ -524,15 +595,23 @@ impl GraphQLSeenDelivery {
         self.data.expense_id.is_some()
     }
 
-    /// the expense this delivery produced, as this caller's rendered id
-    async fn expense_id(&self, context: &Context) -> juniper::FieldResult<Option<ObjectIdWrapper>> {
+    /// the expense this delivery produced, or null if the caller cannot see it
+    async fn expense_id(&self, context: &Context) -> FieldResult<Option<Uuid>> {
         let Some(upstream) = self.data.expense_id else {
             return Ok(None);
         };
 
         let user_id = require_user(context).await?;
-        rendered_template_id(context, user_id, upstream).await
+        let conn = &mut context.conn().await?;
+        visible_expense(conn, user_id, upstream).await
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, GraphQLEnum)]
+pub enum DeliverySortField {
+    #[default]
+    Date,
+    Amount,
 }
 
 pub struct DeliveryQuery;
@@ -543,24 +622,43 @@ impl DeliveryQuery {
         context: &Context,
         limit: Option<i32>,
         skip: Option<i32>,
-        filter: Option<String>,
-        sort: Option<String>,
-    ) -> juniper::FieldResult<Vec<GraphQLSeenDelivery>> {
+        search: Option<String>,
+        only_unmatched: Option<bool>,
+        sort_by: Option<DeliverySortField>,
+        sort_dir: Option<SortDirection>,
+    ) -> FieldResult<Vec<GraphQLSeenDelivery>> {
         let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        Ok(util::list_query::<SeenDelivery>(
-            "seen_deliveries",
-            &context.connection,
-            limit,
-            skip,
-            filter,
-            sort,
-            Some(doc!("userId": user_id)),
-        )
-        .await?
-        .1
-        .into_iter()
-        .map(|data| GraphQLSeenDelivery { data })
-        .collect())
+        let (limit, offset) = util::page(limit, skip);
+        let direction = sort_dir.unwrap_or_default();
+
+        let mut query = seen_deliveries::table
+            .into_boxed()
+            .filter(seen_deliveries::user_id.eq(user_id));
+
+        if let Some(term) = search.filter(|s| !s.trim().is_empty()) {
+            query =
+                query.filter(seen_deliveries::statement.ilike(util::ilike_pattern(term.trim())));
+        }
+        if only_unmatched.unwrap_or(false) {
+            query = query.filter(seen_deliveries::expense_id.is_null());
+        }
+
+        let query = match sort_by.unwrap_or_default() {
+            DeliverySortField::Date => order_by!(query, direction, seen_deliveries::date),
+            DeliverySortField::Amount => order_by!(query, direction, seen_deliveries::amount),
+        };
+
+        Ok(query
+            .then_order_by(seen_deliveries::id.asc())
+            .limit(limit)
+            .offset(offset)
+            .select(SeenDelivery::as_select())
+            .load(conn)
+            .await?
+            .into_iter()
+            .map(|data| GraphQLSeenDelivery { data })
+            .collect())
     }
 }

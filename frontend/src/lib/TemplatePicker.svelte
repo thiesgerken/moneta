@@ -13,9 +13,9 @@
 	let searchTerm = $state('');
 
 	const templateStore = graphql(`
-		query TemplateCandidates($filter: String, $sort: String) {
+		query TemplateCandidates($search: String, $flags: ExpenseFlagFilter) {
 			expenses {
-				list(limit: 25, filter: $filter, sort: $sort) {
+				list(limit: 25, search: $search, flags: $flags, sortBy: BOOKING_START, sortDir: DESC) {
 					edges {
 						node {
 							id
@@ -30,18 +30,25 @@
 		}
 	`);
 
-	const filter = $derived(
+	// with nothing typed the picker shows the flagged templates; a search widens it to every
+	// expense, because rules mostly point at ordinary past ones
+	const variables = $derived(
 		searchTerm.trim()
-			? JSON.stringify({ title: { $regex: searchTerm.trim(), $options: 'i' } })
-			: JSON.stringify({ isTemplate: true })
+			? { search: searchTerm.trim(), flags: undefined }
+			: {
+					search: undefined,
+					flags: {
+						templates: true,
+						taxRelevant: false,
+						extraordinary: false,
+						unchecked: false,
+						incomplete: false,
+						normal: false
+					}
+				}
 	);
 
-	$effect(
-		() =>
-			void templateStore.fetch({
-				variables: { filter, sort: JSON.stringify({ bookingStart: -1 }) }
-			})
-	);
+	$effect(() => void templateStore.fetch({ variables }));
 
 	const candidates = $derived($templateStore.data?.expenses.list.edges.map((e) => e.node) || []);
 

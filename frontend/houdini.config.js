@@ -16,7 +16,7 @@ const config = {
 		}
 	},
 	scalars: {
-		ObjectIdWrapper: {
+		UUID: {
 			type: 'string'
 		},
 		DateTime: {

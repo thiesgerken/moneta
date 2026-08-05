@@ -1,105 +1,134 @@
-use futures::TryStreamExt;
-use mongodb::bson::{doc, oid::ObjectId};
-use serde::de::DeserializeOwned;
+use diesel::prelude::*;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
+use uuid::Uuid;
 
-use crate::models::{Account, Category, User};
+use crate::models::{
+    Account, Category, Expense, ExpenseCategorizationRow, ExpenseRow, ExpenseTransactionRow, User,
+};
+use crate::schema::{
+    accounts, categories, expense_categorizations, expense_transactions, expenses, users,
+};
 
-/// bson 3 dropped its `serde(with = ...)` datetime helpers in favour of `serde_with`
-/// adapters; this keeps the attribute style (and the on-disk representation) unchanged.
-pub mod chrono_datetime_as_bson_datetime {
-    use chrono::Utc;
-    use mongodb::bson;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::result::Result;
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<chrono::DateTime<Utc>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(bson::DateTime::deserialize(deserializer)?.to_chrono())
-    }
-
-    pub fn serialize<S: Serializer>(
-        val: &chrono::DateTime<Utc>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        bson::DateTime::from_chrono(*val).serialize(serializer)
-    }
-}
-
-pub mod optional_chrono_datetime_as_bson_datetime {
-    use chrono::Utc;
-    use mongodb::bson;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::result::Result;
-
-    /// Deserializes a [`Option<chrono::DateTime>`] from a [`Option<crate::DateTime>`].
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<chrono::DateTime<Utc>>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        if let Ok(datetime) = bson::DateTime::deserialize(deserializer) {
-            Ok(Some(datetime.to_chrono()))
-        } else {
-            // NOTE: this implementation simply returns `None` whenever the value present
-            // cannot be parsed as a datetime; this might not be the best behavior
-            Ok(None)
-        }
-    }
-
-    /// Serializes a [`Option<chrono::DateTime>`] as a [`Option<crate::DateTime>`].
-    pub fn serialize<S: Serializer>(
-        val: &Option<chrono::DateTime<Utc>>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        if let Some(val) = val {
-            let datetime = bson::DateTime::from_chrono(val.to_owned());
-            datetime.serialize(serializer)
-        } else {
-            bson::Bson::Null.serialize(serializer)
-        }
-    }
-}
-
-pub async fn query_element_by_id<T>(
-    connection: &mongodb::Database,
-    collection: &str,
-    id: ObjectId,
-) -> Result<Option<T>, mongodb::error::Error>
-where
-    T: DeserializeOwned + Unpin + Send + Sync,
-{
-    let collection = connection.collection::<T>(collection);
-    let filter = doc! {"_id":id};
-    collection.find_one(filter).await
-}
-
+/// Every account a change to `account_ids` could affect: the accounts themselves plus the ones
+/// mirroring them, since a mirror shows the same money in another user's books.
 pub async fn query_associated_accounts(
-    connection: &mongodb::Database,
-    account_ids: &[ObjectId],
-) -> Result<Vec<Account>, mongodb::error::Error> {
-    let collection = connection.collection::<Account>("accounts");
-
-    collection.find(doc! { "$or": [ {"_id": {"$in": account_ids}}, {"synchronization.accountId": {"$in": account_ids}}] }).await?   .try_collect::<Vec<_>>()
-    .await
+    conn: &mut AsyncPgConnection,
+    account_ids: &[Uuid],
+) -> QueryResult<Vec<Account>> {
+    accounts::table
+        .filter(
+            accounts::id
+                .eq_any(account_ids)
+                .or(accounts::sync_account_id.eq_any(account_ids)),
+        )
+        .select(Account::as_select())
+        .load(conn)
+        .await
 }
 
 pub async fn query_user_by_name(
-    connection: &mongodb::Database,
+    conn: &mut AsyncPgConnection,
     user_name: &str,
-) -> Result<Option<User>, mongodb::error::Error> {
-    let collection = connection.collection::<User>("users");
-    let filter = doc! {"name":user_name};
-    collection.find_one(filter).await
+) -> QueryResult<Option<User>> {
+    users::table
+        .filter(users::name.eq(user_name))
+        .select(User::as_select())
+        .first(conn)
+        .await
+        .optional()
 }
 
-pub async fn query_categories(
-    connection: &mongodb::Database,
-) -> Result<Vec<Category>, mongodb::error::Error> {
-    let collection = connection.collection::<Category>("categories");
-    collection
-        .find(doc! {})
-        .await?
-        .try_collect::<Vec<_>>()
+pub async fn query_categories(conn: &mut AsyncPgConnection) -> QueryResult<Vec<Category>> {
+    categories::table
+        .select(Category::as_select())
+        .load(conn)
         .await
+}
+
+/// Reassembles the aggregate the changelog and the importer work with out of its three tables.
+pub async fn load_expense(conn: &mut AsyncPgConnection, id: Uuid) -> QueryResult<Option<Expense>> {
+    let Some(row) = expenses::table
+        .find(id)
+        .select(ExpenseRow::as_select())
+        .first(conn)
+        .await
+        .optional()?
+    else {
+        return Ok(None);
+    };
+
+    let transactions = expense_transactions::table
+        .filter(expense_transactions::expense_id.eq(id))
+        .order_by(expense_transactions::idx.asc())
+        .select(ExpenseTransactionRow::as_select())
+        .load(conn)
+        .await?;
+
+    let categories = expense_categorizations::table
+        .filter(expense_categorizations::expense_id.eq(id))
+        .order_by(expense_categorizations::category_id.asc())
+        .select(ExpenseCategorizationRow::as_select())
+        .load(conn)
+        .await?;
+
+    Ok(Some(Expense::join(row, transactions, categories)))
+}
+
+/// Writes the whole aggregate. Call inside a transaction: three tables have to move together or
+/// an expense ends up with somebody else's transactions.
+pub async fn insert_expense(conn: &mut AsyncPgConnection, expense: &Expense) -> QueryResult<()> {
+    let (row, transactions, categories) = expense.split();
+
+    diesel::insert_into(expenses::table)
+        .values(&row)
+        .execute(conn)
+        .await?;
+    diesel::insert_into(expense_transactions::table)
+        .values(&transactions)
+        .execute(conn)
+        .await?;
+    if !categories.is_empty() {
+        diesel::insert_into(expense_categorizations::table)
+            .values(&categories)
+            .execute(conn)
+            .await?;
+    }
+
+    Ok(())
+}
+
+/// Replaces an expense in place, keeping its id. The children are deleted and rewritten rather
+/// than diffed: `idx` has to stay dense and gapless, and a diff that got that wrong would
+/// reorder the transaction list instead of failing.
+pub async fn replace_expense(conn: &mut AsyncPgConnection, expense: &Expense) -> QueryResult<()> {
+    let (row, transactions, categories) = expense.split();
+
+    diesel::update(expenses::table.find(expense.id))
+        .set(&row)
+        .execute(conn)
+        .await?;
+
+    diesel::delete(
+        expense_transactions::table.filter(expense_transactions::expense_id.eq(expense.id)),
+    )
+    .execute(conn)
+    .await?;
+    diesel::delete(
+        expense_categorizations::table.filter(expense_categorizations::expense_id.eq(expense.id)),
+    )
+    .execute(conn)
+    .await?;
+
+    diesel::insert_into(expense_transactions::table)
+        .values(&transactions)
+        .execute(conn)
+        .await?;
+    if !categories.is_empty() {
+        diesel::insert_into(expense_categorizations::table)
+            .values(&categories)
+            .execute(conn)
+            .await?;
+    }
+
+    Ok(())
 }

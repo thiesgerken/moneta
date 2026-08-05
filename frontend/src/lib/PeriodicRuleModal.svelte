@@ -45,7 +45,7 @@
 		}
 	`);
 	const UpdatePeriodicRule = graphql(`
-		mutation UpdatePeriodicRule($id: ObjectIdWrapper!, $input: PeriodicRuleInput!) {
+		mutation UpdatePeriodicRule($id: UUID!, $input: PeriodicRuleInput!) {
 			periodicRules {
 				update(id: $id, rule: $input) {
 					id

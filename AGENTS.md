@@ -7,8 +7,13 @@ file is the operational stuff: what to run, and the traps that have already been
 
 ```sh
 cd backend  && cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test
+cd backend  && PGURL=postgres://moneta:moneta@localhost:5433/moneta tests/run-sql-tests.sh
 cd frontend && pnpm build && pnpm check && pnpm lint
 ```
+
+The SQL tests need an empty postgres 18 (`docker compose up -d postgres` gives you one on
+5433, but they apply the migrations themselves, so point them at a scratch database rather
+than one holding real data).
 
 CI runs exactly these and is strict — `clippy -D warnings` and `fmt --check` both fail the
 build, including on test code.
@@ -17,21 +22,24 @@ build, including on test code.
 without it `$houdini` types are stale or missing and you will chase type errors that aren't
 real. If codegen gets into a bad state, `rm -rf .houdini .svelte-kit` and rebuild.
 
-## Never touch `volumes/mongo` directly
+## Never touch `volumes/postgres` directly
 
 That directory is real personal financial data. It is gitignored and there is no other copy
 of most of it.
 
-To test against realistic data, copy it first and point a container at the copy:
+To test against realistic data, use a throwaway container and re-import the moneydb export
+into it:
 
 ```sh
-cp -R volumes/mongo /tmp/scratch-mongo
-docker run -d --name scratch -p 127.0.0.1:27099:27017 -v /tmp/scratch-mongo:/data/db mongo:8
-MONETA__DATABASE__URL=mongodb://localhost:27099 cargo run -- <subcommand>
+docker run -d --name scratch -e POSTGRES_USER=moneta -e POSTGRES_PASSWORD=moneta \
+    -e POSTGRES_DB=moneta -p 127.0.0.1:5499:5432 postgres:18-alpine
+export MONETA__DATABASE__URL=postgres://moneta:moneta@localhost:5499/moneta
+cargo run -- user --add thies    # every user in the export has to exist first
+cargo run -- import --clear < moneydb-export.json
 ```
 
-Note that starting the backend creates indexes, which is a write. The database is at
-featureCompatibilityVersion 8.0; a `mongo:7` binary will refuse to open it.
+**Postgres 18 is a hard requirement**: the tables default their ids with `uuidv7()`, which
+does not exist before 18.
 
 ## Traps
 
@@ -39,34 +47,40 @@ featureCompatibilityVersion 8.0; a `mongo:7` binary will refuse to open it.
 (`calculatedAmount`, `effectiveAmount`) are `f64`. Do not introduce floats into stored
 amounts.
 
-**Rendering must stay in sync.** Any mutation of an upstream document has to re-render the
-affected users' documents, or reads silently go stale. After changing anything in
-`rendering.rs`, rebuild everything with `moneta account --rerender x` and re-run the tests —
-they mutation-test the ownership-fraction and sync-inversion paths.
+**Rendering is a view, not stored state.** `expenses_rendered`, `expense_transactions_rendered`
+and `balances_rendered` derive the per-user view from the upstream tables, so there is nothing
+to keep in sync and no rerender step. If you change them, re-run `tests/sql/rendered_views.sql`:
+it mutation-tests the ownership-fraction and sync-inversion paths, and four of its cases
+passed against an earlier, wrong version of the views.
 
-**`graphql/util.rs::merge_filter` is an authorization boundary.** Callers send raw MongoDB
-filter documents as strings; the `userId` override is applied last so they cannot widen their
-own scope. If you refactor it, keep the tests that assert a caller-supplied `userId` loses.
+**List queries take typed arguments, not filter documents.** The mongo version accepted a raw
+filter document built in the browser, with the `userId` override merged in last. That is gone:
+each list names its own sort enum and filter arguments, so a caller cannot reach a column the
+resolver did not offer, and `user_id` is applied by the resolver alone.
 
 **Password hashes are verified with the parameters from the stored PHC string**, not with
 fixed ones. That is what keeps pre-2026 argonautica hashes (m=4096, t=32, p=num_cpus) working
 alongside new argon2 ones. `verifies_legacy_parameters` in `lib.rs` guards this.
 
-**bson 3 datetime serde lives in `queries.rs`.** bson 3 removed
-`mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime` in favour of `serde_with`
-adapters; rather than annotate every model, there are local
-`chrono_datetime_as_bson_datetime` / `optional_chrono_datetime_as_bson_datetime` modules.
-Keep using those in `#[serde(with = ...)]` — the on-disk representation depends on it.
+**An expense spans three tables.** `expenses`, `expense_transactions` and
+`expense_categorizations`. `Expense::split()`/`join()` convert between the aggregate and the
+rows; every write goes through `queries::insert_expense`/`replace_expense` inside a
+`conn.transaction()`. Transaction order is stored as `idx` and has to stay dense, which is why
+an update rewrites the children instead of diffing them.
+
+**The changelog stores whole expenses as jsonb.** `expense_changes.old_state`/`new_state` are
+snapshots on purpose: a later schema change must not retroactively alter what the history says
+happened. `target_id` is deliberately not a foreign key — a change outlives its expense.
 
 **TypeScript is pinned to 6 on purpose.** The 7.x Go port ships no CJS entry, so it crashes
 `svelte-check` and `eslint`, and SvelteKit / svelte-check / typescript-eslint all cap their
 peer range at `^6`. `pnpm outdated` will keep suggesting 7; don't take it until the toolchain
 declares support.
 
-**Rules reference the *upstream* expense, but the API speaks *rendered* ids.** Rendered
-documents get fresh ObjectIds on every re-render, so a rule storing one would break the first
-time anything re-renders. `graphql/rules.rs` resolves a caller's rendered id to the upstream
-id on write and back again on read; keep that translation if you touch it.
+**A rendered id is the upstream id.** A reader only ever sees their own rendering, so the view
+returns the same value for both. What `graphql/rules.rs` still has to check is that the caller
+can *see* the expense a rule points at — a rule pointing at somebody else's expense would copy
+money they cannot read.
 
 **A modal inside a `<TabItem>` cannot close itself.** Writing to a `bind:open` prop from a
 component rendered inside flowbite's tabs does not reach the parent, so the rules page closes
@@ -105,7 +119,8 @@ data is therefore client-side only; there is no SSR of query results.
 
 ## Known gaps worth knowing before you plan work
 
-- No frontend tests, no integration tests against a real mongo.
+- No frontend tests. `tests/sql/` covers the views and constraints, but nothing exercises
+  the GraphQL resolvers against a database.
 - No upload client feeds `deliveries.submit` from a real bank export; that is deliberately
   someone else's program, since it is per-bank and needs credentials.
 - CORS is `AllowedOrigins::all()` with `allow_credentials(true)` in `graphql/mod.rs`, and

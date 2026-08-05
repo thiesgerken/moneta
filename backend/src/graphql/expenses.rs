@@ -1,33 +1,34 @@
-use std::collections::HashMap;
 use std::error::Error;
+
+use uuid::Uuid;
 
 use crate::graphql::accounts::GraphQLAccount;
 use crate::graphql::categories::GraphQLCategory;
-use crate::graphql::root::Context;
-use crate::graphql::root::require_user;
+use crate::graphql::root::{Context, require_user};
 use crate::graphql::users::GraphQLUserInfo;
-use crate::graphql::util::{self};
+use crate::graphql::util::{self, SortDirection};
 use crate::models::Category;
 use crate::models::ExpenseCategorization;
 use crate::models::ExpenseChangelogEntry;
 use crate::models::ExpensePosition;
 use crate::models::ExpenseReceipt;
+use crate::models::Json;
 use crate::models::rendering::RenderedExpenseTransaction;
 use crate::models::rendering::{
     RenderedExpense, RenderedExpenseCreateInput, RenderedExpenseInput, RenderedExpenseUpdateInput,
 };
-use crate::models::{Account, Expense, ObjectIdWrapper};
+use crate::models::{Account, Expense};
 use crate::queries;
+use crate::schema::{expense_categorizations, expense_changes, expenses};
+use crate::schema_views::{expense_transactions_rendered, expenses_rendered};
 
-use bson::Document;
 use chrono::DateTime;
 use chrono::Utc;
-use futures::TryStreamExt;
-use juniper::FieldResult;
-use juniper::GraphQLObject;
-use juniper::graphql_object;
-use mongodb::bson::oid::ObjectId;
-use mongodb::bson::{self, doc};
+use diesel::dsl::sql;
+use diesel::prelude::*;
+use diesel::sql_types::{Bool, Text};
+use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
+use juniper::{FieldResult, GraphQLEnum, GraphQLObject, graphql_object};
 
 #[derive(Debug, Clone)]
 pub struct GraphQLExpenseCategorization {
@@ -118,14 +119,13 @@ impl GraphQLExpense {
     }
 }
 
-#[graphql_object(
-    Context = Context,name = "Expense")]
+#[graphql_object(Context = Context, name = "Expense")]
 impl GraphQLExpense {
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
 
-    fn upstream_id(&self) -> ObjectIdWrapper {
+    fn upstream_id(&self) -> Uuid {
         self.data.upstream_id
     }
 
@@ -207,21 +207,17 @@ impl GraphQLExpense {
         self.data.effective_amount
     }
 
-    async fn changelog(
-        &self,
-        context: &Context,
-    ) -> juniper::FieldResult<Vec<GraphQLExpenseChangelogEntry>> {
-        let collection = context
-            .connection
-            .collection::<ExpenseChangelogEntry>("expense_changes");
+    async fn changelog(&self, context: &Context) -> FieldResult<Vec<GraphQLExpenseChangelogEntry>> {
+        let conn = &mut context.conn().await?;
 
-        Ok(collection
-            .find(doc! {"targetId": *self.data.upstream_id})
-            .await?
-            .try_collect::<Vec<_>>()
+        Ok(expense_changes::table
+            .filter(expense_changes::target_id.eq(self.data.upstream_id))
+            .order_by(expense_changes::date.desc())
+            .select(ExpenseChangelogEntry::as_select())
+            .load(conn)
             .await?
             .into_iter()
-            .map(|entry| GraphQLExpenseChangelogEntry::new(entry, self.data.id.into()))
+            .map(GraphQLExpenseChangelogEntry::new)
             .collect())
     }
 }
@@ -242,27 +238,28 @@ pub struct ExpenseNode {
 #[derive(Debug, Clone)]
 pub struct GraphQLExpenseChangelogEntry {
     data: ExpenseChangelogEntry,
-    rendered_id: ObjectId,
 }
 
 impl GraphQLExpenseChangelogEntry {
-    pub fn new(data: ExpenseChangelogEntry, rendered_id: ObjectId) -> Self {
-        GraphQLExpenseChangelogEntry { data, rendered_id }
+    pub fn new(data: ExpenseChangelogEntry) -> Self {
+        GraphQLExpenseChangelogEntry { data }
     }
 }
 
 #[graphql_object(Context = Context, name = "ExpenseChangelogEntry")]
 impl GraphQLExpenseChangelogEntry {
-    fn target_id(&self) -> ObjectIdWrapper {
+    fn target_id(&self) -> Uuid {
         self.data.target_id
     }
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
-    fn expense_id(&self) -> ObjectIdWrapper {
-        self.rendered_id.into()
+    /// The rendering a reader sees carries the upstream id, so this is the same value as
+    /// `targetId`; it stays because the frontend keys its changelog rows on it.
+    fn expense_id(&self) -> Uuid {
+        self.data.target_id
     }
-    fn user_id(&self) -> Option<ObjectIdWrapper> {
+    fn user_id(&self) -> Option<Uuid> {
         self.data.user_id
     }
     fn date(&self) -> DateTime<Utc> {
@@ -278,14 +275,14 @@ impl GraphQLExpenseChangelogEntry {
         self.data.confidence
     }
     fn old_state(&self) -> Option<Expense> {
-        self.data.old_state.clone()
+        self.data.old_state.clone().map(|state| state.0)
     }
     fn new_state(&self) -> Option<Expense> {
-        self.data.new_state.clone()
+        self.data.new_state.clone().map(|state| state.0)
     }
     fn diff(&self) -> Option<String> {
-        let mut old_state = self.data.old_state.clone()?;
-        let new_state = self.data.new_state.as_ref()?;
+        let mut old_state = self.data.old_state.clone()?.0;
+        let new_state = &self.data.new_state.as_ref()?.0;
 
         old_state.updated_at = new_state.updated_at;
         util::json_diff(&old_state, new_state).ok()
@@ -313,367 +310,488 @@ pub struct ExpenseChangelogNode {
     pub node: GraphQLExpenseChangelogEntry,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, GraphQLEnum)]
+pub enum ExpenseSortField {
+    #[default]
+    BookingStart,
+    Title,
+    Store,
+    Description,
+    Comments,
+    EffectiveAmount,
+    /// template first, then the entries still needing attention
+    Status,
+    Accounts,
+    Categories,
+}
+
+/// The flag checkboxes above the expense table. Each one being off means "hide the expenses
+/// that carry this flag"; `normal` off means "show only expenses that carry some flag".
+#[derive(Debug, Clone, Copy, juniper::GraphQLInputObject)]
+pub struct ExpenseFlagFilter {
+    pub templates: bool,
+    pub tax_relevant: bool,
+    pub extraordinary: bool,
+    pub unchecked: bool,
+    pub incomplete: bool,
+    pub normal: bool,
+}
+
+impl Default for ExpenseFlagFilter {
+    fn default() -> Self {
+        Self {
+            templates: true,
+            tax_relevant: true,
+            extraordinary: true,
+            unchecked: true,
+            incomplete: true,
+            normal: true,
+        }
+    }
+}
+
+type ExpensePredicate =
+    Box<dyn BoxableExpression<expenses_rendered::table, diesel::pg::Pg, SqlType = Bool>>;
+
+/// Everything a search term can match: the free-text fields, the position titles inside the
+/// jsonb, and -- if the term reads as a number -- the total in either sign, since the table
+/// shows expenses and income in the same column.
+fn search_predicate(term: &str) -> ExpensePredicate {
+    let pattern = util::ilike_pattern(term);
+
+    let mut predicate: ExpensePredicate = Box::new(
+        expenses_rendered::title
+            .ilike(pattern.clone())
+            .or(expenses_rendered::store.ilike(pattern.clone()))
+            .or(expenses_rendered::description.ilike(pattern.clone()))
+            .or(expenses_rendered::comments.ilike(pattern.clone()))
+            .or(sql::<Bool>("positions::text ILIKE ").bind::<Text, _>(pattern)),
+    );
+
+    if let Ok(value) = term.replace(',', ".").parse::<f64>()
+        && value != 0.0
+    {
+        let lower = (value * 100.0).floor();
+        let upper = (value * 100.0).ceil();
+
+        predicate = Box::new(
+            predicate
+                .or(expenses_rendered::effective_amount.between(lower, upper))
+                .or(expenses_rendered::effective_amount.between(-upper, -lower)),
+        );
+    }
+
+    predicate
+}
+
 pub struct ExpenseQuery;
 
 #[graphql_object(
     Context = Context,
 )]
 impl ExpenseQuery {
+    #[allow(clippy::too_many_arguments)]
     pub async fn list(
         context: &Context,
         limit: Option<i32>,
         skip: Option<i32>,
-        filter: Option<String>,
-        sort: Option<String>,
-    ) -> juniper::FieldResult<ExpenseConnection> {
-        let uid = require_user(context).await?;
+        search: Option<String>,
+        account_ids: Option<Vec<Uuid>>,
+        category_ids: Option<Vec<Uuid>>,
+        flags: Option<ExpenseFlagFilter>,
+        booked_after: Option<DateTime<Utc>>,
+        booked_before: Option<DateTime<Utc>>,
+        sort_by: Option<ExpenseSortField>,
+        sort_dir: Option<SortDirection>,
+    ) -> FieldResult<ExpenseConnection> {
+        let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        let (total_count, edges) = util::list_query::<RenderedExpense>(
-            "expenses_rendered",
-            &context.connection,
-            limit,
-            skip,
-            filter,
-            sort,
-            Some(doc!("userId": uid)),
-        )
-        .await?;
+        let (limit, offset) = util::page(limit, skip);
+        let direction = sort_dir.unwrap_or_default();
+        let flags = flags.unwrap_or_default();
+        let search = search.filter(|s| !s.trim().is_empty());
+
+        // A boxed query is consumed by the count, so the filter is built twice rather than
+        // cloned.
+        let filtered = || {
+            let mut query = expenses_rendered::table
+                .into_boxed()
+                .filter(expenses_rendered::user_id.eq(user_id));
+
+            if let Some(term) = &search {
+                query = query.filter(search_predicate(term.trim()));
+            }
+
+            if let Some(account_ids) = &account_ids
+                && !account_ids.is_empty()
+            {
+                query = query.filter(
+                    expenses_rendered::id.eq_any(
+                        expense_transactions_rendered::table
+                            .filter(expense_transactions_rendered::user_id.eq(user_id))
+                            .filter(expense_transactions_rendered::account_id.eq_any(account_ids))
+                            .select(expense_transactions_rendered::expense_id),
+                    ),
+                );
+            }
+
+            if let Some(category_ids) = &category_ids
+                && !category_ids.is_empty()
+            {
+                query = query.filter(
+                    expenses_rendered::id.eq_any(
+                        expense_categorizations::table
+                            .filter(expense_categorizations::category_id.eq_any(category_ids))
+                            .select(expense_categorizations::expense_id),
+                    ),
+                );
+            }
+
+            if !flags.templates {
+                query = query.filter(expenses_rendered::is_template.eq(false));
+            }
+            if !flags.tax_relevant {
+                query = query.filter(expenses_rendered::is_tax_relevant.eq(false));
+            }
+            if !flags.extraordinary {
+                query = query.filter(expenses_rendered::is_extraordinary.eq(false));
+            }
+            if !flags.unchecked {
+                query = query.filter(expenses_rendered::is_unchecked.eq(false));
+            }
+            if !flags.incomplete {
+                query = query.filter(expenses_rendered::is_incomplete.eq(false));
+            }
+            if !flags.normal {
+                query = query.filter(
+                    expenses_rendered::is_template
+                        .or(expenses_rendered::is_tax_relevant)
+                        .or(expenses_rendered::is_extraordinary)
+                        .or(expenses_rendered::is_unchecked)
+                        .or(expenses_rendered::is_incomplete),
+                );
+            }
+
+            if let Some(after) = booked_after {
+                query = query.filter(expenses_rendered::booking_start.ge(after));
+            }
+            if let Some(before) = booked_before {
+                query = query.filter(expenses_rendered::booking_end.le(before));
+            }
+
+            query
+        };
+
+        let total_count: i64 = filtered().count().get_result(conn).await?;
+
+        let query = filtered();
+        let query = match sort_by.unwrap_or_default() {
+            ExpenseSortField::BookingStart => {
+                crate::order_by!(query, direction, expenses_rendered::booking_start)
+            }
+            ExpenseSortField::Title => crate::order_by!(query, direction, expenses_rendered::title),
+            ExpenseSortField::Store => crate::order_by!(query, direction, expenses_rendered::store),
+            ExpenseSortField::Description => {
+                crate::order_by!(query, direction, expenses_rendered::description)
+            }
+            ExpenseSortField::Comments => {
+                crate::order_by!(query, direction, expenses_rendered::comments)
+            }
+            ExpenseSortField::EffectiveAmount => {
+                crate::order_by!(query, direction, expenses_rendered::effective_amount)
+            }
+            // the lists are aggregates; the first entry is what the column shows first
+            ExpenseSortField::Accounts => crate::order_by!(
+                query,
+                direction,
+                sql::<Text>("transactions->0->>'accountId'")
+            ),
+            ExpenseSortField::Categories => crate::order_by!(
+                query,
+                direction,
+                sql::<Text>("categories->0->>'categoryId'")
+            ),
+            // the default the table opens with: what needs attention first, then newest.
+            // Without the booking date as a secondary key the id tiebreaker would order by
+            // insertion, which for an imported history is meaningless.
+            ExpenseSortField::Status => match direction {
+                SortDirection::Asc => query.order_by((
+                    expenses_rendered::is_template.desc(),
+                    expenses_rendered::is_incomplete.asc(),
+                    expenses_rendered::is_unchecked.asc(),
+                    expenses_rendered::booking_start.desc(),
+                )),
+                SortDirection::Desc => query.order_by((
+                    expenses_rendered::is_template.asc(),
+                    expenses_rendered::is_incomplete.desc(),
+                    expenses_rendered::is_unchecked.desc(),
+                    expenses_rendered::booking_start.desc(),
+                )),
+            },
+        };
+
+        let found = query
+            // without a tiebreaker, two pages of an equal sort key can repeat or skip rows
+            .then_order_by(expenses_rendered::id.asc())
+            .limit(limit)
+            .offset(offset)
+            .select(RenderedExpense::as_select())
+            .load(conn)
+            .await?;
 
         Ok(ExpenseConnection {
             total_count: total_count as i32,
-            edges: edges
+            edges: found
                 .into_iter()
-                .map(|e| ExpenseNode {
-                    node: GraphQLExpense::new(e),
+                .map(|node| ExpenseNode {
+                    node: GraphQLExpense::new(node),
                 })
                 .collect(),
         })
     }
 
-    pub async fn get(
-        context: &Context,
-        id: ObjectIdWrapper,
-    ) -> juniper::FieldResult<GraphQLExpense> {
-        let uid = require_user(context).await?;
-        let collection = context
-            .connection
-            .collection::<RenderedExpense>("expenses_rendered");
+    pub async fn get(context: &Context, id: Uuid) -> FieldResult<GraphQLExpense> {
+        let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        Ok(GraphQLExpense::new(
-            collection
-                .find_one(doc! {"_id":*id, "userId": uid})
-                .await?
-                .ok_or_else(|| format!("Expense {id:?} not found"))?,
-        ))
+        Ok(GraphQLExpense::new(load_rendered(conn, user_id, id).await?))
     }
 
     pub async fn changelog(
         context: &Context,
         limit: Option<i32>,
         skip: Option<i32>,
-    ) -> juniper::FieldResult<ExpenseChangelogConnection> {
-        let uid = require_user(context).await?;
-        let limit = limit.unwrap_or(50);
-        let skip = skip.unwrap_or(0);
+    ) -> FieldResult<ExpenseChangelogConnection> {
+        let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        // Get the last rendered expenses for the user, sorted by last updated
-        let rendered_collection = context
-            .connection
-            .collection::<RenderedExpense>("expenses_rendered");
+        let (limit, offset) = util::page(limit.or(Some(50)), skip);
 
-        let rendered_expenses = rendered_collection
-            .clone_with_type::<Document>()
-            .find(doc! {"userId": uid})
-            .sort(doc! {"updatedAt": -1})
-            .projection(doc! {"_id": 1, "upstreamId": 1, "updatedAt": 1})
-            .limit((skip + limit) as i64)
-            .await?
-            .try_collect::<Vec<Document>>()
-            .await?;
-
-        // Extract upstream IDs
-        let upstream_ids: Vec<ObjectId> = rendered_expenses
-            .iter()
-            .map(|expense| expense.get_object_id("upstreamId").unwrap())
-            .collect();
-
-        if upstream_ids.is_empty() {
-            return Ok(ExpenseChangelogConnection { edges: vec![] });
-        }
-
-        let upstream_id_to_rendered_id: HashMap<ObjectId, ObjectId> = rendered_expenses
-            .into_iter()
-            .map(|expense| {
-                (
-                    expense.get_object_id("upstreamId").unwrap(),
-                    expense.get_object_id("_id").unwrap(),
-                )
-            })
-            .collect();
-
-        // Query changelog entries for these upstream IDs
-        let changelog_collection = context
-            .connection
-            .collection::<ExpenseChangelogEntry>("expense_changes");
-
-        let changelog_entries = changelog_collection
-            .find(doc! {"targetId": {"$in": upstream_ids}})
-            .sort(doc! {"date": -1})
-            .skip(skip as u64)
-            .limit(limit as i64)
-            .await?
-            .try_collect::<Vec<_>>()
+        // A change outlives the expense it describes, so this reaches the visible expenses
+        // through the view rather than joining: a deleted expense has no rendering left and
+        // its changes drop out of the list, which is what the old query did too.
+        let entries = expense_changes::table
+            .filter(
+                expense_changes::target_id.eq_any(
+                    expenses_rendered::table
+                        .filter(expenses_rendered::user_id.eq(user_id))
+                        .select(expenses_rendered::upstream_id),
+                ),
+            )
+            .order_by(expense_changes::date.desc())
+            .then_order_by(expense_changes::id.desc())
+            .limit(limit)
+            .offset(offset)
+            .select(ExpenseChangelogEntry::as_select())
+            .load(conn)
             .await?;
 
         Ok(ExpenseChangelogConnection {
-            edges: changelog_entries
+            edges: entries
                 .into_iter()
-                .map(|entry| {
-                    let rendered_id = *upstream_id_to_rendered_id.get(&entry.target_id).unwrap();
-                    ExpenseChangelogNode {
-                        node: GraphQLExpenseChangelogEntry::new(entry, rendered_id),
-                    }
+                .map(|node| ExpenseChangelogNode {
+                    node: GraphQLExpenseChangelogEntry::new(node),
                 })
                 .collect(),
         })
     }
 }
+
 pub struct ExpenseMutation;
 
 #[graphql_object(
     Context = Context,
 )]
 impl ExpenseMutation {
-    pub async fn delete(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<bool> {
+    pub async fn delete(context: &Context, id: Uuid) -> FieldResult<bool> {
         let user_id = require_user(context).await?;
-        let collection = context
-            .connection
-            .collection::<RenderedExpense>("expenses_rendered");
+        let conn = &mut context.conn().await?;
 
-        // check if there is a rendered expense with the given upstream id belonging to this user
-        let original_entry = collection
-            .find_one(doc! {"_id":*id, "userId": user_id})
-            .await?
-            .ok_or("entry to delete not found")?;
+        // the rendering is what the user was shown, so it is what they are allowed to remove
+        let rendered = load_rendered(conn, user_id, id).await?;
+        let upstream_id = rendered.upstream_id;
 
-        let upstream_collection = context.connection.collection::<Expense>("expenses");
-        let upstream_entry = upstream_collection
-            .find_one(doc! {"_id":*original_entry.upstream_id})
-            .await?
-            .unwrap_or_else(|| {
-                panic!("cannot find upstream expense for rendered expense {:?}", id)
-            });
+        let deleted = conn
+            .transaction::<_, diesel::result::Error, _>(async |conn| {
+                let Some(old_state) = queries::load_expense(conn, upstream_id).await? else {
+                    return Ok(false);
+                };
 
-        // remove rendered expense first ...
-        upstream_entry.remove_rendered(&context.connection).await?;
-        // ... and then the upstream expense itself
-        let count = upstream_collection
-            .delete_one(doc! {"_id":*original_entry.upstream_id})
-            .await?
-            .deleted_count;
+                let count = diesel::delete(expenses::table.find(upstream_id))
+                    .execute(conn)
+                    .await?;
 
-        // create a changelog entry for this removal
-        let changelog_entry = ExpenseChangelogEntry {
-            id: ObjectId::new().into(),
-            user_id: Some(user_id.into()),
-            target_id: upstream_entry.id,
-            date: Utc::now(),
-            old_state: Some(upstream_entry),
-            new_state: None,
-            tool: None,
-            automatic: false,
-            confidence: 1.0,
-        };
-        context
-            .connection
-            .collection::<ExpenseChangelogEntry>("expense_changes")
-            .insert_one(&changelog_entry)
+                diesel::insert_into(expense_changes::table)
+                    .values(&ExpenseChangelogEntry {
+                        id: Uuid::now_v7(),
+                        user_id: Some(user_id),
+                        target_id: upstream_id,
+                        date: Utc::now(),
+                        old_state: Some(Json(old_state)),
+                        new_state: None,
+                        tool: None,
+                        automatic: false,
+                        confidence: 1.0,
+                    })
+                    .execute(conn)
+                    .await?;
+
+                Ok(count == 1)
+            })
             .await?;
 
-        Ok(count == 1)
+        Ok(deleted)
     }
 
     pub async fn create(
         context: &Context,
         expense: RenderedExpenseCreateInput,
-    ) -> juniper::FieldResult<RenderedExpense> {
+    ) -> FieldResult<GraphQLExpense> {
         let user_id = require_user(context).await?;
-        let collection = context.connection.collection::<Expense>("expenses");
+        let conn = &mut context.conn().await?;
 
-        let occurring_account_ids: Vec<_> =
-            expense.transactions.iter().map(|t| *t.account_id).collect();
-        let related_accounts =
-            queries::query_associated_accounts(&context.connection, &occurring_account_ids).await?;
-        let categories = queries::query_categories(&context.connection).await?;
-        let entry = validate_and_unrender(user_id, expense, &related_accounts, &categories).await?;
+        let entry = validate_and_unrender(conn, user_id, expense).await?;
+        let id = entry.id;
 
-        collection.insert_one(&entry).await?;
+        conn.transaction::<_, diesel::result::Error, _>(async |conn| {
+            queries::insert_expense(conn, &entry).await?;
 
-        // create a changelog entry for this creation
-        let changelog_entry = ExpenseChangelogEntry {
-            id: ObjectId::new().into(),
-            user_id: Some(user_id.into()),
-            target_id: entry.id,
-            date: entry.created_at,
-            old_state: None,
-            new_state: Some(entry.clone()),
-            tool: None,
-            automatic: false,
-            confidence: 1.0,
-        };
-        context
-            .connection
-            .collection::<ExpenseChangelogEntry>("expense_changes")
-            .insert_one(&changelog_entry)
-            .await?;
+            diesel::insert_into(expense_changes::table)
+                .values(&ExpenseChangelogEntry {
+                    id: Uuid::now_v7(),
+                    user_id: Some(user_id),
+                    target_id: entry.id,
+                    date: entry.created_at,
+                    old_state: None,
+                    new_state: Some(Json(entry.clone())),
+                    tool: None,
+                    automatic: false,
+                    confidence: 1.0,
+                })
+                .execute(conn)
+                .await?;
 
-        let expense = render(user_id, &context.connection, entry, &related_accounts).await?;
-        Ok(expense)
+            Ok(())
+        })
+        .await?;
+
+        Ok(GraphQLExpense::new(load_rendered(conn, user_id, id).await?))
     }
 
     pub async fn update(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
         expense: RenderedExpenseUpdateInput,
-    ) -> juniper::FieldResult<RenderedExpense> {
+    ) -> FieldResult<GraphQLExpense> {
         let user_id = require_user(context).await?;
-        let collection = context
-            .connection
-            .collection::<RenderedExpense>("expenses_rendered");
+        let conn = &mut context.conn().await?;
 
-        let original_rendered_expense = collection
-            .find_one(doc! {"_id":*id, "userId": user_id})
-            .await?
-            .ok_or("entry to update not found")?;
+        let rendered = load_rendered(conn, user_id, id).await?;
+        let upstream_id = rendered.upstream_id;
 
-        let occurring_account_ids: Vec<_> =
-            expense.transactions.iter().map(|t| *t.account_id).collect();
-        let related_accounts =
-            queries::query_associated_accounts(&context.connection, &occurring_account_ids).await?;
-        let categories = queries::query_categories(&context.connection).await?;
+        let mut updated = validate_and_unrender(conn, user_id, expense).await?;
+        updated.id = upstream_id;
+        updated.updated_at = Utc::now();
 
-        let mut updated_upstream_entry =
-            validate_and_unrender(user_id, expense, &related_accounts, &categories).await?;
+        conn.transaction::<_, Box<dyn Error + Send + Sync>, _>(async |conn| {
+            let old_state = queries::load_expense(conn, upstream_id)
+                .await?
+                .ok_or("entry to update disappeared")?;
 
-        // find the original upstream expense
-        let upstream_collection = context.connection.collection::<Expense>("expenses");
-        let upstream_entry = upstream_collection
-            .find_one(doc!("_id": *original_rendered_expense.upstream_id))
-            .await?
-            .unwrap_or_else(|| {
-                panic!("cannot find upstream expense for rendered expense {:?}", id)
-            });
+            updated.created_at = old_state.created_at;
+            queries::replace_expense(conn, &updated).await?;
 
-        // delete its rendered expenses
-        upstream_entry.remove_rendered(&context.connection).await?;
+            diesel::insert_into(expense_changes::table)
+                .values(&ExpenseChangelogEntry {
+                    id: Uuid::now_v7(),
+                    user_id: Some(user_id),
+                    target_id: upstream_id,
+                    date: updated.updated_at,
+                    old_state: Some(Json(old_state)),
+                    new_state: Some(Json(updated.clone())),
+                    tool: None,
+                    automatic: false,
+                    confidence: 1.0,
+                })
+                .execute(conn)
+                .await?;
 
-        // update the upstream expense with the changes
-        updated_upstream_entry.id = upstream_entry.id;
-        updated_upstream_entry.updated_at = Utc::now();
-        updated_upstream_entry.created_at = upstream_entry.created_at;
-
-        upstream_collection
-            .update_one(
-                doc!("_id": &*updated_upstream_entry.id),
-                doc! {"$set":  bson::serialize_to_bson(&updated_upstream_entry).unwrap()},
-            )
-            .await?;
-
-        // create a changelog entry for this update
-        let changelog_entry = ExpenseChangelogEntry {
-            id: ObjectId::new().into(),
-            user_id: Some(user_id.into()),
-            target_id: upstream_entry.id,
-            date: updated_upstream_entry.updated_at,
-            old_state: Some(upstream_entry),
-            new_state: Some(updated_upstream_entry.clone()),
-            tool: None,
-            automatic: false,
-            confidence: 1.0,
-        };
-        context
-            .connection
-            .collection::<ExpenseChangelogEntry>("expense_changes")
-            .insert_one(&changelog_entry)
-            .await?;
-
-        let expense = render(
-            user_id,
-            &context.connection,
-            updated_upstream_entry,
-            &related_accounts,
-        )
+            Ok(())
+        })
         .await?;
-        Ok(expense)
+
+        Ok(GraphQLExpense::new(
+            load_rendered(conn, user_id, upstream_id).await?,
+        ))
     }
 }
 
-pub async fn validate_and_unrender(
-    uid: ObjectId,
+type Conn = diesel_async::pooled_connection::deadpool::Object<AsyncPgConnection>;
+
+async fn load_rendered(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<RenderedExpense> {
+    expenses_rendered::table
+        .filter(expenses_rendered::id.eq(id))
+        .filter(expenses_rendered::user_id.eq(user_id))
+        .select(RenderedExpense::as_select())
+        .first(conn)
+        .await
+        .optional()?
+        .ok_or_else(|| format!("Expense {id} not found").into())
+}
+
+async fn validate_and_unrender(
+    conn: &mut Conn,
+    user_id: Uuid,
     expense: RenderedExpenseInput,
-    related_accounts: &[Account],
-    categories: &[Category],
 ) -> Result<Expense, Box<dyn Error>> {
-    if expense
-        .transactions
-        .iter()
-        .map(|t| *t.account_id)
-        .any(|a_id| !related_accounts.iter().any(|a| *a.id == a_id))
-    {
-        return Err(format!(
-            "user {:?} tried to create an expense with unknown account id(s)",
-            uid
-        )
-        .into());
-    };
+    let account_ids: Vec<_> = expense.transactions.iter().map(|t| t.account_id).collect();
+    let related_accounts = queries::query_associated_accounts(conn, &account_ids).await?;
+    let categories = queries::query_categories(conn).await?;
 
-    if related_accounts.iter().all(|a| *a.user_id != uid) {
-        return Err(format!(
-            "user {:?} tried to create an expense consisting only of accounts that don't belong to her",
-            uid
-        ).into());
-    }
+    check_references(user_id, &expense, &related_accounts, &categories)?;
 
-    if expense
-        .categories
-        .iter()
-        .map(|c| c.category_id)
-        .any(|a_id| !categories.iter().any(|a| *a.id == *a_id))
-    {
-        return Err(format!(
-            "user {:?} tried to create an expense with unknown category id(s)",
-            uid
-        )
-        .into());
-    };
-
-    // cast to normal expense and insert into database
     let entry = Expense::from_rendered(expense);
     entry.validate()?;
 
     Ok(entry)
 }
 
-pub async fn render(
-    uid: ObjectId,
-    connection: &mongodb::Database,
-    entry: Expense,
+fn check_references(
+    user_id: Uuid,
+    expense: &RenderedExpenseInput,
     related_accounts: &[Account],
-) -> Result<RenderedExpense, Box<dyn Error>> {
-    // create rendered expenses and insert them into database
-    let rendered_expenses = entry.render(related_accounts)?;
-    let collection = connection.collection::<RenderedExpense>("expenses_rendered");
-    collection.insert_many(&rendered_expenses).await?;
+    categories: &[Category],
+) -> Result<(), Box<dyn Error>> {
+    // the foreign keys would catch unknown ids, but not that the expense has to touch this
+    // user's money for them to be allowed to book it
+    if expense
+        .transactions
+        .iter()
+        .any(|t| !related_accounts.iter().any(|a| a.id == t.account_id))
+    {
+        return Err(format!(
+            "user {user_id} tried to create an expense with unknown account id(s)"
+        )
+        .into());
+    }
 
-    // find the rendered expense that was rendered for this user and return it
-    let rendered_entry = rendered_expenses
-        .into_iter()
-        .find(|b| *b.user_id == uid)
-        .unwrap_or_else(|| {
-            panic!(
-                "rendering did not result in a expense for this user?! expense {:?}",
-                entry.id
-            )
-        });
-    Ok(rendered_entry)
+    if related_accounts.iter().all(|a| a.user_id != user_id) {
+        return Err(format!(
+            "user {user_id} tried to create an expense consisting only of accounts that don't belong to her"
+        ).into());
+    }
+
+    if expense
+        .categories
+        .iter()
+        .any(|c| !categories.iter().any(|k| k.id == c.category_id))
+    {
+        return Err(format!(
+            "user {user_id} tried to create an expense with unknown category id(s)"
+        )
+        .into());
+    }
+
+    Ok(())
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { ExpenseSortField$options, SortDirection$options } from '$houdini';
 	import { cache, graphql } from '$houdini';
 
 	import {
@@ -46,10 +47,7 @@
 	let itemsPerPage = $derived(15);
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
-	let sortBy: { field: string; direction: number }[] = $state([
-		{ field: 'status', direction: -1 },
-		{ field: 'bookingStart', direction: -1 }
-	]);
+	let sortBy: { field: string; direction: number } = $state({ field: 'status', direction: -1 });
 
 	let showNewExpenseModal = $state(false);
 	let showEditExpenseModal = $state(false);
@@ -72,170 +70,39 @@
 	let showIncomplete = $state(true);
 	let showNormal = $state(true);
 
-	const expenseVariables = () => {
-		let filters = [];
-		if (searchTerm) {
-			const re = {
-				$regex: searchTerm,
-				$options: 'i'
-			};
-
-			const searchFilters: Record<string, unknown>[] = [
-				{
-					title: re
-				},
-				{
-					description: re
-				},
-				{
-					store: re
-				},
-				{
-					positions: {
-						$elemMatch: {
-							title: re
-						}
-					}
-				}
-			];
-
-			const searchFloat = parseFloat(searchTerm.trim());
-			if (!isNaN(searchFloat) && searchFloat) {
-				const lower = Math.floor(searchFloat * 100);
-				const upper = Math.ceil(searchFloat * 100);
-
-				searchFilters.push(
-					{
-						transactions: {
-							$elemMatch: {
-								$or: [
-									{
-										effectiveAmount: { $gte: lower, $lte: upper }
-									},
-									{
-										amount: { $gte: lower, $lte: upper }
-									},
-									{
-										effectiveAmount: { $gte: -upper, $lte: -lower }
-									},
-									{
-										amount: { $gte: -upper, $lte: -lower }
-									}
-								]
-							}
-						}
-					},
-					{
-						effectiveAmount: { $gte: lower, $lte: upper }
-					},
-					{
-						effectiveAmount: { $gte: -upper, $lte: -lower }
-					}
-				);
-			}
-
-			filters.push({
-				$or: searchFilters
-			});
-		}
-
-		if (filteredAccounts.length > 0) {
-			filters.push({
-				'transactions.accountId': {
-					$in: filteredAccounts.map((account) => ({ $oid: account }))
-				}
-			});
-		}
-
-		if (filteredCategories.length > 0) {
-			filters.push({
-				'categories.categoryId': {
-					$in: filteredCategories.map((category) => ({ $oid: category }))
-				}
-			});
-		}
-
-		if (!showTemplates) {
-			filters.push({
-				isTemplate: false
-			});
-		}
-
-		if (!showTaxRelevant) {
-			filters.push({
-				isTaxRelevant: false
-			});
-		}
-
-		if (!showExtraordinary) {
-			filters.push({
-				isExtraordinary: false
-			});
-		}
-
-		if (!showUnchecked) {
-			filters.push({
-				isUnchecked: false
-			});
-		}
-
-		if (!showIncomplete) {
-			filters.push({
-				isIncomplete: false
-			});
-		}
-
-		if (!showNormal) {
-			filters.push({
-				$or: [
-					{ isTemplate: true },
-					{ isTaxRelevant: true },
-					{ isExtraordinary: true },
-					{ isUnchecked: true },
-					{ isIncomplete: true }
-				]
-			});
-		}
-
-		if (filterDateRange.from)
-			filters.push({ bookingStart: { $gte: { $date: filterDateRange.from } } });
-
-		if (filterDateRange.to) filters.push({ bookingEnd: { $lte: { $date: filterDateRange.to } } });
-
-		let currentSort: Record<string, number> = {};
-		for (const { field, direction } of sortBy) {
-			switch (field) {
-				case 'status':
-					currentSort.isTemplate = -direction;
-					currentSort.isIncomplete = direction;
-					currentSort.isUnchecked = direction;
-					break;
-				case 'accounts':
-					currentSort['transactions.accountId'] = direction;
-					break;
-				case 'categories':
-					currentSort['categories.categoryId'] = direction;
-					break;
-				case 'bookingStart':
-				case 'title':
-				case 'store':
-				case 'description':
-				case 'comments':
-				case 'effectiveAmount':
-					currentSort[field] = direction;
-					break;
-				default:
-					throw new Error(`Unknown sort field: ${field}`);
-			}
-		}
-
-		return {
-			limit: itemsPerPage || 10,
-			offset: ((currentPage || 1) - 1) * (itemsPerPage || 10),
-			filter: filters.length > 0 ? JSON.stringify({ $and: filters }) : undefined,
-			sort: JSON.stringify(currentSort)
-		};
+	// The column the header clicks name, mapped onto what the API offers. The backend used to
+	// take a mongo sort document built right here; it now names its own columns.
+	const SORT_FIELDS: Record<string, ExpenseSortField$options> = {
+		status: 'STATUS',
+		bookingStart: 'BOOKING_START',
+		title: 'TITLE',
+		store: 'STORE',
+		description: 'DESCRIPTION',
+		comments: 'COMMENTS',
+		effectiveAmount: 'EFFECTIVE_AMOUNT',
+		accounts: 'ACCOUNTS',
+		categories: 'CATEGORIES'
 	};
+
+	const expenseVariables = () => ({
+		limit: itemsPerPage || 10,
+		offset: ((currentPage || 1) - 1) * (itemsPerPage || 10),
+		search: searchTerm.trim() || undefined,
+		accountIds: filteredAccounts.length > 0 ? filteredAccounts : undefined,
+		categoryIds: filteredCategories.length > 0 ? filteredCategories : undefined,
+		flags: {
+			templates: showTemplates,
+			taxRelevant: showTaxRelevant,
+			extraordinary: showExtraordinary,
+			unchecked: showUnchecked,
+			incomplete: showIncomplete,
+			normal: showNormal
+		},
+		bookedAfter: filterDateRange.from,
+		bookedBefore: filterDateRange.to,
+		sortBy: SORT_FIELDS[sortBy.field],
+		sortDir: (sortBy.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options
+	});
 
 	// Stuff that we always need independently of the current page and sorting and so on
 	const basicStore = graphql(`
@@ -271,9 +138,31 @@
 	`);
 
 	const expenseStore = graphql(`
-		query ExpenseTableExpenses($limit: Int, $offset: Int, $filter: String, $sort: String) {
+		query ExpenseTableExpenses(
+			$limit: Int
+			$offset: Int
+			$search: String
+			$accountIds: [UUID!]
+			$categoryIds: [UUID!]
+			$flags: ExpenseFlagFilter
+			$bookedAfter: DateTime
+			$bookedBefore: DateTime
+			$sortBy: ExpenseSortField
+			$sortDir: SortDirection
+		) {
 			expenses {
-				list(limit: $limit, skip: $offset, filter: $filter, sort: $sort) {
+				list(
+					limit: $limit
+					skip: $offset
+					search: $search
+					accountIds: $accountIds
+					categoryIds: $categoryIds
+					flags: $flags
+					bookedAfter: $bookedAfter
+					bookedBefore: $bookedBefore
+					sortBy: $sortBy
+					sortDir: $sortDir
+				) {
 					totalCount
 					edges {
 						node {
@@ -390,25 +279,18 @@
 	}
 
 	function sortByField(field: string) {
-		const index = sortBy.findIndex(({ field: f }) => f === field);
-		if (index === -1) {
-			sortBy = [{ field, direction: -1 }];
-		} else {
-			sortBy = [{ field, direction: -sortBy[index].direction }];
-		}
+		sortBy = { field, direction: sortBy.field === field ? -sortBy.direction : -1 };
 	}
 
 	function isSortedBy(field: string) {
-		const index = sortBy.findIndex(({ field: f }) => f === field);
-		if (index === -1) return null;
-		return sortBy[index].direction;
+		return sortBy.field === field ? sortBy.direction : null;
 	}
 
 	$effect(() => void basicStore.fetch());
 	$effect(() => void expenseStore.fetch({ variables: expenseVariables() }));
 
 	const DeleteExpense = graphql(`
-		mutation DeleteExpense($id: ObjectIdWrapper!) {
+		mutation DeleteExpense($id: UUID!) {
 			expenses {
 				delete(id: $id)
 			}
