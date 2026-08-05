@@ -6,8 +6,12 @@ services:
     restart: unless-stopped
     expose:
       - 80
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
-      - MONETA__DATABASE__URL=mongodb://mongo:27017
+      - MONETA__DATABASE__URL=postgres://moneta:moneta@postgres:5432/moneta
+      - MONETA__DATABASE__MONGO_URL=mongodb://mongo:27017
       - MONETA__API__PORT=80
       - MONETA__API__ADDRESS=0.0.0.0
       - MONETA__API__SECRET_KEY=M7/dfyV00H6WoOGNxygzdOudibhuPdQwJay5pi+I1cg=
@@ -26,9 +30,11 @@ services:
     image: git.gerken.haus/thies/moneta/backend:main
     restart: unless-stopped
     depends_on:
-      - mongo
+      postgres:
+        condition: service_healthy
     environment:
-      - MONETA__DATABASE__URL=mongodb://mongo:27017
+      - MONETA__DATABASE__URL=postgres://moneta:moneta@postgres:5432/moneta
+      - MONETA__DATABASE__MONGO_URL=mongodb://mongo:27017
     command: sh -c 'while true; do moneta periodic --run; sleep 3600; done'
 
   frontend:
@@ -47,6 +53,24 @@ services:
       - "traefik.http.routers.moneta-frontend.rule=PathPrefix(`/`)"
       - "traefik.http.routers.moneta-frontend.entrypoints=web"
 
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      - POSTGRES_USER=moneta
+      - POSTGRES_PASSWORD=moneta
+      - POSTGRES_DB=moneta
+    volumes:
+      - ./volumes/postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    ports:
+      # for debugging :)
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moneta"]
+      interval: 5s
+      retries: 10
+
+  # Only needed until the postgres cutover is done; `moneta migrate-mongo` reads from here.
   mongo:
     image: mongo:8@sha256:d6566e93e6a913cdb622ebe34e0ae7937d50efa60e92363fb4a84404dc890415
     volumes:
@@ -70,3 +94,4 @@ services:
 
 volumes:
   mongo:
+  postgres:

@@ -12,13 +12,18 @@ pub struct Config {
 #[serde(default)]
 pub struct DatabaseConfig {
     pub url: String,
+
+    /// source for `moneta migrate-mongo`, unused otherwise
+    pub mongo_url: String,
+    /// database name within `mongo_url`
     pub name: String,
 }
 
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
-            url: "mongodb://localhost:27018".into(),
+            url: "postgres://moneta:moneta@localhost:5433/moneta".into(),
+            mongo_url: "mongodb://localhost:27018".into(),
             name: "moneta".into(),
         }
     }
