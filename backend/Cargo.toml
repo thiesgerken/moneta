@@ -44,7 +44,7 @@ mongodb = { version = "3.8", default-features = false, features = [
 dataloader = { version = "0.18", default-features = false, features = [
     "runtime-tokio",
 ] }
-juniper = { version = "0.17", features = ["chrono"] }
+juniper = { version = "0.17", features = ["chrono", "uuid"] }
 juniper_rocket = "0.10"
 dotenvy = "0.15"
 bson = { version = "3.1", features = ["chrono-0_4"] }

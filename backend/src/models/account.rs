@@ -1,11 +1,14 @@
 use std::error::Error;
 
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
 use diesel::{deserialize::FromSqlRow, expression::AsExpression};
 use juniper::{GraphQLEnum, GraphQLInputObject, GraphQLObject};
 use serde::{Deserialize, Serialize};
 
-use super::{ObjectIdWrapper, text_enum};
+use uuid::Uuid;
+
+use super::text_enum;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, GraphQLEnum, AsExpression, FromSqlRow)]
 #[diesel(sql_type = diesel::sql_types::Text)]
@@ -71,14 +74,11 @@ text_enum!(AccountKind {
     Other => "other",
 });
 
-#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Queryable, Selectable, Insertable, AsChangeset)]
+#[diesel(table_name = crate::schema::accounts, check_for_backend(diesel::pg::Pg))]
 pub struct Account {
-    #[serde(rename = "_id", default)]
-    pub id: ObjectIdWrapper,
-
-    #[serde(default)]
-    pub user_id: ObjectIdWrapper,
+    pub id: Uuid,
+    pub user_id: Uuid,
 
     pub name: String,
     pub description: String,
@@ -88,22 +88,31 @@ pub struct Account {
     pub availability: AccountAvailability,
     pub risk: AccountRisk,
 
-    // when the account was opened and possibly closed. Used to determine whether to hide the account or not.
-    // at its opening, it is implicitly assumed that the account had a balance of zero.
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
+    /// when the account was opened and possibly closed. Used to determine whether to hide the
+    /// account or not. At its opening it is implicitly assumed to have had a balance of zero.
     pub opened: DateTime<Utc>,
-    #[serde(with = "crate::queries::optional_chrono_datetime_as_bson_datetime")]
     pub closed: Option<DateTime<Utc>>,
 
-    // how to add balances of this account to the total balance, must be >0 and <=1
+    /// how to add balances of this account to the total balance, must be >0 and <=1
     pub ownership_fraction: f64,
 
-    // of course this needs to be mirrored in the other account
-    pub synchronization: Option<AccountSynchronization>,
+    /// The mirror of this account in another user's books, stored flat because that is what a
+    /// row is. `synchronization()` puts the pair back together; the reverse link on the other
+    /// account has to be kept in step by hand, since no constraint can see across rows.
+    pub sync_account_id: Option<Uuid>,
+    pub sync_invert: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, GraphQLInputObject)]
-#[serde(rename_all = "camelCase")]
+impl Account {
+    pub fn synchronization(&self) -> Option<AccountSynchronization> {
+        Some(AccountSynchronization {
+            account_id: self.sync_account_id?,
+            invert: self.sync_invert?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, GraphQLInputObject)]
 pub struct AccountInput {
     pub name: String,
     pub description: String,
@@ -113,29 +122,27 @@ pub struct AccountInput {
     pub availability: AccountAvailability,
     pub risk: AccountRisk,
 
-    // when the account was opened and possibly closed. Used to determine whether to hide the account or not.
-    // at its opening, it is implicitly assumed that the account had a balance of zero.
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub opened: DateTime<Utc>,
-    #[serde(with = "crate::queries::optional_chrono_datetime_as_bson_datetime")]
     pub closed: Option<DateTime<Utc>>,
 
-    // how to add balances of this account to the total balance, must be >0 and <=1
     pub ownership_fraction: f64,
 }
 
 pub type AccountUpdateInput = AccountInput;
 pub type AccountCreateInput = AccountInput;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, GraphQLObject)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq, GraphQLObject)]
 pub struct AccountSynchronization {
-    pub account_id: ObjectIdWrapper, // id of the other account
-    pub invert: bool, // whether to count income in the original account as an expense in the synchronized account (and vice versa) or not
+    pub account_id: Uuid, // id of the other account
+    /// whether to count income in the original account as an expense in the synchronized
+    /// account (and vice versa) or not
+    pub invert: bool,
 }
 
 impl AccountInput {
     pub fn validate(&self) -> Result<(), Box<dyn Error>> {
+        // closed > opened and the ownership fraction range are CHECK constraints now; this
+        // stays so the API reports them before the database does
         if let Some(closed) = self.closed
             && closed <= self.opened
         {
@@ -152,14 +159,13 @@ impl AccountInput {
         Ok(())
     }
 
-    pub fn upgrade(self, id: ObjectIdWrapper, user_id: ObjectIdWrapper) -> Account {
+    pub fn upgrade(self, id: Uuid, user_id: Uuid) -> Account {
         Account {
             id,
+            user_id,
             name: self.name,
             description: self.description,
             color: self.color,
-            user_id,
-            synchronization: None,
             iban: self.iban,
             kind: self.kind,
             availability: self.availability,
@@ -167,6 +173,8 @@ impl AccountInput {
             opened: self.opened,
             closed: self.closed,
             ownership_fraction: self.ownership_fraction,
+            sync_account_id: None,
+            sync_invert: None,
         }
     }
 }

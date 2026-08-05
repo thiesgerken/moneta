@@ -1841,6 +1841,7 @@ dependencies = [
  "ref-cast",
  "serde",
  "static_assertions",
+ "uuid",
 ]
 
 [[package]]

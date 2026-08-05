@@ -7,7 +7,7 @@ use crate::graphql::util::{self};
 use crate::models::rendering::{
     RenderedBalance, RenderedBalanceCreateInput, RenderedBalanceInput, RenderedBalanceUpdateInput,
 };
-use crate::models::{Account, Balance, ObjectIdWrapper};
+use crate::models::{Account, Balance, Uuid};
 use crate::queries;
 
 use chrono::DateTime;
@@ -15,8 +15,7 @@ use chrono::Utc;
 use juniper::FieldResult;
 use juniper::GraphQLObject;
 use juniper::graphql_object;
-use mongodb::bson::oid::ObjectId;
-use mongodb::bson::{self, doc};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct GraphQLBalance {
@@ -30,11 +29,11 @@ impl GraphQLBalance {
 
 #[graphql_object(    Context = Context,name = "Balance")]
 impl GraphQLBalance {
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
 
-    fn upstream_id(&self) -> ObjectIdWrapper {
+    fn upstream_id(&self) -> Uuid {
         self.data.upstream_id
     }
 
@@ -112,7 +111,7 @@ impl BalanceQuery {
 
     pub async fn get(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
     ) -> juniper::FieldResult<GraphQLBalance> {
         let uid = require_user(context).await?;
         let collection = context
@@ -134,7 +133,7 @@ pub struct BalanceMutation;
     Context = Context,
 )]
 impl BalanceMutation {
-    pub async fn delete(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<bool> {
+    pub async fn delete(context: &Context, id: Uuid) -> juniper::FieldResult<bool> {
         let user_id = require_user(context).await?;
         let collection = context
             .connection
@@ -183,7 +182,7 @@ impl BalanceMutation {
 
     pub async fn update(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
         balance: RenderedBalanceUpdateInput,
     ) -> juniper::FieldResult<GraphQLBalance> {
         let user_id = require_user(context).await?;
@@ -237,7 +236,7 @@ impl BalanceMutation {
 }
 
 pub async fn render(
-    uid: ObjectId,
+    uid: Uuid,
     connection: &mongodb::Database,
     entry: Balance,
     related_accounts: &[Account],
@@ -262,7 +261,7 @@ pub async fn render(
 }
 
 pub async fn validate_and_unrender(
-    uid: ObjectId,
+    uid: Uuid,
     balance: RenderedBalanceInput,
     related_accounts: &[Account],
 ) -> Result<Balance, Box<dyn Error>> {

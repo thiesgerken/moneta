@@ -5,13 +5,12 @@
 //! automation rule a delivered transaction matches.
 
 use chrono::{DateTime, Datelike, TimeDelta, Utc};
-use futures::TryStreamExt;
-use mongodb::bson::{self, doc, oid::ObjectId};
 use regex::Regex;
 use std::error::Error;
 
 use crate::models::{
-    Account, AutomationRule, Expense, ExpenseChangelogEntry, ExpenseDelivery, ObjectIdWrapper,
+use uuid::Uuid;
+    Account, AutomationRule, Expense, ExpenseChangelogEntry, ExpenseDelivery, Uuid,
     PeriodicRule, SeenDelivery, rendering::RenderedExpense,
 };
 
@@ -53,7 +52,7 @@ pub fn instantiate(rule: &PeriodicRule, template: &Expense, at: DateTime<Utc>) -
     let shift = at - template.booking_start;
 
     let mut e = template.clone();
-    e.id = ObjectId::new().into();
+    e.id = Uuid::now_v7().into();
     e.is_template = false;
     e.booking_start = at;
     e.booking_end = template.booking_end + shift;
@@ -93,9 +92,9 @@ fn substitute_date(title: &str, at: DateTime<Utc>) -> String {
 }
 
 /// Records that a rule, rather than a person, created this expense.
-pub fn changelog_entry(expense: &Expense, user_id: ObjectId, tool: &str) -> ExpenseChangelogEntry {
+pub fn changelog_entry(expense: &Expense, user_id: Uuid, tool: &str) -> ExpenseChangelogEntry {
     ExpenseChangelogEntry {
-        id: ObjectId::new().into(),
+        id: Uuid::now_v7().into(),
         target_id: expense.id,
         user_id: Some(user_id.into()),
         date: expense.created_at,
@@ -144,7 +143,7 @@ pub fn impose(
     now: DateTime<Utc>,
 ) -> Result<Expense, Box<dyn Error>> {
     let mut e = template.clone();
-    e.id = ObjectId::new().into();
+    e.id = Uuid::now_v7().into();
     e.is_template = false;
     // the delivery is a bank statement line, so it is worth a human look before it counts
     e.is_unchecked = true;
@@ -215,8 +214,8 @@ pub const PERIODIC_ADVANCE: TimeDelta = TimeDelta::hours(12);
 pub enum DeliveryOutcome {
     /// an expense was created from the named rule
     Created {
-        expense_id: ObjectIdWrapper,
-        rule_id: ObjectIdWrapper,
+        expense_id: Uuid,
+        rule_id: Uuid,
     },
     /// already processed, most likely an overlapping re-upload
     Duplicate,
@@ -233,7 +232,7 @@ pub enum DeliveryOutcome {
 /// statement does not keep re-evaluating the same lines.
 pub async fn deliver_expenses(
     connection: &mongodb::Database,
-    user_id: ObjectId,
+    user_id: Uuid,
     deliveries: &[ExpenseDelivery],
     now: DateTime<Utc>,
 ) -> Result<Vec<DeliveryOutcome>, Box<dyn Error + Send + Sync>> {
@@ -277,7 +276,7 @@ pub async fn deliver_expenses(
         }
 
         let mut record = SeenDelivery {
-            id: ObjectId::new().into(),
+            id: Uuid::now_v7().into(),
             user_id: user_id.into(),
             account_id: delivery.account_id,
             date: delivery.date,
@@ -469,7 +468,7 @@ mod tests {
 
     fn template(transactions: Vec<ExpenseTransaction>) -> Expense {
         Expense {
-            id: ObjectId::new().into(),
+            id: Uuid::now_v7().into(),
             title: "Rundfunkgebühr".into(),
             store: String::new(),
             description: String::new(),
@@ -491,7 +490,7 @@ mod tests {
         }
     }
 
-    fn transaction(account_id: ObjectId, amount: Option<i32>) -> ExpenseTransaction {
+    fn transaction(account_id: Uuid, amount: Option<i32>) -> ExpenseTransaction {
         ExpenseTransaction {
             account_id: account_id.into(),
             date: at(2025, 1, 15),
@@ -504,10 +503,10 @@ mod tests {
 
     fn periodic(period: PeriodicInterval, last_creation: DateTime<Utc>) -> PeriodicRule {
         PeriodicRule {
-            id: ObjectId::new().into(),
-            user_id: ObjectId::new().into(),
+            id: Uuid::now_v7().into(),
+            user_id: Uuid::now_v7().into(),
             title: "Rundfunkgebühr".into(),
-            template_id: ObjectId::new().into(),
+            template_id: Uuid::now_v7().into(),
             period,
             title_replacement: None,
             amount_replacement: None,
@@ -519,10 +518,10 @@ mod tests {
 
     fn automation(title: &str, priority: i32) -> AutomationRule {
         AutomationRule {
-            id: ObjectId::new().into(),
-            user_id: ObjectId::new().into(),
+            id: Uuid::now_v7().into(),
+            user_id: Uuid::now_v7().into(),
             title: title.into(),
-            template_id: ObjectId::new().into(),
+            template_id: Uuid::now_v7().into(),
             priority,
             regex_time: None,
             regex_statement: None,
@@ -534,7 +533,7 @@ mod tests {
         }
     }
 
-    fn delivery(account_id: ObjectId, amount: i32, statement: &str) -> ExpenseDelivery {
+    fn delivery(account_id: Uuid, amount: i32, statement: &str) -> ExpenseDelivery {
         ExpenseDelivery {
             account_id: account_id.into(),
             date: at(2025, 3, 4),
@@ -578,7 +577,7 @@ mod tests {
     #[test]
     fn instantiated_expense_is_not_itself_a_template() {
         let rule = periodic(PeriodicInterval::Monthly, at(2025, 3, 1));
-        let tpl = template(vec![transaction(ObjectId::new(), Some(-1836))]);
+        let tpl = template(vec![transaction(Uuid::now_v7(), Some(-1836))]);
         let e = instantiate(&rule, &tpl, at(2025, 4, 15));
 
         assert!(!e.is_template);
@@ -590,7 +589,7 @@ mod tests {
     #[test]
     fn instantiation_shifts_the_whole_booking_window() {
         let rule = periodic(PeriodicInterval::Monthly, at(2025, 3, 1));
-        let mut tpl = template(vec![transaction(ObjectId::new(), Some(-500))]);
+        let mut tpl = template(vec![transaction(Uuid::now_v7(), Some(-500))]);
         tpl.booking_end = at(2025, 1, 18);
 
         let e = instantiate(&rule, &tpl, at(2025, 4, 15));
@@ -614,7 +613,7 @@ mod tests {
         let mut rule = periodic(PeriodicInterval::Monthly, at(2025, 3, 1));
         rule.amount_replacement = Some(-1836);
 
-        let tpl = template(vec![transaction(ObjectId::new(), Some(-500))]);
+        let tpl = template(vec![transaction(Uuid::now_v7(), Some(-500))]);
         let e = instantiate(&rule, &tpl, at(2025, 4, 15));
 
         assert_eq!(e.transactions[0].amount, Some(-1836));
@@ -629,8 +628,8 @@ mod tests {
         rule.amount_replacement = Some(-1836);
 
         let mut tpl = template(vec![
-            transaction(ObjectId::new(), Some(-1750)),
-            transaction(ObjectId::new(), None),
+            transaction(Uuid::now_v7(), Some(-1750)),
+            transaction(Uuid::now_v7(), None),
         ]);
         tpl.transactions[1].fraction = Some(-0.5);
         tpl.reference_amount = Some(-1750);
@@ -652,8 +651,8 @@ mod tests {
         rule.amount_replacement = Some(-1000);
 
         let mut tpl = template(vec![
-            transaction(ObjectId::new(), None),
-            transaction(ObjectId::new(), None),
+            transaction(Uuid::now_v7(), None),
+            transaction(Uuid::now_v7(), None),
         ]);
         tpl.transactions[0].fraction = Some(0.5);
         tpl.transactions[1].fraction = Some(0.5);
@@ -669,7 +668,7 @@ mod tests {
     #[test]
     fn a_rule_without_filters_matches_anything() {
         let rule = automation("catch all", 1);
-        assert!(matches(&rule, &delivery(ObjectId::new(), -100, "whatever")));
+        assert!(matches(&rule, &delivery(Uuid::now_v7(), -100, "whatever")));
     }
 
     #[test]
@@ -680,27 +679,27 @@ mod tests {
         assert!(matches(
             &rule,
             &delivery(
-                ObjectId::new(),
+                Uuid::now_v7(),
                 -100,
                 "LASTSCHRIFT Muster Stadtreinigung AG"
             )
         ));
         assert!(!matches(
             &rule,
-            &delivery(ObjectId::new(), -100, "REWE SAGT DANKE")
+            &delivery(Uuid::now_v7(), -100, "REWE SAGT DANKE")
         ));
     }
 
     #[test]
     fn amount_and_account_filters_must_match_exactly() {
-        let account = ObjectId::new();
+        let account = Uuid::now_v7();
         let mut rule = automation("exact", 1);
         rule.filter_amount = Some(-5001);
         rule.filter_account_id = Some(account.into());
 
         assert!(matches(&rule, &delivery(account, -5001, "x")));
         assert!(!matches(&rule, &delivery(account, -5000, "x")));
-        assert!(!matches(&rule, &delivery(ObjectId::new(), -5001, "x")));
+        assert!(!matches(&rule, &delivery(Uuid::now_v7(), -5001, "x")));
     }
 
     #[test]
@@ -708,7 +707,7 @@ mod tests {
         let mut rule = automation("every fourth", 1);
         rule.regex_time = Some(r"^04\.03\.2025".into());
 
-        assert!(matches(&rule, &delivery(ObjectId::new(), -100, "x")));
+        assert!(matches(&rule, &delivery(Uuid::now_v7(), -100, "x")));
     }
 
     /// a rule nobody can parse must not silently become a catch-all
@@ -719,13 +718,13 @@ mod tests {
 
         assert!(!matches(
             &rule,
-            &delivery(ObjectId::new(), -100, "anything")
+            &delivery(Uuid::now_v7(), -100, "anything")
         ));
     }
 
     #[test]
     fn the_highest_priority_matching_rule_wins() {
-        let account = ObjectId::new();
+        let account = Uuid::now_v7();
         let mut specific = automation("specific", 10);
         specific.regex_statement = Some("REWE".into());
         let general = automation("general", 1);
@@ -744,7 +743,7 @@ mod tests {
         assert!(
             best_match(
                 std::slice::from_ref(&rule),
-                &delivery(ObjectId::new(), -100, "REWE")
+                &delivery(Uuid::now_v7(), -100, "REWE")
             )
             .is_none()
         );
@@ -754,10 +753,10 @@ mod tests {
     /// delivered account would otherwise yield an expense carrying the template's amounts,
     /// which is wrong money written silently — the same failure the periodic amount
     /// replacement had.
-    fn seen(account_id: ObjectId, amount: i32, date: DateTime<Utc>) -> SeenDelivery {
+    fn seen(account_id: Uuid, amount: i32, date: DateTime<Utc>) -> SeenDelivery {
         SeenDelivery {
-            id: ObjectId::new().into(),
-            user_id: ObjectId::new().into(),
+            id: Uuid::now_v7().into(),
+            user_id: Uuid::now_v7().into(),
             account_id: account_id.into(),
             date,
             amount,
@@ -769,7 +768,7 @@ mod tests {
 
     #[test]
     fn an_identical_line_on_the_same_day_is_a_duplicate() {
-        let account = ObjectId::new();
+        let account = Uuid::now_v7();
         let history = vec![seen(account, -4237, at(2025, 3, 4))];
 
         assert!(is_duplicate(&history, &delivery(account, -4237, "REWE")));
@@ -779,7 +778,7 @@ mod tests {
     /// payment, so the text must not decide identity
     #[test]
     fn a_reworded_statement_is_still_a_duplicate() {
-        let account = ObjectId::new();
+        let account = Uuid::now_v7();
         let history = vec![seen(account, -4237, at(2025, 3, 4))];
 
         let mut d = delivery(account, -4237, "KARTENZAHLUNG REWE SAGT DANKE 04.03.");
@@ -790,20 +789,20 @@ mod tests {
 
     #[test]
     fn a_different_amount_or_account_is_not_a_duplicate() {
-        let account = ObjectId::new();
+        let account = Uuid::now_v7();
         let history = vec![seen(account, -4237, at(2025, 3, 4))];
 
         assert!(!is_duplicate(&history, &delivery(account, -4238, "REWE")));
         assert!(!is_duplicate(
             &history,
-            &delivery(ObjectId::new(), -4237, "REWE")
+            &delivery(Uuid::now_v7(), -4237, "REWE")
         ));
     }
 
     /// the same standing order next month is a real second payment
     #[test]
     fn the_same_amount_outside_the_window_is_not_a_duplicate() {
-        let account = ObjectId::new();
+        let account = Uuid::now_v7();
         let history = vec![seen(account, -4237, at(2025, 2, 4))];
 
         assert!(!is_duplicate(&history, &delivery(account, -4237, "REWE")));
@@ -812,7 +811,7 @@ mod tests {
     /// a bank moving a booking by a few hours must not produce a second expense
     #[test]
     fn a_delivery_shifted_within_the_window_is_a_duplicate() {
-        let account = ObjectId::new();
+        let account = Uuid::now_v7();
         let history = vec![seen(account, -4237, at(2025, 3, 4) - TimeDelta::hours(20))];
 
         assert!(is_duplicate(&history, &delivery(account, -4237, "REWE")));
@@ -820,14 +819,14 @@ mod tests {
 
     #[test]
     fn an_empty_history_never_matches() {
-        assert!(!is_duplicate(&[], &delivery(ObjectId::new(), -100, "x")));
+        assert!(!is_duplicate(&[], &delivery(Uuid::now_v7(), -100, "x")));
     }
 
     #[test]
     fn imposing_a_delivery_for_an_unbooked_account_is_refused() {
-        let tpl = template(vec![transaction(ObjectId::new(), Some(-100))]);
+        let tpl = template(vec![transaction(Uuid::now_v7(), Some(-100))]);
 
-        let err = impose(&tpl, &delivery(ObjectId::new(), -4237, "x"), at(2025, 3, 5));
+        let err = impose(&tpl, &delivery(Uuid::now_v7(), -4237, "x"), at(2025, 3, 5));
 
         assert!(err.is_err());
     }
@@ -836,10 +835,10 @@ mod tests {
     /// and follow the new reference amount rather than keeping the template's numbers
     #[test]
     fn imposing_a_delivery_rescales_the_shares() {
-        let account = ObjectId::new();
+        let account = Uuid::now_v7();
         let mut tpl = template(vec![
             transaction(account, Some(-1000)),
-            transaction(ObjectId::new(), None),
+            transaction(Uuid::now_v7(), None),
         ]);
         tpl.transactions[1].fraction = Some(-0.5);
         tpl.reference_amount = Some(-1000);
@@ -856,10 +855,10 @@ mod tests {
     /// the result still has to satisfy the expense invariants
     #[test]
     fn imposing_a_delivery_onto_a_fractional_booking_stays_valid() {
-        let account = ObjectId::new();
+        let account = Uuid::now_v7();
         let mut tpl = template(vec![
             transaction(account, None),
-            transaction(ObjectId::new(), None),
+            transaction(Uuid::now_v7(), None),
         ]);
         tpl.transactions[0].fraction = Some(1.0);
         tpl.transactions[1].fraction = Some(-0.5);
@@ -876,7 +875,7 @@ mod tests {
     /// not produce one that would be rejected
     #[test]
     fn imposed_expenses_are_valid() {
-        let account = ObjectId::new();
+        let account = Uuid::now_v7();
         let tpl = template(vec![transaction(account, Some(-100))]);
 
         let e = impose(&tpl, &delivery(account, -4237, "x"), at(2025, 3, 5)).unwrap();
@@ -887,7 +886,7 @@ mod tests {
     #[test]
     fn instantiated_expenses_are_valid() {
         let rule = periodic(PeriodicInterval::Monthly, at(2025, 3, 1));
-        let tpl = template(vec![transaction(ObjectId::new(), Some(-500))]);
+        let tpl = template(vec![transaction(Uuid::now_v7(), Some(-500))]);
 
         let e = instantiate(&rule, &tpl, at(2025, 4, 15));
 
@@ -899,7 +898,7 @@ mod tests {
     fn equal_priorities_resolve_deterministically() {
         let a = automation("aaa", 5);
         let b = automation("bbb", 5);
-        let d = delivery(ObjectId::new(), -100, "x");
+        let d = delivery(Uuid::now_v7(), -100, "x");
 
         let forwards = best_match(&[a.clone(), b.clone()], &d)
             .unwrap()
@@ -913,7 +912,7 @@ mod tests {
     /// all filters are ANDed: matching the statement is not enough if the amount disagrees
     #[test]
     fn filters_combine_conjunctively() {
-        let account = ObjectId::new();
+        let account = Uuid::now_v7();
         let mut rule = automation("both", 1);
         rule.regex_statement = Some("REWE".into());
         rule.filter_amount = Some(-4237);
@@ -928,7 +927,7 @@ mod tests {
     #[test]
     fn delivery_date_format_matches_moneydb() {
         let d = ExpenseDelivery {
-            account_id: ObjectId::new().into(),
+            account_id: Uuid::now_v7().into(),
             date: Utc.with_ymd_and_hms(2025, 3, 4, 9, 5, 0).unwrap(),
             amount: -100,
             statement: String::new(),
@@ -939,8 +938,8 @@ mod tests {
 
     #[test]
     fn imposing_a_delivery_overwrites_the_matching_transaction() {
-        let account = ObjectId::new();
-        let other = ObjectId::new();
+        let account = Uuid::now_v7();
+        let other = Uuid::now_v7();
         let tpl = template(vec![
             transaction(account, Some(-100)),
             transaction(other, Some(-100)),
@@ -972,10 +971,10 @@ mod tests {
 
     #[test]
     fn imposing_a_delivery_sets_the_reference_amount_for_split_templates() {
-        let account = ObjectId::new();
+        let account = Uuid::now_v7();
         let mut tpl = template(vec![
             transaction(account, None),
-            transaction(ObjectId::new(), None),
+            transaction(Uuid::now_v7(), None),
         ]);
         tpl.transactions[0].fraction = Some(0.5);
         tpl.transactions[1].fraction = Some(0.5);

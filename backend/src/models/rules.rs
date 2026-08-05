@@ -4,11 +4,14 @@
 //! rules fire when a matching transaction is delivered from a bank statement.
 
 use chrono::{DateTime, Datelike, Months, TimeDelta, Timelike, Utc};
+use diesel::prelude::*;
 use diesel::{deserialize::FromSqlRow, expression::AsExpression};
 use juniper::{GraphQLEnum, GraphQLInputObject, GraphQLObject};
 use serde::{Deserialize, Serialize};
 
-use super::{ObjectIdWrapper, text_enum};
+use uuid::Uuid;
+
+use super::text_enum;
 
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, GraphQLEnum, AsExpression, FromSqlRow,
@@ -41,20 +44,18 @@ impl PeriodicInterval {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, GraphQLObject, Queryable, Selectable, Insertable, AsChangeset)]
+#[diesel(table_name = crate::schema::periodic_rules, check_for_backend(diesel::pg::Pg))]
 pub struct PeriodicRule {
-    #[serde(rename = "_id", default)]
-    pub id: ObjectIdWrapper,
+    pub id: Uuid,
 
-    #[serde(default)]
-    pub user_id: ObjectIdWrapper,
+    pub user_id: Uuid,
 
     pub title: String,
 
     /// the expense this rule copies. Often but not always flagged `is_template` — moneydb
     /// let ordinary past expenses double as prototypes, and the import preserves that.
-    pub template_id: ObjectIdWrapper,
+    pub template_id: Uuid,
 
     pub period: PeriodicInterval,
 
@@ -66,12 +67,9 @@ pub struct PeriodicRule {
     pub amount_replacement: Option<i32>,
 
     /// occurrences at or before this instant have already been generated
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub last_creation: DateTime<Utc>,
 
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -79,7 +77,7 @@ pub struct PeriodicRule {
 #[serde(rename_all = "camelCase")]
 pub struct PeriodicRuleInput {
     pub title: String,
-    pub template_id: ObjectIdWrapper,
+    pub template_id: Uuid,
     pub period: PeriodicInterval,
     pub title_replacement: Option<String>,
     pub amount_replacement: Option<i32>,
@@ -89,8 +87,8 @@ pub struct PeriodicRuleInput {
 impl PeriodicRuleInput {
     pub fn upgrade(
         self,
-        id: ObjectIdWrapper,
-        user_id: ObjectIdWrapper,
+        id: Uuid,
+        user_id: Uuid,
         now: DateTime<Utc>,
     ) -> PeriodicRule {
         PeriodicRule {
@@ -108,19 +106,17 @@ impl PeriodicRuleInput {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, GraphQLObject, Queryable, Selectable, Insertable, AsChangeset)]
+#[diesel(table_name = crate::schema::automation_rules, check_for_backend(diesel::pg::Pg))]
 pub struct AutomationRule {
-    #[serde(rename = "_id", default)]
-    pub id: ObjectIdWrapper,
+    pub id: Uuid,
 
-    #[serde(default)]
-    pub user_id: ObjectIdWrapper,
+    pub user_id: Uuid,
 
     pub title: String,
 
     /// the expense this rule copies; see `PeriodicRule::template_id` on the `is_template` flag
-    pub template_id: ObjectIdWrapper,
+    pub template_id: Uuid,
 
     /// higher wins when several rules match the same delivery
     pub priority: i32,
@@ -132,15 +128,12 @@ pub struct AutomationRule {
     /// exact match against the delivered amount, in cents
     pub filter_amount: Option<i32>,
     /// exact match against the account the transaction was delivered for
-    pub filter_account_id: Option<ObjectIdWrapper>,
+    pub filter_account_id: Option<Uuid>,
 
     /// when this rule last produced an expense
-    #[serde(with = "crate::queries::optional_chrono_datetime_as_bson_datetime")]
     pub last_delivery: Option<DateTime<Utc>>,
 
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -148,19 +141,19 @@ pub struct AutomationRule {
 #[serde(rename_all = "camelCase")]
 pub struct AutomationRuleInput {
     pub title: String,
-    pub template_id: ObjectIdWrapper,
+    pub template_id: Uuid,
     pub priority: i32,
     pub regex_time: Option<String>,
     pub regex_statement: Option<String>,
     pub filter_amount: Option<i32>,
-    pub filter_account_id: Option<ObjectIdWrapper>,
+    pub filter_account_id: Option<Uuid>,
 }
 
 impl AutomationRuleInput {
     pub fn upgrade(
         self,
-        id: ObjectIdWrapper,
-        user_id: ObjectIdWrapper,
+        id: Uuid,
+        user_id: Uuid,
         last_delivery: Option<DateTime<Utc>>,
         now: DateTime<Utc>,
     ) -> AutomationRule {
@@ -186,7 +179,7 @@ impl AutomationRuleInput {
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLInputObject)]
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseDelivery {
-    pub account_id: ObjectIdWrapper,
+    pub account_id: Uuid,
     pub date: DateTime<Utc>,
     /// in cents, using the same sign convention as expense transactions
     pub amount: i32,
@@ -197,25 +190,21 @@ pub struct ExpenseDelivery {
 ///
 /// Bank statement uploads overlap — the same lines get handed over again on the next run —
 /// so deliveries are remembered to keep re-uploads from duplicating expenses.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::schema::seen_deliveries, check_for_backend(diesel::pg::Pg))]
 pub struct SeenDelivery {
-    #[serde(rename = "_id", default)]
-    pub id: ObjectIdWrapper,
+    pub id: Uuid,
 
-    #[serde(default)]
-    pub user_id: ObjectIdWrapper,
+    pub user_id: Uuid,
 
-    pub account_id: ObjectIdWrapper,
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
+    pub account_id: Uuid,
     pub date: DateTime<Utc>,
     pub amount: i32,
     pub statement: String,
 
     /// the expense this delivery produced, absent when no rule matched
-    pub expense_id: Option<ObjectIdWrapper>,
+    pub expense_id: Option<Uuid>,
 
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
 }
 

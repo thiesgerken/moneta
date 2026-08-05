@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error};
 
 use crate::{
-    models::{ObjectIdWrapper, User},
+    models::{Uuid, User},
     queries, verify_password,
 };
 
@@ -10,10 +10,11 @@ use futures::{StreamExt, TryStreamExt};
 use juniper::graphql_object;
 use mongodb::{
     Database,
-    bson::{doc, oid::ObjectId},
+    bson::{doc, oid::Uuid},
 };
 
 use super::root::{Context, require_user};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct GraphQLUserInfo {
@@ -28,7 +29,7 @@ impl GraphQLUserInfo {
 
 #[graphql_object(Context = Context, name = "User")]
 impl GraphQLUserInfo {
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
     fn name(&self) -> &str {
@@ -74,7 +75,7 @@ impl UserQuery {
         Ok(GraphQLUserInfo::new(user))
     }
 
-    async fn get(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<GraphQLUserInfo> {
+    async fn get(context: &Context, id: Uuid) -> juniper::FieldResult<GraphQLUserInfo> {
         require_user(context).await?;
         Ok(GraphQLUserInfo::new(
             context.user_loader.try_load(id).await?,
@@ -148,8 +149,8 @@ impl UserMutation {
 
 pub async fn get_many(
     connection: &Database,
-    ids: &[ObjectIdWrapper],
-) -> Result<HashMap<ObjectIdWrapper, User>, Box<dyn Error>> {
+    ids: &[Uuid],
+) -> Result<HashMap<Uuid, User>, Box<dyn Error>> {
     debug!(
         "Performing a coalesced category query for {} ids",
         ids.len()
@@ -157,7 +158,7 @@ pub async fn get_many(
 
     let collection = connection.collection::<User>("users");
     let users = collection
-        .find(doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<ObjectId>>()}})
+        .find(doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<Uuid>>()}})
         .await?
         .try_collect::<Vec<_>>()
         .await?;
@@ -172,13 +173,13 @@ pub struct UserBatcher {
     connection: Database,
 }
 
-impl BatchFn<ObjectIdWrapper, User> for UserBatcher {
-    async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, User> {
+impl BatchFn<Uuid, User> for UserBatcher {
+    async fn load(&mut self, keys: &[Uuid]) -> HashMap<Uuid, User> {
         get_many(&self.connection, keys).await.unwrap_or_default()
     }
 }
 
-pub type UserLoader = Loader<ObjectIdWrapper, User, UserBatcher>;
+pub type UserLoader = Loader<Uuid, User, UserBatcher>;
 
 pub fn get_user_loader(connection: Database) -> UserLoader {
     Loader::new(UserBatcher { connection })

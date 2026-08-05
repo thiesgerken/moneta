@@ -5,16 +5,13 @@ use crate::graphql::root::Context;
 use crate::graphql::root::require_user;
 use crate::graphql::util;
 use crate::models::rendering::RenderedExpense;
-use crate::models::{Category, CategoryCreateInput, CategoryUpdateInput, ObjectIdWrapper};
+use crate::models::{Category, CategoryCreateInput, CategoryUpdateInput, Uuid};
 
 use dataloader::BatchFn;
 use dataloader::cached::Loader;
-use futures::TryStreamExt;
 use juniper::FieldResult;
 use juniper::graphql_object;
-use mongodb::Database;
-use mongodb::bson::oid::ObjectId;
-use mongodb::bson::{self, doc};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct GraphQLCategory {
@@ -29,7 +26,7 @@ impl GraphQLCategory {
 
 #[graphql_object(Context = Context, name = "Category")]
 impl GraphQLCategory {
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
 
@@ -97,7 +94,7 @@ impl CategoryQuery {
 
     pub async fn get(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
     ) -> juniper::FieldResult<GraphQLCategory> {
         require_user(context).await?;
         Ok(GraphQLCategory::new(
@@ -112,7 +109,7 @@ pub struct CategoryMutation;
     Context = Context,
 )]
 impl CategoryMutation {
-    pub async fn delete(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<bool> {
+    pub async fn delete(context: &Context, id: Uuid) -> juniper::FieldResult<bool> {
         require_user(context).await?;
         let collection = context.connection.collection::<Category>("categories");
 
@@ -149,7 +146,7 @@ impl CategoryMutation {
         require_user(context).await?;
         let collection = context.connection.collection::<Category>("categories");
 
-        let category = category.upgrade(ObjectId::new().into());
+        let category = category.upgrade(Uuid::now_v7().into());
         collection.insert_one(&category).await?;
 
         Ok(category)
@@ -157,7 +154,7 @@ impl CategoryMutation {
 
     pub async fn update(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
         category: CategoryUpdateInput,
     ) -> juniper::FieldResult<bool> {
         require_user(context).await?;
@@ -177,8 +174,8 @@ impl CategoryMutation {
 
 pub async fn get_many(
     connection: &Database,
-    ids: &[ObjectIdWrapper],
-) -> Result<HashMap<ObjectIdWrapper, Category>, Box<dyn Error>> {
+    ids: &[Uuid],
+) -> Result<HashMap<Uuid, Category>, Box<dyn Error>> {
     debug!(
         "Performing a coalesced category query for {} ids",
         ids.len()
@@ -186,7 +183,7 @@ pub async fn get_many(
 
     let collection = connection.collection::<Category>("categories");
     let categories = collection
-        .find(doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<ObjectId>>()}})
+        .find(doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<Uuid>>()}})
         .await?
         .try_collect::<Vec<_>>()
         .await?;
@@ -201,13 +198,13 @@ pub struct CategoryBatcher {
     connection: Database,
 }
 
-impl BatchFn<ObjectIdWrapper, Category> for CategoryBatcher {
-    async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, Category> {
+impl BatchFn<Uuid, Category> for CategoryBatcher {
+    async fn load(&mut self, keys: &[Uuid]) -> HashMap<Uuid, Category> {
         get_many(&self.connection, keys).await.unwrap_or_default()
     }
 }
 
-pub type CategoryLoader = Loader<ObjectIdWrapper, Category, CategoryBatcher>;
+pub type CategoryLoader = Loader<Uuid, Category, CategoryBatcher>;
 
 pub fn get_category_loader(connection: Database) -> CategoryLoader {
     Loader::new(CategoryBatcher { connection })

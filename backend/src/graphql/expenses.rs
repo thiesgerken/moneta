@@ -16,18 +16,16 @@ use crate::models::rendering::RenderedExpenseTransaction;
 use crate::models::rendering::{
     RenderedExpense, RenderedExpenseCreateInput, RenderedExpenseInput, RenderedExpenseUpdateInput,
 };
-use crate::models::{Account, Expense, ObjectIdWrapper};
+use crate::models::{Account, Expense, Uuid};
 use crate::queries;
 
 use bson::Document;
 use chrono::DateTime;
 use chrono::Utc;
-use futures::TryStreamExt;
 use juniper::FieldResult;
 use juniper::GraphQLObject;
 use juniper::graphql_object;
-use mongodb::bson::oid::ObjectId;
-use mongodb::bson::{self, doc};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct GraphQLExpenseCategorization {
@@ -121,11 +119,11 @@ impl GraphQLExpense {
 #[graphql_object(
     Context = Context,name = "Expense")]
 impl GraphQLExpense {
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
 
-    fn upstream_id(&self) -> ObjectIdWrapper {
+    fn upstream_id(&self) -> Uuid {
         self.data.upstream_id
     }
 
@@ -242,27 +240,27 @@ pub struct ExpenseNode {
 #[derive(Debug, Clone)]
 pub struct GraphQLExpenseChangelogEntry {
     data: ExpenseChangelogEntry,
-    rendered_id: ObjectId,
+    rendered_id: Uuid,
 }
 
 impl GraphQLExpenseChangelogEntry {
-    pub fn new(data: ExpenseChangelogEntry, rendered_id: ObjectId) -> Self {
+    pub fn new(data: ExpenseChangelogEntry, rendered_id: Uuid) -> Self {
         GraphQLExpenseChangelogEntry { data, rendered_id }
     }
 }
 
 #[graphql_object(Context = Context, name = "ExpenseChangelogEntry")]
 impl GraphQLExpenseChangelogEntry {
-    fn target_id(&self) -> ObjectIdWrapper {
+    fn target_id(&self) -> Uuid {
         self.data.target_id
     }
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
-    fn expense_id(&self) -> ObjectIdWrapper {
+    fn expense_id(&self) -> Uuid {
         self.rendered_id.into()
     }
-    fn user_id(&self) -> Option<ObjectIdWrapper> {
+    fn user_id(&self) -> Option<Uuid> {
         self.data.user_id
     }
     fn date(&self) -> DateTime<Utc> {
@@ -352,7 +350,7 @@ impl ExpenseQuery {
 
     pub async fn get(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
     ) -> juniper::FieldResult<GraphQLExpense> {
         let uid = require_user(context).await?;
         let collection = context
@@ -392,7 +390,7 @@ impl ExpenseQuery {
             .await?;
 
         // Extract upstream IDs
-        let upstream_ids: Vec<ObjectId> = rendered_expenses
+        let upstream_ids: Vec<Uuid> = rendered_expenses
             .iter()
             .map(|expense| expense.get_object_id("upstreamId").unwrap())
             .collect();
@@ -401,7 +399,7 @@ impl ExpenseQuery {
             return Ok(ExpenseChangelogConnection { edges: vec![] });
         }
 
-        let upstream_id_to_rendered_id: HashMap<ObjectId, ObjectId> = rendered_expenses
+        let upstream_id_to_rendered_id: HashMap<Uuid, Uuid> = rendered_expenses
             .into_iter()
             .map(|expense| {
                 (
@@ -444,7 +442,7 @@ pub struct ExpenseMutation;
     Context = Context,
 )]
 impl ExpenseMutation {
-    pub async fn delete(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<bool> {
+    pub async fn delete(context: &Context, id: Uuid) -> juniper::FieldResult<bool> {
         let user_id = require_user(context).await?;
         let collection = context
             .connection
@@ -474,7 +472,7 @@ impl ExpenseMutation {
 
         // create a changelog entry for this removal
         let changelog_entry = ExpenseChangelogEntry {
-            id: ObjectId::new().into(),
+            id: Uuid::now_v7().into(),
             user_id: Some(user_id.into()),
             target_id: upstream_entry.id,
             date: Utc::now(),
@@ -511,7 +509,7 @@ impl ExpenseMutation {
 
         // create a changelog entry for this creation
         let changelog_entry = ExpenseChangelogEntry {
-            id: ObjectId::new().into(),
+            id: Uuid::now_v7().into(),
             user_id: Some(user_id.into()),
             target_id: entry.id,
             date: entry.created_at,
@@ -533,7 +531,7 @@ impl ExpenseMutation {
 
     pub async fn update(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
         expense: RenderedExpenseUpdateInput,
     ) -> juniper::FieldResult<RenderedExpense> {
         let user_id = require_user(context).await?;
@@ -581,7 +579,7 @@ impl ExpenseMutation {
 
         // create a changelog entry for this update
         let changelog_entry = ExpenseChangelogEntry {
-            id: ObjectId::new().into(),
+            id: Uuid::now_v7().into(),
             user_id: Some(user_id.into()),
             target_id: upstream_entry.id,
             date: updated_upstream_entry.updated_at,
@@ -609,7 +607,7 @@ impl ExpenseMutation {
 }
 
 pub async fn validate_and_unrender(
-    uid: ObjectId,
+    uid: Uuid,
     expense: RenderedExpenseInput,
     related_accounts: &[Account],
     categories: &[Category],
@@ -655,7 +653,7 @@ pub async fn validate_and_unrender(
 }
 
 pub async fn render(
-    uid: ObjectId,
+    uid: Uuid,
     connection: &mongodb::Database,
     entry: Expense,
     related_accounts: &[Account],

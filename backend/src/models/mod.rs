@@ -1,13 +1,11 @@
 mod account;
 mod expense;
 mod json;
-mod oid;
 pub mod rendering;
 mod rules;
 mod text_enum;
 
 pub use json::Json;
-pub use oid::ObjectIdWrapper;
 pub(crate) use text_enum::text_enum;
 
 pub use account::{
@@ -15,9 +13,9 @@ pub use account::{
     AccountSynchronization, AccountUpdateInput,
 };
 pub use expense::{
-    Expense, ExpenseCategorization, ExpenseCategorizationInput, ExpensePosition,
-    ExpensePositionInput, ExpenseReceipt, ExpenseReceiptInput, ExpenseTransaction,
-    ExpenseTransactionInput,
+    Expense, ExpenseCategorization, ExpenseCategorizationInput, ExpenseCategorizationRow,
+    ExpensePosition, ExpensePositionInput, ExpenseReceipt, ExpenseReceiptInput, ExpenseRow,
+    ExpenseTransaction, ExpenseTransactionInput, ExpenseTransactionRow,
 };
 pub use rules::{
     AutomationRule, AutomationRuleInput, ExpenseDelivery, PeriodicInterval, PeriodicRule,
@@ -25,56 +23,54 @@ pub use rules::{
 };
 
 use chrono::{DateTime, Utc};
+use diesel::prelude::*;
 use juniper::{GraphQLInputObject, GraphQLObject};
-use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::schema::users, check_for_backend(diesel::pg::Pg))]
 pub struct User {
-    #[serde(rename = "_id", default)]
-    pub id: ObjectIdWrapper,
+    pub id: Uuid,
 
     pub name: String,
     pub full_name: String,
     pub password_hash: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, GraphQLObject, Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::schema::categories, check_for_backend(diesel::pg::Pg))]
 pub struct Category {
-    #[serde(rename = "_id", default)]
-    pub id: ObjectIdWrapper,
+    pub id: Uuid,
 
     pub name: String,
     pub description: String,
     pub color: Option<String>,
-    pub parent: Option<ObjectIdWrapper>,
+    pub parent_id: Option<Uuid>,
 
-    /// desired max spending in this category per month.
+    /// desired max spending in this category per month, in cents.
     /// In the future this could become a list of limits and timespans
     /// (to accommodate for varying spending limits over time without changing past data)
-    pub monthly_limit: Option<f64>,
+    pub monthly_limit: Option<i32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, GraphQLInputObject)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, GraphQLInputObject)]
 pub struct CategoryInput {
     pub name: String,
     pub description: String,
     pub color: Option<String>,
-    pub parent: Option<ObjectIdWrapper>,
+    pub parent_id: Option<Uuid>,
 
-    pub monthly_limit: Option<f64>,
+    pub monthly_limit: Option<i32>,
 }
 
 impl CategoryInput {
-    pub fn upgrade(self, id: ObjectIdWrapper) -> Category {
+    pub fn upgrade(self, id: Uuid) -> Category {
         Category {
             id,
             name: self.name,
             description: self.description,
             color: self.color,
-            parent: self.parent,
+            parent_id: self.parent_id,
             monthly_limit: self.monthly_limit,
         }
     }
@@ -83,35 +79,31 @@ impl CategoryInput {
 pub type CategoryUpdateInput = CategoryInput;
 pub type CategoryCreateInput = CategoryInput;
 
-#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, GraphQLObject, Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::schema::balances, check_for_backend(diesel::pg::Pg))]
 pub struct Balance {
-    #[serde(rename = "_id", default)]
-    pub id: ObjectIdWrapper,
+    pub id: Uuid,
 
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
-    pub date: DateTime<Utc>, // includes expenses with date < this value (i.e. what happened the same instant is not included)
-
-    pub account_id: ObjectIdWrapper,
+    pub account_id: Uuid,
+    /// includes expenses with date < this value (i.e. what happened the same instant is not
+    /// included)
+    pub date: DateTime<Utc>,
     pub amount: i32, // cents
     pub comments: String,
 
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::schema::expense_changes, check_for_backend(diesel::pg::Pg))]
 pub struct ExpenseChangelogEntry {
-    #[serde(rename = "_id", default)]
-    pub id: ObjectIdWrapper,
+    pub id: Uuid,
 
-    pub target_id: ObjectIdWrapper,
-    pub user_id: Option<ObjectIdWrapper>,
+    /// not a foreign key: a change outlives the expense it describes
+    pub target_id: Uuid,
+    pub user_id: Option<Uuid>,
 
-    #[serde(with = "crate::queries::chrono_datetime_as_bson_datetime")]
     pub date: DateTime<Utc>,
 
     /// name of the program that was used to make the change (e.g. web app, CLI, ...)
@@ -119,13 +111,15 @@ pub struct ExpenseChangelogEntry {
 
     /// whether this action was performed by a human or an automatic system
     pub automatic: bool,
-    /// if this action was performed by an automated (AI) system, an indication (between 0 and 1) about how sure this system was.
-    /// value should be ignored if the action was performed by a human
+    /// if this action was performed by an automated (AI) system, an indication (between 0 and 1)
+    /// about how sure this system was. Value should be ignored if a human made the change.
     pub confidence: f64,
 
-    /// how the entry looked before and after the change.
-    /// either one of these (but not both
-    /// representing the creation or deletion of the entry.
-    pub old_state: Option<Expense>,
-    pub new_state: Option<Expense>,
+    /// How the entry looked before and after the change; one of them is absent when the change
+    /// created or deleted the expense.
+    ///
+    /// Kept as whole documents rather than normalised, so that a later schema change cannot
+    /// retroactively alter what the history says happened.
+    pub old_state: Option<Json<Expense>>,
+    pub new_state: Option<Json<Expense>>,
 }

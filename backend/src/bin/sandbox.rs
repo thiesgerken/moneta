@@ -3,9 +3,9 @@ use futures::stream::TryStreamExt;
 use log::{LevelFilter, info};
 use moneta::models::Balance;
 use mongodb::bson::doc;
-use mongodb::bson::oid::ObjectId;
 use simplelog::{ColorChoice, SimpleLogger, TermLogger, TerminalMode};
 use tokio::runtime::Builder;
+use uuid::Uuid;
 
 pub fn initialize_logging(verbosity: i8) {
     let level = match verbosity {
@@ -65,8 +65,8 @@ fn main() {
 
         let balances = vec![
             Balance {
-                account_id: ObjectId::new().into(),
-                id: ObjectId::new().into(),
+                account_id: Uuid::now_v7().into(),
+                id: Uuid::now_v7().into(),
                 date: Utc::now(),
                 amount: 1234,
                 comments: "".to_string(),
@@ -74,8 +74,8 @@ fn main() {
                 updated_at: Utc::now(),
             },
             Balance {
-                account_id: ObjectId::new().into(),
-                id: ObjectId::new().into(),
+                account_id: Uuid::now_v7().into(),
+                id: Uuid::now_v7().into(),
                 date: Utc::now(),
                 amount: 1234,
                 comments: "".to_string(),

@@ -6,12 +6,11 @@ use crate::queries;
 
 use clap::ArgMatches;
 use clap::{Arg, ArgAction, ArgGroup, Command};
-use futures::TryStreamExt;
 use log::info;
 use mongodb::bson::doc;
-use mongodb::bson::oid::ObjectId;
 use prettytable::{Table, row};
 use std::io;
+use uuid::Uuid;
 
 pub fn build() -> Command {
     Command::new("user")
@@ -78,7 +77,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
         );
 
         let u = User {
-            id: ObjectIdWrapper(ObjectId::new()),
+            id: Uuid(Uuid::now_v7()),
             name: uname.to_string(),
             full_name: fname.to_string(),
             password_hash: hash_password(password),

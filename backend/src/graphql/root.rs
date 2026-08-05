@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use juniper::graphql_object;
 use log::info;
-use mongodb::bson::oid::ObjectId;
 use tokio::sync::RwLock;
 
 use crate::graphql::{
@@ -19,6 +18,7 @@ use crate::graphql::{
 };
 
 use super::{
+use uuid::Uuid;
     accounts::{AccountLoader, get_account_loader},
     categories::{CategoryLoader, get_category_loader},
     users::{UserLoader, get_user_loader},
@@ -27,7 +27,7 @@ use super::{
 pub struct Context {
     pub connection: mongodb::Database,
     pub config: crate::config::Config,
-    pub user_id: Arc<RwLock<Option<ObjectId>>>,
+    pub user_id: Arc<RwLock<Option<Uuid>>>,
 
     pub account_loader: AccountLoader,
     pub category_loader: CategoryLoader,
@@ -41,7 +41,7 @@ pub struct Mutation;
 
 pub type Schema = juniper::RootNode<Query, Mutation, juniper::EmptySubscription<Context>>;
 
-pub async fn require_user(context: &Context) -> juniper::FieldResult<ObjectId> {
+pub async fn require_user(context: &Context) -> juniper::FieldResult<Uuid> {
     context.user_id.read().await.ok_or(juniper::FieldError::new(
         "User is not logged in",
         juniper::Value::null(),

@@ -4,13 +4,12 @@ use crate::rendering::rerender_multiple;
 
 use clap::ArgMatches;
 use clap::{Arg, ArgGroup, Command};
-use futures::TryStreamExt;
 use log::info;
 use mongodb::bson;
 use mongodb::bson::doc;
-use mongodb::bson::oid::ObjectId;
 use prettytable::{Table, row};
 use std::str::FromStr;
+use uuid::Uuid;
 
 pub fn build() -> Command {
     Command::new("account")
@@ -51,8 +50,8 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
 
     if let Some(account_id_values) = sub_matches.get_many::<String>("sync") {
         assert!(account_id_values.len() == 2);
-        let account_ids: Vec<ObjectId> = account_id_values
-            .map(|s| ObjectId::from_str(s))
+        let account_ids: Vec<Uuid> = account_id_values
+            .map(|s| Uuid::from_str(s))
             .collect::<Result<_, _>>()
             .expect("error parsing object ids");
 
@@ -89,7 +88,7 @@ pub async fn handle(connection: mongodb::Database, sub_matches: &ArgMatches) {
             .await
             .expect("Could not rerender entities");
     } else if let Some(account_id_value) = sub_matches.get_one::<String>("unsync") {
-        let account_id = ObjectId::from_str(account_id_value).expect("error parsing object id");
+        let account_id = Uuid::from_str(account_id_value).expect("error parsing object id");
         let account = account_collection
             .find_one(doc!("_id": account_id))
             .await

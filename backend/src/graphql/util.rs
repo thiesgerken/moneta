@@ -1,13 +1,13 @@
 use std::error::Error;
 
 use futures::{StreamExt, TryStreamExt};
-use mongodb::bson::{self, Document};
 use mongodb::options::FindOptions;
 use serde::de::DeserializeOwned;
 use similar::TextDiff;
+use uuid::Uuid;
 
 pub fn string_to_document(s: &str) -> Result<Document, Box<dyn Error>> {
-    // also handles EJSON (i.e. decodes {$oid: "..."} as ObjectId if possible)
+    // also handles EJSON (i.e. decodes {$oid: "..."} as Uuid if possible)
     let x: serde_json::Value = serde_json::from_str(s)?;
     bson::serialize_to_document(&x).map_err(|e| e.into())
 }
@@ -81,7 +81,6 @@ pub fn json_diff<T: serde::Serialize>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mongodb::bson::{Bson, doc, oid::ObjectId};
 
     #[test]
     fn parses_json_filters() {
@@ -93,7 +92,7 @@ mod tests {
     /// the frontend sends account and category ids as extended json
     #[test]
     fn decodes_extended_json_object_ids() {
-        let oid = ObjectId::new();
+        let oid = Uuid::now_v7();
         let d = string_to_document(&format!(
             r#"{{"accountId": {{"$oid": "{}"}}}}"#,
             oid.to_hex()
@@ -111,7 +110,7 @@ mod tests {
 
     #[test]
     fn merges_filter_with_overrides() {
-        let uid = ObjectId::new();
+        let uid = Uuid::now_v7();
         let merged = merge_filter(
             Some(r#"{"store": "Rewe"}"#.into()),
             Some(doc!("userId": uid)),
@@ -126,8 +125,8 @@ mod tests {
     /// themselves must not be able to read another user's entries
     #[test]
     fn caller_cannot_override_the_user_scope() {
-        let own = ObjectId::new();
-        let someone_else = ObjectId::new();
+        let own = Uuid::now_v7();
+        let someone_else = Uuid::now_v7();
 
         let merged = merge_filter(
             Some(format!(
@@ -143,7 +142,7 @@ mod tests {
 
     #[test]
     fn keeps_operator_filters_alongside_the_user_scope() {
-        let uid = ObjectId::new();
+        let uid = Uuid::now_v7();
         let merged = merge_filter(
             Some(r#"{"$or": [{"store": "Rewe"}, {"store": "Aldi"}]}"#.into()),
             Some(doc!("userId": uid)),
@@ -157,7 +156,7 @@ mod tests {
 
     #[test]
     fn empty_filter_still_scopes_to_the_user() {
-        let uid = ObjectId::new();
+        let uid = Uuid::now_v7();
         let merged = merge_filter(None, Some(doc!("userId": uid))).unwrap();
 
         assert_eq!(merged.len(), 1);

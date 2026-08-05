@@ -2,12 +2,11 @@ use std::collections::HashMap;
 
 use crate::graphql::root::Context;
 use crate::graphql::root::require_user;
-use crate::models::ObjectIdWrapper;
+use crate::models::Uuid;
 use crate::models::rendering::{RenderedBalance, RenderedExpense};
 
 use chrono::DateTime;
 use chrono::Utc;
-use futures::TryStreamExt;
 use itertools::Itertools;
 use juniper::GraphQLObject;
 use juniper::graphql_object;
@@ -16,6 +15,7 @@ use mongodb::bson::doc;
 
 use super::accounts::GraphQLAccount;
 use super::balances::GraphQLBalance;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, GraphQLObject)]
 #[graphql(context = Context)]
@@ -36,7 +36,7 @@ impl AnalysisQuery {
     pub async fn balance(
         context: &Context,
         date: Option<DateTime<Utc>>,
-        account_id: ObjectIdWrapper,
+        account_id: Uuid,
     ) -> juniper::FieldResult<ComputedBalance> {
         let date = date.unwrap_or(Utc::now());
         let user = require_user(context).await?;

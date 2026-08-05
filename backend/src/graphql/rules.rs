@@ -1,14 +1,14 @@
 use chrono::Utc;
 use juniper::graphql_object;
-use mongodb::bson::{doc, oid::ObjectId};
 
 use super::util;
 use crate::graphql::root::{Context, require_user};
 use crate::models::{
-    AutomationRule, AutomationRuleInput, Expense, ExpenseDelivery, ObjectIdWrapper,
+    AutomationRule, AutomationRuleInput, Expense, ExpenseDelivery, Uuid,
     PeriodicInterval, PeriodicRule, PeriodicRuleInput, SeenDelivery, rendering::RenderedExpense,
 };
 use crate::rules::DeliveryOutcome;
+use uuid::Uuid;
 
 const AUTOMATION: &str = "automation_rules";
 const PERIODIC: &str = "periodic_rules";
@@ -18,9 +18,9 @@ const PERIODIC: &str = "periodic_rules";
 /// rendered document up scoped by user resolves the id and authorizes in one step.
 async fn resolve_template(
     context: &Context,
-    user_id: ObjectId,
-    rendered_id: ObjectIdWrapper,
-) -> juniper::FieldResult<ObjectIdWrapper> {
+    user_id: Uuid,
+    rendered_id: Uuid,
+) -> juniper::FieldResult<Uuid> {
     let rendered = context
         .connection
         .collection::<RenderedExpense>("expenses_rendered")
@@ -34,9 +34,9 @@ async fn resolve_template(
 /// The reverse: the caller's own rendered view of the expense a rule copies.
 async fn rendered_template_id(
     context: &Context,
-    user_id: ObjectId,
-    upstream_id: ObjectIdWrapper,
-) -> juniper::FieldResult<Option<ObjectIdWrapper>> {
+    user_id: Uuid,
+    upstream_id: Uuid,
+) -> juniper::FieldResult<Option<Uuid>> {
     Ok(context
         .connection
         .collection::<RenderedExpense>("expenses_rendered")
@@ -55,7 +55,7 @@ pub struct GraphQLAutomationRule {
 
 #[graphql_object(Context = Context, name = "AutomationRule")]
 impl GraphQLAutomationRule {
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
     fn title(&self) -> &str {
@@ -73,7 +73,7 @@ impl GraphQLAutomationRule {
     fn filter_amount(&self) -> Option<i32> {
         self.data.filter_amount
     }
-    fn filter_account_id(&self) -> Option<ObjectIdWrapper> {
+    fn filter_account_id(&self) -> Option<Uuid> {
         self.data.filter_account_id
     }
     fn last_delivery(&self) -> Option<chrono::DateTime<Utc>> {
@@ -91,7 +91,7 @@ impl GraphQLAutomationRule {
     async fn template_id(
         &self,
         context: &Context,
-    ) -> juniper::FieldResult<Option<ObjectIdWrapper>> {
+    ) -> juniper::FieldResult<Option<Uuid>> {
         let user_id = require_user(context).await?;
         rendered_template_id(context, user_id, self.data.template_id).await
     }
@@ -104,7 +104,7 @@ pub struct GraphQLPeriodicRule {
 
 #[graphql_object(Context = Context, name = "PeriodicRule")]
 impl GraphQLPeriodicRule {
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
     fn title(&self) -> &str {
@@ -133,7 +133,7 @@ impl GraphQLPeriodicRule {
     async fn template_id(
         &self,
         context: &Context,
-    ) -> juniper::FieldResult<Option<ObjectIdWrapper>> {
+    ) -> juniper::FieldResult<Option<Uuid>> {
         let user_id = require_user(context).await?;
         rendered_template_id(context, user_id, self.data.template_id).await
     }
@@ -190,7 +190,7 @@ impl AutomationRuleQuery {
 
     pub async fn get(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
     ) -> juniper::FieldResult<GraphQLAutomationRule> {
         let user_id = require_user(context).await?;
 
@@ -216,7 +216,7 @@ impl AutomationRuleMutation {
         let user_id = require_user(context).await?;
         let template_id = resolve_template(context, user_id, rule.template_id).await?;
 
-        let mut data = rule.upgrade(ObjectId::new().into(), user_id.into(), None, Utc::now());
+        let mut data = rule.upgrade(Uuid::now_v7().into(), user_id.into(), None, Utc::now());
         data.template_id = template_id;
         context
             .connection
@@ -229,7 +229,7 @@ impl AutomationRuleMutation {
 
     pub async fn update(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
         rule: AutomationRuleInput,
     ) -> juniper::FieldResult<GraphQLAutomationRule> {
         let user_id = require_user(context).await?;
@@ -251,7 +251,7 @@ impl AutomationRuleMutation {
         Ok(GraphQLAutomationRule { data })
     }
 
-    pub async fn delete(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<bool> {
+    pub async fn delete(context: &Context, id: Uuid) -> juniper::FieldResult<bool> {
         let user_id = require_user(context).await?;
 
         let count = context
@@ -296,7 +296,7 @@ impl PeriodicRuleQuery {
 
     pub async fn get(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
     ) -> juniper::FieldResult<GraphQLPeriodicRule> {
         let user_id = require_user(context).await?;
 
@@ -322,7 +322,7 @@ impl PeriodicRuleMutation {
         let user_id = require_user(context).await?;
         let template_id = resolve_template(context, user_id, rule.template_id).await?;
 
-        let mut data = rule.upgrade(ObjectId::new().into(), user_id.into(), Utc::now());
+        let mut data = rule.upgrade(Uuid::now_v7().into(), user_id.into(), Utc::now());
         data.template_id = template_id;
         context
             .connection
@@ -335,7 +335,7 @@ impl PeriodicRuleMutation {
 
     pub async fn update(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
         rule: PeriodicRuleInput,
     ) -> juniper::FieldResult<GraphQLPeriodicRule> {
         let user_id = require_user(context).await?;
@@ -356,7 +356,7 @@ impl PeriodicRuleMutation {
         Ok(GraphQLPeriodicRule { data })
     }
 
-    pub async fn delete(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<bool> {
+    pub async fn delete(context: &Context, id: Uuid) -> juniper::FieldResult<bool> {
         let user_id = require_user(context).await?;
 
         let count = context
@@ -396,8 +396,8 @@ pub enum DeliveryStatus {
 
 pub struct DeliveryResult {
     status: DeliveryStatus,
-    expense_id: Option<ObjectIdWrapper>,
-    rule_id: Option<ObjectIdWrapper>,
+    expense_id: Option<Uuid>,
+    rule_id: Option<Uuid>,
     message: Option<String>,
 }
 
@@ -407,7 +407,7 @@ impl DeliveryResult {
         self.status
     }
 
-    fn rule_id(&self) -> Option<ObjectIdWrapper> {
+    fn rule_id(&self) -> Option<Uuid> {
         self.rule_id
     }
 
@@ -416,7 +416,7 @@ impl DeliveryResult {
     }
 
     /// the created expense, as this caller's rendered id
-    async fn expense_id(&self, context: &Context) -> juniper::FieldResult<Option<ObjectIdWrapper>> {
+    async fn expense_id(&self, context: &Context) -> juniper::FieldResult<Option<Uuid>> {
         let Some(upstream) = self.expense_id else {
             return Ok(None);
         };
@@ -500,10 +500,10 @@ pub struct GraphQLSeenDelivery {
 
 #[graphql_object(Context = Context, name = "SeenDelivery")]
 impl GraphQLSeenDelivery {
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
-    fn account_id(&self) -> ObjectIdWrapper {
+    fn account_id(&self) -> Uuid {
         self.data.account_id
     }
     fn date(&self) -> chrono::DateTime<Utc> {
@@ -525,7 +525,7 @@ impl GraphQLSeenDelivery {
     }
 
     /// the expense this delivery produced, as this caller's rendered id
-    async fn expense_id(&self, context: &Context) -> juniper::FieldResult<Option<ObjectIdWrapper>> {
+    async fn expense_id(&self, context: &Context) -> juniper::FieldResult<Option<Uuid>> {
         let Some(upstream) = self.data.expense_id else {
             return Ok(None);
         };

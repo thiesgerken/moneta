@@ -3,7 +3,6 @@ use crate::rules::{PERIODIC_ADVANCE, generate_periodic_expenses, occurrences};
 
 use chrono::Utc;
 use clap::{Arg, ArgAction, ArgGroup, ArgMatches, Command};
-use futures::TryStreamExt;
 use log::info;
 use mongodb::bson::doc;
 use prettytable::{Table, row};

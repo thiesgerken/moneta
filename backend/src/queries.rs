@@ -1,105 +1,42 @@
-use futures::TryStreamExt;
-use mongodb::bson::{doc, oid::ObjectId};
-use serde::de::DeserializeOwned;
+use diesel::prelude::*;
+use diesel_async::{AsyncPgConnection, RunQueryDsl};
+use uuid::Uuid;
 
 use crate::models::{Account, Category, User};
+use crate::schema::{accounts, categories, users};
 
-/// bson 3 dropped its `serde(with = ...)` datetime helpers in favour of `serde_with`
-/// adapters; this keeps the attribute style (and the on-disk representation) unchanged.
-pub mod chrono_datetime_as_bson_datetime {
-    use chrono::Utc;
-    use mongodb::bson;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::result::Result;
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<chrono::DateTime<Utc>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(bson::DateTime::deserialize(deserializer)?.to_chrono())
-    }
-
-    pub fn serialize<S: Serializer>(
-        val: &chrono::DateTime<Utc>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        bson::DateTime::from_chrono(*val).serialize(serializer)
-    }
-}
-
-pub mod optional_chrono_datetime_as_bson_datetime {
-    use chrono::Utc;
-    use mongodb::bson;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::result::Result;
-
-    /// Deserializes a [`Option<chrono::DateTime>`] from a [`Option<crate::DateTime>`].
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<chrono::DateTime<Utc>>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        if let Ok(datetime) = bson::DateTime::deserialize(deserializer) {
-            Ok(Some(datetime.to_chrono()))
-        } else {
-            // NOTE: this implementation simply returns `None` whenever the value present
-            // cannot be parsed as a datetime; this might not be the best behavior
-            Ok(None)
-        }
-    }
-
-    /// Serializes a [`Option<chrono::DateTime>`] as a [`Option<crate::DateTime>`].
-    pub fn serialize<S: Serializer>(
-        val: &Option<chrono::DateTime<Utc>>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        if let Some(val) = val {
-            let datetime = bson::DateTime::from_chrono(val.to_owned());
-            datetime.serialize(serializer)
-        } else {
-            bson::Bson::Null.serialize(serializer)
-        }
-    }
-}
-
-pub async fn query_element_by_id<T>(
-    connection: &mongodb::Database,
-    collection: &str,
-    id: ObjectId,
-) -> Result<Option<T>, mongodb::error::Error>
-where
-    T: DeserializeOwned + Unpin + Send + Sync,
-{
-    let collection = connection.collection::<T>(collection);
-    let filter = doc! {"_id":id};
-    collection.find_one(filter).await
-}
-
+/// Every account a change to `account_ids` could affect: the accounts themselves plus the ones
+/// mirroring them, since a mirror shows the same money in another user's books.
 pub async fn query_associated_accounts(
-    connection: &mongodb::Database,
-    account_ids: &[ObjectId],
-) -> Result<Vec<Account>, mongodb::error::Error> {
-    let collection = connection.collection::<Account>("accounts");
-
-    collection.find(doc! { "$or": [ {"_id": {"$in": account_ids}}, {"synchronization.accountId": {"$in": account_ids}}] }).await?   .try_collect::<Vec<_>>()
-    .await
+    conn: &mut AsyncPgConnection,
+    account_ids: &[Uuid],
+) -> QueryResult<Vec<Account>> {
+    accounts::table
+        .filter(
+            accounts::id
+                .eq_any(account_ids)
+                .or(accounts::sync_account_id.eq_any(account_ids)),
+        )
+        .select(Account::as_select())
+        .load(conn)
+        .await
 }
 
 pub async fn query_user_by_name(
-    connection: &mongodb::Database,
+    conn: &mut AsyncPgConnection,
     user_name: &str,
-) -> Result<Option<User>, mongodb::error::Error> {
-    let collection = connection.collection::<User>("users");
-    let filter = doc! {"name":user_name};
-    collection.find_one(filter).await
+) -> QueryResult<Option<User>> {
+    users::table
+        .filter(users::name.eq(user_name))
+        .select(User::as_select())
+        .first(conn)
+        .await
+        .optional()
 }
 
-pub async fn query_categories(
-    connection: &mongodb::Database,
-) -> Result<Vec<Category>, mongodb::error::Error> {
-    let collection = connection.collection::<Category>("categories");
-    collection
-        .find(doc! {})
-        .await?
-        .try_collect::<Vec<_>>()
+pub async fn query_categories(conn: &mut AsyncPgConnection) -> QueryResult<Vec<Category>> {
+    categories::table
+        .select(Category::as_select())
+        .load(conn)
         .await
 }

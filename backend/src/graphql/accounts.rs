@@ -9,21 +9,18 @@ use crate::models::AccountKind;
 use crate::models::AccountRisk;
 use crate::models::AccountSynchronization;
 use crate::models::rendering::{RenderedBalance, RenderedExpense};
-use crate::models::{Account, AccountCreateInput, AccountUpdateInput, ObjectIdWrapper};
+use crate::models::{Account, AccountCreateInput, AccountUpdateInput, Uuid};
 
 use chrono::DateTime;
 use chrono::Utc;
 use dataloader::BatchFn;
 use dataloader::cached::Loader;
-use futures::TryStreamExt;
 use juniper::FieldResult;
 use juniper::graphql_object;
 use log::debug;
-use mongodb::Database;
-use mongodb::bson::oid::ObjectId;
-use mongodb::bson::{self, doc};
 
 use super::users::GraphQLUserInfo;
+use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct GraphQLAccountSynchronization {
     pub data: AccountSynchronization,
@@ -57,7 +54,7 @@ impl GraphQLAccount {
 
 #[graphql_object(    Context = Context,name = "Account")]
 impl GraphQLAccount {
-    fn id(&self) -> ObjectIdWrapper {
+    fn id(&self) -> Uuid {
         self.data.id
     }
 
@@ -152,7 +149,7 @@ impl AccountQuery {
 
     pub async fn get(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
     ) -> juniper::FieldResult<GraphQLAccount> {
         require_user(context).await?;
         Ok(GraphQLAccount::new(
@@ -167,7 +164,7 @@ pub struct AccountMutation;
     Context = Context,
 )]
 impl AccountMutation {
-    pub async fn delete(context: &Context, id: ObjectIdWrapper) -> juniper::FieldResult<bool> {
+    pub async fn delete(context: &Context, id: Uuid) -> juniper::FieldResult<bool> {
         let user_id = require_user(context).await?;
         let collection = context.connection.collection::<Account>("accounts");
 
@@ -230,7 +227,7 @@ impl AccountMutation {
 
         account.validate()?;
 
-        let account = account.upgrade(ObjectId::new().into(), user_id.into());
+        let account = account.upgrade(Uuid::now_v7().into(), user_id.into());
         collection.insert_one(&account).await?;
 
         Ok(account)
@@ -238,7 +235,7 @@ impl AccountMutation {
 
     pub async fn update(
         context: &Context,
-        id: ObjectIdWrapper,
+        id: Uuid,
         account: AccountUpdateInput,
     ) -> juniper::FieldResult<bool> {
         let user_id = require_user(context).await?;
@@ -265,13 +262,13 @@ impl AccountMutation {
 
 pub async fn get_many(
     connection: &Database,
-    ids: &[ObjectIdWrapper],
-) -> Result<HashMap<ObjectIdWrapper, Account>, Box<dyn Error>> {
+    ids: &[Uuid],
+) -> Result<HashMap<Uuid, Account>, Box<dyn Error>> {
     debug!("Performing a coalesced account query for {} ids", ids.len());
 
     let collection = connection.collection::<Account>("accounts");
     let accounts = collection
-        .find(doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<ObjectId>>()}})
+        .find(doc! {"_id": {"$in": ids.iter().map(|i| **i).collect::<Vec<Uuid>>()}})
         .await?
         .try_collect::<Vec<_>>()
         .await?;
@@ -286,13 +283,13 @@ pub struct AccountBatcher {
     connection: Database,
 }
 
-impl BatchFn<ObjectIdWrapper, Account> for AccountBatcher {
-    async fn load(&mut self, keys: &[ObjectIdWrapper]) -> HashMap<ObjectIdWrapper, Account> {
+impl BatchFn<Uuid, Account> for AccountBatcher {
+    async fn load(&mut self, keys: &[Uuid]) -> HashMap<Uuid, Account> {
         get_many(&self.connection, keys).await.unwrap_or_default()
     }
 }
 
-pub type AccountLoader = Loader<ObjectIdWrapper, Account, AccountBatcher>;
+pub type AccountLoader = Loader<Uuid, Account, AccountBatcher>;
 
 pub fn get_account_loader(connection: Database) -> AccountLoader {
     Loader::new(AccountBatcher { connection })
