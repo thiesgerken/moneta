@@ -1,0 +1,12 @@
+# Kept in step with the builder image in backend/Dockerfile, so the compiler that gates the
+# code in CI is the one that actually builds the binary. Without a pin, CI installs whatever
+# stable is current and every release that promotes a new clippy lint turns main red on its
+# own schedule -- renovate now offers the bump as a reviewable PR instead.
+#
+# This lives at the repository root rather than next to Cargo.toml because
+# actions-rust-lang/setup-rust-toolchain only looks there; rustup itself searches upwards, so
+# `cd backend && cargo build` picks it up either way.
+[toolchain]
+channel = "1.97.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

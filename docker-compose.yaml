@@ -17,6 +17,20 @@ services:
       - "traefik.http.routers.moneta-backend.rule=PathPrefix(`/graphql`)"
       - "traefik.http.routers.moneta-backend.entrypoints=web"
 
+  # In production this is a scheduled job rather than a service; here it is a sidecar so the
+  # compose stack exercises the same command. Generation is idempotent, so the interval only
+  # decides how soon a due expense appears.
+  periodic:
+    build:
+      context: ./backend
+    image: git.gerken.haus/thies/moneta/backend:main
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      - MONETA__DATABASE__URL=mongodb://mongo:27017
+    command: sh -c 'while true; do moneta periodic --run; sleep 3600; done'
+
   frontend:
     deploy:
       replicas: 1

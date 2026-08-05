@@ -2,6 +2,7 @@ mod account;
 mod expense;
 mod oid;
 pub mod rendering;
+mod rules;
 
 pub use oid::ObjectIdWrapper;
 
@@ -13,6 +14,10 @@ pub use expense::{
     Expense, ExpenseCategorization, ExpenseCategorizationInput, ExpensePosition,
     ExpensePositionInput, ExpenseReceipt, ExpenseReceiptInput, ExpenseTransaction,
     ExpenseTransactionInput,
+};
+pub use rules::{
+    AutomationRule, AutomationRuleInput, ExpenseDelivery, PeriodicInterval, PeriodicRule,
+    PeriodicRuleInput, SeenDelivery,
 };
 
 use chrono::{DateTime, Utc};

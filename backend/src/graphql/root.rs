@@ -11,6 +11,10 @@ use crate::graphql::{
     balances::{BalanceMutation, BalanceQuery},
     categories::{CategoryMutation, CategoryQuery},
     expenses::{ExpenseMutation, ExpenseQuery},
+    rules::{
+        AutomationRuleMutation, AutomationRuleQuery, DeliveryMutation, DeliveryQuery,
+        PeriodicRuleMutation, PeriodicRuleQuery,
+    },
     users::{UserMutation, UserQuery},
 };
 
@@ -115,6 +119,18 @@ impl Query {
     fn analysis() -> AnalysisQuery {
         AnalysisQuery
     }
+
+    fn automation_rules() -> AutomationRuleQuery {
+        AutomationRuleQuery
+    }
+
+    fn periodic_rules() -> PeriodicRuleQuery {
+        PeriodicRuleQuery
+    }
+
+    fn deliveries() -> DeliveryQuery {
+        DeliveryQuery
+    }
 }
 
 #[graphql_object(
@@ -139,5 +155,17 @@ impl Mutation {
 
     fn categories() -> CategoryMutation {
         CategoryMutation
+    }
+
+    fn automation_rules() -> AutomationRuleMutation {
+        AutomationRuleMutation
+    }
+
+    fn periodic_rules() -> PeriodicRuleMutation {
+        PeriodicRuleMutation
+    }
+
+    fn deliveries() -> DeliveryMutation {
+        DeliveryMutation
     }
 }

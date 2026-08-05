@@ -50,6 +50,7 @@
 			readonly isExtraordinary: boolean;
 			readonly receipts: {
 				readonly uri: string;
+				readonly ocr: string | null;
 			}[];
 
 			readonly positions: {
@@ -155,6 +156,19 @@
 			comments: pos.comments || ''
 		})) || []
 	);
+
+	// ocr is machine-produced and not editable here, but it has to round-trip: the mutation
+	// replaces the whole receipt list
+	let receipts: { uri: string; ocr: string | null }[] = $derived(
+		expense?.receipts.map((r) => ({ uri: r.uri, ocr: r.ocr })) || []
+	);
+
+	function addReceipt() {
+		receipts = [...receipts, { uri: '', ocr: null }];
+	}
+	function removeReceipt(i: number) {
+		receipts = receipts.slice(0, i).concat(receipts.slice(i + 1));
+	}
 
 	function addCategory() {
 		expenseCategories = [...expenseCategories, { categoryId: '', weight: '1' }];
@@ -316,7 +330,9 @@
 				: undefined,
 			bookingStart: bookingStart!,
 			bookingEnd: endDate!,
-			receipts: [],
+			receipts: receipts
+				.filter((r) => r.uri.trim())
+				.map((r) => ({ uri: r.uri.trim(), ocr: r.ocr })),
 			categories: expenseCategories.map((cat) => ({
 				categoryId: cat.categoryId,
 				weight: cat.weight ? Number(cat.weight) : 1
@@ -424,7 +440,43 @@
 				<Checkbox bind:checked={isExtraordinary}>Außergewöhnlich</Checkbox>
 				<Checkbox bind:checked={isTaxRelevant}>Steuerrelevant</Checkbox>
 			</div>
-			<!-- TODO: support receipts -->
+			<div class="sm:col-span-2">
+				<Label class="mb-2 block">Belege</Label>
+				{#each receipts as receipt, i (i)}
+					<div class="mb-2 flex items-center gap-2">
+						<Input
+							type="text"
+							placeholder="URI (Datei, DMS-Dokument, …)"
+							bind:value={receipt.uri}
+							class="w-full"
+						/>
+						{#if receipt.ocr}
+							<span class="text-xs whitespace-nowrap text-gray-500" title={receipt.ocr}>OCR</span>
+						{/if}
+						<Button
+							onclick={(e: MouseEvent) => {
+								e.stopPropagation();
+								removeReceipt(i);
+							}}
+							color="red"
+							size="xs"
+						>
+							<CircleMinusOutline class="h-4 w-4" />
+						</Button>
+					</div>
+				{/each}
+				<div class="mt-2 text-center">
+					<Button
+						onclick={(e: MouseEvent) => {
+							e.stopPropagation();
+							addReceipt();
+						}}
+						size="xs"
+					>
+						<CirclePlusOutline class="mr-1 h-4 w-4" />Beleg hinzufügen
+					</Button>
+				</div>
+			</div>
 
 			{#if transactions.filter((tx) => tx.isRelative).length > 0}
 				<div>

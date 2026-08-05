@@ -56,6 +56,70 @@ impl Expense {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bson::oid::ObjectId;
+    use chrono::TimeZone;
+
+    fn at(y: i32, m: u32, d: u32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(y, m, d, 12, 0, 0).unwrap()
+    }
+
+    fn expense(booking_start: DateTime<Utc>, booking_end: DateTime<Utc>) -> Expense {
+        Expense {
+            id: ObjectId::new().into(),
+            title: "Jahresbeitrag".into(),
+            store: String::new(),
+            description: String::new(),
+            comments: String::new(),
+            reference_amount: None,
+            booking_start,
+            booking_end,
+            is_template: false,
+            is_tax_relevant: false,
+            is_unchecked: false,
+            is_incomplete: false,
+            is_extraordinary: false,
+            receipts: vec![],
+            categories: vec![],
+            transactions: vec![ExpenseTransaction {
+                account_id: ObjectId::new().into(),
+                date: booking_start,
+                amount: Some(-4800),
+                fraction: None,
+                comments: String::new(),
+                statement: String::new(),
+            }],
+            positions: vec![],
+            created_at: booking_start,
+            updated_at: booking_start,
+        }
+    }
+
+    #[test]
+    fn booking_period_may_be_a_single_instant() {
+        // every imported expense looks like this, so rejecting it would reject the whole database
+        assert!(expense(at(2026, 1, 1), at(2026, 1, 1)).validate().is_ok());
+    }
+
+    #[test]
+    fn booking_period_may_span_time() {
+        // a prepayment: paid once, consumed across the period
+        assert!(expense(at(2026, 1, 1), at(2026, 12, 31)).validate().is_ok());
+    }
+
+    #[test]
+    fn booking_period_must_not_run_backwards() {
+        // the prepayment maths divides by (end - start); a negative span would silently
+        // report a consumed fraction outside 0..1 rather than failing
+        let err = expense(at(2026, 12, 31), at(2026, 1, 1))
+            .validate()
+            .expect_err("backwards booking period must be rejected");
+        assert!(err.to_string().contains("booking start"), "{err}");
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, GraphQLObject)]
 #[serde(rename_all = "camelCase")]
 pub struct Expense {

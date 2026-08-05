@@ -40,6 +40,7 @@
 		makeCategoryColor
 	} from './expense_utils';
 	import ExpenseModal from './ExpenseModal.svelte';
+	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
 
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
@@ -291,6 +292,7 @@
 							isExtraordinary
 							receipts {
 								uri
+								ocr
 							}
 							changelog {
 								id
@@ -504,10 +506,8 @@
 		hoverable={true}
 		striped={true}
 		bind:inputValue={searchTerm}
-		tableClass="w-full text-left text-sm"
-		divClass="bg-white dark:bg-gray-800 relative shadow-md sm:rounded-lg overflow-x-auto"
-		innerDivClass="flex flex-col md:flex-row items-center justify-between space-y-3 md:space-y-0 md:space-x-4 p-4"
-		searchClass="w-full md:w-1/2 relative"
+		class={tableSearchTableClass}
+		classes={tableSearchClasses}
 	>
 		{#snippet header()}
 			<div
