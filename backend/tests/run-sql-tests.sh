@@ -3,7 +3,8 @@
 #
 # The migrations are applied with psql rather than diesel_cli because diesel_cli links libpq,
 # which the rest of the build does not need. They are named so that lexical order is apply
-# order.
+# order. Nothing is recorded in __diesel_schema_migrations, so point this at a throwaway
+# database -- the backend would try to apply them all again on top.
 set -eu
 
 PGURL="${PGURL:-postgres://moneta:moneta@localhost:5433/moneta}"
