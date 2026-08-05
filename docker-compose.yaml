@@ -11,7 +11,6 @@ services:
         condition: service_healthy
     environment:
       - MONETA__DATABASE__URL=postgres://moneta:moneta@postgres:5432/moneta
-      - MONETA__DATABASE__MONGO_URL=mongodb://mongo:27017
       - MONETA__API__PORT=80
       - MONETA__API__ADDRESS=0.0.0.0
       - MONETA__API__SECRET_KEY=M7/dfyV00H6WoOGNxygzdOudibhuPdQwJay5pi+I1cg=
@@ -34,7 +33,6 @@ services:
         condition: service_healthy
     environment:
       - MONETA__DATABASE__URL=postgres://moneta:moneta@postgres:5432/moneta
-      - MONETA__DATABASE__MONGO_URL=mongodb://mongo:27017
     command: sh -c 'while true; do moneta periodic --run; sleep 3600; done'
 
   frontend:
@@ -70,16 +68,6 @@ services:
       interval: 5s
       retries: 10
 
-  # Only needed until the postgres cutover is done; `moneta migrate-mongo` reads from here.
-  mongo:
-    image: mongo:8@sha256:d6566e93e6a913cdb622ebe34e0ae7937d50efa60e92363fb4a84404dc890415
-    volumes:
-      - ./volumes/mongo:/data/db
-    restart: unless-stopped
-    ports:
-      # for debugging :)
-      - "127.0.0.1:27018:27017"
-
   traefik:
     image: "traefik:v3.5@sha256:16acb89c6db341182970d6fdafece31303b0a380a8ed7aa51682e225229bf1d2"
     container_name: "traefik"
@@ -93,5 +81,4 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
 
 volumes:
-  mongo:
   postgres:
