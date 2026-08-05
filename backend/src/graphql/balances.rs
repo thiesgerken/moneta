@@ -1,33 +1,34 @@
 use uuid::Uuid;
-use std::error::Error;
 
 use crate::graphql::accounts::GraphQLAccount;
-use crate::graphql::root::Context;
-use crate::graphql::root::require_user;
-use crate::graphql::util::{self};
+use crate::graphql::root::{Context, require_user};
+use crate::graphql::util::{self, SortDirection};
+use crate::models::Balance;
 use crate::models::rendering::{
-    RenderedBalance, RenderedBalanceCreateInput, RenderedBalanceInput, RenderedBalanceUpdateInput,
+    RenderedBalance, RenderedBalanceCreateInput, RenderedBalanceUpdateInput,
 };
-use crate::models::{Account, Balance, Uuid};
-use crate::queries;
+use crate::order_by;
+use crate::schema::{accounts, balances};
+use crate::schema_views::balances_rendered;
 
 use chrono::DateTime;
 use chrono::Utc;
-use juniper::FieldResult;
-use juniper::GraphQLObject;
-use juniper::graphql_object;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
+use juniper::{FieldResult, GraphQLEnum, GraphQLObject, graphql_object};
 
 #[derive(Debug, Clone)]
 pub struct GraphQLBalance {
     data: RenderedBalance,
 }
+
 impl GraphQLBalance {
     pub fn new(data: RenderedBalance) -> Self {
         Self { data }
     }
 }
 
-#[graphql_object(    Context = Context,name = "Balance")]
+#[graphql_object(Context = Context, name = "Balance")]
 impl GraphQLBalance {
     fn id(&self) -> Uuid {
         self.data.id
@@ -51,10 +52,7 @@ impl GraphQLBalance {
 
     async fn account(&self, context: &Context) -> FieldResult<GraphQLAccount> {
         Ok(GraphQLAccount::new(
-            context
-                .account_loader
-                .try_load(self.data.account_id)
-                .await?,
+            context.account_loader.try_load(self.data.account_id).await?,
         ))
     }
 }
@@ -72,6 +70,13 @@ pub struct BalanceNode {
     pub node: GraphQLBalance,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, GraphQLEnum)]
+pub enum BalanceSortField {
+    #[default]
+    Date,
+    Amount,
+}
+
 pub struct BalanceQuery;
 
 #[graphql_object(
@@ -82,48 +87,67 @@ impl BalanceQuery {
         context: &Context,
         limit: Option<i32>,
         skip: Option<i32>,
-        filter: Option<String>,
-        sort: Option<String>,
-    ) -> juniper::FieldResult<BalanceConnection> {
-        let uid = require_user(context).await?;
+        search: Option<String>,
+        account_id: Option<Uuid>,
+        sort_by: Option<BalanceSortField>,
+        sort_dir: Option<SortDirection>,
+    ) -> FieldResult<BalanceConnection> {
+        let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        let (total_count, edges) = util::list_query::<RenderedBalance>(
-            "balances_rendered",
-            &context.connection,
-            limit,
-            skip,
-            filter,
-            sort,
-            Some(doc!("userId": uid)),
-        )
-        .await?;
+        let (limit, offset) = util::page(limit, skip);
+        let direction = sort_dir.unwrap_or_default();
+        let pattern = search
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| util::ilike_pattern(s.trim()));
+
+        // A boxed query is consumed by the count, so the filter is built twice rather than
+        // cloned.
+        let filtered = || {
+            let mut query = balances_rendered::table
+                .into_boxed()
+                .filter(balances_rendered::user_id.eq(user_id));
+
+            if let Some(pattern) = &pattern {
+                query = query.filter(balances_rendered::comments.ilike(pattern.clone()));
+            }
+            if let Some(account_id) = account_id {
+                query = query.filter(balances_rendered::account_id.eq(account_id));
+            }
+
+            query
+        };
+
+        let total_count: i64 = filtered().count().get_result(conn).await?;
+
+        let query = match sort_by.unwrap_or_default() {
+            BalanceSortField::Date => order_by!(filtered(), direction, balances_rendered::date),
+            BalanceSortField::Amount => order_by!(filtered(), direction, balances_rendered::amount),
+        };
+
+        let found = query
+            .limit(limit)
+            .offset(offset)
+            .select(RenderedBalance::as_select())
+            .load(conn)
+            .await?;
 
         Ok(BalanceConnection {
             total_count: total_count as i32,
-            edges: edges
+            edges: found
                 .into_iter()
-                .map(|e| BalanceNode {
-                    node: GraphQLBalance::new(e),
+                .map(|node| BalanceNode {
+                    node: GraphQLBalance::new(node),
                 })
                 .collect(),
         })
     }
 
-    pub async fn get(
-        context: &Context,
-        id: Uuid,
-    ) -> juniper::FieldResult<GraphQLBalance> {
-        let uid = require_user(context).await?;
-        let collection = context
-            .connection
-            .collection::<RenderedBalance>("balances_rendered");
+    pub async fn get(context: &Context, id: Uuid) -> FieldResult<GraphQLBalance> {
+        let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
 
-        Ok(GraphQLBalance::new(
-            collection
-                .find_one(doc! {"_id":*id, "userId": uid})
-                .await?
-                .ok_or_else(|| format!("Balance {id:?} not found"))?,
-        ))
+        Ok(GraphQLBalance::new(load_rendered(conn, user_id, id).await?))
     }
 }
 
@@ -133,155 +157,103 @@ pub struct BalanceMutation;
     Context = Context,
 )]
 impl BalanceMutation {
-    pub async fn delete(context: &Context, id: Uuid) -> juniper::FieldResult<bool> {
+    pub async fn delete(context: &Context, id: Uuid) -> FieldResult<bool> {
         let user_id = require_user(context).await?;
-        let collection = context
-            .connection
-            .collection::<RenderedBalance>("balances_rendered");
+        let conn = &mut context.conn().await?;
 
-        // check if there is a rendered balance with the given upstream id belonging to this user
-        let original_entry = collection
-            .find_one(doc! {"_id":*id, "userId": user_id})
-            .await?
-            .ok_or("entry to delete not found")?;
+        require_own_balance(conn, user_id, id).await?;
 
-        let upstream_collection = context.connection.collection::<Balance>("balances");
-        let upstream_entry = upstream_collection
-            .find_one(doc! {"_id":*original_entry.upstream_id})
-            .await?
-            .unwrap_or_else(|| {
-                panic!("cannot find upstream balance for rendered balance {:?}", id)
-            });
-
-        // remove rendered balances first ...
-        upstream_entry.remove_rendered(&context.connection).await?;
-        // ... and then the upstream balance itself
-        let count = upstream_collection
-            .delete_one(doc! {"_id":*original_entry.upstream_id})
-            .await?
-            .deleted_count;
+        let count = diesel::delete(balances::table.find(id)).execute(conn).await?;
         Ok(count == 1)
     }
 
     pub async fn create(
         context: &Context,
         balance: RenderedBalanceCreateInput,
-    ) -> juniper::FieldResult<GraphQLBalance> {
+    ) -> FieldResult<GraphQLBalance> {
         let user_id = require_user(context).await?;
-        let collection = context.connection.collection::<Balance>("balances");
+        let conn = &mut context.conn().await?;
 
-        let related_accounts =
-            queries::query_associated_accounts(&context.connection, &[*balance.account_id]).await?;
-        let entry = validate_and_unrender(user_id, balance, &related_accounts).await?;
+        require_own_account(conn, user_id, balance.account_id).await?;
 
-        collection.insert_one(&entry).await?;
+        let entry = Balance::from_rendered(balance);
+        let id = entry.id;
+        diesel::insert_into(balances::table)
+            .values(&entry)
+            .execute(conn)
+            .await?;
 
-        let balance = render(user_id, &context.connection, entry, &related_accounts).await?;
-        Ok(GraphQLBalance::new(balance))
+        Ok(GraphQLBalance::new(load_rendered(conn, user_id, id).await?))
     }
 
     pub async fn update(
         context: &Context,
         id: Uuid,
         balance: RenderedBalanceUpdateInput,
-    ) -> juniper::FieldResult<GraphQLBalance> {
+    ) -> FieldResult<GraphQLBalance> {
         let user_id = require_user(context).await?;
-        let collection = context
-            .connection
-            .collection::<RenderedBalance>("balances_rendered");
+        let conn = &mut context.conn().await?;
 
-        let original_rendered_balance = collection
-            .find_one(doc! {"_id":*id, "userId": user_id})
-            .await?
-            .ok_or("entry to update not found")?;
+        require_own_balance(conn, user_id, id).await?;
+        require_own_account(conn, user_id, balance.account_id).await?;
 
-        let related_accounts =
-            queries::query_associated_accounts(&context.connection, &[*balance.account_id]).await?;
-        let mut updated_upstream_entry =
-            validate_and_unrender(user_id, balance, &related_accounts).await?;
-
-        // find the original upstream balance
-        let upstream_collection = context.connection.collection::<Balance>("balances");
-        let upstream_entry = upstream_collection
-            .find_one(doc!("_id": *original_rendered_balance.upstream_id))
-            .await?
-            .unwrap_or_else(|| {
-                panic!("cannot find upstream balance for rendered balance {:?}", id)
-            });
-
-        // delete its rendered balances
-        upstream_entry.remove_rendered(&context.connection).await?;
-
-        // update the upstream balance with the changes
-        updated_upstream_entry.id = upstream_entry.id;
-        updated_upstream_entry.updated_at = Utc::now();
-        updated_upstream_entry.created_at = upstream_entry.created_at;
-
-        upstream_collection
-            .update_one(
-                doc!("_id": &*updated_upstream_entry.id),
-                doc! {"$set":  bson::serialize_to_bson(&updated_upstream_entry).unwrap()},
-            )
+        diesel::update(balances::table.find(id))
+            .set((
+                balances::account_id.eq(balance.account_id),
+                balances::date.eq(balance.date),
+                balances::amount.eq(balance.amount),
+                balances::comments.eq(balance.comments),
+                balances::updated_at.eq(Utc::now()),
+            ))
+            .execute(conn)
             .await?;
 
-        let balance = render(
-            user_id,
-            &context.connection,
-            updated_upstream_entry,
-            &related_accounts,
-        )
-        .await?;
-        Ok(GraphQLBalance::new(balance))
+        Ok(GraphQLBalance::new(load_rendered(conn, user_id, id).await?))
     }
 }
 
-pub async fn render(
-    uid: Uuid,
-    connection: &mongodb::Database,
-    entry: Balance,
-    related_accounts: &[Account],
-) -> Result<RenderedBalance, Box<dyn Error>> {
-    // create rendered balances and insert them into database
-    let rendered_balances = entry.render(related_accounts)?;
-    let collection = connection.collection::<RenderedBalance>("balances_rendered");
-    collection.insert_many(&rendered_balances).await?;
+type Conn = diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>;
 
-    // find the rendered balance that was rendered for this user and return it
-    let rendered_entry = rendered_balances
-        .into_iter()
-        .find(|b| *b.user_id == uid)
-        .unwrap_or_else(|| {
-            panic!(
-                "rendering did not result in a balance for this user?! balance {:?}",
-                entry.id
-            )
-        });
-
-    Ok(rendered_entry)
+async fn load_rendered(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<RenderedBalance> {
+    balances_rendered::table
+        .filter(balances_rendered::id.eq(id))
+        .filter(balances_rendered::user_id.eq(user_id))
+        .select(RenderedBalance::as_select())
+        .first(conn)
+        .await
+        .optional()?
+        .ok_or_else(|| format!("Balance {id} not found").into())
 }
 
-pub async fn validate_and_unrender(
-    uid: Uuid,
-    balance: RenderedBalanceInput,
-    related_accounts: &[Account],
-) -> Result<Balance, Box<dyn Error>> {
-    let account = related_accounts
-        .iter()
-        .find(|a| a.id == balance.account_id)
-        .ok_or_else(|| {
-            format!(
-                "user {:?} tried to create a balance with unknown account {:?}",
-                uid, balance.account_id
-            )
-        })?;
+/// A mirrored account renders the other user's balances into this user's books, so owning the
+/// rendering is not the same as owning the row behind it. Writes go to the upstream row, so
+/// they have to be checked against the account that actually holds it.
+async fn require_own_balance(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<()> {
+    let owned: Option<Uuid> = balances::table
+        .inner_join(accounts::table)
+        .filter(balances::id.eq(id))
+        .filter(accounts::user_id.eq(user_id))
+        .select(balances::id)
+        .first(conn)
+        .await
+        .optional()?;
 
-    if *account.user_id != uid {
-        return Err(format!(
-            "user {:?} tried to create a balance with foreign account {:?}",
-            uid, balance.account_id
-        )
-        .into());
+    owned
+        .map(|_| ())
+        .ok_or_else(|| format!("Balance {id} not found").into())
+}
+
+async fn require_own_account(conn: &mut Conn, user_id: Uuid, account_id: Uuid) -> FieldResult<()> {
+    let owner: Option<Uuid> = accounts::table
+        .find(account_id)
+        .select(accounts::user_id)
+        .first(conn)
+        .await
+        .optional()?;
+
+    match owner {
+        Some(owner) if owner == user_id => Ok(()),
+        Some(_) => Err(format!("Account {account_id} belongs to somebody else").into()),
+        None => Err(format!("Account {account_id} does not exist").into()),
     }
-
-    Ok(Balance::from_rendered(balance))
 }
