@@ -4,15 +4,20 @@
 //! instants a periodic rule is due for, what the generated expense looks like, and which
 //! automation rule a delivered transaction matches.
 
-use uuid::Uuid;
-use chrono::{DateTime, Datelike, TimeDelta, Utc};
-use regex::Regex;
 use std::error::Error;
 
+use chrono::{DateTime, Datelike, TimeDelta, Utc};
+use diesel::prelude::*;
+use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
+use regex::Regex;
+use uuid::Uuid;
+
 use crate::models::{
-    Account, AutomationRule, Expense, ExpenseChangelogEntry, ExpenseDelivery, Uuid,
-    PeriodicRule, SeenDelivery, rendering::RenderedExpense,
+    AutomationRule, Expense, ExpenseChangelogEntry, ExpenseDelivery, Json, PeriodicRule,
+    SeenDelivery,
 };
+use crate::queries;
+use crate::schema::{automation_rules, expense_changes, periodic_rules, seen_deliveries};
 
 /// The instants a rule is due for: stepping from the template's booking start by the rule's
 /// period, keeping those after `last_creation` and no later than `until`.
@@ -52,7 +57,7 @@ pub fn instantiate(rule: &PeriodicRule, template: &Expense, at: DateTime<Utc>) -
     let shift = at - template.booking_start;
 
     let mut e = template.clone();
-    e.id = Uuid::now_v7().into();
+    e.id = Uuid::now_v7();
     e.is_template = false;
     e.booking_start = at;
     e.booking_end = template.booking_end + shift;
@@ -94,15 +99,15 @@ fn substitute_date(title: &str, at: DateTime<Utc>) -> String {
 /// Records that a rule, rather than a person, created this expense.
 pub fn changelog_entry(expense: &Expense, user_id: Uuid, tool: &str) -> ExpenseChangelogEntry {
     ExpenseChangelogEntry {
-        id: Uuid::now_v7().into(),
+        id: Uuid::now_v7(),
         target_id: expense.id,
-        user_id: Some(user_id.into()),
+        user_id: Some(user_id),
         date: expense.created_at,
         tool: Some(tool.to_owned()),
         automatic: true,
         confidence: 1.0,
         old_state: None,
-        new_state: Some(expense.clone()),
+        new_state: Some(Json(expense.clone())),
     }
 }
 
@@ -143,7 +148,7 @@ pub fn impose(
     now: DateTime<Utc>,
 ) -> Result<Expense, Box<dyn Error>> {
     let mut e = template.clone();
-    e.id = Uuid::now_v7().into();
+    e.id = Uuid::now_v7();
     e.is_template = false;
     // the delivery is a bank statement line, so it is worth a human look before it counts
     e.is_unchecked = true;
@@ -231,39 +236,26 @@ pub enum DeliveryOutcome {
 /// Every delivery is recorded as seen, matched or not, so that re-uploading the same
 /// statement does not keep re-evaluating the same lines.
 pub async fn deliver_expenses(
-    connection: &mongodb::Database,
+    conn: &mut AsyncPgConnection,
     user_id: Uuid,
     deliveries: &[ExpenseDelivery],
     now: DateTime<Utc>,
 ) -> Result<Vec<DeliveryOutcome>, Box<dyn Error + Send + Sync>> {
-    let seen_collection = connection.collection::<SeenDelivery>("seen_deliveries");
-    let expense_collection = connection.collection::<Expense>("expenses");
-
-    let rules = connection
-        .collection::<AutomationRule>("automation_rules")
-        .find(doc!("userId": user_id))
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
-
-    let accounts = connection
-        .collection::<Account>("accounts")
-        .find(doc!())
-        .await?
-        .try_collect::<Vec<_>>()
+    let rules = automation_rules::table
+        .filter(automation_rules::user_id.eq(user_id))
+        .select(AutomationRule::as_select())
+        .load(conn)
         .await?;
 
     // one query for the whole batch rather than per delivery; a user's history on the
     // accounts being delivered to is small enough to filter in memory
-    let account_ids: Vec<_> = deliveries.iter().map(|d| *d.account_id).collect();
-    let mut seen = seen_collection
-        .find(doc! {
-            "userId": user_id,
-            "accountId": {"$in": &account_ids},
-            "date": {"$gte": bson::DateTime::from_chrono(now - TimeDelta::days(400))},
-        })
-        .await?
-        .try_collect::<Vec<_>>()
+    let account_ids: Vec<_> = deliveries.iter().map(|d| d.account_id).collect();
+    let mut seen = seen_deliveries::table
+        .filter(seen_deliveries::user_id.eq(user_id))
+        .filter(seen_deliveries::account_id.eq_any(&account_ids))
+        .filter(seen_deliveries::date.ge(now - TimeDelta::days(400)))
+        .select(SeenDelivery::as_select())
+        .load(conn)
         .await?;
 
     let mut outcomes = Vec::with_capacity(deliveries.len());
@@ -276,8 +268,8 @@ pub async fn deliver_expenses(
         }
 
         let mut record = SeenDelivery {
-            id: Uuid::now_v7().into(),
-            user_id: user_id.into(),
+            id: Uuid::now_v7(),
+            user_id,
             account_id: delivery.account_id,
             date: delivery.date,
             amount: delivery.amount,
@@ -288,59 +280,58 @@ pub async fn deliver_expenses(
 
         let outcome = match best_match(&rules, delivery) {
             None => DeliveryOutcome::Unmatched,
-            Some(rule) => {
-                match expense_collection
-                    .find_one(doc!("_id": *rule.template_id))
-                    .await?
+            Some(rule) => match queries::load_expense(conn, rule.template_id).await? {
+                None => DeliveryOutcome::Failed {
+                    message: format!("rule {} has no template expense", rule.title),
+                },
+                // stringified eagerly: a boxed dyn Error is not Send, and holding one
+                // across the awaits below would make this future unspawnable
+                Some(template) => match impose(&template, delivery, now)
+                    .and_then(|e| e.validate().map(|_| e))
+                    .map_err(|e| e.to_string())
                 {
-                    None => DeliveryOutcome::Failed {
-                        message: format!("rule {} has no template expense", rule.title),
-                    },
-                    // stringified eagerly: a boxed dyn Error is not Send, and holding one
-                    // across the awaits below would make this future unspawnable
-                    Some(template) => match impose(&template, delivery, now)
-                        .and_then(|e| e.validate().map(|_| e))
-                        .map_err(|e| e.to_string())
-                    {
-                        Err(message) => DeliveryOutcome::Failed { message },
-                        Ok(expense) => {
-                            let rendered = expense.render(&accounts).map_err(|e| e.to_string())?;
+                    Err(message) => DeliveryOutcome::Failed { message },
+                    Ok(expense) => {
+                        let expense_id = expense.id;
+                        let rule_id = rule.id;
 
-                            expense_collection.insert_one(&expense).await?;
-                            connection
-                                .collection::<ExpenseChangelogEntry>("expense_changes")
-                                .insert_one(changelog_entry(&expense, user_id, "moneta-automation"))
-                                .await?;
-                            if !rendered.is_empty() {
-                                connection
-                                    .collection::<RenderedExpense>("expenses_rendered")
-                                    .insert_many(&rendered)
-                                    .await?;
-                            }
+                        conn.transaction::<_, diesel::result::Error, _>(async |conn| {
+                            queries::insert_expense(conn, &expense).await?;
 
-                            connection
-                                .collection::<AutomationRule>("automation_rules")
-                                .update_one(
-                                    doc!("_id": *rule.id),
-                                    doc!("$set": {"lastDelivery": bson::DateTime::from_chrono(now)}),
-                                )
+                            diesel::insert_into(expense_changes::table)
+                                .values(changelog_entry(&expense, user_id, "moneta-automation"))
+                                .execute(conn)
                                 .await?;
 
-                            record.expense_id = Some(expense.id);
-                            DeliveryOutcome::Created {
-                                expense_id: expense.id,
-                                rule_id: rule.id,
-                            }
+                            diesel::update(automation_rules::table.find(rule_id))
+                                .set((
+                                    automation_rules::last_delivery.eq(now),
+                                    automation_rules::updated_at.eq(now),
+                                ))
+                                .execute(conn)
+                                .await?;
+
+                            Ok(())
+                        })
+                        .await?;
+
+                        record.expense_id = Some(expense_id);
+                        DeliveryOutcome::Created {
+                            expense_id,
+                            rule_id,
                         }
-                    },
-                }
-            }
+                    }
+                },
+            },
         };
 
         // a failed delivery is deliberately not recorded, so fixing the rule and
         // re-uploading picks it up instead of silently swallowing it forever
         if !matches!(outcome, DeliveryOutcome::Failed { .. }) {
-            seen_collection.insert_one(&record).await?;
+            diesel::insert_into(seen_deliveries::table)
+                .values(&record)
+                .execute(conn)
+                .await?;
             seen.push(record);
         }
 
@@ -350,44 +341,30 @@ pub async fn deliver_expenses(
     Ok(outcomes)
 }
 
-/// Runs every periodic rule that is due, writing the generated expenses, their changelog
-/// entries and their rendered documents, then advancing each rule's `last_creation`.
+/// Runs every periodic rule that is due, writing the generated expenses and their changelog
+/// entries, then advancing each rule's `last_creation`.
 ///
 /// Idempotent: running it twice in a row generates nothing the second time.
 pub async fn generate_periodic_expenses(
-    connection: &mongodb::Database,
+    conn: &mut AsyncPgConnection,
     now: DateTime<Utc>,
-) -> Result<usize, Box<dyn Error>> {
-    let rule_collection = connection.collection::<PeriodicRule>("periodic_rules");
-    let expense_collection = connection.collection::<Expense>("expenses");
-
-    let rules = rule_collection
-        .find(doc!())
-        .await?
-        .try_collect::<Vec<_>>()
+) -> Result<usize, Box<dyn Error + Send + Sync>> {
+    let rules = periodic_rules::table
+        .select(PeriodicRule::as_select())
+        .load(conn)
         .await?;
     if rules.is_empty() {
         return Ok(0);
     }
-
-    let accounts = connection
-        .collection::<Account>("accounts")
-        .find(doc!())
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
 
     let until = now + PERIODIC_ADVANCE;
     let mut generated = Vec::new();
     let mut advanced = Vec::new();
 
     for rule in &rules {
-        let Some(template) = expense_collection
-            .find_one(doc!("_id": *rule.template_id))
-            .await?
-        else {
+        let Some(template) = queries::load_expense(conn, rule.template_id).await? else {
             warn!(
-                "periodic rule {:?} ({}) points at a template that no longer exists, skipping",
+                "periodic rule {} ({}) points at a template that no longer exists, skipping",
                 rule.id, rule.title
             );
             continue;
@@ -402,12 +379,12 @@ pub async fn generate_periodic_expenses(
             let expense = instantiate(rule, &template, *t);
             if let Err(e) = expense.validate() {
                 warn!(
-                    "periodic rule {:?} ({}) would produce an invalid expense, skipping: {}",
+                    "periodic rule {} ({}) would produce an invalid expense, skipping: {}",
                     rule.id, rule.title, e
                 );
                 continue;
             }
-            generated.push((expense, *rule.user_id));
+            generated.push((expense, rule.user_id));
         }
 
         advanced.push((rule.id, *times.last().unwrap()));
@@ -417,43 +394,35 @@ pub async fn generate_periodic_expenses(
         return Ok(0);
     }
 
-    let expenses: Vec<_> = generated.iter().map(|(e, _)| e.clone()).collect();
-    let changelog: Vec<_> = generated
-        .iter()
-        .map(|(e, uid)| changelog_entry(e, *uid, "moneta-periodic"))
-        .collect();
-    let rendered: Vec<_> = expenses
-        .iter()
-        .map(|e| e.render(&accounts))
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .flatten()
-        .collect();
+    let count = generated.len();
 
-    expense_collection.insert_many(&expenses).await?;
-    connection
-        .collection::<ExpenseChangelogEntry>("expense_changes")
-        .insert_many(&changelog)
-        .await?;
-    if !rendered.is_empty() {
-        connection
-            .collection::<RenderedExpense>("expenses_rendered")
-            .insert_many(&rendered)
-            .await?;
-    }
+    // One transaction for the whole run: an expense without its changelog entry, or a rule
+    // advanced past expenses that were never written, both leave the books wrong in a way
+    // nothing later notices.
+    conn.transaction::<_, diesel::result::Error, _>(async |conn| {
+        for (expense, user_id) in &generated {
+            queries::insert_expense(conn, expense).await?;
+            diesel::insert_into(expense_changes::table)
+                .values(changelog_entry(expense, *user_id, "moneta-periodic"))
+                .execute(conn)
+                .await?;
+        }
 
-    // only advance once the expenses are safely stored, so a failure re-runs rather than
-    // silently skipping a period
-    for (id, last) in advanced {
-        rule_collection
-            .update_one(
-                doc!("_id": *id),
-                doc!("$set": {"lastCreation": bson::DateTime::from_chrono(last), "updatedAt": bson::DateTime::from_chrono(now)}),
-            )
-            .await?;
-    }
+        for (id, last) in &advanced {
+            diesel::update(periodic_rules::table.find(id))
+                .set((
+                    periodic_rules::last_creation.eq(last),
+                    periodic_rules::updated_at.eq(now),
+                ))
+                .execute(conn)
+                .await?;
+        }
 
-    Ok(expenses.len())
+        Ok(())
+    })
+    .await?;
+
+    Ok(count)
 }
 
 #[cfg(test)]
@@ -468,7 +437,7 @@ mod tests {
 
     fn template(transactions: Vec<ExpenseTransaction>) -> Expense {
         Expense {
-            id: Uuid::now_v7().into(),
+            id: Uuid::now_v7(),
             title: "Rundfunkgebühr".into(),
             store: String::new(),
             description: String::new(),
@@ -492,7 +461,7 @@ mod tests {
 
     fn transaction(account_id: Uuid, amount: Option<i32>) -> ExpenseTransaction {
         ExpenseTransaction {
-            account_id: account_id.into(),
+            account_id,
             date: at(2025, 1, 15),
             amount,
             fraction: None,
@@ -503,10 +472,10 @@ mod tests {
 
     fn periodic(period: PeriodicInterval, last_creation: DateTime<Utc>) -> PeriodicRule {
         PeriodicRule {
-            id: Uuid::now_v7().into(),
-            user_id: Uuid::now_v7().into(),
+            id: Uuid::now_v7(),
+            user_id: Uuid::now_v7(),
             title: "Rundfunkgebühr".into(),
-            template_id: Uuid::now_v7().into(),
+            template_id: Uuid::now_v7(),
             period,
             title_replacement: None,
             amount_replacement: None,
@@ -518,10 +487,10 @@ mod tests {
 
     fn automation(title: &str, priority: i32) -> AutomationRule {
         AutomationRule {
-            id: Uuid::now_v7().into(),
-            user_id: Uuid::now_v7().into(),
+            id: Uuid::now_v7(),
+            user_id: Uuid::now_v7(),
             title: title.into(),
-            template_id: Uuid::now_v7().into(),
+            template_id: Uuid::now_v7(),
             priority,
             regex_time: None,
             regex_statement: None,
@@ -535,7 +504,7 @@ mod tests {
 
     fn delivery(account_id: Uuid, amount: i32, statement: &str) -> ExpenseDelivery {
         ExpenseDelivery {
-            account_id: account_id.into(),
+            account_id,
             date: at(2025, 3, 4),
             amount,
             statement: statement.into(),
@@ -695,7 +664,7 @@ mod tests {
         let account = Uuid::now_v7();
         let mut rule = automation("exact", 1);
         rule.filter_amount = Some(-5001);
-        rule.filter_account_id = Some(account.into());
+        rule.filter_account_id = Some(account);
 
         assert!(matches(&rule, &delivery(account, -5001, "x")));
         assert!(!matches(&rule, &delivery(account, -5000, "x")));
@@ -755,9 +724,9 @@ mod tests {
     /// replacement had.
     fn seen(account_id: Uuid, amount: i32, date: DateTime<Utc>) -> SeenDelivery {
         SeenDelivery {
-            id: Uuid::now_v7().into(),
-            user_id: Uuid::now_v7().into(),
-            account_id: account_id.into(),
+            id: Uuid::now_v7(),
+            user_id: Uuid::now_v7(),
+            account_id,
             date,
             amount,
             statement: "whatever".into(),
@@ -927,7 +896,7 @@ mod tests {
     #[test]
     fn delivery_date_format_matches_moneydb() {
         let d = ExpenseDelivery {
-            account_id: Uuid::now_v7().into(),
+            account_id: Uuid::now_v7(),
             date: Utc.with_ymd_and_hms(2025, 3, 4, 9, 5, 0).unwrap(),
             amount: -100,
             statement: String::new(),
@@ -955,7 +924,7 @@ mod tests {
         let touched = e
             .transactions
             .iter()
-            .find(|t| *t.account_id == account)
+            .find(|t| t.account_id == account)
             .unwrap();
         assert_eq!(touched.amount, Some(-4237));
         assert_eq!(touched.statement, "LASTSCHRIFT REWE");
