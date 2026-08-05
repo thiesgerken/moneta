@@ -56,6 +56,12 @@
 		return { indices: picked, step, min, max };
 	});
 
+	// zooming out past the data leaves a range set that shows everything anyway; offering to
+	// reset that would be a button that visibly does nothing
+	const zoomedIn = $derived(
+		visible.min > historyDates[0] || visible.max < historyDates[historyDates.length - 1]
+	);
+
 	// Faint verticals on month starts to give the eye something to measure against. Beyond
 	// about 18 months there are too many to stay subtle, so they fall back to year starts.
 	const boundaries = $derived.by(() => {
@@ -103,6 +109,10 @@
 			zoom: { enabled: true, type: 'x', autoScaleYaxis: true },
 			toolbar: {
 				show: true,
+				// apex's own reset is deliberately off: it bails out unless *this chart instance*
+				// was zoomed interactively, and changing the resolution rebuilds the chart, so the
+				// instance you would be resetting has no zoom recorded and the button does nothing.
+				// The labelled button next to the title drives our own range state instead.
 				tools: {
 					download: false,
 					selection: true,
@@ -110,7 +120,7 @@
 					zoomin: true,
 					zoomout: true,
 					pan: false,
-					reset: true
+					reset: false
 				}
 			},
 			events: {
@@ -119,9 +129,6 @@
 						o.xaxis.min == null || o.xaxis.max == null
 							? null
 							: { min: o.xaxis.min, max: o.xaxis.max };
-				},
-				beforeResetZoom: () => {
-					range = null;
 				}
 			}
 		},
@@ -165,7 +172,7 @@
 		<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
 			<div class="flex flex-wrap items-center gap-3">
 				<h3 class="text-lg font-semibold">Vermögensverlauf</h3>
-				{#if range}
+				{#if zoomedIn}
 					<Button size="xs" color="alternative" onclick={() => (range = null)}>
 						<RefreshOutline class="mr-1 h-3 w-3" />Zoom zurücksetzen
 					</Button>
