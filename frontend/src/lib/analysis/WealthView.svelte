@@ -220,18 +220,37 @@
 		for (const name of events) {
 			window.addEventListener(name, name.endsWith('down') ? down : up, true);
 		}
+		// on the element rather than in the markup: a click handler on a plain div is an
+		// accessibility complaint the date input below already answers
+		plotEl.addEventListener('click', pickDate, true);
+
 		return () => {
 			for (const name of events) {
 				window.removeEventListener(name, name.endsWith('down') ? down : up, true);
 			}
+			plotEl.removeEventListener('click', pickDate, true);
 		};
 	});
 
-	/// Clicking a point picks it as the Stichtag for the simulation below.
-	function pickDate(index: number) {
-		if (wasDrag) return;
-		const at = dates[index];
-		if (at === undefined) return;
+	let plotEl: HTMLDivElement;
+
+	/// Clicking the plot picks that day as the Stichtag for the simulation below.
+	///
+	/// Read off the x position rather than from apex's own click event, which reports a data
+	/// point only while the pointer is over one — everywhere else in the plot it reports -1,
+	/// and its range-selection layer covers the plot besides. The position also beats the
+	/// point it would have named: the series is sampled at ~120 dates, so over a decade the
+	/// nearest one can be weeks from where the click landed.
+	function pickDate(e: MouseEvent) {
+		if (wasDrag || !visible) return;
+		if ((e.target as Element).closest('.apexcharts-toolbar, .apexcharts-legend')) return;
+
+		const grid = plotEl.querySelector('.apexcharts-grid')?.getBoundingClientRect();
+		if (!grid || grid.width === 0) return;
+
+		const at = visible.min + ((e.clientX - grid.left) / grid.width) * (visible.max - visible.min);
+		if (at < visible.min || at > visible.max) return;
+
 		const d = new Date(at);
 		// local parts, so the date input does not shift a day against the displayed one
 		wealthState.date = `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, '0')}-${`${d.getDate()}`.padStart(2, '0')}`;
@@ -271,13 +290,6 @@
 					const span = visible ? visible.max - visible.min : 0;
 					if (span > 0 && o.xaxis.max - o.xaxis.min < span * 0.02) return;
 					wealthState.zoom = { min: o.xaxis.min, max: o.xaxis.max };
-				},
-				// -1 when the click landed on empty plot area rather than on a point
-				click: (_e: unknown, _c: unknown, o: { dataPointIndex: number }) => {
-					if (o.dataPointIndex >= 0) pickDate(o.dataPointIndex);
-				},
-				markerClick: (_e: unknown, _c: unknown, o: { dataPointIndex: number }) => {
-					if (o.dataPointIndex >= 0) pickDate(o.dataPointIndex);
 				},
 				// apex toggles the series itself; this only keeps our list in step with it
 				legendClick: (_c: unknown, index: number) => {
@@ -358,13 +370,15 @@
 				/>
 			</div>
 		</div>
-		{#if $historyStore.errors}
-			<p class="p-4 text-sm text-red-600 dark:text-red-400">
-				{$historyStore.errors.map((e) => e.message).join(', ')}
-			</p>
-		{:else}
-			<Chart options={chartOptions} bind:instance={chartInstance} />
-		{/if}
+		<div bind:this={plotEl}>
+			{#if $historyStore.errors}
+				<p class="p-4 text-sm text-red-600 dark:text-red-400">
+					{$historyStore.errors.map((e) => e.message).join(', ')}
+				</p>
+			{:else}
+				<Chart options={chartOptions} bind:instance={chartInstance} />
+			{/if}
+		</div>
 	</Card>
 
 	<div class="flex flex-wrap items-end gap-4">
