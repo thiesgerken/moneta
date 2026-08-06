@@ -10,6 +10,7 @@
 		Input,
 		Label,
 		Button,
+		Select,
 		Spinner
 	} from 'flowbite-svelte';
 	import { RefreshOutline } from 'flowbite-svelte-icons';
@@ -26,12 +27,58 @@
 
 	let date = $state(new Date().toISOString().slice(0, 10));
 	let split = $state('total');
+	let span = $state('all');
 
-	// The window the chart is showing. Zooming rewrites it, which is what makes the query
-	// come back at a different resolution rather than magnifying the points already drawn.
-	const defaultRange = { min: Date.now() - 730 * DAY, max: Date.now() };
+	const SPANS = [
+		{ value: '6m', name: 'Letzte 6 Monate', months: 6 },
+		{ value: '1y', name: 'Letztes Jahr', months: 12 },
+		{ value: '5y', name: 'Letzte 5 Jahre', months: 60 },
+		{ value: '10y', name: 'Letzte 10 Jahre', months: 120 },
+		{ value: 'all', name: 'Alles', months: null }
+	];
+
+	// Where the data starts, so "Alles" means the whole history rather than a guess. Sorted by
+	// booking start rather than by a transaction date, which is not a sort the list offers --
+	// for an imported expense the two are the same day anyway.
+	const firstExpenseStore = graphql(`
+		query AnalysisFirstExpense {
+			expenses {
+				list(limit: 1, sortBy: BOOKING_START, sortDir: ASC) {
+					edges {
+						node {
+							id
+							bookingStart
+						}
+					}
+				}
+			}
+		}
+	`);
+
+	$effect(() => {
+		void firstExpenseStore.fetch();
+	});
+
+	const dataStart = $derived(
+		$firstExpenseStore.data?.expenses.list.edges[0]?.node.bookingStart?.getTime()
+	);
+	// resolved, whether or not it found anything — an empty database has no first expense
+	const dataStartKnown = $derived($firstExpenseStore.data != null);
+
+	const presetRange = $derived.by(() => {
+		const max = Date.now();
+		const months = SPANS.find((s) => s.value === span)?.months ?? null;
+		if (months === null) return { min: dataStart ?? max - 365 * DAY, max };
+
+		// built rather than mutated: a negative month rolls into the previous year on its own
+		const now = new Date(max);
+		const from = new Date(now.getFullYear(), now.getMonth() - months, now.getDate());
+		return { min: from.getTime(), max };
+	});
+
+	// Zooming overrides the preset until it is reset or the preset changes.
 	let range: { min: number; max: number } | null = $state(null);
-	const visible = $derived(range ?? defaultRange);
+	const visible = $derived(range ?? presetRange);
 
 	// The backend caps the point count, and asking for more than the chart can draw only
 	// makes the response bigger; ~120 is what fits across a screen.
@@ -41,6 +88,10 @@
 	);
 
 	const zoomedIn = $derived(range !== null);
+
+	type HistoryData = NonNullable<
+		NonNullable<(typeof $historyStore)['data']>
+	>['analysis']['history'];
 
 	const historyStore = graphql(`
 		query AnalysisHistory($from: DateTime!, $to: DateTime!, $stepDays: Int) {
@@ -87,14 +138,30 @@
 	`);
 
 	// houdini 2 has no @load, so every query needs its own effect; referencing the variables
-	// inside it is what makes zooming and the Stichtag re-run them
+	// inside it is what makes zooming and the Stichtag re-run them.
+	//
+	// The result is kept here rather than read off the store, because two fetches can be in
+	// flight at once — picking a preset while a zoom is still loading, say. houdini writes
+	// whichever answers last into the store, so a slow narrow query can land on top of the
+	// wide one that was asked for after it. Only the newest request may write.
+	let latestRequest = 0;
+	let history = $state<HistoryData | null>(null);
+
 	$effect(() => {
-		void historyStore.fetch({
-			variables: {
-				from: new Date(visible.min),
-				to: new Date(visible.max),
-				stepDays
-			}
+		// "Alles" cannot ask for anything sensible until it knows where the data starts, and
+		// guessing a window meanwhile means two queries racing on every page load
+		if (span === 'all' && !dataStartKnown) return;
+
+		const request = ++latestRequest;
+		const variables = {
+			from: new Date(visible.min),
+			to: new Date(visible.max),
+			stepDays
+		};
+
+		void historyStore.fetch({ variables }).then((result) => {
+			if (request !== latestRequest) return;
+			history = result.data?.analysis.history ?? null;
 		});
 	});
 
@@ -102,7 +169,6 @@
 		void balanceStore.fetch({ variables: { date: new Date(date) } });
 	});
 
-	const history = $derived($historyStore.data?.analysis.history);
 	const balances = $derived($balanceStore.data?.analysis.balances ?? []);
 
 	const total = $derived(balances.reduce((sum, b) => sum + b.amount, 0));
@@ -120,15 +186,17 @@
 	const dates = $derived(history?.dates.map((d) => d.getTime()) ?? []);
 
 	const series = $derived.by(() => {
-		if (!history) return [];
+		// a local const, so the narrowing survives into the callbacks below
+		const loaded = history;
+		if (!loaded) return [];
 		if (split === 'account')
-			return history.byAccount.map((s) => ({
+			return loaded.byAccount.map((s) => ({
 				name: s.account.name,
 				color: s.account.color ?? '#94a3b8',
 				amounts: s.amounts
 			}));
 		if (split === 'availability')
-			return history.byAvailability.map((s) => ({
+			return loaded.byAvailability.map((s) => ({
 				name: AVAILABILITY_LABELS[s.availability],
 				color: availabilityColor(s.availability),
 				amounts: s.amounts
@@ -137,7 +205,7 @@
 			{
 				name: 'Gesamt',
 				color: '#f05a28',
-				amounts: dates.map((_, i) => history.byAccount.reduce((sum, s) => sum + s.amounts[i], 0))
+				amounts: dates.map((_, i) => loaded.byAccount.reduce((sum, s) => sum + s.amounts[i], 0))
 			}
 		];
 	});
@@ -241,14 +309,27 @@
 					</Button>
 				{/if}
 			</div>
-			<ToggleGroup
-				bind:value={split}
-				options={[
-					{ value: 'total', label: 'Gesamt' },
-					{ value: 'account', label: 'Nach Konto' },
-					{ value: 'availability', label: 'Nach Verfügbarkeit' }
-				]}
-			/>
+			<div class="flex flex-wrap items-center gap-2">
+				<Select
+					value={span}
+					onchange={(e) => {
+						// a preset picks the window outright, so a zoom that predates it is stale
+						span = (e.target as HTMLSelectElement).value;
+						range = null;
+					}}
+					items={SPANS.map((s) => ({ value: s.value, name: s.name }))}
+					size="sm"
+					class="w-44"
+				/>
+				<ToggleGroup
+					bind:value={split}
+					options={[
+						{ value: 'total', label: 'Gesamt' },
+						{ value: 'account', label: 'Nach Konto' },
+						{ value: 'availability', label: 'Nach Verfügbarkeit' }
+					]}
+				/>
+			</div>
 		</div>
 		{#if $historyStore.errors}
 			<p class="p-4 text-sm text-red-600 dark:text-red-400">
