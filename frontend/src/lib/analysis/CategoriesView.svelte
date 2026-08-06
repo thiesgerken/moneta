@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { Card, Spinner } from 'flowbite-svelte';
-	import type ApexCharts from 'apexcharts';
 	import type { ApexOptions } from 'apexcharts';
 	import Chart from '$lib/Chart.svelte';
 	import RangePicker from './RangePicker.svelte';
@@ -37,7 +36,6 @@
 
 	const months = $derived(overviews?.months ?? []);
 
-	let barInstance: ApexCharts | null = $state(null);
 	const breakdown = $derived(overviews?.byCategory ?? []);
 
 	const pick = (t: { income: number; expenses: number }) =>
@@ -84,7 +82,12 @@
 				}
 			}
 		},
-		series: bars.map((c) => ({ name: c.name, data: c.data })),
+		// see WealthView: `hidden` is what lets the whole set collapse in a single redraw
+		series: bars.map((c) => ({
+			name: c.name,
+			hidden: categoriesState.hiddenSeries.includes(c.name),
+			data: c.data
+		})),
 		colors: bars.map((c) => c.color),
 		dataLabels: { enabled: false },
 		xaxis: {
@@ -150,13 +153,9 @@
 		<Card class="max-w-none p-4">
 			<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
 				<h3 class="text-lg font-semibold">Nach Kategorie je Monat</h3>
-				<SeriesToggle
-					instance={barInstance}
-					names={barNames}
-					bind:hidden={categoriesState.hiddenSeries}
-				/>
+				<SeriesToggle names={barNames} bind:hidden={categoriesState.hiddenSeries} />
 			</div>
-			<Chart options={barOptions} bind:instance={barInstance} />
+			<Chart options={barOptions} />
 		</Card>
 
 		<Card class="max-w-none p-4">

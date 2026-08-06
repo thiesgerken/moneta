@@ -330,8 +330,12 @@
 				}
 			}
 		},
+		// apex collapses a series marked `hidden` when it draws, which is how the whole set can
+		// be hidden in one redraw. Asking it series by series costs one full redraw each — a few
+		// dozen accounts froze the tab for seconds.
 		series: series.map((s) => ({
 			name: s.name,
+			hidden: wealthState.hiddenSeries.includes(s.name),
 			data: dates.map((d, i) => [d, s.amounts[i] / 100])
 		})),
 		colors: series.map((s) => s.color),
@@ -369,11 +373,7 @@
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
 				{#if wealthState.split !== 'total'}
-					<SeriesToggle
-						instance={chartInstance}
-						names={seriesNames}
-						bind:hidden={wealthState.hiddenSeries}
-					/>
+					<SeriesToggle names={seriesNames} bind:hidden={wealthState.hiddenSeries} />
 				{/if}
 				<RangePicker bind:range={wealthState.range} />
 				<ToggleGroup

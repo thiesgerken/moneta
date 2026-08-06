@@ -25,8 +25,18 @@
 			.map((p) => JSON.stringify(p))
 			.join('|');
 
+	/// Which series are collapsed.
+	///
+	/// `updateOptions` deliberately keeps the collapsed set across an update, so a series that
+	/// stops being `hidden` stays hidden; only `updateSeries` clears it. Worth the extra pass,
+	/// because the alternative — apex's own `hideSeries`, one name at a time — redraws the
+	/// whole chart per call, and a few dozen series lock the tab up for seconds.
+	const hiddenSignature = (o: ApexOptions) =>
+		(o.series ?? []).map((s) => ((s as { hidden?: boolean }).hidden ? 1 : 0)).join('');
+
 	let chart: ApexCharts | null = null;
 	let built = '';
+	let collapsed = '';
 
 	$effect(() => {
 		// tracked before any await, so the effect re-runs when they change
@@ -38,9 +48,22 @@
 			// draws it twice, once empty. Redraw the paths but skip the entry animation, or
 			// every refetch replays it.
 			const updating = chart;
-			void updating.updateOptions(next, true, false).then(() => {
-				if (chart === updating) onUpdated?.(updating);
-			});
+			const wanted = hiddenSignature(next);
+
+			// Both, in this order, and neither alone will do: `updateSeries` clears the
+			// collapsed set but ignores `hidden`, which is only read where the chart draws —
+			// so the pass that acts on it has to come after the one that forgot the old state.
+			const cleared =
+				collapsed === wanted
+					? null
+					: updating.updateSeries(next.series ?? [], false).then(() => undefined);
+			collapsed = wanted;
+
+			void Promise.resolve(cleared)
+				.then(() => updating.updateOptions(next, true, false))
+				.then(() => {
+					if (chart === updating) onUpdated?.(updating);
+				});
 			return;
 		}
 
@@ -48,6 +71,7 @@
 		const created = new ApexCharts(el, next);
 		chart = created;
 		built = shape;
+		collapsed = hiddenSignature(next);
 
 		// Exposed only once it has drawn. Callers drive series visibility through the
 		// instance, and apex reaches into DOM that `render()` has not created yet if asked
