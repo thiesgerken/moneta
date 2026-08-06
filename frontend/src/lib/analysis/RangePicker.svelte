@@ -88,12 +88,15 @@
 </script>
 
 <div class="flex flex-wrap items-center gap-2">
+	<!-- an explicit height on both: flowbite's `sm` is padding, and a select and a date input
+	     do not arrive at the same height from the same padding -->
 	<Select
 		value={range.span}
 		onchange={(e) => (range.span = (e.target as HTMLSelectElement).value)}
 		items={SPANS.map((s) => ({ value: s.value, name: s.name }))}
 		size="sm"
 		class="w-44"
+		selectClass="h-9 py-0"
 		placeholder=""
 	/>
 	{#if dates}
@@ -102,6 +105,7 @@
 			<Input
 				type="date"
 				size="sm"
+				class="h-9 py-0"
 				value={range.from ? isoDate(new Date(range.from)) : ''}
 				onchange={(e) => edit('from', (e.target as HTMLInputElement).value)}
 			/>
@@ -111,6 +115,7 @@
 			<Input
 				type="date"
 				size="sm"
+				class="h-9 py-0"
 				value={range.to ? isoDate(new Date(range.to)) : ''}
 				onchange={(e) => edit('to', (e.target as HTMLInputElement).value)}
 			/>

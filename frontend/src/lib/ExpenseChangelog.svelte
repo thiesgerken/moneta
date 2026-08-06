@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { graphql } from '$houdini';
-
-	import { Timeline, TimelineItem } from 'flowbite-svelte';
-	import { CalendarWeekSolid } from 'flowbite-svelte-icons';
-	import { ChevronDownOutline, ChevronRightOutline } from 'flowbite-svelte-icons';
+	import { Badge, Spinner } from 'flowbite-svelte';
+	import {
+		CirclePlusOutline,
+		EditOutline,
+		ChevronDownOutline,
+		ChevronRightOutline
+	} from 'flowbite-svelte-icons';
+	import { changedFields, summarizeFields, stateAmount } from './changelog';
 
 	let expandedDiffs = $state<string[]>([]);
 
@@ -23,17 +27,26 @@
 							expenseId
 							date
 							tool
+							automatic
 							diff
 							user {
 								name
 								firstName
 							}
 							oldState {
-								__typename # just to find out if it was just created or not
+								# only to tell a creation from a change
+								__typename
 							}
 							newState {
 								title
+								store
 								bookingStart
+								bookingEnd
+								referenceAmount
+								transactions {
+									amount
+									fraction
+								}
 							}
 						}
 					}
@@ -44,65 +57,180 @@
 
 	$effect(() => void changelogStore.fetch());
 
-	const changelogEntries = $derived(
-		($changelogStore.data?.expenses.changelog.edges || []).sort(
-			(a, b) => b.node.date.getTime() - a.node.date.getTime()
-		)
+	const me = $derived($changelogStore.data?.users.me?.name);
+
+	const euro = (cents: number) =>
+		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+
+	const day = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+
+	/// "Heute" and "Gestern" carry more than a date does — everything older is dated in full,
+	/// with the weekday, which is how people remember when they bought something.
+	function dayLabel(d: Date): string {
+		const today = new Date();
+		if (day(d) === day(today)) return 'Heute';
+
+		const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+		if (day(d) === day(yesterday)) return 'Gestern';
+
+		return d.toLocaleDateString('de-DE', {
+			weekday: 'long',
+			day: 'numeric',
+			month: 'long',
+			year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric'
+		});
+	}
+
+	type Entry = (typeof entries)[number];
+
+	const entries = $derived(
+		($changelogStore.data?.expenses.changelog.edges ?? [])
+			.map((e) => e.node)
+			.sort((a, b) => b.date.getTime() - a.date.getTime())
 	);
 
-	const toggleDiff = (id: string) => {
-		if (expandedDiffs.includes(id)) expandedDiffs = expandedDiffs.filter((rowId) => rowId !== id);
-		else expandedDiffs = [...expandedDiffs, id];
+	// Grouped rather than one flat stream: without the day headers every row has to repeat its
+	// date, which is what made the list read as one long paragraph.
+	const days = $derived.by(() => {
+		const out: { key: string; label: string; entries: Entry[] }[] = [];
+
+		for (const entry of entries) {
+			const key = day(entry.date);
+			if (out.at(-1)?.key !== key) out.push({ key, label: dayLabel(entry.date), entries: [] });
+			out.at(-1)?.entries.push(entry);
+		}
+
+		return out;
+	});
+
+	const actor = (entry: Entry) =>
+		entry.user?.name === me ? 'Du' : (entry.user?.firstName ?? entry.user?.name ?? 'Jemand');
+
+	/// What the entry did, in one phrase. The diff says which fields moved, which beats
+	/// "hat die Ausgabe verändert" on every single row.
+	function action(entry: Entry): string {
+		if (!entry.oldState) return `${actor(entry)} hat sie angelegt`;
+
+		const fields = summarizeFields(entry.diff ? changedFields(entry.diff) : []);
+		return fields ? `${actor(entry)} hat ${fields} geändert` : `${actor(entry)} hat sie geändert`;
+	}
+
+	/// The booking period, short: same-day expenses are the common case and need no range.
+	function period(state: { bookingStart: Date; bookingEnd: Date }): string {
+		const fmt = (d: Date) => d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+		const start = fmt(state.bookingStart);
+		const end = fmt(state.bookingEnd);
+		const year = state.bookingStart.getFullYear();
+
+		return (start === end ? start : `${start}–${end}`) + `.${year}`;
+	}
+
+	const toggleDiff = (id: string) =>
+		(expandedDiffs = expandedDiffs.includes(id)
+			? expandedDiffs.filter((other) => other !== id)
+			: [...expandedDiffs, id]);
+
+	/// A unified diff is unreadable in one colour; the marker column is the whole signal.
+	const diffLineClass = (line: string) => {
+		if (line.startsWith('+')) return 'text-green-700 dark:text-green-400';
+		if (line.startsWith('-')) return 'text-red-700 dark:text-red-400';
+		if (line.startsWith('@@')) return 'text-gray-400 dark:text-gray-500';
+		return 'text-gray-500 dark:text-gray-400';
 	};
 </script>
 
-<Timeline order="vertical">
-	{#each changelogEntries as entry (entry.node.id)}
-		<TimelineItem
-			title={(entry.node.newState?.title || '') +
-				(' (' + entry.node.newState?.bookingStart.toLocaleDateString() + ')')}
-			dateFormat="full-date"
-			date={`${entry.node.date.getFullYear()}-${String(entry.node.date.getMonth() + 1).padStart(2, '0')}-${String(entry.node.date.getDate()).padStart(2, '0')}`}
-		>
-			{#snippet orientationSlot()}
-				<span
-					class="bg-primary-200 dark:bg-primary-900 absolute -start-3 flex h-6 w-6 items-center justify-center rounded-full ring-8 ring-white dark:ring-gray-900"
-				>
-					<CalendarWeekSolid class="text-primary-600 dark:text-primary-400 h-4 w-4" />
-				</span>
-			{/snippet}
-			<p class="mb-4 text-base font-normal text-gray-500 dark:text-gray-400">
-				{entry.node.user?.name == $changelogStore.data?.users.me?.name
-					? 'Du hast'
-					: entry.node.user?.firstName + ' hat'}
-				die Ausgabe
-				{entry.node.oldState ? 'verändert' : 'erstellt'}
+<div class="mx-auto max-w-3xl">
+	{#if $changelogStore.fetching && entries.length === 0}
+		<div class="flex justify-center py-12"><Spinner size="6" /></div>
+	{:else if entries.length === 0}
+		<p class="py-12 text-center text-sm text-gray-500 dark:text-gray-400">Noch keine Aktivität.</p>
+	{/if}
 
-				{#if entry.node.tool}
-					(via {entry.node.tool})
-				{/if}
-			</p>
+	{#each days as group (group.key)}
+		<section class="mb-6">
+			<h2
+				class="sticky top-0 z-10 bg-white/85 py-2 text-xs font-semibold tracking-wide text-gray-500 uppercase backdrop-blur dark:bg-gray-900/85 dark:text-gray-400"
+			>
+				{group.label}
+			</h2>
 
-			{#if entry.node.oldState && entry.node.diff}
-				<div class="mb-4">
-					<button
-						class="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-						onclick={() => toggleDiff(entry.node.id.toString())}
-					>
-						{#if expandedDiffs.includes(entry.node.id.toString())}
-							<ChevronDownOutline class="h-3 w-3" />
-						{:else}
-							<ChevronRightOutline class="h-3 w-3" />
-						{/if}
-						<span>Show diff</span>
-					</button>
-					{#if expandedDiffs.includes(entry.node.id.toString())}
-						<pre
-							class="mt-2 font-mono text-xs whitespace-pre-wrap text-gray-500 dark:text-gray-400">{entry
-								.node.diff}</pre>
-					{/if}
-				</div>
-			{/if}
-		</TimelineItem>
+			<ol class="divide-y divide-gray-100 dark:divide-gray-800">
+				{#each group.entries as entry (entry.id)}
+					{@const created = !entry.oldState}
+					{@const amount = entry.newState ? stateAmount(entry.newState) : 0}
+					<li class="flex gap-3 py-3">
+						<span
+							class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full {created
+								? 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400'
+								: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}"
+						>
+							{#if created}
+								<CirclePlusOutline class="h-4 w-4" />
+							{:else}
+								<EditOutline class="h-4 w-4" />
+							{/if}
+						</span>
+
+						<div class="min-w-0 flex-1">
+							<div class="flex items-baseline justify-between gap-3">
+								<span class="truncate font-medium text-gray-900 dark:text-white">
+									{entry.newState?.title || 'Ohne Titel'}
+								</span>
+								<span
+									class="shrink-0 text-sm font-medium tabular-nums {amount > 0
+										? 'text-green-700 dark:text-green-400'
+										: 'text-gray-700 dark:text-gray-300'}"
+								>
+									{euro(amount)}
+								</span>
+							</div>
+
+							<div
+								class="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500 dark:text-gray-400"
+							>
+								<span>{action(entry)}</span>
+								<span aria-hidden="true">·</span>
+								<span>{entry.date.toLocaleTimeString('de-DE', { timeStyle: 'short' })}</span>
+								{#if entry.newState}
+									<span aria-hidden="true">·</span>
+									<span>gebucht {period(entry.newState)}</span>
+								{/if}
+								{#if entry.newState?.store}
+									<span aria-hidden="true">·</span>
+									<span class="truncate">{entry.newState.store}</span>
+								{/if}
+								{#if entry.tool}
+									<span aria-hidden="true">·</span>
+									<span>{entry.tool}</span>
+								{/if}
+								{#if entry.automatic}
+									<Badge color="gray" class="px-1.5 py-0">automatisch</Badge>
+								{/if}
+								{#if entry.diff && !created}
+									<button
+										class="ml-auto flex items-center gap-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+										onclick={() => toggleDiff(entry.id.toString())}
+									>
+										{#if expandedDiffs.includes(entry.id.toString())}
+											<ChevronDownOutline class="h-3 w-3" />
+										{:else}
+											<ChevronRightOutline class="h-3 w-3" />
+										{/if}
+										Details
+									</button>
+								{/if}
+							</div>
+
+							{#if entry.diff && expandedDiffs.includes(entry.id.toString())}
+								<pre
+									class="mt-2 overflow-x-auto rounded-md bg-gray-50 p-2 font-mono text-xs dark:bg-gray-800/60">{#each entry.diff.split('\n') as line, i (i)}<span
+											class="block {diffLineClass(line)}">{line || ' '}</span
+										>{/each}</pre>
+							{/if}
+						</div>
+					</li>
+				{/each}
+			</ol>
+		</section>
 	{/each}
-</Timeline>
+</div>

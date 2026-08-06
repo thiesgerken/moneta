@@ -8,7 +8,8 @@
 		TableHead,
 		TableHeadCell,
 		Badge,
-		Spinner
+		Spinner,
+		Tooltip
 	} from 'flowbite-svelte';
 	import type { ApexOptions } from 'apexcharts';
 	import { resolve } from '$app/paths';
@@ -88,11 +89,7 @@
 		</Card>
 
 		<Card class="max-w-none p-4">
-			<h3 class="text-lg font-semibold">Monatliche Übersichten</h3>
-			<p class="mb-2 text-sm text-gray-500 dark:text-gray-400">
-				Der Fehler ist die Lücke zwischen dem fortgeschriebenen und dem gemessenen Endvermögen –
-				eine große Lücke heißt nicht, dass die Rechnung driftet, sondern dass eine Ausgabe fehlt.
-			</p>
+			<h3 class="mb-2 text-lg font-semibold">Monatliche Übersichten</h3>
 			<div class="overflow-x-auto">
 				<Table hoverable striped class="w-full text-left text-sm">
 					<TableHead>
@@ -103,7 +100,13 @@
 						<TableHeadCell class="px-4 py-3">Ausgaben</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Delta</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Anzahl</TableHeadCell>
-						<TableHeadCell class="px-4 py-3">Fehler</TableHeadCell>
+						<TableHeadCell class="px-4 py-3">
+							<span class="underline decoration-dotted">Fehler</span>
+							<Tooltip class="max-w-xs text-xs font-normal normal-case">
+								Die Lücke zwischen dem fortgeschriebenen und dem gemessenen Endvermögen. Eine große
+								Lücke heißt nicht, dass die Rechnung driftet, sondern dass eine Ausgabe fehlt.
+							</Tooltip>
+						</TableHeadCell>
 					</TableHead>
 					<TableBody class="divide-y">
 						{#each months.toReversed() as o (o.month.getTime())}
