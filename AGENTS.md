@@ -53,6 +53,18 @@ to keep in sync and no rerender step. If you change them, re-run `tests/sql/rend
 it mutation-tests the ownership-fraction and sync-inversion paths, and four of its cases
 passed against an earlier, wrong version of the views.
 
+**Render the transactions once per request, not once per row you need them for.**
+`expense_users` is a `UNION` over the whole transaction table, so no filter on account or date
+narrows it — reading `expense_transactions_rendered` from inside a lateral rebuilds the entire
+rendering on every invocation. `simulate_balances` went from 1.7s to 104ms by materializing it
+in a CTE and joining against that instead. Any query that wants it per (account, date) has
+this problem.
+
+**A shared expense renders once per involved user.** Reading `expense_transactions_rendered`
+without `user_id = ...` double-counts every transaction of an expense that touches two users'
+accounts, since each user's rendering lists all of them. Filtering on `account_id` alone does
+not save you — both copies name the same account.
+
 **List queries take typed arguments, not filter documents.** The mongo version accepted a raw
 filter document built in the browser, with the `userId` override merged in last. That is gone:
 each list names its own sort enum and filter arguments, so a caller cannot reach a column the
@@ -119,11 +131,13 @@ data is therefore client-side only; there is no SSR of query results.
 
 ## Known gaps worth knowing before you plan work
 
-- No frontend tests. `tests/sql/` covers the views and constraints, but nothing exercises
-  the GraphQL resolvers against a database.
+- No frontend tests. `tests/sql/` covers the views, the constraints and the balance
+  simulation, but nothing exercises the GraphQL resolvers against a database.
 - No upload client feeds `deliveries.submit` from a real bank export; that is deliberately
   someone else's program, since it is per-bank and needs credentials.
 - CORS is `AllowedOrigins::all()` with `allow_credentials(true)` in `graphql/mod.rs`, and
   `docker-compose.yaml` carries a committed `MONETA__API__SECRET_KEY`. Both are known and
   accepted for now — the deployment is private infrastructure.
-- The dashboard shows only the changelog; the analysis views from MoneyDB were never ported.
+- `/analysis` is half real: Vermögen and Vorauszahlungen query the backend, while Monate,
+  Kategorien, Kontoauszug and Kalender still render `frontend/src/lib/analysis_mock.ts`.
+  `analysis.overviews` and `analysis.statement` are what the other four are waiting on.
