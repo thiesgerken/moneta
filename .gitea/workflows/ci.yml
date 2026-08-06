@@ -71,6 +71,18 @@ jobs:
       - run: cd frontend && pnpm check
       - run: cd frontend && pnpm lint
 
+  probe-if:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/devel')
+    steps:
+      - run: echo "the if evaluates"
+
+  probe-needs:
+    needs: [test-schema]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "needs resolves"
+
   build-docker:
     needs: [test-backend, test-schema, test-frontend]
     runs-on: ubuntu-latest
