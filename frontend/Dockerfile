@@ -4,8 +4,9 @@ ENV NODE_ENV=production
 WORKDIR /app
 RUN npm i -g pnpm
 
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm i
+# pnpm-workspace.yaml carries allowBuilds; without it pnpm 10 refuses to install at all
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+RUN pnpm i --frozen-lockfile
 
 COPY . ./
 RUN pnpm build

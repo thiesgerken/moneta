@@ -54,6 +54,9 @@ services:
   postgres:
     image: postgres:18-alpine
     environment:
+      # The 18 image defaults PGDATA to /var/lib/postgresql/18/docker, outside the mount,
+      # and then refuses to start because the mount looks like a stray data directory.
+      - PGDATA=/var/lib/postgresql/data
       - POSTGRES_USER=moneta
       - POSTGRES_PASSWORD=moneta
       - POSTGRES_DB=moneta
@@ -69,7 +72,7 @@ services:
       retries: 10
 
   traefik:
-    image: "traefik:v3.5@sha256:16acb89c6db341182970d6fdafece31303b0a380a8ed7aa51682e225229bf1d2"
+    image: "traefik:v3.7@sha256:9c3b91d5fb7770853ca5c1124a23c34bf2d9b47ffaebeab2614cbaf410dcb2ac"
     container_name: "traefik"
     command:
       - "--providers.docker=true"
