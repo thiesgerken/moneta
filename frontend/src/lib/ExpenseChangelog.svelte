@@ -182,10 +182,14 @@
 									{entry.newState?.title || 'Ohne Titel'}
 								</span>
 								{#if amount !== null}
+									<!-- the same red/green the expense list uses, so a number means the
+									     same thing in both places -->
 									<span
-										class="shrink-0 text-sm font-medium tabular-nums {amount > 0
-											? 'text-green-700 dark:text-green-400'
-											: 'text-gray-700 dark:text-gray-300'}"
+										class="shrink-0 text-sm font-medium tabular-nums {amount < 0
+											? 'text-red-700 dark:text-red-400'
+											: amount > 0
+												? 'text-green-700 dark:text-green-400'
+												: 'text-gray-500 dark:text-gray-400'}"
 									>
 										{euro(amount)}
 									</span>
