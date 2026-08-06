@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Select, Input } from 'flowbite-svelte';
 	import { graphql } from '$houdini';
-	import type { Range } from './state.svelte';
+	import { CUSTOM_SPAN, type Range } from './state.svelte';
 	import { isoDate, monthsBefore } from './dates';
 
 	/// A window chosen from a handful of presets, or typed out by hand.
@@ -12,7 +12,6 @@
 	let { range = $bindable(), dates = false }: { range: Range; dates?: boolean } = $props();
 
 	const DAY = 86400000;
-	const CUSTOM = 'custom';
 
 	const SPANS = [
 		{ value: '6m', name: 'Letzte 6 Monate', months: 6 },
@@ -20,7 +19,7 @@
 		{ value: '5y', name: 'Letzte 5 Jahre', months: 60 },
 		{ value: '10y', name: 'Letzte 10 Jahre', months: 120 },
 		{ value: 'all', name: 'Alles', months: null },
-		{ value: CUSTOM, name: 'Eigener Zeitraum', months: null }
+		{ value: CUSTOM_SPAN, name: 'Eigener Zeitraum', months: null }
 	];
 
 	// Sorted by booking start rather than by a transaction date, which is not a sort the list
@@ -52,8 +51,9 @@
 
 	// `from`/`to` stay undefined until a preset can be resolved, which is how a caller knows
 	// not to query yet: a guessed window would be replaced a moment later and the two races.
+	let applied: string | undefined;
 	$effect(() => {
-		if (range.span === CUSTOM) return;
+		if (range.span === CUSTOM_SPAN) return;
 
 		const max = Date.now();
 		const months = SPANS.find((s) => s.value === range.span)?.months ?? null;
@@ -70,14 +70,19 @@
 
 		// only write on a real change: `to` is Date.now(), so assigning unconditionally would
 		// re-trigger whatever the caller queries on every run of this effect
-		if (range.from !== start) range.from = start;
-		if (range.to === undefined) range.to = max;
+		if (range.from === start && applied === range.span) return;
+
+		// Both ends, every time. Every preset runs up to now, and the window may have been
+		// narrowed since — zoomed into, or typed over — leaving an end that is not now.
+		applied = range.span;
+		range.from = start;
+		range.to = max;
 	});
 
 	/// Typing a date means the preset no longer describes the window, so the dropdown follows.
 	function edit(which: 'from' | 'to', value: string) {
 		if (!value) return;
-		range.span = CUSTOM;
+		range.span = CUSTOM_SPAN;
 		range[which] = new Date(value).getTime();
 	}
 </script>

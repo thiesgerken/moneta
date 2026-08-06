@@ -9,10 +9,8 @@
 		TableHeadCell,
 		Input,
 		Label,
-		Button,
 		Spinner
 	} from 'flowbite-svelte';
-	import { RefreshOutline } from 'flowbite-svelte-icons';
 	import { graphql } from '$houdini';
 	import type ApexCharts from 'apexcharts';
 	import type { ApexOptions } from 'apexcharts';
@@ -21,7 +19,7 @@
 	import RangePicker from './RangePicker.svelte';
 	import SeriesToggle from './SeriesToggle.svelte';
 	import { AVAILABILITY_LABELS, AVAILABILITY_ORDER, availabilityColor } from './availability';
-	import { wealthState } from './state.svelte';
+	import { CUSTOM_SPAN, wealthState } from './state.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -29,18 +27,9 @@
 	const DAY = 86400000;
 
 	// module-level, so switching tabs and coming back does not reset the view
-	const presetRange = $derived.by(() => {
+	const visible = $derived.by(() => {
 		const { from, to } = wealthState.range;
 		return from && to ? { min: from, max: to } : null;
-	});
-	const visible = $derived(wealthState.zoom ?? presetRange);
-
-	// a preset chooses the window outright, so a zoom taken before it is stale
-	let lastSpan: string | undefined;
-	$effect(() => {
-		if (wealthState.range.span === lastSpan) return;
-		lastSpan = wealthState.range.span;
-		wealthState.zoom = null;
 	});
 
 	// The backend caps the point count, and asking for more than the chart can draw only
@@ -49,8 +38,6 @@
 	const stepDays = $derived(
 		visible ? Math.max(1, Math.ceil((visible.max - visible.min) / DAY / TARGET_POINTS)) : 30
 	);
-
-	const zoomedIn = $derived(wealthState.zoom !== null);
 
 	type HistoryData = NonNullable<
 		NonNullable<(typeof $historyStore)['data']>
@@ -221,14 +208,16 @@
 			window.addEventListener(name, name.endsWith('down') ? down : up, true);
 		}
 		// on the element rather than in the markup: a click handler on a plain div is an
-		// accessibility complaint the date input below already answers
-		plotEl.addEventListener('click', pickDate, true);
+		// accessibility complaint the date input below already answers. Held in a local, since
+		// svelte clears `bind:this` before it runs the teardown.
+		const plot = plotEl;
+		plot.addEventListener('click', pickDate, true);
 
 		return () => {
 			for (const name of events) {
 				window.removeEventListener(name, name.endsWith('down') ? down : up, true);
 			}
-			plotEl.removeEventListener('click', pickDate, true);
+			plot.removeEventListener('click', pickDate, true);
 		};
 	});
 
@@ -279,17 +268,16 @@
 				}
 			},
 			events: {
+				// A zoom is a window like any other, so it becomes the range rather than
+				// something layered over it — which is what lets the dropdown say so.
 				zoomed: (_c: unknown, o: { xaxis: { min?: number; max?: number } }) => {
-					if (o.xaxis.min == null || o.xaxis.max == null) {
-						wealthState.zoom = null;
-						return;
-					}
+					if (o.xaxis.min == null || o.xaxis.max == null) return;
 					// A click apex read as a hairline selection would narrow the window to
 					// almost nothing. Judged as a fraction of what is on screen rather than
 					// by the drag flag, so this holds even where only mouse events arrive.
 					const span = visible ? visible.max - visible.min : 0;
 					if (span > 0 && o.xaxis.max - o.xaxis.min < span * 0.02) return;
-					wealthState.zoom = { min: o.xaxis.min, max: o.xaxis.max };
+					wealthState.range = { span: CUSTOM_SPAN, from: o.xaxis.min, to: o.xaxis.max };
 				},
 				// apex toggles the series itself; this only keeps our list in step with it
 				legendClick: (_c: unknown, index: number) => {
@@ -344,11 +332,6 @@
 				<h3 class="text-lg font-semibold">Vermögensverlauf</h3>
 				{#if $historyStore.fetching}
 					<Spinner size="4" />
-				{/if}
-				{#if zoomedIn}
-					<Button size="xs" color="alternative" onclick={() => (wealthState.zoom = null)}>
-						<RefreshOutline class="mr-1 h-3 w-3" />Zoom zurücksetzen
-					</Button>
 				{/if}
 			</div>
 			<div class="flex flex-wrap items-center gap-2">

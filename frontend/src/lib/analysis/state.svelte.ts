@@ -13,8 +13,11 @@ import { daysAgoIso, startOfMonth, todayIso } from './dates';
 /// Epoch milliseconds rather than `Date`, because these live in reactive state: a `Date` there
 /// would have to be a `SvelteDate` to stay reactive when mutated, and a plain number cannot be
 /// mutated by accident in the first place.
+/// the span of a window nothing preset describes: typed into the date fields, or zoomed into
+export const CUSTOM_SPAN = 'custom';
+
 export type Range = {
-	/// which preset is selected, or `custom` when the dates were edited by hand
+	/// which preset is selected, or `CUSTOM_SPAN`
 	span: string;
 	from: number | undefined;
 	to: number | undefined;
@@ -27,8 +30,6 @@ export const wealthState = $state({
 	split: 'total',
 	/// the Stichtag for the availability totals and the computed balances
 	date: todayIso(),
-	/// the zoomed window, which overrides the range until it is reset
-	zoom: null as { min: number; max: number } | null,
 	/// series hidden from the chart, by name; only meaningful when split by account or
 	/// availability, and remembered so a tab switch does not un-hide them
 	hiddenSeries: [] as string[]
