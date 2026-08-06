@@ -33,6 +33,11 @@ INSERT INTO expenses (id, title, store, description, comments, reference_amount,
     -- per involved user and a reader who forgets to filter by user_id counts s1's leg twice
     ('00000000-0000-7000-8000-0000000000e8', 'e8', '', '', '', NULL, '2025-06-11T06:00:00Z', '2025-06-11T06:00:00Z');
 
+-- A rule's stanza, sitting on s1 inside the forward window. It carries a real transaction with
+-- a real date, so nothing but the flag distinguishes it from something that happened.
+INSERT INTO expenses (id, title, store, description, comments, reference_amount, booking_start, booking_end, is_template) VALUES
+    ('00000000-0000-7000-8000-0000000000ef', 'template', '', '', '', NULL, '2025-06-11T18:00:00Z', '2025-06-11T18:00:00Z', true);
+
 INSERT INTO expense_transactions (expense_id, account_id, idx, date, amount, fraction, comments, statement) VALUES
     ('00000000-0000-7000-8000-0000000000e1', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-05T12:00:00Z', -1000, NULL, '', ''),
     ('00000000-0000-7000-8000-0000000000e2', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-11T12:00:00Z',  -500, NULL, '', ''),
@@ -43,7 +48,8 @@ INSERT INTO expense_transactions (expense_id, account_id, idx, date, amount, fra
     ('00000000-0000-7000-8000-0000000000e6', '00000000-0000-7000-8000-0000000000a5', 0, '2025-06-10T12:00:00Z', -1000, NULL, '', ''),
     ('00000000-0000-7000-8000-0000000000e7', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-10T00:00:00Z',  -300, NULL, '', ''),
     ('00000000-0000-7000-8000-0000000000e8', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-11T06:00:00Z',  -400, NULL, '', ''),
-    ('00000000-0000-7000-8000-0000000000e8', '00000000-0000-7000-8000-0000000000a4', 1, '2025-06-11T06:00:00Z',  -600, NULL, '', '');
+    ('00000000-0000-7000-8000-0000000000e8', '00000000-0000-7000-8000-0000000000a4', 1, '2025-06-11T06:00:00Z',  -600, NULL, '', ''),
+    ('00000000-0000-7000-8000-0000000000ef', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-11T18:00:00Z', -7777, NULL, '', '');
 
 INSERT INTO balances (id, account_id, date, amount, comments) VALUES
     ('00000000-0000-7000-8000-0000000000b1', '00000000-0000-7000-8000-0000000000a1', '2025-06-10T00:00:00Z', 5000, ''),
@@ -69,7 +75,8 @@ BEGIN
 
             -- forward: b1 (5000 on the 10th), then e7 at that same instant, e2 and e8's own
             -- leg on the 11th, and e4's two transactions on the 12th. e8's other leg is on
-            -- someone else's account and must not move this one.
+            -- someone else's account and must not move this one, and the template sitting on
+            -- s1 on the 11th must not either.
             UNION ALL SELECT 'forward integration adds what happened since',
                 (SELECT amount FROM simulate_balances(mine, ARRAY['2025-06-13T00:00:00Z'::timestamptz], s1)), 3600.0
             UNION ALL SELECT 'the count is of expenses, not transactions',

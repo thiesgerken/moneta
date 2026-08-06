@@ -37,7 +37,12 @@ AS $$
     tx AS MATERIALIZED (
         SELECT t.account_id, t.date, t.expense_id, t.calculated_amount
         FROM expense_transactions_rendered t
+        JOIN expenses e ON e.id = t.expense_id
         WHERE t.user_id = p_user_id AND t.calculated_amount <> 0
+          -- A template is a stanza a rule copies, not something that happened -- but it
+          -- carries real transactions with real dates, since `instantiate` shifts them onto
+          -- the occurrence. Integrating them moves every balance after the template's own date.
+          AND NOT e.is_template
     ),
     -- an account with no recorded balance at all has nothing to anchor to and drops out here
     anchors AS (
