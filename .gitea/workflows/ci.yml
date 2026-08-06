@@ -75,9 +75,9 @@ jobs:
     needs: [test-backend, test-schema, test-frontend]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/devel')
-    strategy:
-      matrix:
-        component: [backend, frontend]
+    # Two steps rather than a matrix over the components: gitea left the matrix children
+    # blocked forever with every dependency green, and checkout, buildx and the registry
+    # login are shared anyway.
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
 
@@ -91,11 +91,20 @@ jobs:
           username: thies
           password: ${{ secrets.DOCKER_REGISTRY_GITEA }}
 
-      - name: Build and push
+      - name: Build and push the backend
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
-          context: ./${{ matrix.component }}
+          context: ./backend
           push: true
-          tags: git.gerken.haus/thies/moneta/${{ matrix.component }}:${{ github.ref_name }}
-          cache-from: type=registry,ref=git.gerken.haus/thies/moneta/${{ matrix.component }}:${{ github.ref_name }}
+          tags: git.gerken.haus/thies/moneta/backend:${{ github.ref_name }}
+          cache-from: type=registry,ref=git.gerken.haus/thies/moneta/backend:${{ github.ref_name }}
+          cache-to: type=inline
+
+      - name: Build and push the frontend
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
+        with:
+          context: ./frontend
+          push: true
+          tags: git.gerken.haus/thies/moneta/frontend:${{ github.ref_name }}
+          cache-from: type=registry,ref=git.gerken.haus/thies/moneta/frontend:${{ github.ref_name }}
           cache-to: type=inline
