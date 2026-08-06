@@ -40,7 +40,11 @@ INSERT INTO expenses (id, title, store, description, comments, reference_amount,
     ('00000000-0000-7000-8000-0000000000eb', 'geteilt mit', '', '', '', NULL, '2025-06-16Z', '2025-06-16Z', false),
     -- a transfer between two of this user's own accounts: one expense, two account rows. This
     -- is what makes a summed per-account count disagree with a distinct one.
-    ('00000000-0000-7000-8000-0000000000ec', 'umbuchung',   '', '', '', NULL, '2025-06-17Z', '2025-06-17Z', false);
+    ('00000000-0000-7000-8000-0000000000ec', 'umbuchung',   '', '', '', NULL, '2025-06-17Z', '2025-06-17Z', false),
+    -- July, so the two below stand alone in their month: the same transfer, but it cost a fee
+    ('00000000-0000-7000-8000-0000000000ed', 'umbuchung mit gebühr', '', '', '', NULL, '2025-07-18Z', '2025-07-18Z', false),
+    -- out to an account this user does not own: nothing nets it, so all of it is gone
+    ('00000000-0000-7000-8000-0000000000ee', 'raus',        '', '', '', NULL, '2025-07-19Z', '2025-07-19Z', false);
 
 INSERT INTO expense_categorizations (expense_id, category_id, weight) VALUES
     ('00000000-0000-7000-8000-0000000000e1', '00000000-0000-7000-8000-0000000000c1', 1.0),
@@ -63,7 +67,11 @@ INSERT INTO expense_transactions (expense_id, account_id, idx, date, amount, fra
     ('00000000-0000-7000-8000-0000000000eb', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-16Z',   -700, NULL, '', ''),
     ('00000000-0000-7000-8000-0000000000eb', '00000000-0000-7000-8000-0000000000a9', 1, '2025-06-16Z',  -1300, NULL, '', ''),
     ('00000000-0000-7000-8000-0000000000ec', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-17Z',  -5000, NULL, '', ''),
-    ('00000000-0000-7000-8000-0000000000ec', '00000000-0000-7000-8000-0000000000a2', 1, '2025-06-17Z',   5000, NULL, '', '');
+    ('00000000-0000-7000-8000-0000000000ec', '00000000-0000-7000-8000-0000000000a2', 1, '2025-06-17Z',   5000, NULL, '', ''),
+    ('00000000-0000-7000-8000-0000000000ed', '00000000-0000-7000-8000-0000000000a1', 0, '2025-07-18Z', -10000, NULL, '', ''),
+    ('00000000-0000-7000-8000-0000000000ed', '00000000-0000-7000-8000-0000000000a2', 1, '2025-07-18Z',   9900, NULL, '', ''),
+    ('00000000-0000-7000-8000-0000000000ee', '00000000-0000-7000-8000-0000000000a1', 0, '2025-07-19Z',  -3000, NULL, '', ''),
+    ('00000000-0000-7000-8000-0000000000ee', '00000000-0000-7000-8000-0000000000a9', 1, '2025-07-19Z',   3000, NULL, '', '');
 
 DO $$
 DECLARE
@@ -76,6 +84,7 @@ DECLARE
     c1 uuid := '00000000-0000-7000-8000-0000000000c1';
     c2 uuid := '00000000-0000-7000-8000-0000000000c2';
     jun timestamptz := '2025-06-01Z';
+    jul timestamptz := '2025-07-01Z';
     aug timestamptz := '2025-08-01Z';
 BEGIN
     FOR r IN
@@ -107,11 +116,12 @@ BEGIN
             UNION ALL SELECT 'a half-owned account reports the whole movement',
                 (SELECT expenses FROM m WHERE month = jun AND account_id = a3), -8000.0
 
-            -- July is its own row, and only holds July
+            -- July is its own row, and only holds July: -3000 of its own, plus the two
+            -- transfers below
             UNION ALL SELECT 'july is separated out',
-                (SELECT expenses FROM m WHERE month = '2025-07-01Z' AND account_id = a1), -3000.0
-            UNION ALL SELECT 'two months, three account rows in june and one in july',
-                (SELECT count(*) FROM m WHERE account_id IS NOT NULL), 4
+                (SELECT expenses FROM m WHERE month = jul AND account_id = a1), -16000.0
+            UNION ALL SELECT 'three account rows in june, two in july',
+                (SELECT count(*) FROM m WHERE account_id IS NOT NULL), 5
             -- plus one roll-up row per month
             UNION ALL SELECT 'each month rolls up once',
                 (SELECT count(*) FROM m WHERE account_id IS NULL), 2
@@ -123,13 +133,35 @@ BEGIN
                 (SELECT expense_count FROM m WHERE month = jun AND account_id IS NULL), 9
             UNION ALL SELECT 'which is fewer than the per-account counts summed',
                 (SELECT sum(expense_count) FROM m WHERE month = jun AND account_id IS NOT NULL), 10
-            -- the money still adds up the same either way
-            UNION ALL SELECT 'the roll-up sums the same spending',
-                (SELECT expenses FROM m WHERE month = jun AND account_id IS NULL),
-                (SELECT sum(expenses) FROM m WHERE month = jun AND account_id IS NOT NULL)
-            UNION ALL SELECT 'and the same income',
-                (SELECT income FROM m WHERE month = jun AND account_id IS NULL),
-                (SELECT sum(income) FROM m WHERE month = jun AND account_id IS NOT NULL)
+            -- What an expense cost is what it did across your accounts together, so ec's two
+            -- halves cancel in the roll-up: -1000, -50000, -4000, -2000, -1000, -8000, -700.
+            UNION ALL SELECT 'a transfer costs nothing',
+                (SELECT expenses FROM m WHERE month = jun AND account_id IS NULL), -66700.0
+            UNION ALL SELECT 'and is no income either',
+                (SELECT income FROM m WHERE month = jun AND account_id IS NULL), 200000.0
+            -- but the accounts it moved between each keep their side of it, which is why they
+            -- no longer add up to the month
+            UNION ALL SELECT 'the account it left still shows it',
+                (SELECT expenses FROM m WHERE month = jun AND account_id = a1), -62700.0
+            UNION ALL SELECT 'the account it arrived on still shows it',
+                (SELECT income FROM m WHERE month = jun AND account_id = a2), 5000.0
+            -- netting moves money between the two columns without inventing or losing any
+            UNION ALL SELECT 'the month still nets out the same',
+                (SELECT income + expenses FROM m WHERE month = jun AND account_id IS NULL),
+                (SELECT sum(income + expenses) FROM m WHERE month = jun AND account_id IS NOT NULL)
+
+            -- July holds the two cases the roll-up has to tell apart: ed moves 10000 and pays
+            -- 100 to do it, ee moves 3000 somewhere this user does not own. -3000 -100 -3000.
+            UNION ALL SELECT 'a transfer costs its fee',
+                (SELECT expenses FROM m WHERE month = jul AND account_id IS NULL), -6100.0
+            UNION ALL SELECT 'and brings in nothing',
+                (SELECT income FROM m WHERE month = jul AND account_id IS NULL), 0.0
+            -- the far side of ee is not this user's account, so nothing nets against it: the
+            -- whole 3000 left. Were it counted, the month would read -3100.
+            UNION ALL SELECT 'money moved off your accounts is gone in full',
+                (SELECT count(*) FROM m WHERE month = jul AND account_id IS NULL AND expenses = -3100.0), 0
+            UNION ALL SELECT 'the fee is not mistaken for the sum moved',
+                (SELECT count(*) FROM m WHERE month = jul AND account_id IS NULL AND expenses = -16000.0), 0
 
             -- a template never happened, and someone else's account is not this user's money
             UNION ALL SELECT 'no template anywhere',
