@@ -18,7 +18,8 @@
 	import {
 		overviewsStore,
 		integrationError,
-		errorColor,
+		errorClass,
+		deltaColor,
 		monthLabel,
 		monthTicks,
 		type OverviewsData
@@ -134,18 +135,17 @@
 								<TableBodyCell class="px-4 py-3 text-red-600 dark:text-red-400"
 									>{euro(o.expenses)}</TableBodyCell
 								>
-								<TableBodyCell
-									class="px-4 py-3 {o.endTotal - o.startTotal < 0
-										? 'text-red-600 dark:text-red-400'
-										: 'text-green-700 dark:text-green-400'}"
-								>
-									{euro(o.endTotal - o.startTotal)}
+								<TableBodyCell class="px-4 py-3">
+									<Badge
+										color={deltaColor(o.endTotal - o.startTotal)}
+										class="text-sm font-semibold"
+									>
+										{euro(o.endTotal - o.startTotal)}
+									</Badge>
 								</TableBodyCell>
 								<TableBodyCell class="px-4 py-3">{o.expenseCount}</TableBodyCell>
-								<TableBodyCell class="px-4 py-3">
-									<Badge color={errorColor(integrationError(o))}>
-										{euro(integrationError(o))}
-									</Badge>
+								<TableBodyCell class="px-4 py-3 {errorClass(integrationError(o))}">
+									{euro(integrationError(o))}
 								</TableBodyCell>
 							</TableBodyRow>
 						{/each}

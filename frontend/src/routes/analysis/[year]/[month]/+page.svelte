@@ -19,7 +19,7 @@
 	import { graphql } from '$houdini';
 	import Chart from '$lib/Chart.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
-	import { integrationError, errorColor, categoryColor } from '$lib/analysis/overviews';
+	import { integrationError, errorClass, deltaColor, categoryColor } from '$lib/analysis/overviews';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -200,15 +200,21 @@
 			</Card>
 			<Card class="max-w-none p-4">
 				<span class="text-sm text-gray-500 dark:text-gray-400">Delta</span>
-				<span class="text-2xl font-semibold">{euro(detail.endTotal - detail.startTotal)}</span>
+				<span
+					class="text-2xl font-semibold {detail.endTotal - detail.startTotal < 0
+						? 'text-red-600 dark:text-red-400'
+						: 'text-green-700 dark:text-green-400'}"
+				>
+					{euro(detail.endTotal - detail.startTotal)}
+				</span>
 			</Card>
 			<Card class="max-w-none p-4">
 				<span class="text-sm text-gray-500 dark:text-gray-400">Vermögen am Ende</span>
 				<span class="text-2xl font-semibold">{euro(detail.endTotal)}</span>
 				<span class="text-xs text-gray-500 dark:text-gray-400">
-					Integrationsfehler <Badge color={errorColor(integrationError(detail))}>
+					Integrationsfehler <span class={errorClass(integrationError(detail))}>
 						{euro(integrationError(detail))}
-					</Badge>
+					</span>
 				</span>
 			</Card>
 		</div>
@@ -251,16 +257,15 @@
 									</TableBodyCell>
 									<TableBodyCell class="px-4 py-3">{euro(a.startAmount)}</TableBodyCell>
 									<TableBodyCell class="px-4 py-3">{euro(a.endAmount)}</TableBodyCell>
-									<TableBodyCell
-										class="px-4 py-3 {a.endAmount - a.startAmount < 0
-											? 'text-red-600 dark:text-red-400'
-											: 'text-green-700 dark:text-green-400'}"
-									>
-										{euro(a.endAmount - a.startAmount)}
-									</TableBodyCell>
 									<TableBodyCell class="px-4 py-3">
-										<Badge color={errorColor(error)}>{euro(error)}</Badge>
+										<Badge
+											color={deltaColor(a.endAmount - a.startAmount)}
+											class="text-sm font-semibold"
+										>
+											{euro(a.endAmount - a.startAmount)}
+										</Badge>
 									</TableBodyCell>
+									<TableBodyCell class="px-4 py-3 {errorClass(error)}">{euro(error)}</TableBodyCell>
 								</TableBodyRow>
 							{/each}
 						</TableBody>

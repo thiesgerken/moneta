@@ -54,7 +54,17 @@ export type OverviewsData = AnalysisOverviews$result['analysis']['overviews'];
 export const integrationError = (o: { endTotal: number; integratedEndTotal: number }) =>
 	Math.abs(o.endTotal - o.integratedEndTotal);
 
-export const errorColor = (e: number) => (e >= 5000 ? 'red' : e >= 2500 ? 'yellow' : 'green');
+/// The error is a caveat on the row, not its headline: quiet until it is big enough to mean a
+/// missing expense, which is the only time it asks for anything.
+export const errorClass = (e: number) =>
+	e >= 5000
+		? 'text-red-600 dark:text-red-400'
+		: e >= 2500
+			? 'text-yellow-600 dark:text-yellow-400'
+			: 'text-gray-400 dark:text-gray-500';
+
+/// What a month or an account came to, which is what a reader is here for.
+export const deltaColor = (cents: number) => (cents < 0 ? 'red' : cents > 0 ? 'green' : 'gray');
 
 export const monthLabel = (d: Date) =>
 	d.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' });
