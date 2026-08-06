@@ -103,26 +103,31 @@
 		return out;
 	});
 
+	/// Subject and verb together, because they do not agree in German: "Du hast", "Krösus hat".
 	const actor = (entry: Entry) =>
-		entry.user?.name === me ? 'Du' : (entry.user?.firstName ?? entry.user?.name ?? 'Jemand');
+		entry.user?.name === me
+			? 'Du hast'
+			: `${entry.user?.firstName ?? entry.user?.name ?? 'Jemand'} hat`;
 
 	/// What the entry did, in one phrase. The diff says which fields moved, which beats
 	/// "hat die Ausgabe verändert" on every single row.
 	function action(entry: Entry): string {
-		if (!entry.oldState) return `${actor(entry)} hat sie angelegt`;
+		if (!entry.oldState) return `${actor(entry)} sie angelegt`;
 
 		const fields = summarizeFields(entry.diff ? changedFields(entry.diff) : []);
-		return fields ? `${actor(entry)} hat ${fields} geändert` : `${actor(entry)} hat sie geändert`;
+		return fields ? `${actor(entry)} ${fields} geändert` : `${actor(entry)} sie geändert`;
 	}
 
 	/// The booking period, short: same-day expenses are the common case and need no range.
 	function period(state: { bookingStart: Date; bookingEnd: Date }): string {
-		const fmt = (d: Date) => d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-		const start = fmt(state.bookingStart);
-		const end = fmt(state.bookingEnd);
-		const year = state.bookingStart.getFullYear();
+		// `de-DE` puts a trailing dot on a day-and-month date, which a year must not follow
+		const short = (d: Date) =>
+			d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }).replace(/\.$/, '');
+		const full = (d: Date) => d.toLocaleDateString('de-DE');
 
-		return (start === end ? start : `${start}–${end}`) + `.${year}`;
+		return state.bookingStart.getTime() === state.bookingEnd.getTime()
+			? full(state.bookingStart)
+			: `${short(state.bookingStart)}–${full(state.bookingEnd)}`;
 	}
 
 	const toggleDiff = (id: string) =>
@@ -157,7 +162,7 @@
 			<ol class="divide-y divide-gray-100 dark:divide-gray-800">
 				{#each group.entries as entry (entry.id)}
 					{@const created = !entry.oldState}
-					{@const amount = entry.newState ? stateAmount(entry.newState) : 0}
+					{@const amount = entry.newState ? stateAmount(entry.newState) : null}
 					<li class="flex gap-3 py-3">
 						<span
 							class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full {created
@@ -176,13 +181,15 @@
 								<span class="truncate font-medium text-gray-900 dark:text-white">
 									{entry.newState?.title || 'Ohne Titel'}
 								</span>
-								<span
-									class="shrink-0 text-sm font-medium tabular-nums {amount > 0
-										? 'text-green-700 dark:text-green-400'
-										: 'text-gray-700 dark:text-gray-300'}"
-								>
-									{euro(amount)}
-								</span>
+								{#if amount !== null}
+									<span
+										class="shrink-0 text-sm font-medium tabular-nums {amount > 0
+											? 'text-green-700 dark:text-green-400'
+											: 'text-gray-700 dark:text-gray-300'}"
+									>
+										{euro(amount)}
+									</span>
+								{/if}
 							</div>
 
 							<div
