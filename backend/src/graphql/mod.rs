@@ -22,6 +22,20 @@ fn graphiql() -> rocket::response::content::RawHtml<String> {
     juniper_rocket::graphiql_source("/graphql", None)
 }
 
+/// The schema as SDL, for `frontend/schema.graphql`.
+///
+/// Building the root node touches no database, so this works without one. `houdini
+/// pull-schema` needs a running server and therefore a database behind it, which makes
+/// regenerating the schema unnecessarily hard when all that changed is a resolver signature.
+pub fn sdl() -> String {
+    root::Schema::new(
+        root::Query,
+        root::Mutation,
+        juniper::EmptySubscription::<root::Context>::new(),
+    )
+    .as_sdl()
+}
+
 #[rocket::get("/graphql?<request>")]
 async fn get_graphql_handler(
     pool: &State<crate::Pool>,

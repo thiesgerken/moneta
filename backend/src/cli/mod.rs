@@ -22,4 +22,8 @@ pub fn build() -> Command {
         .subcommand(account::build())
         .subcommand(periodic::build())
         .subcommand(Command::new("serve").about("serve web interface"))
+        .subcommand(
+            Command::new("schema")
+                .about("print the GraphQL schema as SDL, for frontend/schema.graphql"),
+        )
 }

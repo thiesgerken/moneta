@@ -11,21 +11,69 @@
 		TableBodyCell,
 		TableBodyRow,
 		TableHead,
-		TableHeadCell
+		TableHeadCell,
+		Spinner
 	} from 'flowbite-svelte';
 	import { DownloadOutline } from 'flowbite-svelte-icons';
-	import { accounts, statement } from '$lib/analysis_mock';
+	import { graphql } from '$houdini';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 	const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-	let accountId = $state(accounts[0].id);
+	let accountId = $state('');
 	let from = $state(iso(new Date(Date.now() - 90 * 86400000)));
 	let to = $state(iso(new Date()));
 
-	const account = $derived(accounts.find((a) => a.id === accountId) ?? accounts[0]);
-	const rows = $derived(statement(accountId, new Date(from), new Date(to)));
+	const accountStore = graphql(`
+		query AnalysisStatementAccounts {
+			accounts {
+				list(onlyOpen: true, sortBy: NAME) {
+					id
+					name
+					color
+				}
+			}
+		}
+	`);
+
+	const statementStore = graphql(`
+		query AnalysisStatement($accountId: UUID!, $from: DateTime!, $to: DateTime!) {
+			analysis {
+				statement(accountId: $accountId, from: $from, to: $to) {
+					kind
+					date
+					title
+					store
+					expenseId
+					amount
+					balance
+					drift
+				}
+			}
+		}
+	`);
+
+	$effect(() => {
+		void accountStore.fetch();
+	});
+
+	const accounts = $derived($accountStore.data?.accounts.list ?? []);
+	const account = $derived(accounts.find((a) => a.id === accountId));
+
+	// the picker starts empty because the account list is not there yet on first render
+	$effect(() => {
+		if (!accountId && accounts.length > 0) accountId = accounts[0].id;
+	});
+
+	$effect(() => {
+		if (!accountId) return;
+		void statementStore.fetch({
+			variables: { accountId, from: new Date(from), to: new Date(to) }
+		});
+	});
+
+	const rows = $derived($statementStore.data?.analysis.statement ?? []);
 
 	const turnover = $derived(
 		rows.reduce(
@@ -39,17 +87,20 @@
 		)
 	);
 
+	const label = (kind: string) =>
+		kind === 'OPENING' ? 'Kontostand (berechnet)' : kind === 'BALANCE' ? 'Kontostand' : '';
+
 	function exportCsv() {
-		const head = ['Datum', 'Buchungsdatum', 'Betrag', 'Saldo', 'Titel', 'Geschäft'];
+		const head = ['Datum', 'Art', 'Betrag', 'Saldo', 'Titel', 'Geschäft'];
 		// quote everything: titles and store names contain commas and semicolons
 		const cell = (v: string) => `"${v.replace(/"/g, '""')}"`;
 		const body = rows.map((r) =>
 			[
 				iso(r.date),
-				r.bookingDate ? iso(r.bookingDate) : '',
+				r.kind,
 				r.amount == null ? '' : (r.amount / 100).toFixed(2),
 				(r.balance / 100).toFixed(2),
-				r.title,
+				r.title || label(r.kind),
 				r.store
 			]
 				.map((v) => cell(String(v)))
@@ -62,7 +113,7 @@
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `kontoauszug-${account.name.replace(/\s+/g, '-').toLowerCase()}-${from}_${to}.csv`;
+		a.download = `kontoauszug-${(account?.name ?? 'konto').replace(/\s+/g, '-').toLowerCase()}-${from}_${to}.csv`;
 		// a detached anchor does not reliably trigger a download in every browser
 		document.body.appendChild(a);
 		a.click();
@@ -89,9 +140,12 @@
 			<span>Bis</span>
 			<Input type="date" bind:value={to} class="w-44" />
 		</Label>
-		<Button color="alternative" onclick={exportCsv}>
+		<Button color="alternative" onclick={exportCsv} disabled={rows.length === 0}>
 			<DownloadOutline class="mr-2 h-4 w-4" />CSV
 		</Button>
+		{#if $statementStore.fetching}
+			<Spinner size="5" />
+		{/if}
 	</div>
 
 	<div class="grid gap-4 md:grid-cols-3">
@@ -114,59 +168,61 @@
 
 	<Card class="max-w-none p-4">
 		<h3 class="mb-2 text-lg font-semibold">
-			<span
-				class="mr-2 inline-block h-3 w-3 rounded-full align-middle"
-				style="background-color: {account.color}"
-			></span>{account.name}
+			{#if account}
+				<span
+					class="mr-2 inline-block h-3 w-3 rounded-full align-middle"
+					style="background-color: {account.color ?? '#94a3b8'}"
+				></span>{account.name}
+			{/if}
 		</h3>
-		<div class="overflow-x-auto">
-			<Table hoverable striped class="w-full text-left text-sm">
-				<TableHead>
-					<TableHeadCell class="px-4 py-3">Datum</TableHeadCell>
-					<TableHeadCell class="px-4 py-3">Gebucht</TableHeadCell>
-					<TableHeadCell class="px-4 py-3 text-right">Betrag</TableHeadCell>
-					<TableHeadCell class="px-4 py-3 text-right">Saldo</TableHeadCell>
-					<TableHeadCell class="px-4 py-3">Titel</TableHeadCell>
-					<TableHeadCell class="px-4 py-3">Geschäft</TableHeadCell>
-				</TableHead>
-				<TableBody class="divide-y">
-					{#each rows as r (r.id)}
-						<TableBodyRow class={r.kind === 'expense' ? '' : 'bg-gray-50/80 dark:bg-gray-900/60'}>
-							<TableBodyCell class="px-4 py-3 whitespace-nowrap">
-								{r.date.toLocaleDateString('de-DE')}
-							</TableBodyCell>
-							<TableBodyCell class="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400">
-								{r.bookingDate?.toLocaleDateString('de-DE') ?? '–'}
-							</TableBodyCell>
-							<TableBodyCell
-								class="px-4 py-3 text-right whitespace-nowrap {(r.amount ?? 0) < 0
-									? 'text-red-600 dark:text-red-400'
-									: 'text-green-700 dark:text-green-400'}"
-							>
-								{r.amount == null ? '' : euro(r.amount)}
-							</TableBodyCell>
-							<TableBodyCell class="px-4 py-3 text-right font-medium whitespace-nowrap">
-								{euro(r.balance)}
-							</TableBodyCell>
-							<TableBodyCell class="px-4 py-3">
-								{#if r.kind === 'expense'}
-									{r.title}
-								{:else}
-									<span class="text-gray-600 italic dark:text-gray-300">{r.title}</span>
-									{#if r.drift}
-										<Badge color="red" class="ml-2">
-											weicht um {euro(r.drift)} ab
-										</Badge>
+		{#if $statementStore.errors}
+			<p class="text-sm text-red-600 dark:text-red-400">
+				{$statementStore.errors.map((e) => e.message).join(', ')}
+			</p>
+		{:else}
+			<div class="overflow-x-auto">
+				<Table hoverable striped class="w-full text-left text-sm">
+					<TableHead>
+						<TableHeadCell class="px-4 py-3">Datum</TableHeadCell>
+						<TableHeadCell class="px-4 py-3 text-right">Betrag</TableHeadCell>
+						<TableHeadCell class="px-4 py-3 text-right">Saldo</TableHeadCell>
+						<TableHeadCell class="px-4 py-3">Titel</TableHeadCell>
+						<TableHeadCell class="px-4 py-3">Geschäft</TableHeadCell>
+					</TableHead>
+					<TableBody class="divide-y">
+						{#each rows as r, i (`${r.kind}-${r.date.getTime()}-${r.expenseId ?? i}`)}
+							<TableBodyRow class={r.kind === 'EXPENSE' ? '' : 'bg-gray-50/80 dark:bg-gray-900/60'}>
+								<TableBodyCell class="px-4 py-3 whitespace-nowrap">
+									{r.date.toLocaleDateString('de-DE')}
+								</TableBodyCell>
+								<TableBodyCell
+									class="px-4 py-3 text-right whitespace-nowrap {(r.amount ?? 0) < 0
+										? 'text-red-600 dark:text-red-400'
+										: 'text-green-700 dark:text-green-400'}"
+								>
+									{r.amount == null ? '' : euro(r.amount)}
+								</TableBodyCell>
+								<TableBodyCell class="px-4 py-3 text-right font-medium whitespace-nowrap">
+									{euro(r.balance)}
+								</TableBodyCell>
+								<TableBodyCell class="px-4 py-3">
+									{#if r.kind === 'EXPENSE'}
+										{r.title}
+									{:else}
+										<span class="text-gray-600 italic dark:text-gray-300">{label(r.kind)}</span>
+										{#if r.drift}
+											<Badge color="red" class="ml-2">weicht um {euro(r.drift)} ab</Badge>
+										{/if}
 									{/if}
-								{/if}
-							</TableBodyCell>
-							<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
-								{r.store}
-							</TableBodyCell>
-						</TableBodyRow>
-					{/each}
-				</TableBody>
-			</Table>
-		</div>
+								</TableBodyCell>
+								<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
+									{r.store}
+								</TableBodyCell>
+							</TableBodyRow>
+						{/each}
+					</TableBody>
+				</Table>
+			</div>
+		{/if}
 	</Card>
 </div>

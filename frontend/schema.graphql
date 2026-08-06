@@ -1,208 +1,426 @@
-type Account {
-  availability: AccountAvailability!
-  closed: DateTime
-  color: String
-  description: String!
-  iban: String
-  id: UUID!
-  kind: AccountKind!
-  name: String!
-  opened: DateTime!
-  owner: User!
-  ownershipFraction: Float!
-  risk: AccountRisk!
-  synchronization: AccountSynchronization
+schema {
+  query: Query
+  mutation: Mutation
 }
 
 enum AccountAvailability {
-  DAYS
-  DECADES
   IMMEDIATELY
-  MONTHS
+  DAYS
   WEEKS
+  MONTHS
   YEARS
-}
-
-input AccountInput {
-  availability: AccountAvailability!
-  closed: DateTime
-  color: String
-  description: String!
-  iban: String
-  kind: AccountKind!
-  name: String!
-  opened: DateTime!
-  ownershipFraction: Float!
-  risk: AccountRisk!
+  DECADES
 }
 
 enum AccountKind {
   CASH
-  CREDIT
   DEBIT
+  CREDIT
   DEBT
-  OTHER
-  REAL_ESTATE
   STOCKS
+  REAL_ESTATE
   VIRTUAL
-}
-
-type AccountMutation {
-  create(account: AccountInput!): Account!
-  delete(id: UUID!): Boolean!
-  update(account: AccountInput!, id: UUID!): Boolean!
-}
-
-type AccountQuery {
-  get(id: UUID!): Account!
-  list(limit: Int, onlyOpen: Boolean, search: String, skip: Int, sortBy: AccountSortField, sortDir: SortDirection): [Account!]!
+  OTHER
 }
 
 enum AccountRisk {
-  HIGH
-  HUGE
-  LOW
-  MEDIUM
   NONE
   SLIGHT
+  LOW
+  MEDIUM
+  HIGH
+  HUGE
+}
+
+enum AccountSortField {
+  NAME
+  KIND
+  AVAILABILITY
+  RISK
+  OPENED
+  CLOSED
+}
+
+enum AutomationRuleSortField {
+  PRIORITY
+  TITLE
+  LAST_DELIVERY
+}
+
+enum BalanceSortField {
+  DATE
+  AMOUNT
+  COMMENTS
+  ACCOUNT
+}
+
+enum CategorySortField {
+  NAME
+  MONTHLY_LIMIT
+}
+
+enum DeliverySortField {
+  DATE
+  AMOUNT
+}
+
+enum DeliveryStatus {
+  "an expense was created" CREATED
+  "already delivered before, so nothing was done" DUPLICATE
+  "no automation rule matched; the line is remembered but produced no expense" UNMATCHED
+  """
+    a rule matched but could not be applied, and the line was *not* remembered so that
+    fixing the rule and re-uploading picks it up
+  """ FAILED
+}
+
+enum ExpenseSortField {
+  BOOKING_START
+  TITLE
+  STORE
+  DESCRIPTION
+  COMMENTS
+  EFFECTIVE_AMOUNT
+  "template first, then the entries still needing attention" STATUS
+  ACCOUNTS
+  CATEGORIES
+}
+
+enum PeriodicInterval {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum PeriodicRuleSortField {
+  TITLE
+  PERIOD
+  LAST_CREATION
 }
 
 """
-One account's balance at every sampled date, in the order [`History::dates`] gives them.
+  Which way a list is ordered.
+
+  Lists used to take a mongo sort document built in the browser (`{"bookingStart": -1}`) and
+  a mongo filter document alongside it. Both are gone: the client now names a column from a
+  per-entity enum and a direction, so nothing it sends can reach a column the resolver did
+  not offer, and there is no query language to parse.
 """
+enum SortDirection {
+  ASC
+  DESC
+}
+
+enum StatementEntryKind {
+  "the computed balance the range opens on" OPENING
+  EXPENSE
+  "a balance that was actually recorded, which re-anchors the running total" BALANCE
+}
+
+input AccountInput {
+  name: String!
+  description: String!
+  color: String
+  iban: String
+  kind: AccountKind!
+  availability: AccountAvailability!
+  risk: AccountRisk!
+  opened: DateTime!
+  closed: DateTime
+  ownershipFraction: Float!
+}
+
+input AutomationRuleInput {
+  title: String!
+  templateId: UUID!
+  priority: Int!
+  regexTime: String
+  regexStatement: String
+  filterAmount: Int
+  filterAccountId: UUID
+}
+
+input BalanceInput {
+  "includes expenses with date < this value" date: DateTime!
+  accountId: UUID!
+  amount: Int!
+  comments: String!
+}
+
+input CategoryInput {
+  name: String!
+  description: String!
+  color: String
+  parentId: UUID
+  monthlyLimit: Int
+}
+
+input ExpenseCategorizationInput {
+  categoryId: UUID!
+  weight: Float!
+}
+
+"""
+  A transaction handed to moneta from outside (a bank statement importer), before it is
+  known which expense — if any — it belongs to.
+"""
+input ExpenseDelivery {
+  accountId: UUID!
+  date: DateTime!
+  "in cents, using the same sign convention as expense transactions" amount: Int!
+  statement: String!
+}
+
+"""
+  The flag checkboxes above the expense table. Each one being off means "hide the expenses
+  that carry this flag"; `normal` off means "show only expenses that carry some flag".
+"""
+input ExpenseFlagFilter {
+  templates: Boolean!
+  taxRelevant: Boolean!
+  extraordinary: Boolean!
+  unchecked: Boolean!
+  incomplete: Boolean!
+  normal: Boolean!
+}
+
+input ExpenseInput {
+  title: String!
+  store: String!
+  description: String!
+  comments: String!
+  referenceAmount: Int
+  bookingStart: DateTime!
+  bookingEnd: DateTime!
+  "set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis" isTemplate: Boolean!
+  "to track expenses that should be looked at again when preparing tax forms" isTaxRelevant: Boolean!
+  "needs to be looked at by a user first (missing info, low confidence, ...)" isUnchecked: Boolean!
+  "if we anticipate more transactions to appear before this can be completed; e.g. payback when a order hasn't arrived" isIncomplete: Boolean!
+  "if this expense should not be considered for monthly spending and so on" isExtraordinary: Boolean!
+  receipts: [ExpenseReceiptInput!]!
+  categories: [ExpenseCategorizationInput!]!
+  transactions: [ExpenseTransactionInput!]!
+  positions: [ExpensePositionInput!]!
+}
+
+input ExpensePositionInput {
+  amount: Int
+  quantity: Float
+  unit: String
+  title: String!
+  comments: String!
+}
+
+input ExpenseReceiptInput {
+  uri: String!
+  ocr: String
+}
+
+input ExpenseTransactionInput {
+  accountId: UUID!
+  date: DateTime!
+  amount: Int
+  fraction: Float
+  comments: String!
+  statement: String!
+}
+
+input PeriodicRuleInput {
+  title: String!
+  templateId: UUID!
+  period: PeriodicInterval!
+  titleReplacement: String
+  amountReplacement: Int
+  lastCreation: DateTime!
+}
+
+"""
+  Combined date and time (with time zone) in [RFC 3339][0] format.
+
+  Represents a description of an exact instant on the time-line (such as the
+  instant that a user account was created).
+
+  [`DateTime` scalar][1] compliant.
+
+  See also [`chrono::DateTime`][2] for details.
+
+  [0]: https://datatracker.ietf.org/doc/html/rfc3339#section-5
+  [1]: https://graphql-scalars.dev/docs/scalars/date-time
+  [2]: https://docs.rs/chrono/latest/chrono/struct.DateTime.html
+"""
+scalar DateTime
+
+"""
+  [Universally Unique Identifier][0] (UUID).
+
+  [`UUID` scalar][1] compliant.
+
+  See also [`uuid::Uuid`][2] for details.
+
+  [0]: https://en.wikipedia.org/wiki/Universally_unique_identifier
+  [1]: https://graphql-scalars.dev/docs/scalars/uuid
+  [2]: https://docs.rs/uuid/*/uuid/struct.Uuid.html
+"""
+scalar UUID
+
+type Account {
+  id: UUID!
+  owner: User!
+  name: String!
+  description: String!
+  color: String
+  iban: String
+  kind: AccountKind!
+  availability: AccountAvailability!
+  risk: AccountRisk!
+  opened: DateTime!
+  closed: DateTime
+  ownershipFraction: Float!
+  synchronization: AccountSynchronization
+}
+
+type AccountMutation {
+  delete(id: UUID!): Boolean!
+  create(account: AccountInput!): Account!
+  update(id: UUID!, account: AccountInput!): Boolean!
+}
+
+"One account's movement across a month."
+type AccountOverview {
+  account: Account!
+  startAmount: Float!
+  endAmount: Float!
+  "`startAmount` plus the month's transactions — see [`MonthOverview::integrated_end_total`]"
+  integratedEndAmount: Float!
+  income: Float!
+  expenses: Float!
+  expenseCount: Int!
+}
+
+type AccountQuery {
+  list(limit: Int, skip: Int, search: String, onlyOpen: Boolean, sortBy: AccountSortField, sortDir: SortDirection): [Account!]!
+  get(id: UUID!): Account!
+}
+
+"One account's balance at every sampled date, in the order [`History::dates`] gives them."
 type AccountSeries {
   account: Account!
   amounts: [Float!]!
 }
 
-enum AccountSortField {
-  AVAILABILITY
-  CLOSED
-  KIND
-  NAME
-  OPENED
-  RISK
-}
-
 type AccountSynchronization {
-  account: Account!
   invert: Boolean!
+  account: Account!
 }
 
 type AnalysisQuery {
-  balance(accountId: UUID!, date: DateTime): ComputedBalance!
+  balance(date: DateTime, accountId: UUID!): ComputedBalance!
   balances(date: DateTime): [ComputedBalance!]!
+  """
+    The same computation as [`AnalysisQuery::balances`], repeated across a range.
 
+    `stepDays` comes from the chart's visible range rather than being fixed, so zoomed out
+    it lands around 30 and zoomed all the way in on 1. `to` is always the last sample even
+    when the step does not divide the range, otherwise the line stops short of it.
   """
-  The same computation as [`AnalysisQuery::balances`], repeated across a range.
-  
-  `stepDays` comes from the chart's visible range rather than being fixed, so zoomed out
-  it lands around 30 and zoomed all the way in on 1. `to` is always the last sample even
-  when the step does not divide the range, otherwise the line stops short of it.
+  history(from: DateTime!, to: DateTime!, stepDays: Int): History!
   """
-  history(from: DateTime!, stepDays: Int, to: DateTime!): History!
+    Expenses whose value is not yet fully consumed at `at`.
 
-  """
-  Expenses whose value is not yet fully consumed at `at`.
-  
-  The booking period is what makes this work without the prepayment accounts and
-  compensation flags MoneyDB needed: an expense whose money left on the transaction date
-  but whose value is spread over a period is simply one with `bookingEnd > bookingStart`.
-  Every imported expense has a zero-length period, so nothing shows up here until a
-  period is actually widened.
-  
-  `isIncomplete` expenses are open items too, but with an unknown missing amount and so
-  no remaining balance to compute; they come from `expenses.list` with a flag filter
-  rather than from here.
+    The booking period is what makes this work without the prepayment accounts and
+    compensation flags MoneyDB needed: an expense whose money left on the transaction date
+    but whose value is spread over a period is simply one with `bookingEnd > bookingStart`.
+    Every imported expense has a zero-length period, so nothing shows up here until a
+    period is actually widened.
+
+    `isIncomplete` expenses are open items too, but with an unknown missing amount and so
+    no remaining balance to compute; they come from `expenses.list` with a flag filter
+    rather than from here.
   """
   prepayments(at: DateTime): [Prepayment!]!
+  """
+    Month-by-month income, spending and wealth across a range.
+
+    `from` and `to` are snapped outwards to whole months, so asking for the middle of a
+    month gives you that whole month rather than a fragment of one.
+
+    Amounts are `calculatedAmount` — the movement on the account — rather than
+    `effectiveAmount`. The totals have to reconcile with the balances, and those are
+    account balances rather than ownership-weighted shares of them; mixing the two would
+    make the integration error meaningless.
+  """
+  overviews(from: DateTime!, to: DateTime!): Overviews!
+  """
+    One account's ledger over a range, as a bank statement reads it.
+
+    Not the expense list with a filter: the computed opening balance, the expenses and the
+    balances actually recorded are interleaved into one sequence, and a recorded balance
+    re-anchors the running total. Where it disagrees with the total carried into it, the
+    gap comes back as `drift` — that is the signal that an expense is missing.
+  """
+  statement(accountId: UUID!, from: DateTime!, to: DateTime!): [StatementEntry!]!
 }
 
 type AutomationRule {
-  createdAt: DateTime!
-  filterAccountId: UUID
-  filterAmount: Int
   id: UUID!
-  lastDelivery: DateTime
+  title: String!
   priority: Int!
-  regexStatement: String
   regexTime: String
-
+  regexStatement: String
+  filterAmount: Int
+  filterAccountId: UUID
+  lastDelivery: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
   """
-  null when the caller can no longer see the template, which means the rule cannot fire
-  for them
+    null when the caller can no longer see the template, which means the rule cannot fire
+    for them
   """
   templateId: UUID
-  title: String!
-  updatedAt: DateTime!
-}
-
-input AutomationRuleInput {
-  filterAccountId: UUID
-  filterAmount: Int
-  priority: Int!
-  regexStatement: String
-  regexTime: String
-  templateId: UUID!
-  title: String!
 }
 
 type AutomationRuleMutation {
   create(rule: AutomationRuleInput!): AutomationRule!
-  delete(id: UUID!): Boolean!
   update(id: UUID!, rule: AutomationRuleInput!): AutomationRule!
+  delete(id: UUID!): Boolean!
 }
 
 type AutomationRuleQuery {
+  list(limit: Int, skip: Int, search: String, sortBy: AutomationRuleSortField, sortDir: SortDirection): [AutomationRule!]!
   get(id: UUID!): AutomationRule!
-  list(limit: Int, search: String, skip: Int, sortBy: AutomationRuleSortField, sortDir: SortDirection): [AutomationRule!]!
-}
-
-enum AutomationRuleSortField {
-  LAST_DELIVERY
-  PRIORITY
-  TITLE
 }
 
 """
-The accounts of one availability summed together.
+  The accounts of one availability summed together.
 
-Per bucket rather than cumulative: stacking these gives the cumulative reading back as the
-height of the stack, whereas stacking cumulative series would count the liquid accounts
-once per level above them.
+  Per bucket rather than cumulative: stacking these gives the cumulative reading back as the
+  height of the stack, whereas stacking cumulative series would count the liquid accounts
+  once per level above them.
 """
 type AvailabilitySeries {
-  amounts: [Float!]!
   availability: AccountAvailability!
+  amounts: [Float!]!
 }
 
 type Balance {
-  account: Account!
-  amount: Int!
-  comments: String!
-  date: DateTime!
   id: UUID!
   upstreamId: UUID!
+  comments: String!
+  amount: Int!
+  date: DateTime!
+  account: Account!
 }
 
 type BalanceConnection {
-  edges: [BalanceNode!]!
   totalCount: Int!
-}
-
-input BalanceInput {
-  accountId: UUID!
-  amount: Int!
-  comments: String!
-
-  """includes expenses with date < this value"""
-  date: DateTime!
+  edges: [BalanceNode!]!
 }
 
 type BalanceMutation {
-  create(balance: BalanceInput!): Balance!
   delete(id: UUID!): Boolean!
-  update(balance: BalanceInput!, id: UUID!): Balance!
+  create(balance: BalanceInput!): Balance!
+  update(id: UUID!, balance: BalanceInput!): Balance!
 }
 
 type BalanceNode {
@@ -210,144 +428,113 @@ type BalanceNode {
 }
 
 type BalanceQuery {
+  list(limit: Int, skip: Int, search: String, accountIds: [UUID!], after: DateTime, before: DateTime, sortBy: BalanceSortField, sortDir: SortDirection): BalanceConnection!
   get(id: UUID!): Balance!
-  list(accountIds: [UUID!], after: DateTime, before: DateTime, limit: Int, search: String, skip: Int, sortBy: BalanceSortField, sortDir: SortDirection): BalanceConnection!
-}
-
-enum BalanceSortField {
-  ACCOUNT
-  AMOUNT
-  COMMENTS
-  DATE
 }
 
 type Category {
-  color: String
-  description: String!
   id: UUID!
-
-  """desired maximum spending per month, in cents"""
-  monthlyLimit: Int
   name: String!
+  description: String!
+  color: String
   parent: Category
+  "desired maximum spending per month, in cents"
+  monthlyLimit: Int
 }
 
-input CategoryInput {
-  color: String
-  description: String!
-  monthlyLimit: Int
-  name: String!
-  parentId: UUID
+"A category with the individual expenses behind it, for the treemap's inner level."
+type CategoryBreakdown {
+  category: Category
+  income: Float!
+  expenses: Float!
+  """
+    the biggest by absolute amount, so one call serves both the income and the spending
+    view; a category holding both signs shows fewer of each
+  """
+  biggest: [CategoryExpense!]!
+  "everything `biggest` left out, as one slice, so the treemap still sums to the total"
+  restIncome: Float!
+  restExpenses: Float!
+}
+
+type CategoryExpense {
+  expenseId: UUID!
+  title: String!
+  "this expense's weighted share of the category, in cents"
+  amount: Float!
 }
 
 type CategoryMutation {
-  create(category: CategoryInput!): Category!
   delete(id: UUID!): Boolean!
-  update(category: CategoryInput!, id: UUID!): Boolean!
+  create(category: CategoryInput!): Category!
+  update(id: UUID!, category: CategoryInput!): Boolean!
 }
 
 type CategoryQuery {
+  list(limit: Int, skip: Int, search: String, sortBy: CategorySortField, sortDir: SortDirection): [Category!]!
   get(id: UUID!): Category!
-  list(limit: Int, search: String, skip: Int, sortBy: CategorySortField, sortDir: SortDirection): [Category!]!
 }
 
-enum CategorySortField {
-  MONTHLY_LIMIT
-  NAME
+"""
+  What one category absorbed over a period.
+
+  An expense split across categories contributes its weighted share to each, so these sum to
+  the period's total. `category` is null for the expenses that carry no categorization at
+  all — dropping them would make the parts add up to less than the whole.
+"""
+type CategoryTotal {
+  category: Category
+  income: Float!
+  expenses: Float!
 }
 
 type ComputedBalance {
-  account: Account!
-  amount: Float!
   date: DateTime!
-  expenseCount: Int!
+  amount: Float!
   reference: Balance!
+  account: Account!
+  expenseCount: Int!
 }
-
-"""
-Combined date and time (with time zone) in [RFC 3339][0] format.
-
-Represents a description of an exact instant on the time-line (such as the
-instant that a user account was created).
-
-[`DateTime` scalar][1] compliant.
-
-See also [`chrono::DateTime`][2] for details.
-
-[0]: https://datatracker.ietf.org/doc/html/rfc3339#section-5
-[1]: https://graphql-scalars.dev/docs/scalars/date-time
-[2]: https://docs.rs/chrono/latest/chrono/struct.DateTime.html
-"""
-scalar DateTime
 
 type DeliveryMutation {
   """
-  Hands bank statement lines to the automation rules.
-  
-  Safe to call with overlapping batches: a line already delivered is reported as a
-  duplicate rather than creating a second expense.
+    Hands bank statement lines to the automation rules.
+
+    Safe to call with overlapping batches: a line already delivered is reported as a
+    duplicate rather than creating a second expense.
   """
   submit(deliveries: [ExpenseDelivery!]!): [ExpenseDeliveryResult!]!
 }
 
 type DeliveryQuery {
-  list(limit: Int, onlyUnmatched: Boolean, search: String, skip: Int, sortBy: DeliverySortField, sortDir: SortDirection): [SeenDelivery!]!
-}
-
-enum DeliverySortField {
-  AMOUNT
-  DATE
-}
-
-enum DeliveryStatus {
-  """an expense was created"""
-  CREATED
-
-  """already delivered before, so nothing was done"""
-  DUPLICATE
-
-  """
-  a rule matched but could not be applied, and the line was *not* remembered so that
-  fixing the rule and re-uploading picks it up
-  """
-  FAILED
-
-  """
-  no automation rule matched; the line is remembered but produced no expense
-  """
-  UNMATCHED
+  list(limit: Int, skip: Int, search: String, onlyUnmatched: Boolean, sortBy: DeliverySortField, sortDir: SortDirection): [SeenDelivery!]!
 }
 
 type Expense {
-  bookingEnd: DateTime!
-  bookingStart: DateTime!
-  categories: [ExpenseCategorization!]!
-  changelog: [ExpenseChangelogEntry!]!
-  comments: String!
-  description: String!
-  effectiveAmount: Float!
   id: UUID!
-  isExtraordinary: Boolean!
-  isIncomplete: Boolean!
-  isTaxRelevant: Boolean!
-  isTemplate: Boolean!
-  isUnchecked: Boolean!
-  positions: [ExpensePosition!]!
-  receipts: [ExpenseReceipt!]!
-  referenceAmount: Int
-  store: String!
-  title: String!
-  transactions: [ExpenseTransaction!]!
   upstreamId: UUID!
+  title: String!
+  store: String!
+  description: String!
+  comments: String!
+  referenceAmount: Int
+  bookingStart: DateTime!
+  bookingEnd: DateTime!
+  isTemplate: Boolean!
+  isTaxRelevant: Boolean!
+  isUnchecked: Boolean!
+  isIncomplete: Boolean!
+  isExtraordinary: Boolean!
+  receipts: [ExpenseReceipt!]!
+  categories: [ExpenseCategorization!]!
+  transactions: [ExpenseTransaction!]!
+  positions: [ExpensePosition!]!
+  effectiveAmount: Float!
+  changelog: [ExpenseChangelogEntry!]!
 }
 
 type ExpenseCategorization {
   category: Category!
-  weight: Float!
-}
-
-input ExpenseCategorizationInput {
-  categoryId: UUID!
   weight: Float!
 }
 
@@ -356,23 +543,22 @@ type ExpenseChangelogConnection {
 }
 
 type ExpenseChangelogEntry {
-  automatic: Boolean!
-  confidence: Float!
-  date: DateTime!
-  diff: String
-
+  targetId: UUID!
+  id: UUID!
   """
-  The rendering a reader sees carries the upstream id, so this is the same value as
-  `targetId`; it stays because the frontend keys its changelog rows on it.
+    The rendering a reader sees carries the upstream id, so this is the same value as
+    `targetId`; it stays because the frontend keys its changelog rows on it.
   """
   expenseId: UUID!
-  id: UUID!
-  newState: Expense
-  oldState: Expense
-  targetId: UUID!
-  tool: String
-  user: User
   userId: UUID
+  date: DateTime!
+  tool: String
+  automatic: Boolean!
+  confidence: Float!
+  oldState: Expense
+  newState: Expense
+  diff: String
+  user: User
 }
 
 type ExpenseChangelogNode {
@@ -380,87 +566,22 @@ type ExpenseChangelogNode {
 }
 
 type ExpenseConnection {
-  edges: [ExpenseNode!]!
   totalCount: Int!
-}
-
-"""
-A transaction handed to moneta from outside (a bank statement importer), before it is
-known which expense — if any — it belongs to.
-"""
-input ExpenseDelivery {
-  accountId: UUID!
-
-  """in cents, using the same sign convention as expense transactions"""
-  amount: Int!
-  date: DateTime!
-  statement: String!
+  edges: [ExpenseNode!]!
 }
 
 type ExpenseDeliveryResult {
-  """the created expense, or null if the caller cannot see it"""
-  expenseId: UUID
-  message: String
-  ruleId: UUID
   status: DeliveryStatus!
-}
-
-"""
-The flag checkboxes above the expense table. Each one being off means "hide the expenses
-that carry this flag"; `normal` off means "show only expenses that carry some flag".
-"""
-input ExpenseFlagFilter {
-  extraordinary: Boolean!
-  incomplete: Boolean!
-  normal: Boolean!
-  taxRelevant: Boolean!
-  templates: Boolean!
-  unchecked: Boolean!
-}
-
-input ExpenseInput {
-  bookingEnd: DateTime!
-  bookingStart: DateTime!
-  categories: [ExpenseCategorizationInput!]!
-  comments: String!
-  description: String!
-
-  """
-  if this expense should not be considered for monthly spending and so on
-  """
-  isExtraordinary: Boolean!
-
-  """
-  if we anticipate more transactions to appear before this can be completed; e.g. payback when a order hasn't arrived
-  """
-  isIncomplete: Boolean!
-
-  """
-  to track expenses that should be looked at again when preparing tax forms
-  """
-  isTaxRelevant: Boolean!
-
-  """
-  set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis
-  """
-  isTemplate: Boolean!
-
-  """
-  needs to be looked at by a user first (missing info, low confidence, ...)
-  """
-  isUnchecked: Boolean!
-  positions: [ExpensePositionInput!]!
-  receipts: [ExpenseReceiptInput!]!
-  referenceAmount: Int
-  store: String!
-  title: String!
-  transactions: [ExpenseTransactionInput!]!
+  ruleId: UUID
+  message: String
+  "the created expense, or null if the caller cannot see it"
+  expenseId: UUID
 }
 
 type ExpenseMutation {
-  create(expense: ExpenseInput!): Expense!
   delete(id: UUID!): Boolean!
-  update(expense: ExpenseInput!, id: UUID!): Expense!
+  create(expense: ExpenseInput!): Expense!
+  update(id: UUID!, expense: ExpenseInput!): Expense!
 }
 
 type ExpenseNode {
@@ -469,218 +590,168 @@ type ExpenseNode {
 
 type ExpensePosition {
   amount: Int
-  comments: String!
   quantity: Float
-  title: String!
   unit: String
-}
-
-input ExpensePositionInput {
-  amount: Int
+  title: String!
   comments: String!
-  quantity: Float
-  title: String!
-  unit: String
 }
 
 type ExpenseQuery {
-  changelog(limit: Int, skip: Int): ExpenseChangelogConnection!
+  list(limit: Int, skip: Int, search: String, accountIds: [UUID!], categoryIds: [UUID!], flags: ExpenseFlagFilter, bookedAfter: DateTime, bookedBefore: DateTime, valuedAfter: DateTime, valuedBefore: DateTime, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
   get(id: UUID!): Expense!
-  list(accountIds: [UUID!], bookedAfter: DateTime, bookedBefore: DateTime, categoryIds: [UUID!], flags: ExpenseFlagFilter, limit: Int, search: String, skip: Int, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
+  changelog(limit: Int, skip: Int): ExpenseChangelogConnection!
 }
 
 type ExpenseReceipt {
-  """can be a local file or e.g. a reference to a document in a dms"""
-  ocr: String
   uri: String!
-}
-
-input ExpenseReceiptInput {
+  "can be a local file or e.g. a reference to a document in a dms"
   ocr: String
-  uri: String!
-}
-
-enum ExpenseSortField {
-  ACCOUNTS
-  BOOKING_START
-  CATEGORIES
-  COMMENTS
-  DESCRIPTION
-  EFFECTIVE_AMOUNT
-
-  """template first, then the entries still needing attention"""
-  STATUS
-  STORE
-  TITLE
 }
 
 type ExpenseTransaction {
   account: Account!
+  date: DateTime!
   amount: Int
+  fraction: Float
+  comments: String!
+  statement: String!
   calculatedAmount: Float!
-  comments: String!
-  date: DateTime!
   effectiveAmount: Float!
-  fraction: Float
-  statement: String!
-}
-
-input ExpenseTransactionInput {
-  accountId: UUID!
-  amount: Int
-  comments: String!
-  date: DateTime!
-  fraction: Float
-  statement: String!
 }
 
 type History {
+  dates: [DateTime!]!
   byAccount: [AccountSeries!]!
   byAvailability: [AvailabilitySeries!]!
-  dates: [DateTime!]!
+}
+
+type MonthOverview {
+  "midnight on the first of the month, UTC"
+  month: DateTime!
+  startTotal: Float!
+  "what the recorded balances say at the end of the month"
+  endTotal: Float!
+  """
+    `startTotal` plus everything booked during the month.
+
+    The gap to `endTotal` is MoneyDB's *Integrationsfehler*. It does not mean the
+    arithmetic drifted — it means an expense is missing, which is the whole point of
+    showing it.
+  """
+  integratedEndTotal: Float!
+  income: Float!
+  expenses: Float!
+  expenseCount: Int!
+  byAccount: [AccountOverview!]!
+  byCategory: [CategoryTotal!]!
 }
 
 type Mutation {
-  accounts: AccountMutation!
-  automationRules: AutomationRuleMutation!
-  balances: BalanceMutation!
-  categories: CategoryMutation!
-  deliveries: DeliveryMutation!
-  expenses: ExpenseMutation!
-  periodicRules: PeriodicRuleMutation!
   users: UserMutation!
+  accounts: AccountMutation!
+  balances: BalanceMutation!
+  expenses: ExpenseMutation!
+  categories: CategoryMutation!
+  automationRules: AutomationRuleMutation!
+  periodicRules: PeriodicRuleMutation!
+  deliveries: DeliveryMutation!
 }
 
-enum PeriodicInterval {
-  DAILY
-  MONTHLY
-  WEEKLY
-  YEARLY
+type Overviews {
+  months: [MonthOverview!]!
+  "the whole range at once, for the treemap"
+  byCategory: [CategoryBreakdown!]!
 }
 
 type PeriodicRule {
-  amountReplacement: Int
-  createdAt: DateTime!
   id: UUID!
-  lastCreation: DateTime!
-
-  """the instants this rule would generate expenses for on the next run"""
-  pending: [DateTime!]!
-  period: PeriodicInterval!
-
-  """see `AutomationRule.templateId`"""
-  templateId: UUID
   title: String!
+  period: PeriodicInterval!
   titleReplacement: String
-  updatedAt: DateTime!
-}
-
-input PeriodicRuleInput {
   amountReplacement: Int
   lastCreation: DateTime!
-  period: PeriodicInterval!
-  templateId: UUID!
-  title: String!
-  titleReplacement: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  "see `AutomationRule.templateId`"
+  templateId: UUID
+  "the instants this rule would generate expenses for on the next run"
+  pending: [DateTime!]!
 }
 
 type PeriodicRuleMutation {
   create(rule: PeriodicRuleInput!): PeriodicRule!
+  update(id: UUID!, rule: PeriodicRuleInput!): PeriodicRule!
   delete(id: UUID!): Boolean!
-
   """
-  Generates every expense that is currently due from this user's own rules. The scheduled
-  job covers everybody; this is the button for not waiting for it.
+    Generates every expense that is currently due from this user's own rules. The scheduled
+    job covers everybody; this is the button for not waiting for it.
   """
   run: Int!
-  update(id: UUID!, rule: PeriodicRuleInput!): PeriodicRule!
 }
 
 type PeriodicRuleQuery {
+  list(limit: Int, skip: Int, search: String, sortBy: PeriodicRuleSortField, sortDir: SortDirection): [PeriodicRule!]!
   get(id: UUID!): PeriodicRule!
-  list(limit: Int, search: String, skip: Int, sortBy: PeriodicRuleSortField, sortDir: SortDirection): [PeriodicRule!]!
 }
 
-enum PeriodicRuleSortField {
-  LAST_CREATION
-  PERIOD
-  TITLE
-}
-
-"""
-What is left of an expense whose value is still being consumed at the requested date.
-"""
+"What is left of an expense whose value is still being consumed at the requested date."
 type Prepayment {
-  """how much of the booking period has elapsed, 0..1"""
-  consumedFraction: Float!
   expense: Expense!
-
-  """cents not yet consumed, in the same sign as the expense itself"""
+  "how much of the booking period has elapsed, 0..1"
+  consumedFraction: Float!
+  "cents not yet consumed, in the same sign as the expense itself"
   remaining: Float!
 }
 
 type Query {
-  accounts: AccountQuery!
-  analysis: AnalysisQuery!
   apiVersion: String!
-  automationRules: AutomationRuleQuery!
-  balances: BalanceQuery!
-  categories: CategoryQuery!
-  deliveries: DeliveryQuery!
-  expenses: ExpenseQuery!
-  periodicRules: PeriodicRuleQuery!
   users: UserQuery!
+  accounts: AccountQuery!
+  balances: BalanceQuery!
+  expenses: ExpenseQuery!
+  categories: CategoryQuery!
+  analysis: AnalysisQuery!
+  automationRules: AutomationRuleQuery!
+  periodicRules: PeriodicRuleQuery!
+  deliveries: DeliveryQuery!
 }
 
 type SeenDelivery {
-  accountId: UUID!
-  amount: Int!
-  createdAt: DateTime!
-  date: DateTime!
-
-  """
-  the expense this delivery produced, or null if the caller cannot see it
-  """
-  expenseId: UUID
   id: UUID!
-
-  """false when no rule matched, which is the signal that a rule is missing"""
-  matched: Boolean!
+  accountId: UUID!
+  date: DateTime!
+  amount: Int!
   statement: String!
+  createdAt: DateTime!
+  "false when no rule matched, which is the signal that a rule is missing"
+  matched: Boolean!
+  "the expense this delivery produced, or null if the caller cannot see it"
+  expenseId: UUID
 }
 
-"""
-Which way a list is ordered.
-
-Lists used to take a mongo sort document built in the browser (`{"bookingStart": -1}`) and
-a mongo filter document alongside it. Both are gone: the client now names a column from a
-per-entity enum and a direction, so nothing it sends can reach a column the resolver did
-not offer, and there is no query language to parse.
-"""
-enum SortDirection {
-  ASC
-  DESC
+type StatementEntry {
+  kind: StatementEntryKind!
+  date: DateTime!
+  title: String!
+  store: String!
+  expenseId: UUID
+  "this account's share, in cents; null on the rows that only assert a balance"
+  amount: Float
+  "running total, re-anchored whenever a recorded balance disagrees with it"
+  balance: Float!
+  """
+    on a recorded balance, what it says minus what was carried into it. A non-zero value
+    is the signal that an expense is missing.
+  """
+  drift: Float
 }
-
-"""
-[Universally Unique Identifier][0] (UUID).
-
-[`UUID` scalar][1] compliant.
-
-See also [`uuid::Uuid`][2] for details.
-
-[0]: https://en.wikipedia.org/wiki/Universally_unique_identifier
-[1]: https://graphql-scalars.dev/docs/scalars/uuid
-[2]: https://docs.rs/uuid/*/uuid/struct.Uuid.html
-"""
-scalar UUID
 
 type User {
-  firstName: String
-  fullName: String!
   id: UUID!
-  lastName: String
   name: String!
+  fullName: String!
+  firstName: String
+  lastName: String
 }
 
 type UserMutation {
@@ -689,7 +760,8 @@ type UserMutation {
 }
 
 type UserQuery {
+  me: User!
   get(id: UUID!): User!
   list(limit: Int, skip: Int): [User!]!
-  me: User!
 }
+

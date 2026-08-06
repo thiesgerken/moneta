@@ -1,9 +1,7 @@
 # Analysis dashboard
 
-Port of MoneyDB's `analysis` section, at `/analysis`. **Vermögen** and **Vorauszahlungen** read
-real queries; the other four tabs still show hardcoded numbers from
-`frontend/src/lib/analysis_mock.ts`. This document records what each should show and what the
-backend still owes it.
+Port of MoneyDB's `analysis` section, at `/analysis`. All six tabs read real queries; the mock
+is gone. This document records what each shows and the decisions behind it.
 
 ## Displays
 
@@ -124,9 +122,9 @@ spend in March" has two defensible answers.
 
 ## Backend
 
-`analysis.balance(date, accountId)`, `analysis.balances(date)`, `analysis.history` and
-`analysis.prepayments` exist (`backend/src/graphql/analysis.rs`). Two endpoints are missing:
-`overviews` and `statement`.
+All of it lives in `backend/src/graphql/analysis.rs`, with the arithmetic in SQL functions the
+migrations define so that `tests/sql` can reach it: `simulate_balances`, `analysis_statement`,
+`analysis_month_totals`, `analysis_category_totals` and `analysis_category_expenses`.
 
 ### `analysis.history(from, to, stepDays)` — done
 
@@ -175,43 +173,77 @@ sign (negative for money that went out).
 The incomplete list needs no endpoint: `expenses.list` with every flag off except
 `incomplete`, alongside `normal: false`, is exactly that set.
 
-### `analysis.overviews(from, to)`
+### `analysis.overviews(from, to)` — done
 
 ```graphql
 type Overviews {
-  months: [MonthOverview!]!          # per-month balances, income, expenses, count, error
-  byCategory: CategoryStats!         # whole-period tree, for the treemap
+  months: [MonthOverview!]!          # per-month totals, per account and per category
+  byCategory: [CategoryBreakdown!]!  # whole range, with its expenses, for the treemap
 }
 ```
 
-Per-month category stats live on `MonthOverview`, which is what feeds the stacked bars — so
-**Kategorien** needs no endpoint of its own. **Kalender** needs none either; it is the existing
-expense list filtered to a month.
+`from` and `to` snap outwards to whole months, so asking for the middle of one gives you that
+whole month. The balances at every month boundary are one `simulate_balances` call over an
+array of month starts — a year costs one simulation, not thirteen.
 
-### `analysis.statement(accountId, from, to)`
+**Amounts are `calculatedAmount`, not `effectiveAmount`.** The totals have to reconcile with
+the balances, and those are account balances rather than ownership-weighted shares of them.
+Mixing the two would make the integration error meaningless. It also means a half-owned account
+contributes its whole movement here, which is the same convention **Vermögen** already uses.
+
+Per-month category totals live on `MonthOverview` and feed the stacked bars, so **Kategorien**
+needs no endpoint of its own — it is a second reading of this one. Its treemap comes from
+`byCategory`, which is the whole range at once rather than a sum of the months: the biggest
+expenses of a year are not the biggest of each of its months.
+
+An expense split across categories contributes its weighted share to each, and one with no
+categorization at all comes back under a null category. Dropping those would make the parts add
+up to less than the whole, which is worse than a slice labelled "Ohne Kategorie".
+
+**Kalender** and the month pages' *Größte Ausgaben* need no endpoint either, but they do need
+the right axis: `expenses.list` grew `valuedAfter`/`valuedBefore`, which filter on transaction
+dates. The pre-existing `bookedAfter`/`bookedBefore` filter the booking period, which for a
+prepayment spans a year while its payment lands on one day.
+
+### Month pages are `overviews` over a single month
+
+`MonthOverview` carries `byAccount` as well, which is the only thing the month page needs
+beyond what the table shows. So `/analysis/[year]/[month]` is this same query with a one-month
+range plus an expense list for the biggest few, rather than an endpoint of its own.
+
+### `analysis.statement(accountId, from, to)` — done
 
 ```graphql
 type StatementEntry {
   kind: StatementEntryKind!          # OPENING | EXPENSE | BALANCE
   date: DateTime!                    # transaction date for expenses
-  bookingDate: DateTime              # null while the bank has not booked it
   title: String!
   store: String!
   expenseId: UUID                    # null on balance rows
-  amount: Int                        # this account's share in cents; null on balance rows
-  balance: Int!                      # running total, re-anchored on recorded balances
-  drift: Int                         # recorded minus carried, when a balance disagrees
+  amount: Float                      # this account's share in cents; null on balance rows
+  balance: Float!                    # running total, re-anchored on recorded balances
+  drift: Float                       # recorded minus carried, when a balance disagrees
 }
 ```
 
-Assemblable from what already exists — `analysis.balance(accountId, date)` for the opening row,
-plus the rendered expense and balance views filtered by account and range — so it could start
-life in the frontend. It belongs on the server anyway: the running total and the drift have to
-be computed in one pass over a correctly ordered sequence, and that ordering (value date,
-balances before the expenses of the same instant) is exactly the sort of rule that goes wrong
-quietly when two clients each reimplement it. `sum(...) OVER (ORDER BY ...)` does both.
+It belongs on the server rather than being assembled by the client: the running total and the
+drift have to be computed in one pass over a correctly ordered sequence, and that ordering is
+exactly the sort of rule that goes wrong quietly when two clients each reimplement it.
+
+**A balance is stated before the expenses of its own instant**, matching
+`balances_rendered.date` including expenses with `date <` it. Each recorded balance opens an
+island; within one, the balance is the anchor plus the movements since it. That is what makes a
+recorded balance override the total carried into it rather than be absorbed by it, and `drift`
+is the difference between the two.
+
+**Legs of one expense on one account at one instant merge into a single movement** — splitting
+a purchase in two is an accounting detail, not two bank movements. Legs on different dates stay
+separate rows, which is how a bank shows an instalment.
 
 Sort ascending to accumulate, return descending — newest first is what you want to read.
+
+MoneyDB's statement had a booking date next to the value date. moneta does not model one:
+`expense_transactions` carries only `date`. The column is gone rather than invented.
 
 ### Implementation note
 
@@ -219,14 +251,24 @@ Do the work in SQL, not by folding in Rust. That advice was written for mongo, w
 alternative was an aggregation pipeline per sample date; postgres does the whole thing set-based
 and `simulate_balances` in the migrations is the worked example.
 
-The trap it ran into is worth knowing before writing `overviews` or `statement`. Reading
-`expense_transactions_rendered` per (account, date) looks harmless and is not: `expense_users`
-is a `UNION` over the whole transaction table and cannot be narrowed to one account, so every
-lateral invocation rebuilds the rendering for all ~16k rows. A 120-point chart took 1.7s that
-way and 104ms once the rendering was materialized once per call and joined.
+Two traps are worth knowing before touching any of it.
+
+Reading `expense_transactions_rendered` per (account, date) looks harmless and is not:
+`expense_users` is a `UNION` over the whole transaction table and cannot be narrowed to one
+account, so every lateral invocation rebuilds the rendering for all ~16k rows. A 120-point
+chart took 1.7s that way and 104ms once the rendering was materialized once per call and
+joined. The monthly totals sidestep it by being a single `GROUP BY` rather than a query per
+month.
+
+A **rule template** carries a real account and a real date — `instantiate` shifts its
+transactions onto each occurrence — so nothing but `is_template` says it never happened. Every
+one of these functions filters it out. Forgetting to is invisible until a balance is wrong by
+exactly one template.
 
 Put the arithmetic in a SQL function rather than a Rust string, so `tests/sql` can reach it.
-That is the only place in the repo where a query can be tested against a database.
+That is the only place in the repo where a query can be tested against a database, and it is
+worth the indirection: it caught the missing template filter in `analysis_statement` and, in
+the fixtures, three ordering and weighting bugs that review had passed over.
 
 ## Charts
 
