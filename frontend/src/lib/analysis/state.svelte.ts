@@ -25,6 +25,10 @@ export type Range = {
 
 const range = (span: string): Range => ({ span, from: undefined, to: undefined });
 
+/// Whose changes the activity feed shows. Defaults to everyone else's: you already know what
+/// you did, so the feed is worth opening for what someone else did.
+export const feedState = $state({ author: 'OTHERS' });
+
 export const wealthState = $state({
 	range: range('all'),
 	split: 'total',

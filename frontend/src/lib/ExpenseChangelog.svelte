@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { graphql } from '$houdini';
+	import { graphql, type ChangelogAuthor$options, type ExpenseChangelog$result } from '$houdini';
 	import { Badge, Spinner } from 'flowbite-svelte';
 	import {
 		CirclePlusOutline,
@@ -7,12 +7,14 @@
 		ChevronDownOutline,
 		ChevronRightOutline
 	} from 'flowbite-svelte-icons';
+	import ToggleGroup from './ToggleGroup.svelte';
 	import { changedFields, summarizeFields, stateAmount } from './changelog';
+	import { feedState } from './analysis/state.svelte';
 
 	let expandedDiffs = $state<string[]>([]);
 
 	const changelogStore = graphql(`
-		query ExpenseChangelog {
+		query ExpenseChangelog($author: ChangelogAuthor!) {
 			users {
 				me {
 					name
@@ -20,7 +22,7 @@
 			}
 
 			expenses {
-				changelog(limit: 100, skip: 0) {
+				changelog(limit: 100, skip: 0, author: $author) {
 					edges {
 						node {
 							id
@@ -55,9 +57,21 @@
 		}
 	`);
 
-	$effect(() => void changelogStore.fetch());
+	// the store is cleared while a fetch is in flight, which empties the list between filters
+	let latestRequest = 0;
+	let feed = $state<ExpenseChangelog$result | null>(null);
 
-	const me = $derived($changelogStore.data?.users.me?.name);
+	$effect(() => {
+		const request = ++latestRequest;
+		void changelogStore
+			.fetch({ variables: { author: feedState.author as ChangelogAuthor$options } })
+			.then((result) => {
+				if (request !== latestRequest) return;
+				feed = result.data ?? null;
+			});
+	});
+
+	const me = $derived(feed?.users.me?.name);
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -84,7 +98,7 @@
 	type Entry = (typeof entries)[number];
 
 	const entries = $derived(
-		($changelogStore.data?.expenses.changelog.edges ?? [])
+		(feed?.expenses.changelog.edges ?? [])
 			.map((e) => e.node)
 			.sort((a, b) => b.date.getTime() - a.date.getTime())
 	);
@@ -145,10 +159,29 @@
 </script>
 
 <div class="mx-auto max-w-3xl">
+	<div class="flex items-center justify-between gap-3 pb-2">
+		<ToggleGroup
+			bind:value={feedState.author}
+			size="sm"
+			options={[
+				{ value: 'OTHERS', label: 'Nur andere' },
+				{ value: 'ME', label: 'Nur meine' },
+				{ value: 'ANYONE', label: 'Alle' }
+			]}
+		/>
+		{#if $changelogStore.fetching}
+			<Spinner size="4" />
+		{/if}
+	</div>
+
 	{#if $changelogStore.fetching && entries.length === 0}
 		<div class="flex justify-center py-12"><Spinner size="6" /></div>
 	{:else if entries.length === 0}
-		<p class="py-12 text-center text-sm text-gray-500 dark:text-gray-400">Noch keine Aktivität.</p>
+		<p class="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+			{feedState.author === 'OTHERS'
+				? 'Niemand sonst hat etwas geändert.'
+				: 'Noch keine Aktivität.'}
+		</p>
 	{/if}
 
 	{#each days as group (group.key)}

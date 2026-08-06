@@ -310,6 +310,17 @@ pub struct ExpenseChangelogNode {
     pub node: GraphQLExpenseChangelogEntry,
 }
 
+/// Whose changes the activity feed shows. Filtered here rather than in the reader, which only
+/// ever holds a page: dropping a page's own entries would leave a handful of rows and call it
+/// everyone else's activity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, GraphQLEnum)]
+pub enum ChangelogAuthor {
+    #[default]
+    Anyone,
+    Me,
+    Others,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, GraphQLEnum)]
 pub enum ExpenseSortField {
     #[default]
@@ -588,6 +599,7 @@ impl ExpenseQuery {
         context: &Context,
         limit: Option<i32>,
         skip: Option<i32>,
+        author: Option<ChangelogAuthor>,
     ) -> FieldResult<ExpenseChangelogConnection> {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
@@ -597,7 +609,7 @@ impl ExpenseQuery {
         // A change outlives the expense it describes, so this reaches the visible expenses
         // through the view rather than joining: a deleted expense has no rendering left and
         // its changes drop out of the list, which is what the old query did too.
-        let entries = expense_changes::table
+        let mut query = expense_changes::table
             .filter(
                 expense_changes::target_id.eq_any(
                     expenses_rendered::table
@@ -605,6 +617,18 @@ impl ExpenseQuery {
                         .select(expenses_rendered::upstream_id),
                 ),
             )
+            .into_boxed();
+
+        // An automation writes the owner's id, so "someone else" means a different person, not
+        // a different actor: a rule of mine firing is still mine.
+        query = match author.unwrap_or_default() {
+            ChangelogAuthor::Anyone => query,
+            ChangelogAuthor::Me => query.filter(expense_changes::user_id.eq(user_id)),
+            // an entry with no author is nobody's -- an import, which is not someone else
+            ChangelogAuthor::Others => query.filter(expense_changes::user_id.ne(user_id)),
+        };
+
+        let entries = query
             .order_by(expense_changes::date.desc())
             .then_order_by(expense_changes::id.desc())
             .limit(limit)
