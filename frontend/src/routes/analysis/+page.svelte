@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Tabs, TabItem } from 'flowbite-svelte';
+	import ExpenseChangelog from '$lib/ExpenseChangelog.svelte';
 	import WealthView from '$lib/analysis/WealthView.svelte';
 	import OverviewsView from '$lib/analysis/OverviewsView.svelte';
 	import CategoriesView from '$lib/analysis/CategoriesView.svelte';
@@ -10,7 +11,10 @@
 
 <div class="space-y-4 pr-8 pl-8">
 	<Tabs tabStyle="underline">
-		<TabItem open title="Vermögen">
+		<TabItem open title="Aktivität">
+			<ExpenseChangelog />
+		</TabItem>
+		<TabItem title="Vermögen">
 			<WealthView />
 		</TabItem>
 		<TabItem title="Monate">
