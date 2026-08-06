@@ -69,7 +69,7 @@ moneta import [--clear] < moneydb-export.json
 `import` matches users by name, so create them with `user --add` before importing;
 `--clear` wipes everything except users.
 
-Note the odd argument shapes on `account`: `--list`, `--rerender` and `--invert` are declared
+Note the odd argument shapes on `account`: `--list` and `--invert` are declared
 as value-taking options rather than flags, so they need a throwaway argument
 (`moneta account --list x`). Worth fixing, hasn't been.
 
@@ -77,14 +77,17 @@ as value-taking options rather than flags, so they need a throwaway argument
 
 Two layers, and understanding the split is the key to the whole backend.
 
-**Upstream collections** — `expenses`, `balances`, `accounts`, `categories`, `users`,
-`expense_changes`. These are the truth. An expense is owned by nobody in particular: it has
-a list of *transactions*, each pointing at an account, and each account has an owner.
+**Upstream tables** — `expenses`, `expense_transactions`, `expense_categorizations`,
+`balances`, `accounts`, `categories`, `users`, `expense_changes`. These are the truth. An
+expense is owned by nobody in particular: it has a list of *transactions*, each pointing at
+an account, and each account has an owner. One expense therefore spans three tables, and
+`Expense::split()`/`join()` in `src/models/expense.rs` convert between the aggregate and its
+rows.
 
-**Rendered collections** — `expenses_rendered`, `balances_rendered`. One document *per user
-per upstream entry*, precomputed by `src/rendering.rs`. Every read path (GraphQL queries,
-analysis) hits these, never the upstream ones. They exist because "what did this expense
-cost *me*" is expensive to answer on the fly and is asked constantly.
+**Rendered views** — `expenses_rendered`, `expense_transactions_rendered`, `balances_rendered`
+and `expense_users`, defined in `migrations/*_rendered_views`. One row *per user per upstream
+entry*. Every read path (GraphQL queries, analysis) hits these, never the upstream tables.
+They exist because "what did this expense cost *me*" is asked constantly.
 
 Rendering resolves three things:
 
@@ -96,8 +99,15 @@ Rendering resolves three things:
   one person's entry shows up in the other's view too. With `invert`, the sign flips, which
   is how debts between the two users are modelled
 
-**Any write to an upstream document must re-render.** The mutations do this; if you touch
-rendering logic, `moneta account --rerender x` rebuilds everything from scratch.
+They are SQL views rather than stored rows because rendering is a pure function of the
+expense and the accounts it touches: there is nothing to keep in sync, no write path, and no
+rerender step. A rendered row also keeps the id of the row it came from, since a reader only
+ever sees their own rendering of it. `tests/sql/rendered_views.sql` is where the three rules
+above are pinned down.
+
+The analysis endpoints go one step further and compute in SQL as well
+(`simulate_balances`, `analysis_statement`, `analysis_month_totals`,
+`analysis_category_totals`, `analysis_category_expenses`), each added by its own migration.
 
 Money is stored as integer cents (`amount: i32`). Computed values that involve fractions are
 `f64` (`calculatedAmount`, `effectiveAmount`).
@@ -193,9 +203,8 @@ $effect(() => void expenseStore.fetch({ variables: expenseVariables() }));
 ```
 
 Filtering and sorting are done **server-side** through typed arguments: each list query takes
-a `search` string, whatever filters that entity has, and a `sortBy` enum plus `sortDir`. The
-components used to build MongoDB query documents in the browser and send them as strings;
-nothing on the wire is a query language any more.
+a `search` string, whatever filters that entity has, and a `sortBy` enum plus `sortDir`.
+Nothing on the wire is a query language.
 
 `schema.graphql` is checked in and is what codegen runs against. Refresh it with the backend
 running:
