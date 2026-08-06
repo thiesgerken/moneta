@@ -18,7 +18,7 @@
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import RangePicker from './RangePicker.svelte';
 	import SeriesToggle from './SeriesToggle.svelte';
-	import { AVAILABILITY_LABELS, AVAILABILITY_ORDER, availabilityColor } from './availability';
+	import { AVAILABILITY_LABELS, availabilityColor } from './availability';
 	import { CUSTOM_SPAN, wealthState } from './state.svelte';
 
 	const euro = (cents: number) =>
@@ -75,7 +75,6 @@
 						id
 						name
 						color
-						availability
 					}
 					reference {
 						id
@@ -121,16 +120,6 @@
 	const balances = $derived($balanceStore.data?.analysis.balances ?? []);
 
 	const total = $derived(balances.reduce((sum, b) => sum + b.amount, 0));
-
-	const availabilityTotals = $derived(
-		AVAILABILITY_ORDER.map((availability) => ({
-			availability,
-			label: AVAILABILITY_LABELS[availability],
-			amount: balances
-				.filter((b) => b.account.availability === availability)
-				.reduce((sum, b) => sum + b.amount, 0)
-		})).filter((a) => a.amount !== 0)
-	);
 
 	const dates = $derived(history?.dates.map((d) => d.getTime()) ?? []);
 
@@ -403,17 +392,8 @@
 			<Input type="date" bind:value={wealthState.date} class="w-48" />
 		</Label>
 		<p class="pb-2 text-sm text-gray-500 dark:text-gray-400">
-			gilt für die Verfügbarkeiten und die berechneten Kontostände
+			gilt für die berechneten Kontostände
 		</p>
-	</div>
-
-	<div class="grid gap-4 md:grid-cols-4">
-		{#each availabilityTotals as a (a.availability)}
-			<Card class="max-w-none p-4">
-				<span class="text-sm text-gray-500 dark:text-gray-400">Verfügbar: {a.label}</span>
-				<span class="text-2xl font-semibold">{euro(a.amount)}</span>
-			</Card>
-		{/each}
 	</div>
 
 	<Card class="max-w-none p-4">
