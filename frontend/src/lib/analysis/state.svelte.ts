@@ -28,12 +28,19 @@ export const wealthState = $state({
 	/// the Stichtag for the availability totals and the computed balances
 	date: todayIso(),
 	/// the zoomed window, which overrides the range until it is reset
-	zoom: null as { min: number; max: number } | null
+	zoom: null as { min: number; max: number } | null,
+	/// series hidden from the chart, by name; only meaningful when split by account or
+	/// availability, and remembered so a tab switch does not un-hide them
+	hiddenSeries: [] as string[]
 });
 
 export const overviewsState = $state({ range: range('10y') });
 
-export const categoriesState = $state({ range: range('10y'), sign: 'expenses' });
+export const categoriesState = $state({
+	range: range('10y'),
+	sign: 'expenses',
+	hiddenSeries: [] as string[]
+});
 
 export const statementState = $state({
 	accountId: '',

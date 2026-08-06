@@ -59,6 +59,13 @@ export const errorColor = (e: number) => (e >= 5000 ? 'red' : e >= 2500 ? 'yello
 export const monthLabel = (d: Date) =>
 	d.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' });
 
+/// How many labels a month axis can carry before they turn into a smear.
+///
+/// A category axis draws one label per bar unless told otherwise, which at ten years is 120
+/// of them. `tickAmount` thins them to every nth; apex picks which ones, and the first and
+/// last always survive.
+export const monthTicks = (count: number) => Math.min(count, 12);
+
 /// A colour for a category that has none set, and for the "no category" bucket. Derived from
 /// the name so it at least stays the same between renders.
 export function categoryColor(category: { name: string; color?: string | null } | null): string {

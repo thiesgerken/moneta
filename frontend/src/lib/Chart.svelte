@@ -3,8 +3,11 @@
 
 	interface Props {
 		options: ApexOptions;
+		/// the live instance, for callers that need to drive it imperatively — showing and
+		/// hiding series is not expressible through the options alone
+		instance?: ApexCharts | null;
 	}
-	let { options }: Props = $props();
+	let { options, instance = $bindable(null) }: Props = $props();
 
 	let el: HTMLDivElement;
 
@@ -35,15 +38,23 @@
 		}
 
 		chart?.destroy();
-		chart = new ApexCharts(el, next);
+		const created = new ApexCharts(el, next);
+		chart = created;
 		built = shape;
-		void chart.render();
+
+		// Exposed only once it has drawn. Callers drive series visibility through the
+		// instance, and apex reaches into DOM that `render()` has not created yet if asked
+		// before then -- it throws out of their effect rather than returning an error.
+		void created.render().then(() => {
+			if (chart === created && instance !== created) instance = created;
+		});
 	});
 
 	$effect(() => {
 		return () => {
 			chart?.destroy();
 			chart = null;
+			if (instance !== null) instance = null;
 		};
 	});
 </script>

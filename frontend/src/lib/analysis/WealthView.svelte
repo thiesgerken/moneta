@@ -14,10 +14,12 @@
 	} from 'flowbite-svelte';
 	import { RefreshOutline } from 'flowbite-svelte-icons';
 	import { graphql } from '$houdini';
+	import type ApexCharts from 'apexcharts';
 	import type { ApexOptions } from 'apexcharts';
 	import Chart from '$lib/Chart.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import RangePicker from './RangePicker.svelte';
+	import SeriesToggle from './SeriesToggle.svelte';
 	import { AVAILABILITY_LABELS, AVAILABILITY_ORDER, availabilityColor } from './availability';
 	import { wealthState } from './state.svelte';
 
@@ -170,6 +172,9 @@
 		];
 	});
 
+	let chartInstance: ApexCharts | null = $state(null);
+	const seriesNames = $derived(series.map((s) => s.name));
+
 	// Faint verticals on month starts to give the eye something to measure against. Beyond
 	// about 18 months there are too many to stay subtle, so they fall back to year starts.
 	const boundaries = $derived.by(() => {
@@ -273,6 +278,14 @@
 				},
 				markerClick: (_e: unknown, _c: unknown, o: { dataPointIndex: number }) => {
 					if (o.dataPointIndex >= 0) pickDate(o.dataPointIndex);
+				},
+				// apex toggles the series itself; this only keeps our list in step with it
+				legendClick: (_c: unknown, index: number) => {
+					const name = series[index]?.name;
+					if (!name) return;
+					wealthState.hiddenSeries = wealthState.hiddenSeries.includes(name)
+						? wealthState.hiddenSeries.filter((n) => n !== name)
+						: [...wealthState.hiddenSeries, name];
 				}
 			}
 		},
@@ -327,6 +340,13 @@
 				{/if}
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
+				{#if wealthState.split !== 'total'}
+					<SeriesToggle
+						instance={chartInstance}
+						names={seriesNames}
+						bind:hidden={wealthState.hiddenSeries}
+					/>
+				{/if}
 				<RangePicker bind:range={wealthState.range} />
 				<ToggleGroup
 					bind:value={wealthState.split}
@@ -343,7 +363,7 @@
 				{$historyStore.errors.map((e) => e.message).join(', ')}
 			</p>
 		{:else}
-			<Chart options={chartOptions} />
+			<Chart options={chartOptions} bind:instance={chartInstance} />
 		{/if}
 	</Card>
 

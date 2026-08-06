@@ -1,10 +1,18 @@
 <script lang="ts">
 	import { Card, Spinner } from 'flowbite-svelte';
+	import type ApexCharts from 'apexcharts';
 	import type { ApexOptions } from 'apexcharts';
 	import Chart from '$lib/Chart.svelte';
 	import RangePicker from './RangePicker.svelte';
+	import SeriesToggle from './SeriesToggle.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
-	import { overviewsStore, monthLabel, categoryColor, type OverviewsData } from './overviews';
+	import {
+		overviewsStore,
+		monthLabel,
+		monthTicks,
+		categoryColor,
+		type OverviewsData
+	} from './overviews';
 	import { categoriesState } from './state.svelte';
 
 	const euro = (cents: number) =>
@@ -28,6 +36,8 @@
 	});
 
 	const months = $derived(overviews?.months ?? []);
+
+	let barInstance: ApexCharts | null = $state(null);
 	const breakdown = $derived(overviews?.byCategory ?? []);
 
 	const pick = (t: { income: number; expenses: number }) =>
@@ -55,12 +65,33 @@
 		});
 	});
 
+	const barNames = $derived(bars.map((c) => c.name));
+
 	const barOptions = $derived({
-		chart: { type: 'bar', height: 340, toolbar: { show: false }, stacked: true },
+		chart: {
+			type: 'bar',
+			height: 340,
+			toolbar: { show: false },
+			stacked: true,
+			events: {
+				// apex toggles the series itself; this only keeps our list in step with it
+				legendClick: (_c: unknown, index: number) => {
+					const name = bars[index]?.name;
+					if (!name) return;
+					categoriesState.hiddenSeries = categoriesState.hiddenSeries.includes(name)
+						? categoriesState.hiddenSeries.filter((n) => n !== name)
+						: [...categoriesState.hiddenSeries, name];
+				}
+			}
+		},
 		series: bars.map((c) => ({ name: c.name, data: c.data })),
 		colors: bars.map((c) => c.color),
 		dataLabels: { enabled: false },
-		xaxis: { categories: months.map((m) => monthLabel(m.month)) },
+		xaxis: {
+			categories: months.map((m) => monthLabel(m.month)),
+			tickAmount: monthTicks(months.length),
+			labels: { rotate: -45, hideOverlappingLabels: true }
+		},
 		yaxis: { labels: { formatter: (v: number) => Math.round(v) + ' €' } },
 		// the tooltip inherits the axis formatter otherwise, which rounds away the cents
 		tooltip: { y: { formatter: (v: number) => euro(v * 100) } },
@@ -117,8 +148,15 @@
 		</p>
 	{:else}
 		<Card class="max-w-none p-4">
-			<h3 class="mb-2 text-lg font-semibold">Nach Kategorie je Monat</h3>
-			<Chart options={barOptions} />
+			<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+				<h3 class="text-lg font-semibold">Nach Kategorie je Monat</h3>
+				<SeriesToggle
+					instance={barInstance}
+					names={barNames}
+					bind:hidden={categoriesState.hiddenSeries}
+				/>
+			</div>
+			<Chart options={barOptions} bind:instance={barInstance} />
 		</Card>
 
 		<Card class="max-w-none p-4">

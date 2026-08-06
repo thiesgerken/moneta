@@ -19,6 +19,7 @@
 		integrationError,
 		errorColor,
 		monthLabel,
+		monthTicks,
 		type OverviewsData
 	} from './overviews';
 	import { overviewsState } from './state.svelte';
@@ -56,7 +57,11 @@
 		],
 		colors: ['#16a34a', '#dc2626'],
 		dataLabels: { enabled: false },
-		xaxis: { categories: months.map((o) => monthLabel(o.month)) },
+		xaxis: {
+			categories: months.map((o) => monthLabel(o.month)),
+			tickAmount: monthTicks(months.length),
+			labels: { rotate: -45, hideOverlappingLabels: true }
+		},
 		yaxis: { labels: { formatter: (v: number) => Math.round(v) + ' €' } },
 		// the tooltip inherits the axis formatter otherwise, which rounds away the cents
 		tooltip: { y: { formatter: (v: number) => euro(v * 100) } },
