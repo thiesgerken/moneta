@@ -9,7 +9,19 @@ use serde::{Deserialize, Serialize};
 
 use super::text_enum;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, GraphQLEnum, AsExpression, FromSqlRow)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    GraphQLEnum,
+    AsExpression,
+    FromSqlRow,
+)]
 #[diesel(sql_type = diesel::sql_types::Text)]
 pub enum AccountAvailability {
     Immediately,
@@ -18,6 +30,20 @@ pub enum AccountAvailability {
     Months,
     Years,
     Decades,
+}
+
+impl AccountAvailability {
+    /// Most liquid first. The variant order carries the meaning -- "available within days"
+    /// includes anything available sooner -- and a caller grouping by it needs that order
+    /// without depending on `HashMap` iteration.
+    pub const ORDERED: [Self; 6] = [
+        Self::Immediately,
+        Self::Days,
+        Self::Weeks,
+        Self::Months,
+        Self::Years,
+        Self::Decades,
+    ];
 }
 
 text_enum!(AccountAvailability {
