@@ -162,6 +162,47 @@
 	let chartInstance: ApexCharts | null = $state(null);
 	const seriesNames = $derived(series.map((s) => s.name));
 
+	/// The Stichtag marker, drawn onto the chart rather than declared in its options.
+	///
+	/// Changed options are applied by handing apex the whole set again, which rebuilds the
+	/// series — so moving this line would blink every marker on the chart, for a line that has
+	/// nothing to do with the data. (`redrawPaths: false` does not help; the markers go either
+	/// way.) The cost is that apex keeps only the annotations its options carry, so this has
+	/// to be re-drawn after anything that makes it re-render.
+	const STICHTAG = 'stichtag';
+	function drawStichtag(chart: ApexCharts | null) {
+		const at = new Date(wealthState.date).getTime();
+		if (!chart || Number.isNaN(at)) return;
+
+		try {
+			chart.removeAnnotation(STICHTAG);
+			chart.addXaxisAnnotation(
+				{
+					id: STICHTAG,
+					x: at,
+					borderColor: '#f05a28',
+					strokeDashArray: 0,
+					label: { text: 'Stichtag', style: { background: '#f05a28', color: '#fff' } }
+				},
+				false
+			);
+		} catch {
+			// the chart can be torn down between the instance being handed over and this
+			// running; apex throws rather than returning when it is
+		}
+	}
+
+	$effect(() => {
+		const chart = chartInstance;
+		void wealthState.date;
+		// hiding or showing a series re-renders the chart, which drops this line with it
+		void wealthState.hiddenSeries.length;
+
+		// a frame late, so it lands after whatever redraw prompted it rather than under it
+		const timer = setTimeout(() => drawStichtag(chart));
+		return () => clearTimeout(timer);
+	});
+
 	// Faint verticals on month starts to give the eye something to measure against. Beyond
 	// about 18 months there are too many to stay subtle, so they fall back to year starts.
 	const boundaries = $derived.by(() => {
@@ -295,20 +336,12 @@
 		})),
 		colors: series.map((s) => s.color),
 		annotations: {
-			xaxis: [
-				...boundaries.map((x) => ({
-					x,
-					borderColor: '#cbd5e1',
-					strokeDashArray: 3,
-					opacity: 0.5
-				})),
-				{
-					x: new Date(wealthState.date).getTime(),
-					borderColor: '#f05a28',
-					strokeDashArray: 0,
-					label: { text: 'Stichtag', style: { background: '#f05a28', color: '#fff' } }
-				}
-			]
+			xaxis: boundaries.map((x) => ({
+				x,
+				borderColor: '#cbd5e1',
+				strokeDashArray: 3,
+				opacity: 0.5
+			}))
 		},
 		dataLabels: { enabled: false },
 		stroke: { curve: 'smooth', width: 2 },
@@ -359,7 +392,7 @@
 					{$historyStore.errors.map((e) => e.message).join(', ')}
 				</p>
 			{:else}
-				<Chart options={chartOptions} bind:instance={chartInstance} />
+				<Chart options={chartOptions} bind:instance={chartInstance} onUpdated={drawStichtag} />
 			{/if}
 		</div>
 	</Card>
