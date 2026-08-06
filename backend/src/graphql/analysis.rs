@@ -16,15 +16,17 @@ use crate::models::rendering::{RenderedBalance, RenderedExpense};
 use crate::schema_views::{balances_rendered, expenses_rendered};
 
 use chrono::DateTime;
+use chrono::Datelike;
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel::sql_types::{Array, BigInt, Double, Nullable, Timestamptz};
+use diesel::sql_types::{Array, BigInt, Double, Integer, Nullable, Text, Timestamptz};
 use diesel_async::RunQueryDsl;
 use itertools::Itertools;
 use juniper::{FieldResult, GraphQLObject, graphql_object};
 
 use super::accounts::GraphQLAccount;
 use super::balances::GraphQLBalance;
+use super::categories::GraphQLCategory;
 use super::expenses::GraphQLExpense;
 
 #[derive(Debug, Clone, GraphQLObject)]
@@ -76,6 +78,112 @@ pub struct Prepayment {
     pub remaining: f64,
 }
 
+/// What one category absorbed over a period.
+///
+/// An expense split across categories contributes its weighted share to each, so these sum to
+/// the period's total. `category` is null for the expenses that carry no categorization at
+/// all — dropping them would make the parts add up to less than the whole.
+#[derive(Debug, Clone, GraphQLObject)]
+#[graphql(context = Context)]
+pub struct CategoryTotal {
+    pub category: Option<GraphQLCategory>,
+    pub income: f64,
+    pub expenses: f64,
+}
+
+/// A category with the individual expenses behind it, for the treemap's inner level.
+#[derive(Debug, Clone, GraphQLObject)]
+#[graphql(context = Context)]
+pub struct CategoryBreakdown {
+    pub category: Option<GraphQLCategory>,
+    pub income: f64,
+    pub expenses: f64,
+    /// the biggest by absolute amount, so one call serves both the income and the spending
+    /// view; a category holding both signs shows fewer of each
+    pub biggest: Vec<CategoryExpense>,
+    /// everything `biggest` left out, as one slice, so the treemap still sums to the total
+    pub rest_income: f64,
+    pub rest_expenses: f64,
+}
+
+#[derive(Debug, Clone, GraphQLObject)]
+#[graphql(context = Context)]
+pub struct CategoryExpense {
+    pub expense_id: Uuid,
+    pub title: String,
+    /// this expense's weighted share of the category, in cents
+    pub amount: f64,
+}
+
+/// One account's movement across a month.
+#[derive(Debug, Clone, GraphQLObject)]
+#[graphql(context = Context)]
+pub struct AccountOverview {
+    pub account: GraphQLAccount,
+    pub start_amount: f64,
+    pub end_amount: f64,
+    /// `startAmount` plus the month's transactions — see [`MonthOverview::integrated_end_total`]
+    pub integrated_end_amount: f64,
+    pub income: f64,
+    pub expenses: f64,
+    pub expense_count: i32,
+}
+
+#[derive(Debug, Clone, GraphQLObject)]
+#[graphql(context = Context)]
+pub struct MonthOverview {
+    /// midnight on the first of the month, UTC
+    pub month: DateTime<Utc>,
+    pub start_total: f64,
+    /// what the recorded balances say at the end of the month
+    pub end_total: f64,
+    /// `startTotal` plus everything booked during the month.
+    ///
+    /// The gap to `endTotal` is MoneyDB's *Integrationsfehler*. It does not mean the
+    /// arithmetic drifted — it means an expense is missing, which is the whole point of
+    /// showing it.
+    pub integrated_end_total: f64,
+    pub income: f64,
+    pub expenses: f64,
+    pub expense_count: i32,
+    pub by_account: Vec<AccountOverview>,
+    pub by_category: Vec<CategoryTotal>,
+}
+
+#[derive(Debug, Clone, GraphQLObject)]
+#[graphql(context = Context)]
+pub struct Overviews {
+    pub months: Vec<MonthOverview>,
+    /// the whole range at once, for the treemap
+    pub by_category: Vec<CategoryBreakdown>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, juniper::GraphQLEnum)]
+pub enum StatementEntryKind {
+    /// the computed balance the range opens on
+    Opening,
+    Expense,
+    /// a balance that was actually recorded, which re-anchors the running total
+    Balance,
+}
+
+#[derive(Debug, Clone, GraphQLObject)]
+#[graphql(context = Context)]
+pub struct StatementEntry {
+    pub kind: StatementEntryKind,
+    pub date: DateTime<Utc>,
+    pub title: String,
+    pub store: String,
+    pub expense_id: Option<Uuid>,
+    /// this account's share, in cents; null on the rows that only assert a balance
+    pub amount: Option<f64>,
+    /// running total, re-anchored whenever a recorded balance disagrees with it
+    pub balance: f64,
+    /// on a recorded balance, what it says minus what was carried into it. A non-zero value
+    /// is the signal that an expense is missing.
+    pub drift: Option<f64>,
+}
+
 #[derive(Debug, QueryableByName)]
 struct SimulatedRow {
     #[diesel(sql_type = BigInt)]
@@ -96,6 +204,94 @@ const SIMULATE: &str = r#"
 SELECT sample_idx, account_id, balance_id, amount, expense_count
 FROM simulate_balances($1, $2::timestamptz[], $3::uuid)
 "#;
+
+#[derive(Debug, QueryableByName)]
+struct MonthTotalRow {
+    #[diesel(sql_type = Timestamptz)]
+    month: DateTime<Utc>,
+    #[diesel(sql_type = diesel::sql_types::Uuid)]
+    account_id: Uuid,
+    #[diesel(sql_type = Double)]
+    income: f64,
+    #[diesel(sql_type = Double)]
+    expenses: f64,
+    #[diesel(sql_type = BigInt)]
+    expense_count: i64,
+}
+
+#[derive(Debug, QueryableByName)]
+struct CategoryTotalRow {
+    #[diesel(sql_type = Timestamptz)]
+    month: DateTime<Utc>,
+    #[diesel(sql_type = Nullable<diesel::sql_types::Uuid>)]
+    category_id: Option<Uuid>,
+    #[diesel(sql_type = Double)]
+    income: f64,
+    #[diesel(sql_type = Double)]
+    expenses: f64,
+}
+
+#[derive(Debug, QueryableByName)]
+struct CategoryExpenseRow {
+    #[diesel(sql_type = Nullable<diesel::sql_types::Uuid>)]
+    category_id: Option<Uuid>,
+    #[diesel(sql_type = diesel::sql_types::Uuid)]
+    expense_id: Uuid,
+    #[diesel(sql_type = Text)]
+    title: String,
+    #[diesel(sql_type = Double)]
+    amount: f64,
+}
+
+#[derive(Debug, QueryableByName)]
+struct StatementRow {
+    #[diesel(sql_type = Text)]
+    kind: String,
+    #[diesel(sql_type = Timestamptz)]
+    entry_date: DateTime<Utc>,
+    #[diesel(sql_type = Text)]
+    title: String,
+    #[diesel(sql_type = Text)]
+    store: String,
+    #[diesel(sql_type = Nullable<diesel::sql_types::Uuid>)]
+    expense_id: Option<Uuid>,
+    #[diesel(sql_type = Nullable<Double>)]
+    amount: Option<f64>,
+    #[diesel(sql_type = Double)]
+    balance: f64,
+    #[diesel(sql_type = Nullable<Double>)]
+    drift: Option<f64>,
+}
+
+const MONTH_TOTALS: &str = r#"
+SELECT month, account_id, income, expenses, expense_count
+FROM analysis_month_totals($1, $2, $3)
+"#;
+
+const CATEGORY_TOTALS: &str = r#"
+SELECT month, category_id, income, expenses
+FROM analysis_category_totals($1, $2, $3)
+"#;
+
+const CATEGORY_EXPENSES: &str = r#"
+SELECT category_id, expense_id, title, amount
+FROM analysis_category_expenses($1, $2, $3, $4)
+"#;
+
+const STATEMENT: &str = r#"
+SELECT kind, entry_date, title, store, expense_id, amount, balance, drift
+FROM analysis_statement($1, $2, $3, $4)
+"#;
+
+/// How many expenses the treemap shows inside one category before the remainder collapses
+/// into a single slice. Past a dozen the labels stop fitting anyway.
+const TREEMAP_EXPENSES_PER_CATEGORY: i32 = 12;
+
+/// Ceiling on how many months one `overviews` call may cover.
+///
+/// Each month costs a balance simulation at its start plus one at the range end, and the
+/// table is read a month at a time; a request for a century is a caller that has lost track.
+const MAX_MONTHS: usize = 600;
 
 /// Ceiling on how many dates one request may ask to be simulated.
 ///
@@ -265,6 +461,291 @@ impl AnalysisQuery {
             .sorted_by(|a, b| a.remaining.total_cmp(&b.remaining))
             .collect())
     }
+
+    /// Month-by-month income, spending and wealth across a range.
+    ///
+    /// `from` and `to` are snapped outwards to whole months, so asking for the middle of a
+    /// month gives you that whole month rather than a fragment of one.
+    ///
+    /// Amounts are `calculatedAmount` — the movement on the account — rather than
+    /// `effectiveAmount`. The totals have to reconcile with the balances, and those are
+    /// account balances rather than ownership-weighted shares of them; mixing the two would
+    /// make the integration error meaningless.
+    pub async fn overviews(
+        context: &Context,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+    ) -> FieldResult<Overviews> {
+        let user_id = require_user(context).await?;
+
+        // one more boundary than there are months: month i runs [starts[i], starts[i + 1])
+        let starts = month_starts(from, to)?;
+        let (range_from, range_to) = (starts[0], starts[starts.len() - 1]);
+
+        let simulated = simulate(context, &starts, None).await?;
+        let conn = &mut context.conn().await?;
+
+        let month_rows: Vec<MonthTotalRow> = diesel::sql_query(MONTH_TOTALS)
+            .bind::<diesel::sql_types::Uuid, _>(user_id)
+            .bind::<Timestamptz, _>(range_from)
+            .bind::<Timestamptz, _>(range_to)
+            .load(conn)
+            .await?;
+
+        let category_rows: Vec<CategoryTotalRow> = diesel::sql_query(CATEGORY_TOTALS)
+            .bind::<diesel::sql_types::Uuid, _>(user_id)
+            .bind::<Timestamptz, _>(range_from)
+            .bind::<Timestamptz, _>(range_to)
+            .load(conn)
+            .await?;
+
+        let expense_rows: Vec<CategoryExpenseRow> = diesel::sql_query(CATEGORY_EXPENSES)
+            .bind::<diesel::sql_types::Uuid, _>(user_id)
+            .bind::<Timestamptz, _>(range_from)
+            .bind::<Timestamptz, _>(range_to)
+            .bind::<Integer, _>(TREEMAP_EXPENSES_PER_CATEGORY)
+            .load(conn)
+            .await?;
+
+        let accounts = context
+            .account_loader
+            .load_many(simulated.iter().map(|r| r.account_id).unique().collect())
+            .await;
+        let categories = context
+            .category_loader
+            .load_many(
+                category_rows
+                    .iter()
+                    .filter_map(|r| r.category_id)
+                    .unique()
+                    .collect(),
+            )
+            .await;
+
+        // (sample index, account) -> the balance there, so a month can look up both its ends
+        let mut balances: HashMap<(usize, Uuid), f64> = HashMap::new();
+        for row in &simulated {
+            balances.insert((row.sample_idx as usize - 1, row.account_id), row.amount);
+        }
+
+        let mut months = Vec::with_capacity(starts.len() - 1);
+        for (index, month) in starts.iter().take(starts.len() - 1).enumerate() {
+            let mut by_account = Vec::new();
+            let (mut income, mut expenses, mut expense_count) = (0.0, 0.0, 0);
+
+            for (account_id, account) in accounts.iter().sorted_by_key(|(_, a)| a.name.clone()) {
+                let totals = month_rows
+                    .iter()
+                    .find(|r| r.month == *month && r.account_id == *account_id);
+
+                let start_amount = *balances.get(&(index, *account_id)).unwrap_or(&0.0);
+                let end_amount = *balances.get(&(index + 1, *account_id)).unwrap_or(&0.0);
+                let moved = totals.map_or(0.0, |t| t.income + t.expenses);
+
+                income += totals.map_or(0.0, |t| t.income);
+                expenses += totals.map_or(0.0, |t| t.expenses);
+                expense_count += totals.map_or(0, |t| t.expense_count);
+
+                by_account.push(AccountOverview {
+                    account: GraphQLAccount::new(account.clone()),
+                    start_amount,
+                    end_amount,
+                    integrated_end_amount: start_amount + moved,
+                    income: totals.map_or(0.0, |t| t.income),
+                    expenses: totals.map_or(0.0, |t| t.expenses),
+                    expense_count: totals.map_or(0, |t| t.expense_count) as i32,
+                });
+            }
+
+            let start_total: f64 = by_account.iter().map(|a| a.start_amount).sum();
+            let end_total: f64 = by_account.iter().map(|a| a.end_amount).sum();
+
+            months.push(MonthOverview {
+                month: *month,
+                start_total,
+                end_total,
+                integrated_end_total: start_total + income + expenses,
+                income,
+                expenses,
+                expense_count: expense_count as i32,
+                by_account,
+                by_category: category_rows
+                    .iter()
+                    .filter(|r| r.month == *month)
+                    .map(|r| CategoryTotal {
+                        category: r
+                            .category_id
+                            .and_then(|id| categories.get(&id))
+                            .map(|c| GraphQLCategory::new(c.clone())),
+                        income: r.income,
+                        expenses: r.expenses,
+                    })
+                    .sorted_by(|a, b| a.expenses.total_cmp(&b.expenses))
+                    .collect(),
+            });
+        }
+
+        // whole range at once for the treemap, which is not a sum of the monthly ones: the
+        // biggest expenses of a year are not the biggest of each of its months
+        let mut by_category: Vec<CategoryBreakdown> = category_rows
+            .iter()
+            .map(|r| r.category_id)
+            .unique()
+            .map(|category_id| {
+                let (income, expenses) = category_rows
+                    .iter()
+                    .filter(|r| r.category_id == category_id)
+                    .fold((0.0, 0.0), |(i, e), r| (i + r.income, e + r.expenses));
+
+                let biggest: Vec<CategoryExpense> = expense_rows
+                    .iter()
+                    .filter(|r| r.category_id == category_id)
+                    .map(|r| CategoryExpense {
+                        expense_id: r.expense_id,
+                        title: r.title.clone(),
+                        amount: r.amount,
+                    })
+                    .collect();
+
+                CategoryBreakdown {
+                    category: category_id
+                        .and_then(|id| categories.get(&id))
+                        .map(|c| GraphQLCategory::new(c.clone())),
+                    income,
+                    expenses,
+                    rest_income: income
+                        - biggest
+                            .iter()
+                            .filter(|e| e.amount > 0.0)
+                            .map(|e| e.amount)
+                            .sum::<f64>(),
+                    rest_expenses: expenses
+                        - biggest
+                            .iter()
+                            .filter(|e| e.amount < 0.0)
+                            .map(|e| e.amount)
+                            .sum::<f64>(),
+                    biggest,
+                }
+            })
+            .collect();
+
+        // biggest spender first, which is the order a treemap wants to lay out in
+        by_category.sort_by(|a, b| a.expenses.total_cmp(&b.expenses));
+
+        Ok(Overviews {
+            months,
+            by_category,
+        })
+    }
+
+    /// One account's ledger over a range, as a bank statement reads it.
+    ///
+    /// Not the expense list with a filter: the computed opening balance, the expenses and the
+    /// balances actually recorded are interleaved into one sequence, and a recorded balance
+    /// re-anchors the running total. Where it disagrees with the total carried into it, the
+    /// gap comes back as `drift` — that is the signal that an expense is missing.
+    pub async fn statement(
+        context: &Context,
+        account_id: Uuid,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+    ) -> FieldResult<Vec<StatementEntry>> {
+        let user_id = require_user(context).await?;
+
+        let account = context.account_loader.try_load(account_id).await?;
+        if account.user_id != user_id {
+            return Err(format!(
+                "Not going to tell you the statement for account {} that isn't yours!",
+                account.id
+            )
+            .into());
+        }
+
+        if to < from {
+            return Err(format!("Statement range ends ({to}) before it starts ({from})").into());
+        }
+
+        let conn = &mut context.conn().await?;
+        let rows: Vec<StatementRow> = diesel::sql_query(STATEMENT)
+            .bind::<diesel::sql_types::Uuid, _>(user_id)
+            .bind::<diesel::sql_types::Uuid, _>(account_id)
+            .bind::<Timestamptz, _>(from)
+            .bind::<Timestamptz, _>(to)
+            .load(conn)
+            .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                Ok(StatementEntry {
+                    kind: match row.kind.as_str() {
+                        "opening" => StatementEntryKind::Opening,
+                        "balance" => StatementEntryKind::Balance,
+                        "expense" => StatementEntryKind::Expense,
+                        other => return Err(format!("Unknown statement entry kind {other}").into()),
+                    },
+                    date: row.entry_date,
+                    title: row.title,
+                    store: row.store,
+                    expense_id: row.expense_id,
+                    amount: row.amount,
+                    balance: row.balance,
+                    drift: row.drift,
+                })
+            })
+            .collect()
+    }
+}
+
+/// The first of every month the range touches, plus the first of the month after it.
+///
+/// One more boundary than there are months, because a month needs both its ends: month `i`
+/// runs from `starts[i]` to `starts[i + 1]`, and the balance at each boundary is one sample of
+/// the same simulation.
+fn month_starts(from: DateTime<Utc>, to: DateTime<Utc>) -> FieldResult<Vec<DateTime<Utc>>> {
+    if to < from {
+        return Err(format!("Overview range ends ({to}) before it starts ({from})").into());
+    }
+
+    let start_of = |d: DateTime<Utc>| -> DateTime<Utc> {
+        DateTime::from_naive_utc_and_offset(
+            d.date_naive()
+                .with_day(1)
+                .expect("the 1st always exists")
+                .into(),
+            Utc,
+        )
+    };
+    let next_month = |d: DateTime<Utc>| -> DateTime<Utc> {
+        let (year, month) = (d.year(), d.month());
+        let (year, month) = if month == 12 {
+            (year + 1, 1)
+        } else {
+            (year, month + 1)
+        };
+        DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(year, month, 1)
+                .expect("the 1st of any month exists")
+                .into(),
+            Utc,
+        )
+    };
+
+    let mut starts = vec![start_of(from)];
+    // `to` inside a month means that whole month is wanted, so the boundary after it is the
+    // start of the following one
+    let last = next_month(to);
+    while *starts.last().expect("seeded above") < last {
+        if starts.len() > MAX_MONTHS {
+            return Err(format!(
+                "Overview from {from} to {to} covers more than {MAX_MONTHS} months"
+            )
+            .into());
+        }
+        starts.push(next_month(*starts.last().expect("seeded above")));
+    }
+
+    Ok(starts)
 }
 
 /// Linear accrual across the booking period, as [`AnalysisQuery::prepayments`] describes.

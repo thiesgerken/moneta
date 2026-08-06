@@ -401,6 +401,8 @@ impl ExpenseQuery {
         flags: Option<ExpenseFlagFilter>,
         booked_after: Option<DateTime<Utc>>,
         booked_before: Option<DateTime<Utc>>,
+        valued_after: Option<DateTime<Utc>>,
+        valued_before: Option<DateTime<Utc>>,
         sort_by: Option<ExpenseSortField>,
         sort_dir: Option<SortDirection>,
     ) -> FieldResult<ExpenseConnection> {
@@ -478,6 +480,30 @@ impl ExpenseQuery {
             }
             if let Some(before) = booked_before {
                 query = query.filter(expenses_rendered::booking_end.le(before));
+            }
+
+            // The booking period is when an expense was *for*; these two are when the money
+            // actually moved. A prepayment's period spans a year while its payment lands on
+            // one day, so a caller asking "what happened in March" wants these.
+            if let Some(after) = valued_after {
+                query = query.filter(
+                    expenses_rendered::id.eq_any(
+                        expense_transactions_rendered::table
+                            .filter(expense_transactions_rendered::user_id.eq(user_id))
+                            .filter(expense_transactions_rendered::date.ge(after))
+                            .select(expense_transactions_rendered::expense_id),
+                    ),
+                );
+            }
+            if let Some(before) = valued_before {
+                query = query.filter(
+                    expenses_rendered::id.eq_any(
+                        expense_transactions_rendered::table
+                            .filter(expense_transactions_rendered::user_id.eq(user_id))
+                            .filter(expense_transactions_rendered::date.lt(before))
+                            .select(expense_transactions_rendered::expense_id),
+                    ),
+                );
             }
 
             query

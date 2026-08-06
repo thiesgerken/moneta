@@ -72,6 +72,13 @@ fn main() {
         initialize_logging(config.verbosity);
         debug!("config={:?}", config);
 
+        // before the database is touched: dumping the schema does not need one, and needing
+        // one is exactly what makes regenerating frontend/schema.graphql awkward
+        if matches.subcommand_matches("schema").is_some() {
+            println!("{}", graphql::sdl());
+            return;
+        }
+
         moneta::migrate(&config.database.url)
             .await
             .expect("error migrating the database");

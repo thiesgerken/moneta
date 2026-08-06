@@ -37,7 +37,9 @@ uuid = { version = "1", features = ["v7", "serde"] }
 dataloader = { version = "0.18", default-features = false, features = [
     "runtime-tokio",
 ] }
-juniper = { version = "0.17", features = ["chrono", "uuid"] }
+# schema-language is what `moneta schema` prints; without it the SDL has to come from a
+# running server, which means a database, to regenerate a file that depends on neither
+juniper = { version = "0.17", features = ["chrono", "schema-language", "uuid"] }
 juniper_rocket = "0.10"
 dotenvy = "0.15"
 rocket_cors = "0.6.0"

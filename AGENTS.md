@@ -110,8 +110,11 @@ export must already exist in moneta or it panics. `--clear` wipes everything *ex
 exists — the request url now comes from `houdini.config.js` and is relative. It is still set
 in `docker-compose.yaml` and read by the frontend `dev` script; neither has any effect.
 
-**`frontend/schema.graphql` is generated** by `pnpm exec houdini pull-schema` (needs the
-backend running) and is prettier-ignored. Don't hand-edit it, and don't reformat it.
+**`frontend/schema.graphql` is generated** by `cargo run -- schema > ../frontend/schema.graphql`
+and is prettier-ignored. Don't hand-edit it. `houdini pull-schema` produces the same schema but
+needs a running backend and therefore a database, which is a lot of setup for a file that
+depends on neither; it also sorts arguments alphabetically, so switching between the two
+reformats the whole file. Stay on `cargo run -- schema`.
 
 **Component queries do not load themselves.** houdini 2 removed `@load`, the `_<Name>Variables`
 convention and route-level `+page.gql` codegen. Every query needs an explicit
@@ -138,6 +141,7 @@ data is therefore client-side only; there is no SSR of query results.
 - CORS is `AllowedOrigins::all()` with `allow_credentials(true)` in `graphql/mod.rs`, and
   `docker-compose.yaml` carries a committed `MONETA__API__SECRET_KEY`. Both are known and
   accepted for now — the deployment is private infrastructure.
-- `/analysis` is half real: Vermögen and Vorauszahlungen query the backend, while Monate,
-  Kategorien, Kontoauszug and Kalender still render `frontend/src/lib/analysis_mock.ts`.
-  `analysis.overviews` and `analysis.statement` are what the other four are waiting on.
+- `/analysis` reads real data throughout and `analysis_mock.ts` is gone. What is still open is
+  which views should offer a transaction-date/booking-period toggle — everything analytical
+  follows transaction dates today, and `expenses.list` grew `valuedAfter`/`valuedBefore` for
+  exactly that axis.
