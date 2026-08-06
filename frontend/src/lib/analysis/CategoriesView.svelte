@@ -1,22 +1,23 @@
 <script lang="ts">
-	import { Card, Input, Label, Spinner } from 'flowbite-svelte';
+	import { Card, Spinner } from 'flowbite-svelte';
 	import type { ApexOptions } from 'apexcharts';
 	import Chart from '$lib/Chart.svelte';
+	import RangePicker from './RangePicker.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import { overviewsStore, monthLabel, categoryColor } from './overviews';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
-	const iso = (d: Date) => d.toISOString().slice(0, 10);
-
-	const today = new Date();
-	let from = $state(iso(new Date(today.getFullYear() - 1, today.getMonth(), 1)));
-	let to = $state(iso(today));
+	let span = $state('all');
+	let from: Date | undefined = $state();
+	let to: Date | undefined = $state();
 	let sign = $state('expenses');
 
+	// undefined until the picker knows what "Alles" means
 	$effect(() => {
-		void overviewsStore.fetch({ variables: { from: new Date(from), to: new Date(to) } });
+		if (!from || !to) return;
+		void overviewsStore.fetch({ variables: { from, to } });
 	});
 
 	const overviews = $derived($overviewsStore.data?.analysis.overviews);
@@ -91,14 +92,7 @@
 
 <div class="space-y-4">
 	<div class="flex flex-wrap items-end gap-4">
-		<Label class="space-y-2">
-			<span>Von</span>
-			<Input type="date" bind:value={from} class="w-44" />
-		</Label>
-		<Label class="space-y-2">
-			<span>Bis</span>
-			<Input type="date" bind:value={to} class="w-44" />
-		</Label>
+		<RangePicker bind:value={span} bind:from bind:to />
 		<ToggleGroup
 			bind:value={sign}
 			options={[

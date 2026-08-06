@@ -8,26 +8,25 @@
 		TableHead,
 		TableHeadCell,
 		Badge,
-		Input,
-		Label,
 		Spinner
 	} from 'flowbite-svelte';
 	import type { ApexOptions } from 'apexcharts';
 	import { resolve } from '$app/paths';
 	import Chart from '$lib/Chart.svelte';
+	import RangePicker from './RangePicker.svelte';
 	import { overviewsStore, integrationError, errorColor, monthLabel } from './overviews';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
-	const iso = (d: Date) => d.toISOString().slice(0, 10);
+	let span = $state('all');
+	let from: Date | undefined = $state();
+	let to: Date | undefined = $state();
 
-	const today = new Date();
-	let from = $state(iso(new Date(today.getFullYear() - 1, today.getMonth(), 1)));
-	let to = $state(iso(today));
-
+	// undefined until the picker knows what "Alles" means
 	$effect(() => {
-		void overviewsStore.fetch({ variables: { from: new Date(from), to: new Date(to) } });
+		if (!from || !to) return;
+		void overviewsStore.fetch({ variables: { from, to } });
 	});
 
 	const months = $derived($overviewsStore.data?.analysis.overviews.months ?? []);
@@ -50,14 +49,7 @@
 
 <div class="space-y-4">
 	<div class="flex flex-wrap items-end gap-4">
-		<Label class="space-y-2">
-			<span>Von</span>
-			<Input type="date" bind:value={from} class="w-44" />
-		</Label>
-		<Label class="space-y-2">
-			<span>Bis</span>
-			<Input type="date" bind:value={to} class="w-44" />
-		</Label>
+		<RangePicker bind:value={span} bind:from bind:to />
 		{#if $overviewsStore.fetching}
 			<Spinner size="5" />
 		{/if}

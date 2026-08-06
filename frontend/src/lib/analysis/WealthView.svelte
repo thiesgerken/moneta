@@ -10,7 +10,6 @@
 		Input,
 		Label,
 		Button,
-		Select,
 		Spinner
 	} from 'flowbite-svelte';
 	import { RefreshOutline } from 'flowbite-svelte-icons';
@@ -18,6 +17,7 @@
 	import type { ApexOptions } from 'apexcharts';
 	import Chart from '$lib/Chart.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
+	import RangePicker from './RangePicker.svelte';
 	import { AVAILABILITY_LABELS, AVAILABILITY_ORDER, availabilityColor } from './availability';
 
 	const euro = (cents: number) =>
@@ -28,63 +28,30 @@
 	let date = $state(new Date().toISOString().slice(0, 10));
 	let split = $state('total');
 	let span = $state('all');
-
-	const SPANS = [
-		{ value: '6m', name: 'Letzte 6 Monate', months: 6 },
-		{ value: '1y', name: 'Letztes Jahr', months: 12 },
-		{ value: '5y', name: 'Letzte 5 Jahre', months: 60 },
-		{ value: '10y', name: 'Letzte 10 Jahre', months: 120 },
-		{ value: 'all', name: 'Alles', months: null }
-	];
-
-	// Where the data starts, so "Alles" means the whole history rather than a guess. Sorted by
-	// booking start rather than by a transaction date, which is not a sort the list offers --
-	// for an imported expense the two are the same day anyway.
-	const firstExpenseStore = graphql(`
-		query AnalysisFirstExpense {
-			expenses {
-				list(limit: 1, sortBy: BOOKING_START, sortDir: ASC) {
-					edges {
-						node {
-							id
-							bookingStart
-						}
-					}
-				}
-			}
-		}
-	`);
-
-	$effect(() => {
-		void firstExpenseStore.fetch();
-	});
-
-	const dataStart = $derived(
-		$firstExpenseStore.data?.expenses.list.edges[0]?.node.bookingStart?.getTime()
-	);
-	// resolved, whether or not it found anything — an empty database has no first expense
-	const dataStartKnown = $derived($firstExpenseStore.data != null);
-
-	const presetRange = $derived.by(() => {
-		const max = Date.now();
-		const months = SPANS.find((s) => s.value === span)?.months ?? null;
-		if (months === null) return { min: dataStart ?? max - 365 * DAY, max };
-
-		// built rather than mutated: a negative month rolls into the previous year on its own
-		const now = new Date(max);
-		const from = new Date(now.getFullYear(), now.getMonth() - months, now.getDate());
-		return { min: from.getTime(), max };
-	});
+	let presetFrom: Date | undefined = $state();
+	let presetTo: Date | undefined = $state();
 
 	// Zooming overrides the preset until it is reset or the preset changes.
 	let range: { min: number; max: number } | null = $state(null);
+
+	// a preset chooses the window outright, so a zoom taken before it is stale
+	let lastSpan: string | undefined;
+	$effect(() => {
+		if (span === lastSpan) return;
+		lastSpan = span;
+		range = null;
+	});
+
+	const presetRange = $derived(
+		presetFrom && presetTo ? { min: presetFrom.getTime(), max: presetTo.getTime() } : null
+	);
 	const visible = $derived(range ?? presetRange);
 
 	// The backend caps the point count, and asking for more than the chart can draw only
 	// makes the response bigger; ~120 is what fits across a screen.
 	const TARGET_POINTS = 120;
 	const stepDays = $derived(
-		Math.max(1, Math.ceil((visible.max - visible.min) / DAY / TARGET_POINTS))
+		visible ? Math.max(1, Math.ceil((visible.max - visible.min) / DAY / TARGET_POINTS)) : 30
 	);
 
 	const zoomedIn = $derived(range !== null);
@@ -148,9 +115,8 @@
 	let history = $state<HistoryData | null>(null);
 
 	$effect(() => {
-		// "Alles" cannot ask for anything sensible until it knows where the data starts, and
-		// guessing a window meanwhile means two queries racing on every page load
-		if (span === 'all' && !dataStartKnown) return;
+		// undefined until the picker knows what "Alles" means
+		if (!visible) return;
 
 		const request = ++latestRequest;
 		const variables = {
@@ -213,6 +179,7 @@
 	// Faint verticals on month starts to give the eye something to measure against. Beyond
 	// about 18 months there are too many to stay subtle, so they fall back to year starts.
 	const boundaries = $derived.by(() => {
+		if (!visible) return [];
 		const yearly = visible.max - visible.min > 550 * DAY;
 		const from = new Date(visible.min);
 		const year = from.getFullYear();
@@ -228,6 +195,15 @@
 		}
 		return out;
 	});
+
+	/// Clicking a point picks it as the Stichtag for the simulation below.
+	function pickDate(index: number) {
+		const at = dates[index];
+		if (at === undefined) return;
+		const d = new Date(at);
+		// local parts, so the date input does not shift a day against the displayed one
+		date = `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, '0')}-${`${d.getDate()}`.padStart(2, '0')}`;
+	}
 
 	const chartOptions = $derived({
 		chart: {
@@ -257,6 +233,13 @@
 						o.xaxis.min == null || o.xaxis.max == null
 							? null
 							: { min: o.xaxis.min, max: o.xaxis.max };
+				},
+				// -1 when the click landed on empty plot area rather than on a point
+				click: (_e: unknown, _c: unknown, o: { dataPointIndex: number }) => {
+					if (o.dataPointIndex >= 0) pickDate(o.dataPointIndex);
+				},
+				markerClick: (_e: unknown, _c: unknown, o: { dataPointIndex: number }) => {
+					if (o.dataPointIndex >= 0) pickDate(o.dataPointIndex);
 				}
 			}
 		},
@@ -266,18 +249,26 @@
 		})),
 		colors: series.map((s) => s.color),
 		annotations: {
-			xaxis: boundaries.map((x) => ({
-				x,
-				borderColor: '#cbd5e1',
-				strokeDashArray: 3,
-				opacity: 0.5
-			}))
+			xaxis: [
+				...boundaries.map((x) => ({
+					x,
+					borderColor: '#cbd5e1',
+					strokeDashArray: 3,
+					opacity: 0.5
+				})),
+				{
+					x: new Date(date).getTime(),
+					borderColor: '#f05a28',
+					strokeDashArray: 0,
+					label: { text: 'Stichtag', style: { background: '#f05a28', color: '#fff' } }
+				}
+			]
 		},
 		dataLabels: { enabled: false },
 		stroke: { curve: 'smooth', width: 2 },
 		markers: { size: 3, strokeWidth: 0, hover: { size: 6 } },
 		fill: { type: 'gradient', gradient: { opacityFrom: 0.4, opacityTo: 0.05 } },
-		xaxis: { type: 'datetime', min: visible.min, max: visible.max },
+		xaxis: { type: 'datetime', min: visible?.min, max: visible?.max },
 		yaxis: { labels: { formatter: (v: number) => Math.round(v / 1000) + 'k €' } },
 		tooltip: {
 			x: { format: stepDays < 28 ? 'dd.MM.yyyy' : 'MMM yyyy' },
@@ -289,13 +280,6 @@
 </script>
 
 <div class="space-y-4">
-	<div class="flex flex-wrap items-end gap-4">
-		<Label class="space-y-2">
-			<span>Stichtag</span>
-			<Input type="date" bind:value={date} class="w-48" />
-		</Label>
-	</div>
-
 	<Card class="max-w-none p-4">
 		<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
 			<div class="flex flex-wrap items-center gap-3">
@@ -310,17 +294,7 @@
 				{/if}
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
-				<Select
-					value={span}
-					onchange={(e) => {
-						// a preset picks the window outright, so a zoom that predates it is stale
-						span = (e.target as HTMLSelectElement).value;
-						range = null;
-					}}
-					items={SPANS.map((s) => ({ value: s.value, name: s.name }))}
-					size="sm"
-					class="w-44"
-				/>
+				<RangePicker bind:value={span} bind:from={presetFrom} bind:to={presetTo} />
 				<ToggleGroup
 					bind:value={split}
 					options={[
@@ -337,8 +311,21 @@
 			</p>
 		{:else}
 			<Chart options={chartOptions} />
+			<p class="mt-1 text-center text-xs text-gray-500 dark:text-gray-400">
+				Ein Klick auf einen Punkt setzt den Stichtag für die Auswertung darunter.
+			</p>
 		{/if}
 	</Card>
+
+	<div class="flex flex-wrap items-end gap-4">
+		<Label class="space-y-2">
+			<span>Stichtag</span>
+			<Input type="date" bind:value={date} class="w-48" />
+		</Label>
+		<p class="pb-2 text-sm text-gray-500 dark:text-gray-400">
+			gilt für die Verfügbarkeiten und die berechneten Kontostände
+		</p>
+	</div>
 
 	<div class="grid gap-4 md:grid-cols-4">
 		{#each availabilityTotals as a (a.availability)}
