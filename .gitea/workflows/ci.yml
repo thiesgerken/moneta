@@ -91,7 +91,7 @@ jobs:
       - name: Login to Gitea Container Registry
         uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3
         with:
-          registry: git.gerken.haus
+          registry: gitea.gerken.haus
           username: thies
           password: ${{ secrets.DOCKER_REGISTRY_GITEA }}
 
@@ -100,8 +100,8 @@ jobs:
         with:
           context: ./backend
           push: true
-          tags: git.gerken.haus/thies/moneta/backend:${{ github.ref_name }}
-          cache-from: type=registry,ref=git.gerken.haus/thies/moneta/backend:${{ github.ref_name }}
+          tags: gitea.gerken.haus/thies/moneta/backend:${{ github.ref_name }}
+          cache-from: type=registry,ref=gitea.gerken.haus/thies/moneta/backend:${{ github.ref_name }}
           cache-to: type=inline
 
       - name: Build and push the frontend
@@ -109,6 +109,6 @@ jobs:
         with:
           context: ./frontend
           push: true
-          tags: git.gerken.haus/thies/moneta/frontend:${{ github.ref_name }}
-          cache-from: type=registry,ref=git.gerken.haus/thies/moneta/frontend:${{ github.ref_name }}
+          tags: gitea.gerken.haus/thies/moneta/frontend:${{ github.ref_name }}
+          cache-from: type=registry,ref=gitea.gerken.haus/thies/moneta/frontend:${{ github.ref_name }}
           cache-to: type=inline

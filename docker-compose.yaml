@@ -2,7 +2,7 @@ services:
   backend:
     build:
       context: ./backend
-    image: git.gerken.haus/thies/moneta/backend:main
+    image: gitea.gerken.haus/thies/moneta/backend:main
     restart: unless-stopped
     expose:
       - 80
@@ -30,7 +30,7 @@ services:
   periodic:
     build:
       context: ./backend
-    image: git.gerken.haus/thies/moneta/backend:main
+    image: gitea.gerken.haus/thies/moneta/backend:main
     restart: unless-stopped
     depends_on:
       postgres:
@@ -44,7 +44,7 @@ services:
       replicas: 1
     build:
       context: ./frontend
-    image: git.gerken.haus/thies/moneta/frontend:main
+    image: gitea.gerken.haus/thies/moneta/frontend:main
     restart: unless-stopped
     expose:
       - 80
