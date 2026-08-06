@@ -6,6 +6,10 @@ services:
     restart: unless-stopped
     expose:
       - 80
+    ports:
+      # The port `cargo run -- serve` uses, so that `pnpm dev` reaches whichever of the two
+      # backends is running without being reconfigured. They cannot both have it.
+      - "127.0.0.1:8181:80"
     depends_on:
       postgres:
         condition: service_healthy

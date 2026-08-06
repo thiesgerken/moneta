@@ -17,14 +17,26 @@ cd backend  && cargo run -- serve           # API + graphiql on :8181
 cd frontend && pnpm install && pnpm dev     # UI on :5173, proxies /graphql to :8181
 ```
 
-You need at least one user before anything is visible:
+The full stack (traefik in front of backend, frontend and postgres) comes up with
+`docker compose up -d`, reachable on <http://localhost:8485>. It publishes the backend on
+8181 as well, so `pnpm dev` talks to it without any change — run one backend or the other,
+not both.
+
+You need at least one user before anything is visible, and importing needs every user the
+export mentions, `thies` and `kroesus`:
 
 ```sh
-cd backend && cargo run -- user --add <name>
+cargo run -- user --add <name>                     # or, against the compose stack:
+docker compose exec backend moneta user --add <name>
 ```
 
-The full stack (traefik in front of backend, frontend and postgres) comes up with
-`docker compose up -d`, reachable on <http://localhost:8485>.
+Importing from MoneyDB then takes the export on stdin. `--clear` wipes everything except
+the users:
+
+```sh
+cargo run -- import --clear < moneydb-export.json
+docker compose exec -T backend moneta import --clear < backend/moneydb-export.json
+```
 
 ### Configuration
 
