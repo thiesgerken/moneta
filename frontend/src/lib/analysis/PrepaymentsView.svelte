@@ -13,11 +13,10 @@
 		Spinner
 	} from 'flowbite-svelte';
 	import { graphql } from '$houdini';
+	import { prepaymentsState } from './state.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
-
-	let date = $state(new Date().toISOString().slice(0, 10));
 
 	const prepaymentStore = graphql(`
 		query AnalysisPrepayments($at: DateTime!) {
@@ -75,7 +74,7 @@
 	`);
 
 	$effect(() => {
-		void prepaymentStore.fetch({ variables: { at: new Date(date) } });
+		void prepaymentStore.fetch({ variables: { at: new Date(prepaymentsState.date) } });
 	});
 
 	$effect(() => {
@@ -100,7 +99,7 @@
 	<div class="flex flex-wrap items-end gap-4">
 		<Label class="space-y-2">
 			<span>Stichtag</span>
-			<Input type="date" bind:value={date} class="w-48" />
+			<Input type="date" bind:value={prepaymentsState.date} class="w-48" />
 		</Label>
 		{#if $prepaymentStore.fetching}
 			<Spinner size="5" />

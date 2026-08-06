@@ -19,33 +19,27 @@
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import RangePicker from './RangePicker.svelte';
 	import { AVAILABILITY_LABELS, AVAILABILITY_ORDER, availabilityColor } from './availability';
+	import { wealthState } from './state.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
 	const DAY = 86400000;
 
-	let date = $state(new Date().toISOString().slice(0, 10));
-	let split = $state('total');
-	let span = $state('all');
-	let presetFrom: Date | undefined = $state();
-	let presetTo: Date | undefined = $state();
-
-	// Zooming overrides the preset until it is reset or the preset changes.
-	let range: { min: number; max: number } | null = $state(null);
+	// module-level, so switching tabs and coming back does not reset the view
+	const presetRange = $derived.by(() => {
+		const { from, to } = wealthState.range;
+		return from && to ? { min: from, max: to } : null;
+	});
+	const visible = $derived(wealthState.zoom ?? presetRange);
 
 	// a preset chooses the window outright, so a zoom taken before it is stale
 	let lastSpan: string | undefined;
 	$effect(() => {
-		if (span === lastSpan) return;
-		lastSpan = span;
-		range = null;
+		if (wealthState.range.span === lastSpan) return;
+		lastSpan = wealthState.range.span;
+		wealthState.zoom = null;
 	});
-
-	const presetRange = $derived(
-		presetFrom && presetTo ? { min: presetFrom.getTime(), max: presetTo.getTime() } : null
-	);
-	const visible = $derived(range ?? presetRange);
 
 	// The backend caps the point count, and asking for more than the chart can draw only
 	// makes the response bigger; ~120 is what fits across a screen.
@@ -54,7 +48,7 @@
 		visible ? Math.max(1, Math.ceil((visible.max - visible.min) / DAY / TARGET_POINTS)) : 30
 	);
 
-	const zoomedIn = $derived(range !== null);
+	const zoomedIn = $derived(wealthState.zoom !== null);
 
 	type HistoryData = NonNullable<
 		NonNullable<(typeof $historyStore)['data']>
@@ -132,7 +126,7 @@
 	});
 
 	$effect(() => {
-		void balanceStore.fetch({ variables: { date: new Date(date) } });
+		void balanceStore.fetch({ variables: { date: new Date(wealthState.date) } });
 	});
 
 	const balances = $derived($balanceStore.data?.analysis.balances ?? []);
@@ -155,13 +149,13 @@
 		// a local const, so the narrowing survives into the callbacks below
 		const loaded = history;
 		if (!loaded) return [];
-		if (split === 'account')
+		if (wealthState.split === 'account')
 			return loaded.byAccount.map((s) => ({
 				name: s.account.name,
 				color: s.account.color ?? '#94a3b8',
 				amounts: s.amounts
 			}));
-		if (split === 'availability')
+		if (wealthState.split === 'availability')
 			return loaded.byAvailability.map((s) => ({
 				name: AVAILABILITY_LABELS[s.availability],
 				color: availabilityColor(s.availability),
@@ -202,14 +196,14 @@
 		if (at === undefined) return;
 		const d = new Date(at);
 		// local parts, so the date input does not shift a day against the displayed one
-		date = `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, '0')}-${`${d.getDate()}`.padStart(2, '0')}`;
+		wealthState.date = `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, '0')}-${`${d.getDate()}`.padStart(2, '0')}`;
 	}
 
 	const chartOptions = $derived({
 		chart: {
 			type: 'area',
 			height: 340,
-			stacked: split !== 'total',
+			stacked: wealthState.split !== 'total',
 			zoom: { enabled: true, type: 'x', autoScaleYaxis: true },
 			toolbar: {
 				show: true,
@@ -229,7 +223,7 @@
 			},
 			events: {
 				zoomed: (_c: unknown, o: { xaxis: { min?: number; max?: number } }) => {
-					range =
+					wealthState.zoom =
 						o.xaxis.min == null || o.xaxis.max == null
 							? null
 							: { min: o.xaxis.min, max: o.xaxis.max };
@@ -257,7 +251,7 @@
 					opacity: 0.5
 				})),
 				{
-					x: new Date(date).getTime(),
+					x: new Date(wealthState.date).getTime(),
 					borderColor: '#f05a28',
 					strokeDashArray: 0,
 					label: { text: 'Stichtag', style: { background: '#f05a28', color: '#fff' } }
@@ -275,7 +269,7 @@
 			// without this the tooltip inherits the axis formatter and reports "40k €"
 			y: { formatter: (v: number) => euro(v * 100) }
 		},
-		legend: { show: split !== 'total' }
+		legend: { show: wealthState.split !== 'total' }
 	}) as ApexOptions;
 </script>
 
@@ -288,15 +282,15 @@
 					<Spinner size="4" />
 				{/if}
 				{#if zoomedIn}
-					<Button size="xs" color="alternative" onclick={() => (range = null)}>
+					<Button size="xs" color="alternative" onclick={() => (wealthState.zoom = null)}>
 						<RefreshOutline class="mr-1 h-3 w-3" />Zoom zurücksetzen
 					</Button>
 				{/if}
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
-				<RangePicker bind:value={span} bind:from={presetFrom} bind:to={presetTo} />
+				<RangePicker bind:range={wealthState.range} />
 				<ToggleGroup
-					bind:value={split}
+					bind:value={wealthState.split}
 					options={[
 						{ value: 'total', label: 'Gesamt' },
 						{ value: 'account', label: 'Nach Konto' },
@@ -320,7 +314,7 @@
 	<div class="flex flex-wrap items-end gap-4">
 		<Label class="space-y-2">
 			<span>Stichtag</span>
-			<Input type="date" bind:value={date} class="w-48" />
+			<Input type="date" bind:value={wealthState.date} class="w-48" />
 		</Label>
 		<p class="pb-2 text-sm text-gray-500 dark:text-gray-400">
 			gilt für die Verfügbarkeiten und die berechneten Kontostände

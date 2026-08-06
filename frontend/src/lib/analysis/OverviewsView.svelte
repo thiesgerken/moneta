@@ -14,22 +14,39 @@
 	import { resolve } from '$app/paths';
 	import Chart from '$lib/Chart.svelte';
 	import RangePicker from './RangePicker.svelte';
-	import { overviewsStore, integrationError, errorColor, monthLabel } from './overviews';
+	import {
+		overviewsStore,
+		integrationError,
+		errorColor,
+		monthLabel,
+		type OverviewsData
+	} from './overviews';
+	import { overviewsState } from './state.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
-	let span = $state('all');
-	let from: Date | undefined = $state();
-	let to: Date | undefined = $state();
+	// Kept here rather than read off the store so the chart never sees an empty intermediate
+	// state: houdini clears `data` while a fetch is in flight, which drew the chart once
+	// empty and once full on every range change. Only the newest request may write.
+	let latestRequest = 0;
+	let overviews = $state<OverviewsData | null>(null);
 
-	// undefined until the picker knows what "Alles" means
 	$effect(() => {
+		// undefined until the picker has resolved its preset
+		const { from, to } = overviewsState.range;
 		if (!from || !to) return;
-		void overviewsStore.fetch({ variables: { from, to } });
+
+		const request = ++latestRequest;
+		void overviewsStore
+			.fetch({ variables: { from: new Date(from), to: new Date(to) } })
+			.then((result) => {
+				if (request !== latestRequest) return;
+				overviews = result.data?.analysis.overviews ?? null;
+			});
 	});
 
-	const months = $derived($overviewsStore.data?.analysis.overviews.months ?? []);
+	const months = $derived(overviews?.months ?? []);
 
 	const chartOptions = $derived({
 		chart: { type: 'bar', height: 300, toolbar: { show: false }, stacked: true },
@@ -49,7 +66,7 @@
 
 <div class="space-y-4">
 	<div class="flex flex-wrap items-end gap-4">
-		<RangePicker bind:value={span} bind:from bind:to />
+		<RangePicker bind:range={overviewsState.range} dates />
 		{#if $overviewsStore.fetching}
 			<Spinner size="5" />
 		{/if}

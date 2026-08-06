@@ -1,32 +1,26 @@
 <script lang="ts">
-	import { Select } from 'flowbite-svelte';
+	import { Select, Input } from 'flowbite-svelte';
 	import { graphql } from '$houdini';
+	import type { Range } from './state.svelte';
+	import { isoDate, monthsBefore } from './dates';
 
-	/// A window ending today, chosen from a handful of presets rather than typed as two dates.
+	/// A window chosen from a handful of presets, or typed out by hand.
 	///
 	/// "Alles" reaches back to the first expense, which is why this owns a query: the analysis
-	/// views default to it, and a range picked without knowing where the data starts either
-	/// misses most of it or asks for empty years.
-	let {
-		value = $bindable('all'),
-		from = $bindable(),
-		to = $bindable(),
-		size = 'sm'
-	}: {
-		value?: string;
-		from?: Date;
-		to?: Date;
-		size?: 'sm' | 'md';
-	} = $props();
+	/// views default to a preset, and a range picked without knowing where the data starts
+	/// either misses most of it or asks for empty years.
+	let { range = $bindable(), dates = false }: { range: Range; dates?: boolean } = $props();
 
 	const DAY = 86400000;
+	const CUSTOM = 'custom';
 
 	const SPANS = [
 		{ value: '6m', name: 'Letzte 6 Monate', months: 6 },
 		{ value: '1y', name: 'Letztes Jahr', months: 12 },
 		{ value: '5y', name: 'Letzte 5 Jahre', months: 60 },
 		{ value: '10y', name: 'Letzte 10 Jahre', months: 120 },
-		{ value: 'all', name: 'Alles', months: null }
+		{ value: 'all', name: 'Alles', months: null },
+		{ value: CUSTOM, name: 'Eigener Zeitraum', months: null }
 	];
 
 	// Sorted by booking start rather than by a transaction date, which is not a sort the list
@@ -56,33 +50,65 @@
 	// resolved, whether or not it found anything — an empty database has no first expense
 	const ready = $derived($firstExpenseStore.data != null);
 
-	// `from`/`to` stay undefined until there is an answer, which is how a caller knows not to
-	// query yet: a guessed window would be replaced a moment later and the two would race.
+	// `from`/`to` stay undefined until a preset can be resolved, which is how a caller knows
+	// not to query yet: a guessed window would be replaced a moment later and the two races.
 	$effect(() => {
-		const max = Date.now();
-		const months = SPANS.find((s) => s.value === value)?.months ?? null;
+		if (range.span === CUSTOM) return;
 
-		let start: Date;
-		if (months === null) {
+		const max = Date.now();
+		const months = SPANS.find((s) => s.value === range.span)?.months ?? null;
+
+		let start: number;
+		if (range.span === 'all') {
 			if (!ready) return;
-			start = new Date(dataStart ?? max - 365 * DAY);
+			start = dataStart ?? max - 365 * DAY;
+		} else if (months !== null) {
+			start = monthsBefore(max, months);
 		} else {
-			// built rather than mutated: a negative month rolls into the previous year on its own
-			const now = new Date(max);
-			start = new Date(now.getFullYear(), now.getMonth() - months, now.getDate());
+			return;
 		}
 
 		// only write on a real change: `to` is Date.now(), so assigning unconditionally would
-		// hand the caller a fresh object on every run and re-trigger whatever it queries
-		if (from?.getTime() !== start.getTime()) from = start;
-		if (to === undefined) to = new Date(max);
+		// re-trigger whatever the caller queries on every run of this effect
+		if (range.from !== start) range.from = start;
+		if (range.to === undefined) range.to = max;
 	});
+
+	/// Typing a date means the preset no longer describes the window, so the dropdown follows.
+	function edit(which: 'from' | 'to', value: string) {
+		if (!value) return;
+		range.span = CUSTOM;
+		range[which] = new Date(value).getTime();
+	}
 </script>
 
-<Select
-	{value}
-	onchange={(e) => (value = (e.target as HTMLSelectElement).value)}
-	items={SPANS.map((s) => ({ value: s.value, name: s.name }))}
-	{size}
-	class="w-44"
-/>
+<div class="flex flex-wrap items-center gap-2">
+	<Select
+		value={range.span}
+		onchange={(e) => (range.span = (e.target as HTMLSelectElement).value)}
+		items={SPANS.map((s) => ({ value: s.value, name: s.name }))}
+		size="sm"
+		class="w-44"
+		placeholder=""
+	/>
+	{#if dates}
+		<!-- flowbite's Input fills its container, so the width lives on a wrapper -->
+		<div class="w-40">
+			<Input
+				type="date"
+				size="sm"
+				value={range.from ? isoDate(new Date(range.from)) : ''}
+				onchange={(e) => edit('from', (e.target as HTMLInputElement).value)}
+			/>
+		</div>
+		<span class="text-gray-500 dark:text-gray-400">–</span>
+		<div class="w-40">
+			<Input
+				type="date"
+				size="sm"
+				value={range.to ? isoDate(new Date(range.to)) : ''}
+				onchange={(e) => edit('to', (e.target as HTMLInputElement).value)}
+			/>
+		</div>
+	{/if}
+</div>

@@ -3,14 +3,15 @@
 	import { ChevronLeftOutline, ChevronRightOutline } from 'flowbite-svelte-icons';
 	import { graphql } from '$houdini';
 	import { categoryColor } from './overviews';
+	import { calendarState } from './state.svelte';
+	import { shiftMonth } from './dates';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
-	let month = $state(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-
+	const month = $derived(new Date(calendarState.month));
 	const shift = (n: number) => {
-		month = new Date(month.getFullYear(), month.getMonth() + n, 1);
+		calendarState.month = shiftMonth(calendarState.month, n);
 	};
 
 	const nextMonth = $derived(new Date(month.getFullYear(), month.getMonth() + 1, 1));

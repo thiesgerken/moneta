@@ -16,14 +16,11 @@
 	} from 'flowbite-svelte';
 	import { DownloadOutline } from 'flowbite-svelte-icons';
 	import { graphql } from '$houdini';
+	import { statementState } from './state.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 	const iso = (d: Date) => d.toISOString().slice(0, 10);
-
-	let accountId = $state('');
-	let from = $state(iso(new Date(Date.now() - 90 * 86400000)));
-	let to = $state(iso(new Date()));
 
 	const accountStore = graphql(`
 		query AnalysisStatementAccounts {
@@ -59,14 +56,15 @@
 	});
 
 	const accounts = $derived($accountStore.data?.accounts.list ?? []);
-	const account = $derived(accounts.find((a) => a.id === accountId));
+	const account = $derived(accounts.find((a) => a.id === statementState.accountId));
 
 	// the picker starts empty because the account list is not there yet on first render
 	$effect(() => {
-		if (!accountId && accounts.length > 0) accountId = accounts[0].id;
+		if (!statementState.accountId && accounts.length > 0) statementState.accountId = accounts[0].id;
 	});
 
 	$effect(() => {
+		const { accountId, from, to } = statementState;
 		if (!accountId) return;
 		void statementStore.fetch({
 			variables: { accountId, from: new Date(from), to: new Date(to) }
@@ -113,7 +111,7 @@
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `kontoauszug-${(account?.name ?? 'konto').replace(/\s+/g, '-').toLowerCase()}-${from}_${to}.csv`;
+		a.download = `kontoauszug-${(account?.name ?? 'konto').replace(/\s+/g, '-').toLowerCase()}-${statementState.from}_${statementState.to}.csv`;
 		// a detached anchor does not reliably trigger a download in every browser
 		document.body.appendChild(a);
 		a.click();
@@ -127,18 +125,18 @@
 		<Label class="space-y-2">
 			<span>Konto</span>
 			<Select
-				bind:value={accountId}
+				bind:value={statementState.accountId}
 				items={accounts.map((a) => ({ value: a.id, name: a.name }))}
 				class="w-64"
 			/>
 		</Label>
 		<Label class="space-y-2">
 			<span>Von</span>
-			<Input type="date" bind:value={from} class="w-44" />
+			<Input type="date" bind:value={statementState.from} class="w-44" />
 		</Label>
 		<Label class="space-y-2">
 			<span>Bis</span>
-			<Input type="date" bind:value={to} class="w-44" />
+			<Input type="date" bind:value={statementState.to} class="w-44" />
 		</Label>
 		<Button color="alternative" onclick={exportCsv} disabled={rows.length === 0}>
 			<DownloadOutline class="mr-2 h-4 w-4" />CSV
@@ -161,7 +159,7 @@
 			>
 		</Card>
 		<Card class="max-w-none p-4">
-			<span class="text-sm text-gray-500 dark:text-gray-400">Saldo am {to}</span>
+			<span class="text-sm text-gray-500 dark:text-gray-400">Saldo am {statementState.to}</span>
 			<span class="text-2xl font-semibold">{euro(rows[0]?.balance ?? 0)}</span>
 		</Card>
 	</div>

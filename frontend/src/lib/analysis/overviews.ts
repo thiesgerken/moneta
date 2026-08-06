@@ -1,4 +1,4 @@
-import { graphql } from '$houdini';
+import { graphql, type AnalysisOverviews$result } from '$houdini';
 
 /// The Monate and Kategorien tabs are two readings of the same query, so they share it: the
 /// bars come from the monthly totals and the treemap from the whole-period breakdown.
@@ -44,6 +44,8 @@ export const overviewsStore = graphql(`
 		}
 	}
 `);
+
+export type OverviewsData = AnalysisOverviews$result['analysis']['overviews'];
 
 /// How far the integrated end balance drifts from the one the recorded balances give.
 ///

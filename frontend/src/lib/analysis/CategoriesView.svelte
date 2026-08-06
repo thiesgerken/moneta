@@ -4,28 +4,34 @@
 	import Chart from '$lib/Chart.svelte';
 	import RangePicker from './RangePicker.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
-	import { overviewsStore, monthLabel, categoryColor } from './overviews';
+	import { overviewsStore, monthLabel, categoryColor, type OverviewsData } from './overviews';
+	import { categoriesState } from './state.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
-	let span = $state('all');
-	let from: Date | undefined = $state();
-	let to: Date | undefined = $state();
-	let sign = $state('expenses');
+	// see OverviewsView: the store is cleared mid-fetch, which flickers the charts
+	let latestRequest = 0;
+	let overviews = $state<OverviewsData | null>(null);
 
-	// undefined until the picker knows what "Alles" means
 	$effect(() => {
+		const { from, to } = categoriesState.range;
 		if (!from || !to) return;
-		void overviewsStore.fetch({ variables: { from, to } });
+
+		const request = ++latestRequest;
+		void overviewsStore
+			.fetch({ variables: { from: new Date(from), to: new Date(to) } })
+			.then((result) => {
+				if (request !== latestRequest) return;
+				overviews = result.data?.analysis.overviews ?? null;
+			});
 	});
 
-	const overviews = $derived($overviewsStore.data?.analysis.overviews);
 	const months = $derived(overviews?.months ?? []);
 	const breakdown = $derived(overviews?.byCategory ?? []);
 
 	const pick = (t: { income: number; expenses: number }) =>
-		sign === 'expenses' ? t.expenses : t.income;
+		categoriesState.sign === 'expenses' ? t.expenses : t.income;
 	const name = (c: { name: string } | null) => c?.name ?? 'Ohne Kategorie';
 
 	// The bars are stacked per month, so every category needs a value at every month even
@@ -67,11 +73,11 @@
 		const series = breakdown
 			.map((c) => {
 				const children = c.biggest
-					.filter((e) => (sign === 'expenses' ? e.amount < 0 : e.amount > 0))
+					.filter((e) => (categoriesState.sign === 'expenses' ? e.amount < 0 : e.amount > 0))
 					.map((e) => ({ x: e.title, y: Math.abs(e.amount) / 100 }));
 
 				// what `biggest` left out, as one slice, so the areas still add up to the total
-				const rest = Math.abs(sign === 'expenses' ? c.restExpenses : c.restIncome);
+				const rest = Math.abs(categoriesState.sign === 'expenses' ? c.restExpenses : c.restIncome);
 				if (rest > 0) children.push({ x: 'Rest', y: rest / 100 });
 
 				return { name: name(c.category), color: categoryColor(c.category), data: children };
@@ -92,9 +98,9 @@
 
 <div class="space-y-4">
 	<div class="flex flex-wrap items-end gap-4">
-		<RangePicker bind:value={span} bind:from bind:to />
+		<RangePicker bind:range={categoriesState.range} dates />
 		<ToggleGroup
-			bind:value={sign}
+			bind:value={categoriesState.sign}
 			options={[
 				{ value: 'expenses', label: 'Ausgaben' },
 				{ value: 'income', label: 'Einnahmen' }
