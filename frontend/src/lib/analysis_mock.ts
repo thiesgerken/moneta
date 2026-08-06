@@ -1,5 +1,6 @@
-// Mock data for the analysis dashboard, so the layout can be reviewed before the
-// backend endpoints exist. Delete this file once /analysis reads real queries.
+// Mock data for the analysis tabs whose endpoints do not exist yet: Monate, Kategorien,
+// Kontoauszug and Kalender. Vermoegen and Vorauszahlungen read real queries and no longer
+// appear here. Delete this file once the remaining four follow.
 
 export const accounts = [
 	{ id: 'a1', name: 'Commerzbank Giro', color: '#6cbf84', availability: 'IMMEDIATELY' },
@@ -19,76 +20,9 @@ export const categories = [
 	{ id: 'c6', name: 'Spenden', color: '#c0392b' }
 ];
 
-// Daily, so that zooming in has something finer to reveal. The real endpoint takes a
-// resolution and returns only the points it was asked for; the mock hands over everything
-// and lets the view resample.
-const DAYS = 900;
-
 // deterministic pseudo-noise: mock data must not reshuffle on every render
 const wobble = (i: number, seed: number) =>
 	Math.sin(i * 1.7 + seed) * 0.5 + Math.sin(i * 0.6 + seed);
-
-export const historyDates = Array.from({ length: DAYS }, (_, i) =>
-	new Date(2024, 0, 1 + i).getTime()
-);
-
-export const historyByAccount = accounts.map((a, ai) => ({
-	...a,
-	amounts: historyDates.map((_, i) => {
-		const base = [14000, 300, -400, 9000, 21000, 12000][ai];
-		const growthPerDay = [2, 0, 0, 4, 8.5, 3][ai];
-		return Math.round(
-			base +
-				growthPerDay * i +
-				// two frequencies, so zooming in reveals day-to-day movement rather than a
-				// smooth curve that looks identical at every scale
-				wobble(i * 0.06, ai) * base * 0.04 +
-				wobble(i * 0.9, ai + 9) * base * 0.012
-		);
-	})
-}));
-
-export const historyTotal = historyDates.map((_, i) =>
-	historyByAccount.reduce((sum, a) => sum + a.amounts[i], 0)
-);
-
-export const AVAILABILITY_LABELS: Record<string, string> = {
-	IMMEDIATELY: 'Sofort',
-	DAYS: 'Tage',
-	WEEKS: 'Wochen',
-	MONTHS: 'Monate',
-	YEARS: 'Jahre',
-	DECADES: 'Jahrzehnte'
-};
-
-// the availability order the backend enum declares; a total for "verfügbar in Tagen"
-// includes everything more liquid than that, so the order has to be preserved
-const AVAILABILITY_ORDER = ['IMMEDIATELY', 'DAYS', 'WEEKS', 'MONTHS', 'YEARS', 'DECADES'];
-
-export const historyByAvailability = AVAILABILITY_ORDER.filter((av) =>
-	accounts.some((a) => a.availability === av)
-).map((av) => ({
-	availability: av,
-	label: AVAILABILITY_LABELS[av],
-	amounts: historyDates.map((_, i) =>
-		historyByAccount.filter((a) => a.availability === av).reduce((sum, a) => sum + a.amounts[i], 0)
-	)
-}));
-
-export const availabilityTotals = [
-	{ availability: 'IMMEDIATELY', label: 'Sofort', amount: 1889012 },
-	{ availability: 'DAYS', label: 'Tage', amount: 1102400 },
-	{ availability: 'WEEKS', label: 'Wochen', amount: 2698000 },
-	{ availability: 'DECADES', label: 'Jahrzehnte', amount: 1421000 }
-];
-
-export const computedBalances = accounts.map((a, i) => ({
-	...a,
-	amount: historyByAccount[i].amounts[DAYS - 1] * 100,
-	referenceDate: new Date(2026, 6, 12 - i * 3),
-	referenceAmount: historyByAccount[i].amounts[DAYS - 1] * 100 - 4200 * (i + 1),
-	expenseCount: [37, 4, 12, 1, 0, 0][i]
-}));
 
 export const overviews = Array.from({ length: 12 }, (_, i) => {
 	const month = new Date(2025, 7 + i, 1);
@@ -173,107 +107,6 @@ export function monthDetail(year: number, month: number) {
 		]
 	};
 }
-
-// Prepayments fall out of the booking period rather than out of a dedicated account kind:
-// the cash left on `paidOn`, but the value is consumed linearly across
-// `bookingStart..bookingEnd`, so at any date part of it is still unconsumed.
-const PREPAYMENTS = [
-	{
-		id: 'p1',
-		title: 'KFZ-Versicherung 2026',
-		amount: -48000,
-		paidOn: '2026-01-02',
-		bookingStart: '2026-01-01',
-		bookingEnd: '2026-12-31'
-	},
-	{
-		id: 'p2',
-		title: 'ZEIT Abo (Jahr)',
-		amount: -29900,
-		paidOn: '2026-03-15',
-		bookingStart: '2026-03-15',
-		bookingEnd: '2027-03-14'
-	},
-	{
-		id: 'p3',
-		title: 'Bahncard 50',
-		amount: -24900,
-		paidOn: '2025-11-20',
-		bookingStart: '2025-11-20',
-		bookingEnd: '2026-11-19'
-	},
-	{
-		id: 'p4',
-		title: 'Kita-Beitrag Q3',
-		amount: -63000,
-		paidOn: '2026-07-01',
-		bookingStart: '2026-07-01',
-		bookingEnd: '2026-09-30'
-	},
-	{
-		id: 'p5',
-		title: 'Hausratversicherung',
-		amount: -13200,
-		paidOn: '2026-05-01',
-		bookingStart: '2026-05-01',
-		bookingEnd: '2027-04-30'
-	},
-	{
-		id: 'p6',
-		title: 'Domain + Hosting',
-		amount: -8400,
-		paidOn: '2026-02-01',
-		bookingStart: '2026-02-01',
-		bookingEnd: '2027-01-31'
-	},
-	{
-		id: 'p7',
-		title: 'Mietkaution',
-		amount: -180000,
-		paidOn: '2019-09-01',
-		bookingStart: '2019-09-01',
-		bookingEnd: '2019-09-01'
-	}
-];
-
-export function prepayments(at: Date) {
-	const t = at.getTime();
-	return PREPAYMENTS.map((p) => {
-		const start = new Date(p.bookingStart).getTime();
-		const end = new Date(p.bookingEnd).getTime();
-		// a zero-length period is an ordinary expense: fully consumed the moment it starts
-		const consumedFraction =
-			end <= start ? (t >= start ? 1 : 0) : Math.min(1, Math.max(0, (t - start) / (end - start)));
-		return {
-			...p,
-			paidOnDate: new Date(p.paidOn),
-			startDate: new Date(start),
-			endDate: new Date(end),
-			consumedFraction,
-			remaining: Math.round(p.amount * (1 - consumedFraction))
-		};
-	})
-		.filter((p) => p.remaining !== 0)
-		.sort((a, b) => a.remaining - b.remaining);
-}
-
-// A different kind of open item: we know more transactions are coming but not how much,
-// so there is no remaining balance to compute -- only a flag and what has landed so far.
-export const incompleteExpenses = [
-	{
-		id: 'i1',
-		title: 'Amazon Bestellung (Retoure offen)',
-		amount: -8990,
-		date: new Date(2026, 6, 28)
-	},
-	{ id: 'i2', title: 'Werkstatt Anzahlung', amount: -25000, date: new Date(2026, 6, 12) },
-	{
-		id: 'i3',
-		title: 'Arztrechnung (Erstattung ausstehend)',
-		amount: -14350,
-		date: new Date(2026, 5, 30)
-	}
-];
 
 export type StatementRow = {
 	id: string;

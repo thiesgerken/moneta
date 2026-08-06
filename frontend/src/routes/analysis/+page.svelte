@@ -10,8 +10,9 @@
 
 <div class="space-y-4 pr-8 pl-8">
 	<Alert color="yellow">
-		<span class="font-medium">Mock:</span> alle Zahlen auf dieser Seite sind erfunden. Die Backend-Endpunkte
-		fehlen noch.
+		<span class="font-medium">Teilweise Mock:</span> Vermögen und Vorauszahlungen lesen echte Daten. Monate,
+		Kategorien, Kontoauszug und Kalender zeigen weiterhin erfundene Zahlen – die Endpunkte dafür fehlen
+		noch.
 	</Alert>
 
 	<Tabs tabStyle="underline">

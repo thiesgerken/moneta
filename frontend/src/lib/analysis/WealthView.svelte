@@ -9,63 +9,143 @@
 		TableHeadCell,
 		Input,
 		Label,
-		Button
+		Button,
+		Spinner
 	} from 'flowbite-svelte';
 	import { RefreshOutline } from 'flowbite-svelte-icons';
+	import { graphql } from '$houdini';
 	import type { ApexOptions } from 'apexcharts';
 	import Chart from '$lib/Chart.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
-	import {
-		availabilityTotals,
-		computedBalances,
-		historyByAccount,
-		historyByAvailability,
-		historyDates,
-		historyTotal
-	} from '$lib/analysis_mock';
+	import { AVAILABILITY_LABELS, AVAILABILITY_ORDER, availabilityColor } from './availability';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
+	const DAY = 86400000;
+
 	let date = $state(new Date().toISOString().slice(0, 10));
 	let split = $state('total');
 
-	// null = full range. Set from apex's zoom event so the resolution can follow it.
+	// The window the chart is showing. Zooming rewrites it, which is what makes the query
+	// come back at a different resolution rather than magnifying the points already drawn.
+	const defaultRange = { min: Date.now() - 730 * DAY, max: Date.now() };
 	let range: { min: number; max: number } | null = $state(null);
+	const visible = $derived(range ?? defaultRange);
 
-	const total = $derived(availabilityTotals.reduce((a, b) => a + b.amount, 0));
-
-	// The visible window decides the step, so zooming in exposes finer detail instead of
-	// magnifying the same monthly points. The real endpoint gets asked for this resolution
-	// rather than shipping every day and thinning it here.
+	// The backend caps the point count, and asking for more than the chart can draw only
+	// makes the response bigger; ~120 is what fits across a screen.
 	const TARGET_POINTS = 120;
+	const stepDays = $derived(
+		Math.max(1, Math.ceil((visible.max - visible.min) / DAY / TARGET_POINTS))
+	);
 
-	const visible = $derived.by(() => {
-		const zoom: { min: number; max: number } | null = range;
-		const min = zoom ? zoom.min : historyDates[0];
-		const max = zoom ? zoom.max : historyDates[historyDates.length - 1];
-		const indices = historyDates
-			.map((d, i) => ({ d, i }))
-			.filter(({ d }) => d >= min && d <= max)
-			.map(({ i }) => i);
-		const step = Math.max(1, Math.ceil(indices.length / TARGET_POINTS));
-		// always keep the last point, otherwise the line stops short of the range end
-		const picked = indices.filter((_, k) => k % step === 0);
-		const last = indices.at(-1);
-		if (last !== undefined && picked.at(-1) !== last) picked.push(last);
-		return { indices: picked, step, min, max };
+	const zoomedIn = $derived(range !== null);
+
+	const historyStore = graphql(`
+		query AnalysisHistory($from: DateTime!, $to: DateTime!, $stepDays: Int) {
+			analysis {
+				history(from: $from, to: $to, stepDays: $stepDays) {
+					dates
+					byAccount {
+						account {
+							id
+							name
+							color
+						}
+						amounts
+					}
+					byAvailability {
+						availability
+						amounts
+					}
+				}
+			}
+		}
+	`);
+
+	const balanceStore = graphql(`
+		query AnalysisComputedBalances($date: DateTime!) {
+			analysis {
+				balances(date: $date) {
+					amount
+					expenseCount
+					account {
+						id
+						name
+						color
+						availability
+					}
+					reference {
+						id
+						date
+						amount
+					}
+				}
+			}
+		}
+	`);
+
+	// houdini 2 has no @load, so every query needs its own effect; referencing the variables
+	// inside it is what makes zooming and the Stichtag re-run them
+	$effect(() => {
+		void historyStore.fetch({
+			variables: {
+				from: new Date(visible.min),
+				to: new Date(visible.max),
+				stepDays
+			}
+		});
 	});
 
-	// zooming out past the data leaves a range set that shows everything anyway; offering to
-	// reset that would be a button that visibly does nothing
-	const zoomedIn = $derived(
-		visible.min > historyDates[0] || visible.max < historyDates[historyDates.length - 1]
+	$effect(() => {
+		void balanceStore.fetch({ variables: { date: new Date(date) } });
+	});
+
+	const history = $derived($historyStore.data?.analysis.history);
+	const balances = $derived($balanceStore.data?.analysis.balances ?? []);
+
+	const total = $derived(balances.reduce((sum, b) => sum + b.amount, 0));
+
+	const availabilityTotals = $derived(
+		AVAILABILITY_ORDER.map((availability) => ({
+			availability,
+			label: AVAILABILITY_LABELS[availability],
+			amount: balances
+				.filter((b) => b.account.availability === availability)
+				.reduce((sum, b) => sum + b.amount, 0)
+		})).filter((a) => a.amount !== 0)
 	);
+
+	const dates = $derived(history?.dates.map((d) => d.getTime()) ?? []);
+
+	const series = $derived.by(() => {
+		if (!history) return [];
+		if (split === 'account')
+			return history.byAccount.map((s) => ({
+				name: s.account.name,
+				color: s.account.color ?? '#94a3b8',
+				amounts: s.amounts
+			}));
+		if (split === 'availability')
+			return history.byAvailability.map((s) => ({
+				name: AVAILABILITY_LABELS[s.availability],
+				color: availabilityColor(s.availability),
+				amounts: s.amounts
+			}));
+		return [
+			{
+				name: 'Gesamt',
+				color: '#f05a28',
+				amounts: dates.map((_, i) => history.byAccount.reduce((sum, s) => sum + s.amounts[i], 0))
+			}
+		];
+	});
 
 	// Faint verticals on month starts to give the eye something to measure against. Beyond
 	// about 18 months there are too many to stay subtle, so they fall back to year starts.
 	const boundaries = $derived.by(() => {
-		const yearly = visible.max - visible.min > 550 * 86400000;
+		const yearly = visible.max - visible.min > 550 * DAY;
 		const from = new Date(visible.min);
 		const year = from.getFullYear();
 		const month = yearly ? 0 : from.getMonth();
@@ -79,26 +159,6 @@
 			if (t >= visible.min) out.push(t);
 		}
 		return out;
-	});
-
-	const series = $derived.by(() => {
-		if (split === 'account')
-			return historyByAccount.map((a) => ({
-				name: a.name,
-				color: a.color,
-				amounts: a.amounts
-			}));
-		if (split === 'availability')
-			return historyByAvailability.map((a) => ({
-				name: a.label,
-				// availability has no colour of its own; a ramp keeps the stack ordered
-				// from liquid at the bottom to illiquid at the top
-				color: ['#f05a28', '#f0a428', '#7db35b', '#4a90c2', '#8e6cbf', '#bf6c8e'][
-					historyByAvailability.indexOf(a)
-				],
-				amounts: a.amounts
-			}));
-		return [{ name: 'Gesamt', color: '#f05a28', amounts: historyTotal }];
 	});
 
 	const chartOptions = $derived({
@@ -134,7 +194,7 @@
 		},
 		series: series.map((s) => ({
 			name: s.name,
-			data: visible.indices.map((i) => [historyDates[i], s.amounts[i]])
+			data: dates.map((d, i) => [d, s.amounts[i] / 100])
 		})),
 		colors: series.map((s) => s.color),
 		annotations: {
@@ -152,7 +212,7 @@
 		xaxis: { type: 'datetime', min: visible.min, max: visible.max },
 		yaxis: { labels: { formatter: (v: number) => Math.round(v / 1000) + 'k €' } },
 		tooltip: {
-			x: { format: visible.step < 28 ? 'dd.MM.yyyy' : 'MMM yyyy' },
+			x: { format: stepDays < 28 ? 'dd.MM.yyyy' : 'MMM yyyy' },
 			// without this the tooltip inherits the axis formatter and reports "40k €"
 			y: { formatter: (v: number) => euro(v * 100) }
 		},
@@ -172,6 +232,9 @@
 		<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
 			<div class="flex flex-wrap items-center gap-3">
 				<h3 class="text-lg font-semibold">Vermögensverlauf</h3>
+				{#if $historyStore.fetching}
+					<Spinner size="4" />
+				{/if}
 				{#if zoomedIn}
 					<Button size="xs" color="alternative" onclick={() => (range = null)}>
 						<RefreshOutline class="mr-1 h-3 w-3" />Zoom zurücksetzen
@@ -187,7 +250,13 @@
 				]}
 			/>
 		</div>
-		<Chart options={chartOptions} />
+		{#if $historyStore.errors}
+			<p class="p-4 text-sm text-red-600 dark:text-red-400">
+				{$historyStore.errors.map((e) => e.message).join(', ')}
+			</p>
+		{:else}
+			<Chart options={chartOptions} />
+		{/if}
 	</Card>
 
 	<div class="grid gap-4 md:grid-cols-4">
@@ -208,13 +277,13 @@
 				<TableHeadCell class="px-4 py-3">Berechnet aus</TableHeadCell>
 			</TableHead>
 			<TableBody class="divide-y">
-				{#each computedBalances as b (b.id)}
+				{#each balances as b (b.account.id)}
 					<TableBodyRow>
 						<TableBodyCell class="px-4 py-3">
 							<span
 								class="mr-2 inline-block h-3 w-3 rounded-full align-middle"
-								style="background-color: {b.color}"
-							></span>{b.name}
+								style="background-color: {b.account.color ?? '#94a3b8'}"
+							></span>{b.account.name}
 						</TableBodyCell>
 						<TableBodyCell
 							class="px-4 py-3 {b.amount < 0
@@ -224,7 +293,7 @@
 							{euro(b.amount)}
 						</TableBodyCell>
 						<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
-							{euro(b.referenceAmount)} am {b.referenceDate.toLocaleDateString(
+							{euro(b.reference.amount)} am {b.reference.date.toLocaleDateString(
 								'de-DE'
 							)}{b.expenseCount > 0
 								? ` + ${b.expenseCount} ${b.expenseCount === 1 ? 'Ausgabe' : 'Ausgaben'}`

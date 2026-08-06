@@ -67,6 +67,14 @@ enum AccountRisk {
   SLIGHT
 }
 
+"""
+One account's balance at every sampled date, in the order [`History::dates`] gives them.
+"""
+type AccountSeries {
+  account: Account!
+  amounts: [Float!]!
+}
+
 enum AccountSortField {
   AVAILABILITY
   CLOSED
@@ -84,6 +92,30 @@ type AccountSynchronization {
 type AnalysisQuery {
   balance(accountId: UUID!, date: DateTime): ComputedBalance!
   balances(date: DateTime): [ComputedBalance!]!
+
+  """
+  The same computation as [`AnalysisQuery::balances`], repeated across a range.
+  
+  `stepDays` comes from the chart's visible range rather than being fixed, so zoomed out
+  it lands around 30 and zoomed all the way in on 1. `to` is always the last sample even
+  when the step does not divide the range, otherwise the line stops short of it.
+  """
+  history(from: DateTime!, stepDays: Int, to: DateTime!): History!
+
+  """
+  Expenses whose value is not yet fully consumed at `at`.
+  
+  The booking period is what makes this work without the prepayment accounts and
+  compensation flags MoneyDB needed: an expense whose money left on the transaction date
+  but whose value is spread over a period is simply one with `bookingEnd > bookingStart`.
+  Every imported expense has a zero-length period, so nothing shows up here until a
+  period is actually widened.
+  
+  `isIncomplete` expenses are open items too, but with an unknown missing amount and so
+  no remaining balance to compute; they come from `expenses.list` with a flag filter
+  rather than from here.
+  """
+  prepayments(at: DateTime): [Prepayment!]!
 }
 
 type AutomationRule {
@@ -130,6 +162,18 @@ enum AutomationRuleSortField {
   LAST_DELIVERY
   PRIORITY
   TITLE
+}
+
+"""
+The accounts of one availability summed together.
+
+Per bucket rather than cumulative: stacking these gives the cumulative reading back as the
+height of the stack, whereas stacking cumulative series would count the liquid accounts
+once per level above them.
+"""
+type AvailabilitySeries {
+  amounts: [Float!]!
+  availability: AccountAvailability!
 }
 
 type Balance {
@@ -490,6 +534,12 @@ input ExpenseTransactionInput {
   statement: String!
 }
 
+type History {
+  byAccount: [AccountSeries!]!
+  byAvailability: [AvailabilitySeries!]!
+  dates: [DateTime!]!
+}
+
 type Mutation {
   accounts: AccountMutation!
   automationRules: AutomationRuleMutation!
@@ -539,7 +589,8 @@ type PeriodicRuleMutation {
   delete(id: UUID!): Boolean!
 
   """
-  Generates every expense that is currently due, across all of this user's rules.
+  Generates every expense that is currently due from this user's own rules. The scheduled
+  job covers everybody; this is the button for not waiting for it.
   """
   run: Int!
   update(id: UUID!, rule: PeriodicRuleInput!): PeriodicRule!
@@ -554,6 +605,18 @@ enum PeriodicRuleSortField {
   LAST_CREATION
   PERIOD
   TITLE
+}
+
+"""
+What is left of an expense whose value is still being consumed at the requested date.
+"""
+type Prepayment {
+  """how much of the booking period has elapsed, 0..1"""
+  consumedFraction: Float!
+  expense: Expense!
+
+  """cents not yet consumed, in the same sign as the expense itself"""
+  remaining: Float!
 }
 
 type Query {

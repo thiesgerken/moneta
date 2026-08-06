@@ -1,8 +1,9 @@
 # Analysis dashboard
 
-Port of MoneyDB's `analysis` section. A mock UI lives at `/analysis` (six tabs, hardcoded
-numbers from `frontend/src/lib/analysis_mock.ts`); this document records what it should show
-and what the backend still owes it.
+Port of MoneyDB's `analysis` section, at `/analysis`. **Vermögen** and **Vorauszahlungen** read
+real queries; the other four tabs still show hardcoded numbers from
+`frontend/src/lib/analysis_mock.ts`. This document records what each should show and what the
+backend still owes it.
 
 ## Displays
 
@@ -60,9 +61,14 @@ point of the view, so it stays.
 ### Chart resolution
 
 The wealth chart picks its step from the visible x-range, targeting ~120 points: zoomed out it
-samples monthly, zoomed in it goes down to daily. Points get markers so individual samples are
-visible, and the hovered one enlarges. Zooming sets the range and the resolution follows; a
-labelled reset button appears alongside apex's own toolbar once a zoom is active.
+samples weekly or monthly, zoomed in it goes down to daily. Points get markers so individual
+samples are visible, and the hovered one enlarges. Zooming rewrites the range, which re-runs
+the query at the new resolution rather than magnifying the points already drawn.
+
+The default window is the last two years. Apex's own reset control is off and a labelled button
+takes its place: apex's bails out unless *that chart instance* was zoomed interactively, and
+since a resolution change rebuilds the chart, the instance behind the button never has a zoom
+recorded.
 
 Faint dashed verticals mark month starts, falling back to year starts beyond ~18 months so
 they stay subtle rather than becoming a second grid. Tooltips carry their own formatter — by
@@ -118,15 +124,16 @@ spend in March" has two defensible answers.
 
 ## Backend
 
-`analysis.balances(date)` already exists (`backend/src/graphql/analysis.rs`) and covers the
-balance table in **Vermögen**. Three endpoints are missing.
+`analysis.balance(date, accountId)`, `analysis.balances(date)`, `analysis.history` and
+`analysis.prepayments` exist (`backend/src/graphql/analysis.rs`). Two endpoints are missing:
+`overviews` and `statement`.
 
-### `analysis.history(from, to, stepDays)`
+### `analysis.history(from, to, stepDays)` — done
 
 ```graphql
 type History {
   dates: [DateTime!]!
-  byAccount: [AccountSeries!]!       # accountId + amounts, one per date
+  byAccount: [AccountSeries!]!       # account + amounts, one per date
   byAvailability: [AvailabilitySeries!]!
 }
 ```
@@ -136,27 +143,37 @@ chart's visible range rather than being fixed: zoomed out it lands on ~30, zoome
 in on 1. MoneyDB's `pointspermonth` said the same thing more awkwardly, since it could not
 express "one point per day" without knowing the month length.
 
-Cap the returned point count server-side too — `from`/`to`/`stepDays` are user input, and a
-decade at `stepDays: 1` is ~3650 simulations.
+`byAvailability` is **per bucket**, not cumulative. Stacking per-bucket series gives the
+cumulative reading back as the height of the stack; stacking cumulative ones would count the
+liquid accounts once per level above them. MoneyDB returned the cumulative form because it
+drew overlapping lines rather than a stack.
 
-### `analysis.prepayments(at)`
+`to` is always the last sample even when the step does not divide the range, otherwise the
+line stops short of the right edge. The point count is capped at 400 server-side —
+`from`/`to`/`stepDays` are user input and a decade at `stepDays: 1` is ~3650 simulations.
+Exceeding it is an error rather than a coarser answer, because a series quietly returned at a
+resolution nobody asked for is indistinguishable from one that was.
+
+### `analysis.prepayments(at)` — done
 
 ```graphql
 type Prepayment {
-  expenseId: ObjectIdWrapper!
-  title: String!
-  amount: Int!                       # cents, as booked
-  paidOn: DateTime!                  # transaction date
-  bookingStart: DateTime!
-  bookingEnd: DateTime!
+  expense: Expense!
   consumedFraction: Float!
-  remaining: Int!                    # cents still unconsumed at `at`
+  remaining: Float!                  # cents still unconsumed at `at`, signed like the expense
 }
 ```
 
-Returns only expenses with `remaining != 0`, so a zero-length booking period drops out on its
-own. The incomplete list is just the expense query filtered on `isIncomplete`, so it needs no
-endpoint.
+Returns the whole rendered expense rather than a copy of a few of its fields, so the view can
+link to it and read its transactions — `paidOn` is `min(transaction.date)` and needs no
+column of its own.
+
+Only expenses with a non-degenerate booking period that has not run out at `at` are returned.
+`remaining` follows `effectiveAmount`, so it is the reader's share and carries the expense's
+sign (negative for money that went out).
+
+The incomplete list needs no endpoint: `expenses.list` with every flag off except
+`incomplete`, alongside `normal: false`, is exactly that set.
 
 ### `analysis.overviews(from, to)`
 
@@ -180,7 +197,7 @@ type StatementEntry {
   bookingDate: DateTime              # null while the bank has not booked it
   title: String!
   store: String!
-  expenseId: ObjectIdWrapper         # null on balance rows
+  expenseId: UUID                    # null on balance rows
   amount: Int                        # this account's share in cents; null on balance rows
   balance: Int!                      # running total, re-anchored on recorded balances
   drift: Int                         # recorded minus carried, when a balance disagrees
@@ -188,20 +205,28 @@ type StatementEntry {
 ```
 
 Assemblable from what already exists — `analysis.balance(accountId, date)` for the opening row,
-plus the rendered expense and balance collections filtered by account and range — so it could
-start life in the frontend. It belongs on the server anyway: the running total and the drift
-have to be computed in one pass over a correctly ordered sequence, and that ordering (value
-date, balances after the expenses of the same instant) is exactly the sort of rule that goes
-wrong quietly when two clients each reimplement it.
+plus the rendered expense and balance views filtered by account and range — so it could start
+life in the frontend. It belongs on the server anyway: the running total and the drift have to
+be computed in one pass over a correctly ordered sequence, and that ordering (value date,
+balances before the expenses of the same instant) is exactly the sort of rule that goes wrong
+quietly when two clients each reimplement it. `sum(...) OVER (ORDER BY ...)` does both.
 
 Sort ascending to accumulate, return descending — newest first is what you want to read.
 
 ### Implementation note
 
-Load rendered balances and rendered expenses once and fold in Rust, the way MoneyDB's
-`simulateCached` does — not one aggregation pipeline per sample date. The collections are small
-(~16k rendered expenses, ~340 rendered balances), and every sampled date reuses the same working
-set, so repeated round trips would dominate the cost.
+Do the work in SQL, not by folding in Rust. That advice was written for mongo, where the only
+alternative was an aggregation pipeline per sample date; postgres does the whole thing set-based
+and `simulate_balances` in the migrations is the worked example.
+
+The trap it ran into is worth knowing before writing `overviews` or `statement`. Reading
+`expense_transactions_rendered` per (account, date) looks harmless and is not: `expense_users`
+is a `UNION` over the whole transaction table and cannot be narrowed to one account, so every
+lateral invocation rebuilds the rendering for all ~16k rows. A 120-point chart took 1.7s that
+way and 104ms once the rendering was materialized once per call and joined.
+
+Put the arithmetic in a SQL function rather than a Rust string, so `tests/sql` can reach it.
+That is the only place in the repo where a query can be tested against a database.
 
 ## Charts
 
