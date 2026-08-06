@@ -190,8 +190,41 @@
 		return out;
 	});
 
+	// Apex reports a drag that selects a range and a plain click through the same `click`
+	// event, so without this, selecting a range also moved the Stichtag to wherever the
+	// pointer came to rest. How far the pointer travelled is what tells them apart.
+	const DRAG_SLOP = 5; // px: a click with a shaky hand, not a selection
+	let pressedAt: { x: number; y: number } | null = null;
+	let wasDrag = false;
+
+	$effect(() => {
+		const down = (e: MouseEvent) => {
+			pressedAt = { x: e.clientX, y: e.clientY };
+			wasDrag = false;
+		};
+		const up = (e: MouseEvent) => {
+			if (!pressedAt) return;
+			wasDrag = Math.hypot(e.clientX - pressedAt.x, e.clientY - pressedAt.y) > DRAG_SLOP;
+			pressedAt = null;
+		};
+
+		// Both event families: pointer events cover touch, but anything synthesising plain
+		// mouse events would otherwise never set the flag. Capture phase, so they have run
+		// before apex's own handlers inside the chart.
+		const events = ['pointerdown', 'mousedown', 'pointerup', 'mouseup'] as const;
+		for (const name of events) {
+			window.addEventListener(name, name.endsWith('down') ? down : up, true);
+		}
+		return () => {
+			for (const name of events) {
+				window.removeEventListener(name, name.endsWith('down') ? down : up, true);
+			}
+		};
+	});
+
 	/// Clicking a point picks it as the Stichtag for the simulation below.
 	function pickDate(index: number) {
+		if (wasDrag) return;
 		const at = dates[index];
 		if (at === undefined) return;
 		const d = new Date(at);
@@ -223,10 +256,16 @@
 			},
 			events: {
 				zoomed: (_c: unknown, o: { xaxis: { min?: number; max?: number } }) => {
-					wealthState.zoom =
-						o.xaxis.min == null || o.xaxis.max == null
-							? null
-							: { min: o.xaxis.min, max: o.xaxis.max };
+					if (o.xaxis.min == null || o.xaxis.max == null) {
+						wealthState.zoom = null;
+						return;
+					}
+					// A click apex read as a hairline selection would narrow the window to
+					// almost nothing. Judged as a fraction of what is on screen rather than
+					// by the drag flag, so this holds even where only mouse events arrive.
+					const span = visible ? visible.max - visible.min : 0;
+					if (span > 0 && o.xaxis.max - o.xaxis.min < span * 0.02) return;
+					wealthState.zoom = { min: o.xaxis.min, max: o.xaxis.max };
 				},
 				// -1 when the click landed on empty plot area rather than on a point
 				click: (_e: unknown, _c: unknown, o: { dataPointIndex: number }) => {
@@ -305,9 +344,6 @@
 			</p>
 		{:else}
 			<Chart options={chartOptions} />
-			<p class="mt-1 text-center text-xs text-gray-500 dark:text-gray-400">
-				Ein Klick auf einen Punkt setzt den Stichtag für die Auswertung darunter.
-			</p>
 		{/if}
 	</Card>
 
