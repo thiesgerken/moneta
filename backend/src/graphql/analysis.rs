@@ -209,8 +209,10 @@ FROM simulate_balances($1, $2::timestamptz[], $3::uuid)
 struct MonthTotalRow {
     #[diesel(sql_type = Timestamptz)]
     month: DateTime<Utc>,
-    #[diesel(sql_type = diesel::sql_types::Uuid)]
-    account_id: Uuid,
+    /// null on the month's roll-up row, which is the only place the expense count is a
+    /// distinct count across accounts rather than within one
+    #[diesel(sql_type = Nullable<diesel::sql_types::Uuid>)]
+    account_id: Option<Uuid>,
     #[diesel(sql_type = Double)]
     income: f64,
     #[diesel(sql_type = Double)]
@@ -531,20 +533,25 @@ impl AnalysisQuery {
         let mut months = Vec::with_capacity(starts.len() - 1);
         for (index, month) in starts.iter().take(starts.len() - 1).enumerate() {
             let mut by_account = Vec::new();
-            let (mut income, mut expenses, mut expense_count) = (0.0, 0.0, 0);
+
+            // The roll-up row, whose count is distinct across the month rather than within one
+            // account -- summing the per-account counts would count an expense that books
+            // against two of your own accounts twice.
+            let rolled_up = month_rows
+                .iter()
+                .find(|r| r.month == *month && r.account_id.is_none());
+            let income = rolled_up.map_or(0.0, |t| t.income);
+            let expenses = rolled_up.map_or(0.0, |t| t.expenses);
+            let expense_count = rolled_up.map_or(0, |t| t.expense_count);
 
             for (account_id, account) in accounts.iter().sorted_by_key(|(_, a)| a.name.clone()) {
                 let totals = month_rows
                     .iter()
-                    .find(|r| r.month == *month && r.account_id == *account_id);
+                    .find(|r| r.month == *month && r.account_id == Some(*account_id));
 
                 let start_amount = *balances.get(&(index, *account_id)).unwrap_or(&0.0);
                 let end_amount = *balances.get(&(index + 1, *account_id)).unwrap_or(&0.0);
                 let moved = totals.map_or(0.0, |t| t.income + t.expenses);
-
-                income += totals.map_or(0.0, |t| t.income);
-                expenses += totals.map_or(0.0, |t| t.expenses);
-                expense_count += totals.map_or(0, |t| t.expense_count);
 
                 by_account.push(AccountOverview {
                     account: GraphQLAccount::new(account.clone()),
