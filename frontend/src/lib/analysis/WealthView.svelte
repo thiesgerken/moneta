@@ -386,15 +386,10 @@
 		</div>
 	</Card>
 
-	<div class="flex flex-wrap items-end gap-4">
-		<Label class="space-y-2">
-			<span>Stichtag</span>
-			<Input type="date" bind:value={wealthState.date} class="w-48" />
-		</Label>
-		<p class="pb-2 text-sm text-gray-500 dark:text-gray-400">
-			gilt für die berechneten Kontostände
-		</p>
-	</div>
+	<Label class="space-y-2">
+		<span>Stichtag</span>
+		<Input type="date" bind:value={wealthState.date} class="w-48" />
+	</Label>
 
 	<Card class="max-w-none p-4">
 		<h3 class="mb-2 text-lg font-semibold">Berechnete Kontostände</h3>
