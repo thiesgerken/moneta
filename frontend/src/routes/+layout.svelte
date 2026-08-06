@@ -3,6 +3,7 @@
 	import Nav from '$lib/Nav.svelte';
 	import { graphql } from '$houdini';
 	import { page } from '$app/state';
+	import { pageTitle } from '$lib/navigation';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -34,6 +35,10 @@
 		});
 	});
 </script>
+
+<svelte:head>
+	<title>{pageTitle(page.url.pathname)}</title>
+</svelte:head>
 
 <Nav />
 
