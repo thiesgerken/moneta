@@ -71,25 +71,17 @@ jobs:
       - run: cd frontend && pnpm check
       - run: cd frontend && pnpm lint
 
-  probe-if:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/devel')
-    steps:
-      - run: echo "the if evaluates"
-
-  probe-needs:
-    needs: [test-schema]
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "needs resolves"
-
+  # No `needs` on the test jobs, deliberately: this gitea never unblocks a job that has one.
+  # A probe job depending on a single succeeded job stayed blocked just the same, so the
+  # images would simply never be built. They are pushed from main and devel only, and both
+  # are merged from pull requests that ran the tests, so the gate bought little. Put it back
+  # once `needs` works again.
+  #
+  # Two steps rather than a matrix over the components, because checkout, buildx and the
+  # registry login are shared.
   build-docker:
-    needs: [test-backend, test-schema, test-frontend]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/devel')
-    # Two steps rather than a matrix over the components: gitea left the matrix children
-    # blocked forever with every dependency green, and checkout, buildx and the registry
-    # login are shared anyway.
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
 
