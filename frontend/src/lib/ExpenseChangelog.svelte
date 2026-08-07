@@ -19,10 +19,20 @@
 	import { categoryColor } from './analysis/overviews';
 	import { feedState } from './analysis/state.svelte';
 
+	/// The dashboard shows the same feed in a column beside everything else, where the filters
+	/// belong to the tab that owns them and six entries are as many as fit.
+	let {
+		limit = 100,
+		controls = true,
+		author
+	}: { limit?: number; controls?: boolean; author?: ChangelogAuthor$options } = $props();
+
+	const shownAuthor = $derived(author ?? (feedState.author as ChangelogAuthor$options));
+
 	let expandedDiffs = $state<string[]>([]);
 
 	const changelogStore = graphql(`
-		query ExpenseChangelog($author: ChangelogAuthor!) {
+		query ExpenseChangelog($author: ChangelogAuthor!, $limit: Int!) {
 			users {
 				me {
 					name
@@ -53,7 +63,7 @@
 			}
 
 			expenses {
-				changelog(limit: 100, skip: 0, author: $author) {
+				changelog(limit: $limit, skip: 0, author: $author) {
 					edges {
 						node {
 							id
@@ -149,14 +159,12 @@
 
 	async function load() {
 		const request = ++latestRequest;
-		const result = await changelogStore.fetch({
-			variables: { author: feedState.author as ChangelogAuthor$options }
-		});
+		const result = await changelogStore.fetch({ variables: { author: shownAuthor, limit } });
 		if (request === latestRequest) feed = result.data ?? null;
 	}
 
 	$effect(() => {
-		void feedState.author;
+		void shownAuthor;
 		void load();
 	});
 
@@ -291,31 +299,31 @@
 	};
 </script>
 
-<div class="mx-auto max-w-3xl">
-	<div class="flex items-center justify-between gap-3 pb-2">
-		<!-- the same words the entries use, which say "von dir" and "von Krösus"; the default
-		     leads, so the row reads as everything first and then two ways to narrow it -->
-		<ToggleGroup
-			bind:value={feedState.author}
-			size="sm"
-			options={[
-				{ value: 'ANYONE', label: 'Alle' },
-				{ value: 'ME', label: 'Von mir' },
-				{ value: 'OTHERS', label: 'Von anderen' }
-			]}
-		/>
-		{#if $changelogStore.fetching}
-			<Spinner size="4" />
-		{/if}
-	</div>
+<div class={controls ? 'mx-auto max-w-3xl' : ''}>
+	{#if controls}
+		<div class="flex items-center justify-between gap-3 pb-2">
+			<!-- the same words the entries use, which say "von dir" and "von Krösus"; the default
+			     leads, so the row reads as everything first and then two ways to narrow it -->
+			<ToggleGroup
+				bind:value={feedState.author}
+				size="sm"
+				options={[
+					{ value: 'ANYONE', label: 'Alle' },
+					{ value: 'ME', label: 'Von mir' },
+					{ value: 'OTHERS', label: 'Von anderen' }
+				]}
+			/>
+			{#if $changelogStore.fetching}
+				<Spinner size="4" />
+			{/if}
+		</div>
+	{/if}
 
 	{#if $changelogStore.fetching && entries.length === 0}
 		<div class="flex justify-center py-12"><Spinner size="6" /></div>
 	{:else if entries.length === 0}
 		<p class="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-			{feedState.author === 'OTHERS'
-				? 'Niemand sonst hat etwas geändert.'
-				: 'Noch keine Aktivität.'}
+			{shownAuthor === 'OTHERS' ? 'Niemand sonst hat etwas geändert.' : 'Noch keine Aktivität.'}
 		</p>
 	{/if}
 
