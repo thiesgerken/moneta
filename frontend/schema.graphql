@@ -833,6 +833,14 @@ type User {
 
 type UserMutation {
   login(name: String!, password: String!): User!
+  """
+    Records that the reader is here, and says when they were here before.
+
+    A mutation because it writes, but it is what the start page opens with: it needs the
+    previous visit to date its news from, and that answer stops being available the moment
+    this one is recorded.
+  """
+  visit: Visit!
   logout: Boolean!
 }
 
@@ -840,5 +848,16 @@ type UserQuery {
   me: User!
   get(id: UUID!): User!
   list(limit: Int, skip: Int): [User!]!
+}
+
+"""
+  When the reader was last here, and when they were here before that.
+
+  `previous` is what a start page dates its news from: null on a first visit, which the
+  reader has no history to be told about anyway.
+"""
+type Visit {
+  current: DateTime!
+  previous: DateTime
 }
 

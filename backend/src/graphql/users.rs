@@ -54,6 +54,42 @@ impl GraphQLUserInfo {
     }
 }
 
+/// When the reader was last here, and when they were here before that.
+///
+/// `previous` is what a start page dates its news from: null on a first visit, which the
+/// reader has no history to be told about anyway.
+#[derive(Debug, juniper::GraphQLObject)]
+#[graphql(context = Context)]
+pub struct Visit {
+    pub current: chrono::DateTime<chrono::Utc>,
+    pub previous: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, diesel::QueryableByName)]
+struct VisitRow {
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>)]
+    seen_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>)]
+    seen_before: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// How long a visit lasts.
+///
+/// Reloading the page, or coming back to the tab over lunch, is the same visit: the marker
+/// stays put and the page keeps saying what it said, which is the point of a marker at all.
+/// Coming back in the evening is a new one.
+const VISIT_HOURS: i64 = 4;
+
+/// One statement, so two tabs opening together cannot both decide they are the new visit and
+/// roll the marker twice -- the second would land on the first's own arrival.
+const VISIT: &str = r#"
+UPDATE users
+SET seen_before = CASE WHEN seen_at IS NULL OR seen_at < $2 THEN seen_at ELSE seen_before END,
+    seen_at     = CASE WHEN seen_at IS NULL OR seen_at < $2 THEN now()   ELSE seen_at     END
+WHERE id = $1
+RETURNING seen_at, seen_before
+"#;
+
 pub struct UserQuery;
 
 #[graphql_object(
@@ -143,6 +179,28 @@ impl UserMutation {
                 juniper::Value::null(),
             ))
         }
+    }
+
+    /// Records that the reader is here, and says when they were here before.
+    ///
+    /// A mutation because it writes, but it is what the start page opens with: it needs the
+    /// previous visit to date its news from, and that answer stops being available the moment
+    /// this one is recorded.
+    async fn visit(context: &Context) -> juniper::FieldResult<Visit> {
+        let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
+
+        let now = chrono::Utc::now();
+        let row: VisitRow = diesel::sql_query(VISIT)
+            .bind::<diesel::sql_types::Uuid, _>(user_id)
+            .bind::<diesel::sql_types::Timestamptz, _>(now - chrono::Duration::hours(VISIT_HOURS))
+            .get_result(conn)
+            .await?;
+
+        Ok(Visit {
+            current: row.seen_at.unwrap_or(now),
+            previous: row.seen_before,
+        })
     }
 
     async fn logout(context: &Context) -> juniper::FieldResult<bool> {

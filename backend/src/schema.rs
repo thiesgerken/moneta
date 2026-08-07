@@ -174,6 +174,8 @@ diesel::table! {
         name -> Text,
         full_name -> Text,
         password_hash -> Text,
+        seen_at -> Nullable<Timestamptz>,
+        seen_before -> Nullable<Timestamptz>,
     }
 }
 

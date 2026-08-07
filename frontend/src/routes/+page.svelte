@@ -25,15 +25,39 @@
 
 	const DAY = 86400000;
 
-	/// How far back "neu seit" reaches until the last visit is recorded.
+	/// How far back the news reaches for someone who has never been here before.
 	const RECENT_DAYS = 7;
 
 	const now = new Date();
-	const recentSince = new Date(now.getTime() - RECENT_DAYS * DAY);
 	const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 	// six whole months before the running one, which is what the running one is compared against
 	const compareFrom = new Date(now.getFullYear(), now.getMonth() - 6, 1);
 	const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+
+	/// Records this visit and hands back the one before it, which is what everything on this
+	/// page dates its news from.
+	const visitMutation = graphql(`
+		mutation RecordVisit {
+			users {
+				visit {
+					previous
+				}
+			}
+		}
+	`);
+
+	/// Null until the marker is known, which is also what keeps the query below from firing
+	/// with a window it would have to redo a moment later.
+	let since = $state<Date | null>(null);
+	let firstVisit = $state(false);
+
+	$effect(() => {
+		void visitMutation.mutate(null).then((result) => {
+			const previous = result.data?.users.visit.previous ?? null;
+			firstVisit = previous === null;
+			since = previous ?? new Date(now.getTime() - RECENT_DAYS * DAY);
+		});
+	});
 
 	const dashboardStore = graphql(`
 		query Dashboard(
@@ -106,13 +130,11 @@
 	`);
 
 	$effect(() => {
+		const from = since;
+		if (!from) return;
+
 		void dashboardStore.fetch({
-			variables: {
-				now,
-				since: recentSince,
-				monthsFrom: compareFrom,
-				sparkFrom: yearAgo
-			}
+			variables: { now, since: from, monthsFrom: compareFrom, sparkFrom: yearAgo }
 		});
 	});
 
@@ -219,6 +241,19 @@
 
 	const monthName = (d: Date) => d.toLocaleDateString('de-DE', { month: 'long' });
 
+	/// What the window is called. A first visit has nothing to have been away from, and a
+	/// marker set today reads better as the day than as "seit deinem letzten Besuch", which
+	/// sounds like weeks.
+	const windowLabel = $derived.by(() => {
+		if (!since || firstVisit) return `in den letzten ${RECENT_DAYS} Tagen`;
+
+		const days = Math.floor((now.getTime() - since.getTime()) / DAY);
+		if (days < 1) return 'seit heute früh';
+		if (days === 1) return 'seit gestern';
+		if (days < 7) return `seit ${since.toLocaleDateString('de-DE', { weekday: 'long' })}`;
+		return `seit dem ${since.toLocaleDateString('de-DE')}`;
+	});
+
 	const feedHref = resolve('/analysis');
 	const lastMonthHref = $derived(
 		resolve('/analysis/[year]/[month]', {
@@ -255,9 +290,7 @@
 						>
 							{delta > 0 ? '+' : ''}{euroExact(delta)}
 						</span>
-						<span class="text-gray-500 dark:text-gray-400">
-							in den letzten {RECENT_DAYS} Tagen
-						</span>
+						<span class="text-gray-500 dark:text-gray-400">{windowLabel}</span>
 					</p>
 				{/if}
 			</div>
@@ -306,7 +339,7 @@
 								{changeCount === 1 ? 'Änderung' : 'Änderungen'} von anderen
 							</span>
 							<span class="block text-sm text-gray-500 dark:text-gray-400">
-								in den letzten {RECENT_DAYS} Tagen — ansehen
+								{windowLabel} — ansehen
 							</span>
 						</span>
 						<ArrowRightOutline class="h-4 w-4 shrink-0 text-gray-400" />
