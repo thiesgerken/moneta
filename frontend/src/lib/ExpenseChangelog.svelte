@@ -24,8 +24,15 @@
 	let {
 		limit = 100,
 		controls = true,
-		author
-	}: { limit?: number; controls?: boolean; author?: ChangelogAuthor$options } = $props();
+		author,
+		since
+	}: {
+		limit?: number;
+		controls?: boolean;
+		author?: ChangelogAuthor$options;
+		/// only read where the controls are hidden; with them, the reader's own choice wins
+		since?: Date | null;
+	} = $props();
 
 	const shownAuthor = $derived(author ?? (feedState.author as ChangelogAuthor$options));
 
@@ -42,7 +49,7 @@
 
 	// a day boundary rather than "now minus n days", so the window does not creep while the
 	// page is open and the entries of the earliest day are all there or all gone
-	const since = $derived.by(() => {
+	const spanSince = $derived.by(() => {
 		const days = Number(feedState.span);
 		if (!feedState.span || !Number.isFinite(days)) return null;
 
@@ -50,6 +57,8 @@
 		const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 		return new Date(midnight.getTime() - (days - 1) * DAY);
 	});
+
+	const cutoff = $derived(controls ? spanSince : (since ?? null));
 
 	let expandedDiffs = $state<string[]>([]);
 
@@ -182,14 +191,14 @@
 	async function load() {
 		const request = ++latestRequest;
 		const result = await changelogStore.fetch({
-			variables: { author: shownAuthor, limit, since: controls ? since : null }
+			variables: { author: shownAuthor, limit, since: cutoff }
 		});
 		if (request === latestRequest) feed = result.data ?? null;
 	}
 
 	$effect(() => {
 		void shownAuthor;
-		void since;
+		void cutoff;
 		void load();
 	});
 
@@ -349,7 +358,7 @@
 		<div class="flex justify-center py-12"><Spinner size="6" /></div>
 	{:else if entries.length === 0}
 		<p class="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-			{#if since}
+			{#if cutoff}
 				In diesem Zeitraum ist nichts passiert.
 			{:else if shownAuthor === 'OTHERS'}
 				Niemand sonst hat etwas geändert.

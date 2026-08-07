@@ -121,6 +121,11 @@
 				changes: changelog(author: OTHERS, since: $since, limit: 1) {
 					totalCount
 				}
+				# everyone's, including mine: whether the feed beside this has anything to show
+				# for the time we were away, which decides what it can call itself
+				recent: changelog(since: $since, limit: 1) {
+					totalCount
+				}
 				# what the "pruefen" link on /expenses lands on, so the number and the list agree.
 				# Oldest first, since how long the oldest one has been waiting says more about
 				# whether this needs attention than the count does.
@@ -265,6 +270,15 @@
 	});
 
 	const lastMonth = $derived(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+
+	/// Whether the feed can be about the time we were away.
+	///
+	/// Only if something actually happened in it, and only from the second visit on. Otherwise
+	/// the column would be a heading over an empty box, which is what the feed used to be, and
+	/// it falls back to the newest entries under a heading that promises no more than that.
+	const sinceLastVisit = $derived(
+		!firstVisit && since !== null && (data?.expenses.recent.totalCount ?? 0) > 0
+	);
 
 	const changeCount = $derived(data?.expenses.changes.totalCount ?? 0);
 	const reviewCount = $derived(data?.expenses.review.totalCount ?? 0);
@@ -472,10 +486,12 @@
 				class="flex max-w-none flex-col border-0 bg-white p-4 lg:absolute lg:inset-0 dark:bg-gray-800"
 			>
 				<div class="mb-2 flex items-baseline justify-between gap-2">
-					<h2 class="text-lg font-semibold">Zuletzt passiert</h2>
+					<h2 class="text-lg font-semibold">
+						{sinceLastVisit ? 'Seit du das letzte Mal hier warst' : 'Zuletzt passiert'}
+					</h2>
 					<a
 						href="{resolve('/analysis')}?tab=aktivitaet"
-						class="text-primary-600 dark:text-primary-400 text-sm hover:underline"
+						class="text-primary-600 dark:text-primary-400 shrink-0 text-sm hover:underline"
 					>
 						alle anzeigen
 					</a>
@@ -483,7 +499,12 @@
 				<!-- min-h-0, or the flex child refuses to shrink below its content and the card
 				     grows the row after all -->
 				<div class="max-h-112 min-h-0 flex-1 overflow-y-auto lg:max-h-none">
-					<ExpenseChangelog limit={25} controls={false} author="ANYONE" />
+					<ExpenseChangelog
+						limit={25}
+						controls={false}
+						author="ANYONE"
+						since={sinceLastVisit ? since : null}
+					/>
 				</div>
 			</Card>
 		</div>
