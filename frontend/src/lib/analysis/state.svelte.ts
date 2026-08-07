@@ -25,9 +25,9 @@ export type Range = {
 
 const range = (span: string): Range => ({ span, from: undefined, to: undefined });
 
-/// Whose changes the activity feed shows. Defaults to everyone else's: you already know what
-/// you did, so the feed is worth opening for what someone else did.
-export const feedState = $state({ author: 'OTHERS' });
+/// Whose changes the activity feed shows. A feed that opens on a filter reads as an empty
+/// feed when nobody else has been active, and leaves you looking for your own entry.
+export const feedState = $state({ author: 'ANYONE' });
 
 export const wealthState = $state({
 	range: range('all'),
