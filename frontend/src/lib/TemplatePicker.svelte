@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Label, Input, Select } from 'flowbite-svelte';
 	import { graphql } from '$houdini';
+	import { shortDate } from './analysis/dates';
 
 	interface Props {
 		templateId: string;
@@ -60,7 +61,7 @@
 			: []),
 		...candidates.map((c) => ({
 			value: c.id,
-			name: `${c.title}${c.store ? ' · ' + c.store : ''} · ${c.accrualStart?.toLocaleDateString('de-DE')} · ${(c.effectiveAmount / 100).toFixed(2)}€`
+			name: `${c.title}${c.store ? ' · ' + c.store : ''} · ${shortDate(c.accrualStart)} · ${(c.effectiveAmount / 100).toFixed(2)}€`
 		}))
 	]);
 </script>

@@ -18,6 +18,7 @@
 	import { formatAccount } from './expense_utils';
 	import { categoryColor } from './analysis/overviews';
 	import { feedState } from './analysis/state.svelte';
+	import { shortDate } from './analysis/dates';
 
 	/// The dashboard shows the same feed in a column beside everything else, where the filters
 	/// belong to the tab that owns them and six entries are as many as fit.
@@ -312,7 +313,7 @@
 		// `de-DE` puts a trailing dot on a day-and-month date, which a year must not follow
 		const short = (d: Date) =>
 			d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }).replace(/\.$/, '');
-		const full = (d: Date) => d.toLocaleDateString('de-DE');
+		const full = (d: Date) => shortDate(d);
 
 		return state.accrualStart.getTime() === state.accrualEnd.getTime()
 			? full(state.accrualStart)

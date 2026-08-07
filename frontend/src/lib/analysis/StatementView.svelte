@@ -18,6 +18,7 @@
 	import { graphql } from '$houdini';
 	import { statementState } from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
+	import { shortDate } from './dates';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -192,7 +193,7 @@
 						{#each rows as r, i (`${r.kind}-${r.date.getTime()}-${r.expenseId ?? i}`)}
 							<TableBodyRow class={r.kind === 'EXPENSE' ? '' : 'bg-gray-50/80 dark:bg-gray-900/60'}>
 								<TableBodyCell class="px-4 py-3 whitespace-nowrap">
-									{r.date.toLocaleDateString('de-DE')}
+									{shortDate(r.date)}
 								</TableBodyCell>
 								<TableBodyCell
 									class="px-4 py-3 text-right whitespace-nowrap {(r.amount ?? 0) < 0

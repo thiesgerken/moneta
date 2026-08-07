@@ -20,6 +20,7 @@
 	} from 'flowbite-svelte-icons';
 	import AutomationRuleModal from './AutomationRuleModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
+	import { shortDate } from './analysis/dates';
 
 	let searchTerm = $state('');
 	let showNewModal = $state(false);
@@ -176,7 +177,7 @@
 					</TableBodyCell>
 					<TableBodyCell class="px-4 py-3">{rule.priority}</TableBodyCell>
 					<TableBodyCell class="px-4 py-3">
-						{rule.lastDelivery?.toLocaleDateString('de-DE') ?? '–'}
+						{rule.lastDelivery ? shortDate(rule.lastDelivery) : '–'}
 					</TableBodyCell>
 					<TableBodyCell class="px-4 py-3 text-right">
 						<button

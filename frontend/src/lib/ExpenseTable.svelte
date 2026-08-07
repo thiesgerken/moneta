@@ -43,6 +43,7 @@
 	import ExpenseModal from './ExpenseModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
 	import { page } from '$app/state';
+	import { shortDate } from './analysis/dates';
 
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
@@ -126,7 +127,7 @@
 
 		const { from, to } = filterDateRange;
 		if (from || to) {
-			const day = (d: Date | undefined) => (d ? d.toLocaleDateString('de-DE') : '');
+			const day = (d: Date | undefined) => (d ? shortDate(d) : '');
 			out.push({
 				label: from && to ? `${day(from)} – ${day(to)}` : `ab ${day(from)}${day(to)}`,
 				clear: () => (filterDateRange = { from: undefined, to: undefined })

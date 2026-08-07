@@ -20,7 +20,7 @@
 	import SeriesToggle from './SeriesToggle.svelte';
 	import { AVAILABILITY_LABELS, availabilityColor } from './availability';
 	import { CUSTOM_SPAN, wealthState } from './state.svelte';
-	import { todayIso } from './dates';
+	import { shortDate, todayIso } from './dates';
 	import { resolve } from '$app/paths';
 	import { ANALYSIS_CARD, WEALTH_COLOR } from './cards';
 
@@ -480,9 +480,7 @@
 							{euro(b.amount)}
 						</TableBodyCell>
 						<TableBodyCell class="hidden px-4 py-3 text-gray-500 sm:table-cell dark:text-gray-400">
-							{euro(b.reference.amount)} am {b.reference.date.toLocaleDateString(
-								'de-DE'
-							)}{b.expenseCount > 0
+							{euro(b.reference.amount)} am {shortDate(b.reference.date)}{b.expenseCount > 0
 								? ` + ${b.expenseCount} ${b.expenseCount === 1 ? 'Ausgabe' : 'Ausgaben'}`
 								: ''}
 						</TableBodyCell>

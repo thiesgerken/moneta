@@ -15,6 +15,7 @@
 	import { graphql } from '$houdini';
 	import { prepaymentsState } from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
+	import { shortDate } from './dates';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -160,12 +161,10 @@
 								{/if}
 							</TableBodyCell>
 							<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
-								{paid ? paid.toLocaleDateString('de-DE') : '–'}
+								{paid ? shortDate(paid) : '–'}
 							</TableBodyCell>
 							<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
-								{p.expense.accrualStart.toLocaleDateString('de-DE')} – {p.expense.accrualEnd.toLocaleDateString(
-									'de-DE'
-								)}
+								{shortDate(p.expense.accrualStart)} – {shortDate(p.expense.accrualEnd)}
 							</TableBodyCell>
 							<TableBodyCell class="px-4 py-3">{euro(p.expense.effectiveAmount)}</TableBodyCell>
 							<TableBodyCell class="px-4 py-3">
@@ -217,7 +216,7 @@
 								{/if}
 							</TableBodyCell>
 							<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
-								{e.accrualStart.toLocaleDateString('de-DE')}
+								{shortDate(e.accrualStart)}
 							</TableBodyCell>
 							<TableBodyCell class="px-4 py-3">{euro(e.effectiveAmount)}</TableBodyCell>
 							<TableBodyCell class="px-4 py-3">

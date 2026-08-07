@@ -14,6 +14,7 @@
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import { categoryColor } from '$lib/analysis/overviews';
 	import { WEALTH_COLOR } from '$lib/analysis/cards';
+	import { shortDate } from '$lib/analysis/dates';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', {
@@ -296,7 +297,7 @@
 		if (days < 1) return 'seit heute früh';
 		if (days === 1) return 'seit gestern';
 		if (days < 7) return `seit ${since.toLocaleDateString('de-DE', { weekday: 'long' })}`;
-		return `seit dem ${since.toLocaleDateString('de-DE')}`;
+		return `seit dem ${shortDate(since)}`;
 	});
 
 	const lastMonthHref = $derived(
@@ -417,7 +418,7 @@
 									<!-- the age of the oldest is what says whether this has been sitting
 									     there; a count alone reads the same after a day and after a year -->
 									älteste: {oldestReview.title || 'Ohne Titel'} vom
-									{oldestReview.accrualStart.toLocaleDateString('de-DE')}
+									{shortDate(oldestReview.accrualStart)}
 								{:else}
 									ungeprüft oder unvollständig
 								{/if}
@@ -500,7 +501,7 @@
 				     changes under a heading, with nothing saying that none of them are new. -->
 				<p class="mt-0.5 mb-2 text-sm text-gray-500 dark:text-gray-400">
 					{#if sinceLastVisit}
-						Seit deinem letzten Besuch am {since?.toLocaleDateString('de-DE')}
+						Seit deinem letzten Besuch am {since ? shortDate(since) : ''}
 					{:else if firstVisit}
 						Die letzten Änderungen
 					{:else}

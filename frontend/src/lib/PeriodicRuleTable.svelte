@@ -21,6 +21,7 @@
 	} from 'flowbite-svelte-icons';
 	import PeriodicRuleModal from './PeriodicRuleModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
+	import { shortDate } from './analysis/dates';
 
 	let searchTerm = $state('');
 	let showNewModal = $state(false);
@@ -188,9 +189,7 @@
 							? (rule.amountReplacement / 100).toFixed(2) + '€'
 							: 'wie Vorlage'}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3"
-						>{rule.lastCreation?.toLocaleDateString('de-DE')}</TableBodyCell
-					>
+					<TableBodyCell class="px-4 py-3">{shortDate(rule.lastCreation)}</TableBodyCell>
 					<TableBodyCell class="px-4 py-3">
 						{#if !rule.templateId}
 							<Badge color="red">Vorlage fehlt</Badge>

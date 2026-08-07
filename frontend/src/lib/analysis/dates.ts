@@ -13,6 +13,14 @@ export function isoDate(d: Date): string {
 
 export const todayIso = () => isoDate(new Date());
 
+/// A date the way it is written down: `08.08.2026`.
+///
+/// `de-DE` on its own gives `8.8.2026`, which is the same date in fewer characters and reads
+/// worse in a column -- the day, the month and the year all start in a different place from
+/// one row to the next.
+export const shortDate = (d: Date): string =>
+	d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
 export const daysAgoIso = (days: number) => isoDate(new Date(Date.now() - days * 86400000));
 
 /// Midnight on the first of the month containing `at`, as epoch milliseconds.

@@ -12,6 +12,7 @@
 	} from 'flowbite-svelte';
 	import { Section } from 'flowbite-svelte-blocks';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
+	import { shortDate } from './analysis/dates';
 
 	let searchTerm = $state('');
 	let onlyUnmatched = $state(false);
@@ -84,7 +85,7 @@
 			{#each deliveries as delivery (delivery.id)}
 				<TableBodyRow>
 					<TableBodyCell class="px-4 py-3">
-						{delivery.date?.toLocaleDateString('de-DE')}
+						{shortDate(delivery.date)}
 					</TableBodyCell>
 					<TableBodyCell class="px-4 py-3">
 						{accountNames.get(delivery.accountId) ?? '?'}
