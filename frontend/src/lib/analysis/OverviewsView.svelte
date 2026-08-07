@@ -22,6 +22,7 @@
 		deltaColor,
 		monthLabel,
 		monthTicks,
+		monthDrilldown,
 		type OverviewsData
 	} from './overviews';
 	import { overviewsState } from './state.svelte';
@@ -53,7 +54,13 @@
 	const months = $derived(overviews?.months ?? []);
 
 	const chartOptions = $derived({
-		chart: { type: 'bar', height: 300, toolbar: { show: false }, stacked: true },
+		chart: {
+			type: 'bar',
+			height: 300,
+			toolbar: { show: false },
+			stacked: true,
+			events: monthDrilldown(months)
+		},
 		series: [
 			{ name: 'Einnahmen', data: months.map((o) => o.income / 100) },
 			{ name: 'Ausgaben', data: months.map((o) => o.expenses / 100) }
@@ -168,3 +175,10 @@
 		</Card>
 	{/if}
 </div>
+
+<style>
+	/* apex draws the axis labels as plain text; nothing says they can be clicked */
+	:global(.apexcharts-xaxis-label) {
+		cursor: pointer;
+	}
+</style>

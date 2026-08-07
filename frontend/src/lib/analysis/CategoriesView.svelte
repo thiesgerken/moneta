@@ -9,6 +9,7 @@
 		overviewsStore,
 		monthLabel,
 		monthTicks,
+		monthDrilldown,
 		categoryColor,
 		type OverviewsData
 	} from './overviews';
@@ -76,6 +77,7 @@
 			toolbar: { show: false },
 			stacked: true,
 			events: {
+				...monthDrilldown(months),
 				// apex toggles the series itself; this only keeps our list in step with it
 				legendClick: (_c: unknown, index: number) => {
 					const name = bars[index]?.name;
@@ -178,3 +180,10 @@
 		</Card>
 	{/if}
 </div>
+
+<style>
+	/* apex draws the axis labels as plain text; nothing says they can be clicked */
+	:global(.apexcharts-xaxis-label) {
+		cursor: pointer;
+	}
+</style>
