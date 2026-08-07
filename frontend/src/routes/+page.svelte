@@ -12,6 +12,7 @@
 	import Chart from '$lib/Chart.svelte';
 	import ExpenseChangelog from '$lib/ExpenseChangelog.svelte';
 	import { categoryColor } from '$lib/analysis/overviews';
+	import { WEALTH_COLOR } from '$lib/analysis/cards';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', {
@@ -181,7 +182,7 @@
 			animations: { enabled: false }
 		},
 		series: [{ name: 'Vermögen', data: spark }],
-		colors: ['#f05a28'],
+		colors: [WEALTH_COLOR],
 		stroke: { curve: 'smooth', width: 2 },
 		fill: { type: 'gradient', gradient: { opacityFrom: 0.4, opacityTo: 0 } },
 		xaxis: { type: 'datetime' },

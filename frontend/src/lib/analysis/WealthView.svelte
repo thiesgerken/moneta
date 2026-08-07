@@ -20,7 +20,7 @@
 	import SeriesToggle from './SeriesToggle.svelte';
 	import { AVAILABILITY_LABELS, availabilityColor } from './availability';
 	import { CUSTOM_SPAN, wealthState } from './state.svelte';
-	import { ANALYSIS_CARD } from './cards';
+	import { ANALYSIS_CARD, WEALTH_COLOR } from './cards';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -167,7 +167,7 @@
 		return [
 			{
 				name: 'Gesamt',
-				color: '#f05a28',
+				color: WEALTH_COLOR,
 				amounts: dates.map((_, i) => loaded.byAccount.reduce((sum, s) => sum + s.amounts[i], 0))
 			}
 		];
