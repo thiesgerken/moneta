@@ -292,7 +292,7 @@
 		<div class="grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
 			<div>
 				<p class="text-sm text-gray-500 dark:text-gray-400">
-					Hallo{greeting ? ` ${greeting}` : ''}, dein Vermögen beträgt
+					Hallo{greeting ? ` ${greeting}` : ''}, du hast
 				</p>
 				<!-- on `data` rather than on `fetching`, which is false before the first fetch is
 				     issued -- the page is rendered on the server, where there is none -->
@@ -312,8 +312,13 @@
 						>
 							{delta > 0 ? '+' : ''}{euroExact(delta)}
 						</span>
+						<!-- the month spelt out and the year left off: this is always a month back,
+						     so the year is either obvious or the same one -->
 						<span class="text-gray-500 dark:text-gray-400">
-							seit dem {monthAgo.toLocaleDateString('de-DE')}
+							im Vergleich zum {monthAgo.toLocaleDateString('de-DE', {
+								day: 'numeric',
+								month: 'long'
+							})}
 						</span>
 					</p>
 				{/if}
