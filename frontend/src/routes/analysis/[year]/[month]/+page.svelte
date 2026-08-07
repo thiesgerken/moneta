@@ -34,15 +34,26 @@
 
 	let sign = $state('expenses');
 
+	const open = (y: number, m: number) => {
+		goto(resolve('/analysis/[year]/[month]', { year: `${y}`, month: `${m}` }));
+	};
+
 	const shift = (n: number) => {
 		const d = new Date(Date.UTC(year, month - 1 + n, 1));
-		goto(
-			resolve('/analysis/[year]/[month]', {
-				year: `${d.getUTCFullYear()}`,
-				month: `${d.getUTCMonth() + 1}`
-			})
-		);
+		open(d.getUTCFullYear(), d.getUTCMonth() + 1);
 	};
+
+	/// The heading is a month input, so this page reads as one of a series rather than as a
+	/// place you arrived at: the arrows only ever offer the two next to it, and getting to
+	/// March of last year meant either counting clicks or going back to the overview.
+	const picked = $derived(`${year}-${`${month}`.padStart(2, '0')}`);
+
+	function pick(value: string) {
+		// an emptied input, which the picker allows
+		if (!value) return;
+		const [y, m] = value.split('-').map(Number);
+		if (y && m) open(y, m);
+	}
 
 	const detailStore = graphql(`
 		query AnalysisMonthDetail($from: DateTime!, $to: DateTime!) {
@@ -189,8 +200,18 @@
 			<Button color="alternative" size="sm" onclick={() => shift(-1)}>
 				<ChevronLeftOutline class="h-4 w-4" />
 			</Button>
+			<!-- a month input rather than a heading: the browser's own picker is a year and a
+			     month grid, which is exactly the choice on offer here -->
 			<h2 class="text-xl font-semibold">
-				{start.toLocaleDateString('de-DE', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+				<label>
+					<span class="sr-only">Monat</span>
+					<input
+						type="month"
+						value={picked}
+						onchange={(e) => pick((e.target as HTMLInputElement).value)}
+						class="focus:border-primary-500 cursor-pointer rounded-lg border border-transparent bg-transparent px-2 py-1 text-xl font-semibold hover:border-gray-300 focus:ring-0 dark:hover:border-gray-600"
+					/>
+				</label>
 			</h2>
 			<Button color="alternative" size="sm" onclick={() => shift(1)}>
 				<ChevronRightOutline class="h-4 w-4" />
