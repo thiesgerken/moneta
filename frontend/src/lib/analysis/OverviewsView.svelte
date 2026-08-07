@@ -94,18 +94,20 @@
 			<h3 class="mb-2 text-lg font-semibold">Monatliche Übersichten</h3>
 			<div class="overflow-x-auto">
 				<Table hoverable striped class="w-full text-left text-sm">
-					<!-- Delta right after the month: it is what the row is read for, and on a phone
-					     the columns behind it are off the screen. What is dropped there is what
-					     answers a question nobody asks on a phone -- where the month started, how
-					     many expenses it took, and how far the two ways of counting disagree. -->
+					<!-- What the month did comes before what it left behind: delta, then the two
+					     sides it is made of, then the balances they moved between. On a phone the
+					     columns behind Ausgaben are off the screen, and what is dropped there is
+					     what answers a question nobody asks on a phone -- how many expenses it
+					     took, where the month started, and how far the two ways of counting
+					     disagree. -->
 					<TableHead>
 						<TableHeadCell class="px-4 py-3">Monat</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Delta</TableHeadCell>
-						<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Vermögen Beginn</TableHeadCell>
-						<TableHeadCell class="px-4 py-3">Vermögen Ende</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Einnahmen</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Ausgaben</TableHeadCell>
 						<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Anzahl</TableHeadCell>
+						<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Vermögen Beginn</TableHeadCell>
+						<TableHeadCell class="px-4 py-3">Vermögen Ende</TableHeadCell>
 						<TableHeadCell class="hidden px-4 py-3 sm:table-cell">
 							<span class="underline decoration-dotted">Fehler</span>
 							<Tooltip class="max-w-xs text-xs font-normal normal-case">
@@ -140,10 +142,6 @@
 										{euro(o.endTotal - o.startTotal)}
 									</Badge>
 								</TableBodyCell>
-								<TableBodyCell class="hidden px-4 py-3 sm:table-cell"
-									>{euro(o.startTotal)}</TableBodyCell
-								>
-								<TableBodyCell class="px-4 py-3">{euro(o.endTotal)}</TableBodyCell>
 								<TableBodyCell class="px-4 py-3 text-green-700 dark:text-green-400"
 									>{euro(o.income)}</TableBodyCell
 								>
@@ -153,6 +151,10 @@
 								<TableBodyCell class="hidden px-4 py-3 sm:table-cell"
 									>{o.expenseCount}</TableBodyCell
 								>
+								<TableBodyCell class="hidden px-4 py-3 sm:table-cell"
+									>{euro(o.startTotal)}</TableBodyCell
+								>
+								<TableBodyCell class="px-4 py-3">{euro(o.endTotal)}</TableBodyCell>
 								<TableBodyCell
 									class="hidden px-4 py-3 sm:table-cell {errorClass(integrationError(o))}"
 								>
