@@ -11,6 +11,7 @@
 	import type { ApexOptions } from 'apexcharts';
 	import Chart from '$lib/Chart.svelte';
 	import ExpenseChangelog from '$lib/ExpenseChangelog.svelte';
+	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import { categoryColor } from '$lib/analysis/overviews';
 	import { WEALTH_COLOR } from '$lib/analysis/cards';
 
@@ -36,8 +37,8 @@
 	// The 31st of a month whose predecessor is shorter rolls into the 1st, which is close
 	// enough to a month and never skips one.
 	const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-	// six whole months before the running one, which is what the running one is compared against
-	const compareFrom = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+	// the month before the running one, which is what the running one is compared against
+	const compareFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 	const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
 
 	/// Records this visit and hands back the one before it, which is what everything on this
@@ -100,6 +101,7 @@
 				overviews(from: $monthsFrom, to: $now) {
 					months {
 						month
+						income
 						expenses
 						byCategory {
 							category {
@@ -107,6 +109,7 @@
 								name
 								color
 							}
+							income
 							expenses
 						}
 					}
@@ -194,35 +197,40 @@
 
 	const months = $derived(data?.analysis.overviews.months ?? []);
 
-	/// The running month, which is the last one the range covers.
+	/// The running month, which is the last one the range covers, and the one before it.
 	const thisMonth = $derived(months.at(-1));
+	const previousMonth = $derived(months.length > 1 ? months.at(-2) : undefined);
 
-	/// What the months before it averaged, as something to hold the running one against. The
-	/// running month is left out of its own comparison, and so is anything before the range.
-	const average = $derived.by(() => {
-		const earlier = months.slice(0, -1);
-		if (earlier.length === 0) return null;
-		return earlier.reduce((sum, m) => sum + m.expenses, 0) / earlier.length;
-	});
+	/// Spending and income live in the same rows with opposite signs, and a donut can only draw
+	/// one of them. Everything below reads its figure through here.
+	let sign = $state<'expenses' | 'income'>('expenses');
+	const amount = (of: { income: number; expenses: number } | undefined) =>
+		Math.abs((sign === 'income' ? of?.income : of?.expenses) ?? 0);
 
-	/// How the running month compares, as a share of the average. Only meaningful once enough
-	/// of the month has passed for the comparison to say something -- before that it always
-	/// reads as "spending less", because the month is not over.
+	/// How much of the month has run.
+	///
+	/// The comparison is against the previous month scaled to this, since what is known about
+	/// the previous month is its whole: without the scaling the running month would report a
+	/// shortfall every time, right up to its last day.
 	const monthShare = $derived(now.getDate() / daysInMonth(now));
 
 	function daysInMonth(d: Date): number {
 		return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
 	}
 
+	/// What the running month is ahead or behind by, in cents; positive is more than last month.
+	const comparison = $derived(
+		previousMonth ? amount(thisMonth) - amount(previousMonth) * monthShare : null
+	);
+
 	const donut = $derived.by(() => {
 		const slices = (thisMonth?.byCategory ?? [])
-			// income sits in the same list with the opposite sign, and a donut cannot draw it
-			.filter((c) => c.expenses < 0)
 			.map((c) => ({
 				name: c.category?.name ?? 'Ohne Kategorie',
 				color: categoryColor(c.category),
-				value: Math.abs(c.expenses) / 100
+				value: amount(c) / 100
 			}))
+			.filter((s) => s.value > 0)
 			.sort((a, b) => b.value - a.value);
 
 		return {
@@ -246,8 +254,8 @@
 							value: { formatter: (v: string) => euroExact(Number(v) * 100) },
 							total: {
 								show: true,
-								label: 'Ausgegeben',
-								formatter: () => euro(Math.abs(thisMonth?.expenses ?? 0))
+								label: sign === 'income' ? 'Eingenommen' : 'Ausgegeben',
+								formatter: () => euro(amount(thisMonth))
 							}
 						}
 					}
@@ -425,25 +433,31 @@
 			</div>
 
 			<Card class="max-w-none border-0 bg-white p-4 dark:bg-gray-800">
-				<div class="mb-1 flex items-baseline justify-between gap-2">
-					<h2 class="text-lg font-semibold">{monthName(monthStart)}</h2>
-					{#if average !== null && thisMonth}
-						<!-- against the same share of the average as the month has run, or the
-						     comparison would say "weniger" on every first of the month -->
-						{@const expected = average * monthShare}
-						{@const diff = Math.abs(thisMonth.expenses) - Math.abs(expected)}
+				<div class="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+					<div class="flex items-center gap-3">
+						<h2 class="text-lg font-semibold">{monthName(monthStart)}</h2>
+						<ToggleGroup
+							bind:value={sign}
+							options={[
+								{ value: 'expenses', label: 'Ausgaben' },
+								{ value: 'income', label: 'Einnahmen' }
+							]}
+						/>
+					</div>
+					{#if comparison !== null}
 						<span class="text-sm text-gray-500 dark:text-gray-400">
-							{diff > 0 ? 'mehr' : 'weniger'} als sonst um diese Zeit: {euro(Math.abs(diff))}
+							{euro(Math.abs(comparison))}
+							{comparison > 0 ? 'mehr' : 'weniger'} als zu dieser Zeit im Vormonat
 						</span>
 					{/if}
 				</div>
 				{#if !data}
 					<div class="flex justify-center py-12"><Spinner size="6" /></div>
-				{:else if thisMonth && thisMonth.byCategory.some((c) => c.expenses < 0)}
+				{:else if amount(thisMonth) > 0}
 					<Chart options={donut} />
 				{:else}
 					<p class="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-						Diesen Monat noch nichts ausgegeben.
+						Diesen Monat noch {sign === 'income' ? 'nichts eingenommen' : 'nichts ausgegeben'}.
 					</p>
 				{/if}
 			</Card>
