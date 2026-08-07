@@ -194,6 +194,12 @@ struct SimulatedRow {
     balance_id: Uuid,
     #[diesel(sql_type = Double)]
     amount: f64,
+}
+
+#[derive(Debug, QueryableByName)]
+struct ExpenseCountRow {
+    #[diesel(sql_type = diesel::sql_types::Uuid)]
+    account_id: Uuid,
     #[diesel(sql_type = BigInt)]
     expense_count: i64,
 }
@@ -201,8 +207,16 @@ struct SimulatedRow {
 /// The arithmetic itself is `simulate_balances` in the migrations, so that `tests/sql` can
 /// reach it; `$1` is the user, `$2` the dates to sample, `$3` an optional single account.
 const SIMULATE: &str = r#"
-SELECT sample_idx, account_id, balance_id, amount, expense_count
+SELECT sample_idx, account_id, balance_id, amount
 FROM simulate_balances($1, $2::timestamptz[], $3::uuid)
+"#;
+
+/// Deliberately not part of `simulate_balances`: counting distinct expenses forces a sort of
+/// every transaction in every anchor's interval, which across a chart's worth of samples cost
+/// more than everything else together. Asked for one date at a time, where it is cheap.
+const COUNT_EXPENSES: &str = r#"
+SELECT account_id, expense_count
+FROM count_balance_expenses($1, $2, $3::uuid)
 "#;
 
 #[derive(Debug, QueryableByName)]
@@ -824,6 +838,13 @@ async fn compute(
     let rows = simulate(context, &[date], account_id).await?;
     let conn = &mut context.conn().await?;
 
+    let counts: Vec<ExpenseCountRow> = diesel::sql_query(COUNT_EXPENSES)
+        .bind::<diesel::sql_types::Uuid, _>(user_id)
+        .bind::<Timestamptz, _>(date)
+        .bind::<Nullable<diesel::sql_types::Uuid>, _>(account_id)
+        .load(conn)
+        .await?;
+
     let references: Vec<RenderedBalance> = balances_rendered::table
         .filter(balances_rendered::user_id.eq(user_id))
         .filter(balances_rendered::id.eq_any(rows.iter().map(|r| r.balance_id).collect::<Vec<_>>()))
@@ -849,7 +870,10 @@ async fn compute(
         computed.push(ComputedBalance {
             date,
             amount: row.amount,
-            expense_count: row.expense_count as i32,
+            expense_count: counts
+                .iter()
+                .find(|c| c.account_id == reference.account_id)
+                .map_or(0, |c| c.expense_count as i32),
             reference: GraphQLBalance::new(reference.clone()),
             account: GraphQLAccount::new(account.clone()),
         });

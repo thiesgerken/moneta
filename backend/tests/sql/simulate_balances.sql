@@ -80,7 +80,7 @@ BEGIN
             UNION ALL SELECT 'forward integration adds what happened since',
                 (SELECT amount FROM simulate_balances(mine, ARRAY['2025-06-13T00:00:00Z'::timestamptz], s1)), 3600.0
             UNION ALL SELECT 'the count is of expenses, not transactions',
-                (SELECT expense_count FROM simulate_balances(mine, ARRAY['2025-06-13T00:00:00Z'::timestamptz], s1)), 4
+                (SELECT expense_count FROM count_balance_expenses(mine, '2025-06-13T00:00:00Z', s1)), 4
 
             -- backward: the nearest balance to the 8th is b1 on the 10th, so e1 on the 5th is
             -- outside the interval and only the emptiness between the 8th and the 10th counts
@@ -91,7 +91,11 @@ BEGIN
             UNION ALL SELECT 'backward integration removes what happened after',
                 (SELECT amount FROM simulate_balances(mine, ARRAY['2025-06-04T00:00:00Z'::timestamptz], s1)), 6000.0
             UNION ALL SELECT 'backward integration counts the same expenses',
-                (SELECT expense_count FROM simulate_balances(mine, ARRAY['2025-06-04T00:00:00Z'::timestamptz], s1)), 1
+                (SELECT expense_count FROM count_balance_expenses(mine, '2025-06-04T00:00:00Z', s1)), 1
+            -- the count is anchored the same way the amount is, so an account whose interval
+            -- holds nothing still reports a row rather than dropping out
+            UNION ALL SELECT 'an empty interval counts nothing',
+                (SELECT expense_count FROM count_balance_expenses(mine, '2025-07-01T00:00:00Z', s2)), 0
 
             -- the 19th is nearer to b2 (the 20th) than to b1 (the 10th), so it anchors there
             -- and takes e3 on the 25th off nothing, leaving b2 alone
