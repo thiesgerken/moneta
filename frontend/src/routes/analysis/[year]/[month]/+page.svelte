@@ -160,20 +160,24 @@
 	});
 </script>
 
-<div class="space-y-4 pr-8 pl-8">
+<div class="space-y-4 px-4 sm:px-8">
 	<div class="flex flex-wrap items-center gap-3">
 		<Button color="alternative" size="sm" href={resolve('/analysis')}>
 			<ArrowLeftOutline class="mr-2 h-4 w-4" />Auswertung
 		</Button>
-		<Button color="alternative" size="sm" onclick={() => shift(-1)}>
-			<ChevronLeftOutline class="h-4 w-4" />
-		</Button>
-		<h2 class="text-xl font-semibold">
-			{start.toLocaleDateString('de-DE', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
-		</h2>
-		<Button color="alternative" size="sm" onclick={() => shift(1)}>
-			<ChevronRightOutline class="h-4 w-4" />
-		</Button>
+		<!-- the two arrows belong to the month between them; loose in the row they wrapped
+		     away from it, leaving a lone "next" on a line of its own -->
+		<div class="flex items-center gap-3">
+			<Button color="alternative" size="sm" onclick={() => shift(-1)}>
+				<ChevronLeftOutline class="h-4 w-4" />
+			</Button>
+			<h2 class="text-xl font-semibold">
+				{start.toLocaleDateString('de-DE', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+			</h2>
+			<Button color="alternative" size="sm" onclick={() => shift(1)}>
+				<ChevronRightOutline class="h-4 w-4" />
+			</Button>
+		</div>
 		{#if $detailStore.fetching}
 			<Spinner size="4" />
 		{/if}
@@ -234,9 +238,12 @@
 		</Card>
 
 		<div class="grid gap-4 lg:grid-cols-2">
-			<Card class="max-w-none p-4">
+			<!-- min-w-0 twice over: a grid track and a flex child both size to their content
+			     unless told otherwise, so without it the table widens the page rather than
+			     scrolling inside the card -->
+			<Card class="max-w-none min-w-0 p-4">
 				<h3 class="mb-2 text-lg font-semibold">Konten</h3>
-				<div class="overflow-x-auto">
+				<div class="min-w-0 overflow-x-auto">
 					<Table hoverable striped class="w-full text-left text-sm">
 						<TableHead>
 							<TableHeadCell class="px-4 py-3">Konto</TableHeadCell>
@@ -273,7 +280,7 @@
 				</div>
 			</Card>
 
-			<Card class="max-w-none p-4">
+			<Card class="max-w-none min-w-0 p-4">
 				<h3 class="mb-2 text-lg font-semibold">Größte Ausgaben</h3>
 				<Table hoverable striped class="w-full text-left text-sm">
 					<TableHead>

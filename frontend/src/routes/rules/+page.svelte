@@ -4,8 +4,8 @@
 	import AutomationRuleTable from '$lib/AutomationRuleTable.svelte';
 </script>
 
-<div class="pr-8 pl-8">
-	<Tabs tabStyle="underline">
+<div class="px-4 sm:px-8">
+	<Tabs tabStyle="underline" class="flex-nowrap overflow-x-auto whitespace-nowrap">
 		<TabItem open title="Periodisch">
 			<PeriodicRuleTable />
 		</TabItem>

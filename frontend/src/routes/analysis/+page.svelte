@@ -9,8 +9,10 @@
 	import StatementView from '$lib/analysis/StatementView.svelte';
 </script>
 
-<div class="space-y-4 pr-8 pl-8">
-	<Tabs tabStyle="underline">
+<div class="space-y-4 px-4 sm:px-8">
+	<!-- Seven tabs do not fit a phone, and without a scroller of their own they widen the page
+	     instead: the last four were only reachable by dragging the whole layout sideways. -->
+	<Tabs tabStyle="underline" class="flex-nowrap overflow-x-auto whitespace-nowrap">
 		<TabItem open title="Aktivität">
 			<ExpenseChangelog />
 		</TabItem>
