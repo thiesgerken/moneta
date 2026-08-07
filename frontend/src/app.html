@@ -6,6 +6,11 @@
 		<!-- the png stays for anything that will not take an svg, homepage's dashboard tile included -->
 		<link rel="alternate icon" href="%sveltekit.assets%/favicon.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
+		<!-- the colour android paints the status bar with once the app is installed -->
+		<meta name="theme-color" content="#ef562f" />
+		<!-- ios ignores the manifest's icons and takes this one instead -->
+		<link rel="apple-touch-icon" href="%sveltekit.assets%/icon-192.png" />
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
