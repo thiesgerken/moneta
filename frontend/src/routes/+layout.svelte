@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import Nav from '$lib/Nav.svelte';
+	import DisplayFontPicker from '$lib/DisplayFontPicker.svelte';
 	import { graphql } from '$houdini';
 	import { page } from '$app/state';
 	import { pageTitle } from '$lib/navigation';
@@ -52,3 +53,5 @@
 <Nav />
 
 {@render children()}
+
+<DisplayFontPicker />

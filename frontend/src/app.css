@@ -7,6 +7,13 @@
    so a German reader downloads the latin one and nothing else. */
 @import '@fontsource-variable/inter';
 
+/* On trial, for headings only -- see `--font-display` below and DisplayFontPicker.svelte.
+   Delete the three that lose, and their packages with them. */
+@import '@fontsource-variable/fraunces';
+@import '@fontsource/instrument-serif';
+@import '@fontsource-variable/newsreader';
+@import '@fontsource-variable/source-serif-4';
+
 @plugin 'flowbite/plugin';
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -15,6 +22,10 @@
 	--font-sans:
 		'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
 		Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+
+	/* What headings are set in. Inter until one of the four below wins, so the app looks the
+	   same as it does today unless someone is deliberately trying them out. */
+	--font-display: var(--font-sans);
 
 	--color-primary-50: #fff5f2;
 	--color-primary-100: #fff1ee;
@@ -53,6 +64,32 @@
 		   row. This is the whole reason for choosing a font with a tabular set. */
 		font-variant-numeric: tabular-nums;
 	}
+
+	/* Titles and card headings only. Numbers stay in Inter wherever they are, which is why
+	   this is on the headings rather than on a wrapper. */
+	h1,
+	h2,
+	h3 {
+		font-family: var(--font-display);
+	}
+}
+
+/* The four on trial. Set by DisplayFontPicker.svelte on the root element; without it nothing
+   here matches and headings stay in Inter. */
+:root[data-display='fraunces'] {
+	--font-display: 'Fraunces Variable', Georgia, serif;
+}
+
+:root[data-display='instrument'] {
+	--font-display: 'Instrument Serif', Georgia, serif;
+}
+
+:root[data-display='newsreader'] {
+	--font-display: 'Newsreader Variable', Georgia, serif;
+}
+
+:root[data-display='source'] {
+	--font-display: 'Source Serif 4 Variable', Georgia, serif;
 }
 
 /* Deliberately outside every layer: flowbite dresses its tables in utility classes, and an
