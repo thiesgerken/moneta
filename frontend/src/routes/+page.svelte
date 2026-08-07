@@ -447,24 +447,24 @@
 			</div>
 
 			<Card class="max-w-none border-0 bg-white p-4 dark:bg-gray-800">
-				<div class="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-					<div class="flex items-center gap-3">
-						<h2 class="text-lg font-semibold">{monthName(monthStart)}</h2>
-						<ToggleGroup
-							bind:value={sign}
-							options={[
-								{ value: 'expenses', label: 'Ausgaben' },
-								{ value: 'income', label: 'Einnahmen' }
-							]}
-						/>
-					</div>
-					{#if comparison !== null}
-						<span class="text-sm text-gray-500 dark:text-gray-400">
-							{euro(Math.abs(comparison))}
-							{comparison > 0 ? 'mehr' : 'weniger'} als zu dieser Zeit im Vormonat
-						</span>
-					{/if}
+				<!-- the comparison on its own line: beside the toggle it was a sentence competing
+				     with a control for the same row, and it wrapped into it on the way -->
+				<div class="flex items-center justify-between gap-3">
+					<h2 class="text-lg font-semibold">{monthName(monthStart)}</h2>
+					<ToggleGroup
+						bind:value={sign}
+						options={[
+							{ value: 'expenses', label: 'Ausgaben' },
+							{ value: 'income', label: 'Einnahmen' }
+						]}
+					/>
 				</div>
+				{#if comparison !== null}
+					<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+						{euro(Math.abs(comparison))}
+						{comparison > 0 ? 'mehr' : 'weniger'} als zu dieser Zeit im Vormonat
+					</p>
+				{/if}
 				{#if !data}
 					<div class="flex justify-center py-12"><Spinner size="6" /></div>
 				{:else if amount(thisMonth) > 0}
