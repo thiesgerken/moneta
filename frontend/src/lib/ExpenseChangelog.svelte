@@ -9,6 +9,7 @@
 	} from 'flowbite-svelte-icons';
 	import ToggleGroup from './ToggleGroup.svelte';
 	import { changedFields, summarizeFields, stateAmount } from './changelog';
+	import { formatAccount } from './expense_utils';
 	import { categoryColor } from './analysis/overviews';
 	import { feedState } from './analysis/state.svelte';
 
@@ -29,6 +30,11 @@
 					id
 					name
 					color
+					# whose account it is: two people can both keep a "Bargeld"
+					owner {
+						name
+						firstName
+					}
 				}
 			}
 
@@ -154,13 +160,20 @@
 		return fields ? `${fields} geändert` : 'Geändert';
 	}
 
-	const named = $derived(
-		[...(feed?.categories.list ?? []), ...(feed?.accounts.list ?? [])].map((e) => ({
-			id: e.id.toString(),
-			name: e.name,
-			color: categoryColor(e)
+	const named = $derived([
+		...(feed?.categories.list ?? []).map((c) => ({
+			id: c.id.toString(),
+			name: c.name,
+			color: categoryColor(c)
+		})),
+		// an account of somebody else's is named after them, as everywhere else: the chip is
+		// there to say which pot the money came out of, and "Bargeld" alone does not
+		...(feed?.accounts.list ?? []).map((a) => ({
+			id: a.id.toString(),
+			name: formatAccount(a, me),
+			color: categoryColor(a)
 		}))
-	);
+	]);
 
 	/// One chip per category and account the expense touches. Deduplicated, since an expense
 	/// split over two cards names the same account twice, and the second chip adds nothing.
