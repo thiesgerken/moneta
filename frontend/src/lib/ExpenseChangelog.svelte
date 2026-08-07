@@ -140,19 +140,18 @@
 		return out;
 	});
 
-	/// Subject and verb together, because they do not agree in German: "Du hast", "Krösus hat".
+	/// Dative, since it always follows "von": "von dir", "von Krösus".
 	const actor = (entry: Entry) =>
-		entry.user?.name === me
-			? 'Du hast'
-			: `${entry.user?.firstName ?? entry.user?.name ?? 'Jemand'} hat`;
+		entry.user?.name === me ? 'dir' : (entry.user?.firstName ?? entry.user?.name ?? 'jemandem');
 
 	/// What the entry did, in one phrase. The diff says which fields moved, which beats
-	/// "hat die Ausgabe verändert" on every single row.
+	/// "geändert" on every single row. Capitalized because it opens the line, and the field
+	/// names it is built from are nouns anyway.
 	function action(entry: Entry): string {
-		if (!entry.oldState) return 'sie angelegt';
+		if (!entry.oldState) return 'Angelegt';
 
 		const fields = summarizeFields(entry.diff ? changedFields(entry.diff) : []);
-		return fields ? `${fields} geändert` : 'sie geändert';
+		return fields ? `${fields} geändert` : 'Geändert';
 	}
 
 	const named = $derived(
@@ -277,13 +276,14 @@
 							<div
 								class="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500 dark:text-gray-400"
 							>
-								<!-- Subject and verb in one flex item: the row's gap is sized to separate the
-								     ·-delimited segments, and using it between the words of a sentence spaces
-								     them like a heading. Inside, a plain space does what a space should.
+								<!-- One flex item: the row's gap is sized to separate the ·-delimited segments,
+								     and using it between the words of a phrase spaces them like a heading.
+								     Inside, a plain space does what a space should.
 
-								     The clock lives on the subject rather than in the row: the day header
+								     The clock hangs on the name rather than sitting in the row: the day header
 								     already places the entry, so the exact minute is only worth asking for -->
 								<span>
+									{action(entry)} von
 									<span
 										class="underline decoration-gray-300 decoration-dotted dark:decoration-gray-600"
 										title={entry.date.toLocaleString('de-DE', {
@@ -291,7 +291,6 @@
 											timeStyle: 'short'
 										})}>{actor(entry)}</span
 									>
-									{action(entry)}
 								</span>
 								{#if entry.newState}
 									<span aria-hidden="true">·</span>
