@@ -13,7 +13,7 @@
 
 - decide which analysis views should offer a transaction-date / booking-period toggle. Today
   everything follows transaction dates; `expenses.list` has `valuedAfter`/`valuedBefore` for
-  that axis and `bookedAfter`/`bookedBefore` for the other, so it is a UI question now.
+  that axis and `accruedAfter`/`accruedBefore` for the other, so it is a UI question now.
   See [docs/analysis-dashboard.md](docs/analysis-dashboard.md).
 - push notifications
 - ausgabe in transaktion umwandeln (zB Retoure mit original zusammenfassen, dann automatisch buchungszeitraum anpassen?)

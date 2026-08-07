@@ -1,12 +1,14 @@
 # Analysis dashboard
 
-Port of MoneyDB's `analysis` section, at `/analysis`. All six tabs read real queries; the mock
+Port of MoneyDB's `analysis` section, at `/analysis`. Every tab reads real queries; the mock
 is gone. This document records what each shows and the decisions behind it.
 
 ## Displays
 
 MoneyDB had seven tabs. Six survive the port, because two of them were different views of
-the same numbers.
+the same numbers. A seventh, **Aktivität**, is not from MoneyDB at all — it is the expense
+changelog, which used to be the whole dashboard and now sits here, last, while the start page
+carries the part of the feed worth arriving at.
 
 | Tab                  | MoneyDB origin                  | Shows                                                                                                                 |
 | -------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
@@ -16,6 +18,7 @@ the same numbers.
 | **Kontoauszug**      | `statements`                    | one account's ledger over a range: opening balance, expenses and recorded balances interleaved, running total, CSV      |
 | **Kalender**         | `calendar`                      | month grid, expenses per day with a daily sum                                                                           |
 | **Vorauszahlungen**  | `prepayments`                   | what is still unconsumed at a chosen date, plus the separate list of incomplete expenses                                |
+| **Aktivität**        | —                               | the expense changelog with its diffs                                                                                    |
 
 Merged away:
 

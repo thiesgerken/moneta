@@ -2,6 +2,8 @@
 
 Read `README.md` first for what the project is and how the two-layer data model works. This
 file is the operational stuff: what to run, and the traps that have already been stepped in.
+`docs/analysis-dashboard.md` covers the one part with enough decisions behind it to need its
+own document, and `TODO.md` is what is deliberately not built yet.
 
 ## Verify your changes
 
@@ -17,6 +19,9 @@ than one holding real data).
 
 CI runs exactly these and is strict — `clippy -D warnings` and `fmt --check` both fail the
 build, including on test code.
+
+A push to `main` also builds both images and restarts the deployments in the cluster, so a
+merge is a deploy. `devel` builds images without deploying.
 
 **Run `pnpm build` before `pnpm check` or `pnpm lint`.** The build triggers houdini codegen;
 without it `$houdini` types are stale or missing and you will chase type errors that aren't
@@ -70,6 +75,11 @@ filter document built in the browser, with the `userId` override merged in last.
 each list names its own sort enum and filter arguments, so a caller cannot reach a column the
 resolver did not offer, and `user_id` is applied by the resolver alone.
 
+**The login redirect keys on `extensions.code == "UNAUTHENTICATED"`**, which `require_user`
+puts on its error and nothing else does. The guard in `+layout.svelte` redirects on that
+alone, so that a backend that is down does not look like a session that ended. Both halves
+ship together; a frontend newer than its backend simply never redirects.
+
 **Password hashes are verified with the parameters from the stored PHC string**, not with
 fixed ones. That is what keeps pre-2026 argonautica hashes (m=4096, t=32, p=num_cpus) working
 alongside new argon2 ones. `verifies_legacy_parameters` in `lib.rs` guards this.
@@ -115,6 +125,17 @@ and is prettier-ignored. Don't hand-edit it. `houdini pull-schema` produces the 
 needs a running backend and therefore a database, which is a lot of setup for a file that
 depends on neither; it also sorts arguments alphabetically, so switching between the two
 reformats the whole file. Stay on `cargo run -- schema`.
+
+**`needs:` does not work on this gitea, so the workflow has no job graph.** A job that
+declares one stays blocked forever with every dependency green — measured with a probe job
+that depended on a single succeeded job, against an otherwise identical job that ran.
+Restarting gitea did not help. That is why the image build neither gates on the test jobs nor
+lives in a job of its own: as a separate job it would have nothing holding it behind the
+build and would deploy the previous run's image. Don't "fix" the missing `needs` without
+checking whether the bug is gone.
+
+**The registry is `gitea.gerken.haus`, not `git.gerken.haus`.** The latter answers `/v2/`
+with 403 and cost a red pipeline; every other app on that cluster pulls from the former.
 
 **Component queries do not load themselves.** houdini 2 removed `@load`, the `_<Name>Variables`
 convention and route-level `+page.gql` codegen. Every query needs an explicit
