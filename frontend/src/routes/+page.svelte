@@ -30,6 +30,11 @@
 
 	const now = new Date();
 	const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+	// The same day one month ago, which is what the wealth is held against: a fixed span reads
+	// as noise, where "since this day last month" is a comparison you can keep in your head.
+	// The 31st of a month whose predecessor is shorter rolls into the 1st, which is close
+	// enough to a month and never skips one.
+	const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
 	// six whole months before the running one, which is what the running one is compared against
 	const compareFrom = new Date(now.getFullYear(), now.getMonth() - 6, 1);
 	const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
@@ -63,6 +68,7 @@
 		query Dashboard(
 			$now: DateTime!
 			$since: DateTime!
+			$monthAgo: DateTime!
 			$monthsFrom: DateTime!
 			$sparkFrom: DateTime!
 		) {
@@ -78,7 +84,7 @@
 				current: balances(date: $now) {
 					amount
 				}
-				earlier: balances(date: $since) {
+				earlier: balances(date: $monthAgo) {
 					amount
 				}
 
@@ -134,7 +140,7 @@
 		if (!from) return;
 
 		void dashboardStore.fetch({
-			variables: { now, since: from, monthsFrom: compareFrom, sparkFrom: yearAgo }
+			variables: { now, since: from, monthAgo, monthsFrom: compareFrom, sparkFrom: yearAgo }
 		});
 	});
 
@@ -289,7 +295,9 @@
 						>
 							{delta > 0 ? '+' : ''}{euroExact(delta)}
 						</span>
-						<span class="text-gray-500 dark:text-gray-400">{windowLabel}</span>
+						<span class="text-gray-500 dark:text-gray-400">
+							seit dem {monthAgo.toLocaleDateString('de-DE')}
+						</span>
 					</p>
 				{/if}
 			</div>
