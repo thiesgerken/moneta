@@ -91,8 +91,80 @@
 	// list that quietly used different ends would not add up to the chart it came from.
 	const from = page.url.searchParams.get('von');
 	const to = page.url.searchParams.get('bis');
-	if (from) filterDateRange.from = new Date(from);
-	if (to) filterDateRange.to = new Date(to);
+	if (from || to) {
+		filterDateRange = {
+			from: from ? new Date(from) : undefined,
+			to: to ? new Date(to) : undefined
+		};
+	}
+
+	/// What is currently being filtered on, and how to undo each of them.
+	///
+	/// The filters live behind a button on a phone and in a row of empty-looking selects on a
+	/// desktop, so a list arriving pre-filtered from somewhere else looked like the whole list,
+	/// only shorter. Saying it out loud is also the only way to notice a filter you forgot.
+	const activeFilters = $derived.by(() => {
+		const out: { label: string; clear: () => void }[] = [];
+
+		if (searchTerm.trim()) {
+			out.push({ label: `Suche: ${searchTerm.trim()}`, clear: () => (searchTerm = '') });
+		}
+
+		for (const id of filteredAccounts) {
+			out.push({
+				label: filterableAccounts?.find((a) => a.value === id)?.name ?? 'Konto',
+				clear: () => (filteredAccounts = filteredAccounts.filter((other) => other !== id))
+			});
+		}
+
+		for (const id of filteredCategories) {
+			out.push({
+				label: filterableCategories?.find((c) => c.value === id)?.name ?? 'Kategorie',
+				clear: () => (filteredCategories = filteredCategories.filter((other) => other !== id))
+			});
+		}
+
+		const { from, to } = filterDateRange;
+		if (from || to) {
+			const day = (d: Date | undefined) => (d ? d.toLocaleDateString('de-DE') : '');
+			out.push({
+				label: from && to ? `${day(from)} – ${day(to)}` : `ab ${day(from)}${day(to)}`,
+				clear: () => (filterDateRange = { from: undefined, to: undefined })
+			});
+		}
+
+		// one chip for the lot: which of the six is off matters less than the fact that the
+		// list is no longer showing everything
+		if (
+			showTemplates ||
+			!showTaxRelevant ||
+			!showExtraordinary ||
+			!showUnchecked ||
+			!showIncomplete ||
+			!showNormal
+		) {
+			out.push({ label: 'Zustand', clear: resetFlags });
+		}
+
+		return out;
+	});
+
+	function resetFlags() {
+		showTemplates = false;
+		showTaxRelevant = true;
+		showExtraordinary = true;
+		showUnchecked = true;
+		showIncomplete = true;
+		showNormal = true;
+	}
+
+	function resetFilters() {
+		searchTerm = '';
+		filteredAccounts = [];
+		filteredCategories = [];
+		filterDateRange = { from: undefined, to: undefined };
+		resetFlags();
+	}
 
 	// The column the header clicks name, mapped onto what the API offers. The backend used to
 	// take a mongo sort document built right here; it now names its own columns.
@@ -407,6 +479,34 @@
 />
 
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
+	{#if activeFilters.length > 0}
+		<div class="flex flex-wrap items-center gap-2 px-4 pb-3 text-sm sm:px-0">
+			<span class="text-gray-500 dark:text-gray-400">Gefiltert nach</span>
+			{#each activeFilters as filter (filter.label)}
+				<span
+					class="inline-flex items-center gap-1 rounded-full bg-gray-200 px-2 py-0.5 dark:bg-gray-700"
+				>
+					{filter.label}
+					<button
+						type="button"
+						aria-label="{filter.label} entfernen"
+						class="text-gray-500 hover:text-gray-900 dark:hover:text-white"
+						onclick={filter.clear}
+					>
+						×
+					</button>
+				</span>
+			{/each}
+			<button
+				type="button"
+				class="text-primary-600 dark:text-primary-500 hover:underline"
+				onclick={resetFilters}
+			>
+				alle entfernen
+			</button>
+		</div>
+	{/if}
+
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
