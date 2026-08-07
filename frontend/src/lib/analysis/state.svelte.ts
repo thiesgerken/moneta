@@ -25,9 +25,11 @@ export type Range = {
 
 const range = (span: string): Range => ({ span, from: undefined, to: undefined });
 
-/// Whose changes the activity feed shows. A feed that opens on a filter reads as an empty
-/// feed when nobody else has been active, and leaves you looking for your own entry.
-export const feedState = $state({ author: 'ANYONE' });
+/// Whose changes the activity feed shows, and how far back. A feed that opens on an author
+/// filter reads as an empty feed when nobody else has been active, and leaves you looking for
+/// your own entry — where a month of history is plenty to arrive on, and `span` is a number of
+/// days or the empty string for all of it.
+export const feedState = $state({ author: 'ANYONE', span: '30' });
 
 export const wealthState = $state({
 	range: range('all'),

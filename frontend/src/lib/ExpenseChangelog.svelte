@@ -29,10 +29,32 @@
 
 	const shownAuthor = $derived(author ?? (feedState.author as ChangelogAuthor$options));
 
+	const DAY = 86400000;
+
+	/// How far back the feed reaches. "Alles" is null rather than a very old date, so the query
+	/// is the same one it was before this filter existed.
+	const SPANS = [
+		{ value: '7', label: '7 Tage' },
+		{ value: '30', label: '30 Tage' },
+		{ value: '365', label: 'Ein Jahr' },
+		{ value: '', label: 'Alles' }
+	];
+
+	// a day boundary rather than "now minus n days", so the window does not creep while the
+	// page is open and the entries of the earliest day are all there or all gone
+	const since = $derived.by(() => {
+		const days = Number(feedState.span);
+		if (!feedState.span || !Number.isFinite(days)) return null;
+
+		const today = new Date();
+		const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+		return new Date(midnight.getTime() - (days - 1) * DAY);
+	});
+
 	let expandedDiffs = $state<string[]>([]);
 
 	const changelogStore = graphql(`
-		query ExpenseChangelog($author: ChangelogAuthor!, $limit: Int!) {
+		query ExpenseChangelog($author: ChangelogAuthor!, $limit: Int!, $since: DateTime) {
 			users {
 				me {
 					name
@@ -63,7 +85,7 @@
 			}
 
 			expenses {
-				changelog(limit: $limit, skip: 0, author: $author) {
+				changelog(limit: $limit, skip: 0, author: $author, since: $since) {
 					edges {
 						node {
 							id
@@ -159,12 +181,15 @@
 
 	async function load() {
 		const request = ++latestRequest;
-		const result = await changelogStore.fetch({ variables: { author: shownAuthor, limit } });
+		const result = await changelogStore.fetch({
+			variables: { author: shownAuthor, limit, since: controls ? since : null }
+		});
 		if (request === latestRequest) feed = result.data ?? null;
 	}
 
 	$effect(() => {
 		void shownAuthor;
+		void since;
 		void load();
 	});
 
@@ -301,7 +326,7 @@
 
 <div class={controls ? 'mx-auto max-w-3xl' : ''}>
 	{#if controls}
-		<div class="flex items-center justify-between gap-3 pb-2">
+		<div class="flex flex-wrap items-center gap-x-3 gap-y-2 pb-2">
 			<!-- the same words the entries use, which say "von dir" and "von Krösus"; the default
 			     leads, so the row reads as everything first and then two ways to narrow it -->
 			<ToggleGroup
@@ -313,6 +338,7 @@
 					{ value: 'OTHERS', label: 'Von anderen' }
 				]}
 			/>
+			<ToggleGroup bind:value={feedState.span} size="sm" options={SPANS} />
 			{#if $changelogStore.fetching}
 				<Spinner size="4" />
 			{/if}
@@ -323,7 +349,13 @@
 		<div class="flex justify-center py-12"><Spinner size="6" /></div>
 	{:else if entries.length === 0}
 		<p class="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-			{shownAuthor === 'OTHERS' ? 'Niemand sonst hat etwas geändert.' : 'Noch keine Aktivität.'}
+			{#if since}
+				In diesem Zeitraum ist nichts passiert.
+			{:else if shownAuthor === 'OTHERS'}
+				Niemand sonst hat etwas geändert.
+			{:else}
+				Noch keine Aktivität.
+			{/if}
 		</p>
 	{/if}
 
