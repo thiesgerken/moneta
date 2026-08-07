@@ -226,7 +226,7 @@
 			.sort((a, b) => b.value - a.value);
 
 		return {
-			chart: { type: 'donut', height: 260, animations: { enabled: false } },
+			chart: { type: 'donut', height: 273, animations: { enabled: false } },
 			series: slices.map((s) => s.value),
 			labels: slices.map((s) => s.name),
 			colors: slices.map((s) => s.color),
