@@ -54,10 +54,14 @@ impl Context {
 }
 
 pub async fn require_user(context: &Context) -> juniper::FieldResult<Uuid> {
-    context.user_id.read().await.ok_or(juniper::FieldError::new(
-        "User is not logged in",
-        juniper::Value::null(),
-    ))
+    context.user_id.read().await.ok_or_else(|| {
+        // The frontend sends people to the login form on this code and on nothing else, so a
+        // query that merely failed is not mistaken for a session that ended.
+        juniper::FieldError::new(
+            "User is not logged in",
+            juniper::graphql_value!({ "code": "UNAUTHENTICATED" }),
+        )
+    })
 }
 
 pub async fn graphql_handler(
