@@ -254,7 +254,6 @@
 		return `seit dem ${since.toLocaleDateString('de-DE')}`;
 	});
 
-	const feedHref = resolve('/analysis');
 	const lastMonthHref = $derived(
 		resolve('/analysis/[year]/[month]', {
 			year: `${lastMonth.getFullYear()}`,
@@ -325,7 +324,7 @@
 
 				{#if changeCount > 0}
 					<a
-						href={feedHref}
+						href="{resolve('/analysis')}?tab=aktivitaet"
 						class="hover:border-primary-400 flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
 					>
 						<span
@@ -416,7 +415,10 @@
 		<Card class="max-w-none border-0 bg-white p-4 dark:bg-gray-800">
 			<div class="mb-2 flex items-baseline justify-between gap-2">
 				<h2 class="text-lg font-semibold">Zuletzt passiert</h2>
-				<a href={feedHref} class="text-primary-600 dark:text-primary-400 text-sm hover:underline">
+				<a
+					href="{resolve('/analysis')}?tab=aktivitaet"
+					class="text-primary-600 dark:text-primary-400 text-sm hover:underline"
+				>
 					alle anzeigen
 				</a>
 			</div>
