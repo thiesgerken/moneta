@@ -443,17 +443,29 @@
 			</Card>
 		</div>
 
-		<Card class="max-w-none border-0 bg-white p-4 dark:bg-gray-800">
-			<div class="mb-2 flex items-baseline justify-between gap-2">
-				<h2 class="text-lg font-semibold">Zuletzt passiert</h2>
-				<a
-					href="{resolve('/analysis')}?tab=aktivitaet"
-					class="text-primary-600 dark:text-primary-400 text-sm hover:underline"
-				>
-					alle anzeigen
-				</a>
-			</div>
-			<ExpenseChangelog limit={6} controls={false} author="ANYONE" />
-		</Card>
+		<!-- The feed is as long as the history is, which left the left column ending halfway up
+		     the page. Absolute inside a relative cell so the row is sized by the left column
+		     alone and the feed scrolls inside whatever is left; static below lg, where the two
+		     are stacked and there is nothing to line up with. -->
+		<div class="lg:relative">
+			<Card
+				class="flex max-w-none flex-col border-0 bg-white p-4 lg:absolute lg:inset-0 dark:bg-gray-800"
+			>
+				<div class="mb-2 flex items-baseline justify-between gap-2">
+					<h2 class="text-lg font-semibold">Zuletzt passiert</h2>
+					<a
+						href="{resolve('/analysis')}?tab=aktivitaet"
+						class="text-primary-600 dark:text-primary-400 text-sm hover:underline"
+					>
+						alle anzeigen
+					</a>
+				</div>
+				<!-- min-h-0, or the flex child refuses to shrink below its content and the card
+				     grows the row after all -->
+				<div class="max-h-112 min-h-0 flex-1 overflow-y-auto lg:max-h-none">
+					<ExpenseChangelog limit={25} controls={false} author="ANYONE" />
+				</div>
+			</Card>
+		</div>
 	</div>
 </div>
