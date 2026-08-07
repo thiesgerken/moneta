@@ -16,7 +16,7 @@
 
 	const nextMonth = $derived(new Date(month.getFullYear(), month.getMonth() + 1, 1));
 
-	// Filtered on the transaction dates rather than the booking period: the calendar answers
+	// Filtered on the transaction dates rather than the accrual period: the calendar answers
 	// "what happened on this day", and a prepayment's period spans a year while its payment
 	// lands on one of them.
 	const calendarStore = graphql(`
@@ -34,7 +34,7 @@
 						normal: true
 					}
 					limit: 1000
-					sortBy: BOOKING_START
+					sortBy: ACCRUAL_START
 				) {
 					edges {
 						node {

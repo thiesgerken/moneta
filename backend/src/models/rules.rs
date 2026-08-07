@@ -174,7 +174,12 @@ impl AutomationRuleInput {
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseDelivery {
     pub account_id: Uuid,
+    /// when the money moved (Wertstellung), which is the date everything is filed under
     pub date: DateTime<Utc>,
+    /// when the bank posted the line, where the statement says so. Kept on the transaction it
+    /// produces, and used for nothing else: two statements of the same payment can disagree
+    /// about it, so it must not decide what a thing cost or when.
+    pub booking_date: Option<DateTime<Utc>>,
     /// in cents, using the same sign convention as expense transactions
     pub amount: i32,
     pub statement: String,

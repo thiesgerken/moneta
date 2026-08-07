@@ -35,7 +35,7 @@
 		accountSorter,
 		categorySorter,
 		formatTransactionAccounts,
-		formatBookingPeriod,
+		formatAccrualPeriod,
 		formatCategories,
 		makeAccountColor,
 		makeCategoryColor
@@ -74,7 +74,7 @@
 	// take a mongo sort document built right here; it now names its own columns.
 	const SORT_FIELDS: Record<string, ExpenseSortField$options> = {
 		status: 'STATUS',
-		bookingStart: 'BOOKING_START',
+		accrualStart: 'ACCRUAL_START',
 		title: 'TITLE',
 		store: 'STORE',
 		description: 'DESCRIPTION',
@@ -98,8 +98,8 @@
 			incomplete: showIncomplete,
 			normal: showNormal
 		},
-		bookedAfter: filterDateRange.from,
-		bookedBefore: filterDateRange.to,
+		accruedAfter: filterDateRange.from,
+		accruedBefore: filterDateRange.to,
 		sortBy: SORT_FIELDS[sortBy.field],
 		sortDir: (sortBy.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options
 	});
@@ -145,8 +145,8 @@
 			$accountIds: [UUID!]
 			$categoryIds: [UUID!]
 			$flags: ExpenseFlagFilter
-			$bookedAfter: DateTime
-			$bookedBefore: DateTime
+			$accruedAfter: DateTime
+			$accruedBefore: DateTime
 			$sortBy: ExpenseSortField
 			$sortDir: SortDirection
 		) {
@@ -158,8 +158,8 @@
 					accountIds: $accountIds
 					categoryIds: $categoryIds
 					flags: $flags
-					bookedAfter: $bookedAfter
-					bookedBefore: $bookedBefore
+					accruedAfter: $accruedAfter
+					accruedBefore: $accruedBefore
 					sortBy: $sortBy
 					sortDir: $sortDir
 				) {
@@ -171,8 +171,8 @@
 							description
 							store
 							effectiveAmount
-							bookingStart
-							bookingEnd
+							accrualStart
+							accrualEnd
 							comments
 							isTaxRelevant
 							isTemplate
@@ -470,9 +470,9 @@
 		{/snippet}
 
 		<TableHead>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('bookingStart')}>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('accrualStart')}>
 				Datum
-				{@render sortIcon('bookingStart')}
+				{@render sortIcon('accrualStart')}
 			</TableHeadCell>
 			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('title')}>
 				Titel
@@ -514,7 +514,7 @@
 								<ChevronRightOutline class="inline h-4 w-4" />
 							{/if}
 						</button>
-						{formatBookingPeriod(expense.bookingStart, expense.bookingEnd, false)}
+						{formatAccrualPeriod(expense.accrualStart, expense.accrualEnd, false)}
 					</TableBodyCell>
 					<TableBodyCell class="max-w-96 truncate px-4 py-3">{expense.title}</TableBodyCell>
 					<TableBodyCell
@@ -572,8 +572,8 @@
 						<td colspan="5" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
 							<div class="flex flex-col gap-2">
 								<div>
-									<b>Buchungszeit:</b>
-									{formatBookingPeriod(expense.bookingStart, expense.bookingEnd, true)}
+									<b>Leistungszeitraum:</b>
+									{formatAccrualPeriod(expense.accrualStart, expense.accrualEnd, true)}
 								</div>
 								{#if expense.description}
 									<div>
@@ -670,7 +670,7 @@
 												{:else}
 													{(transaction.amount! / 100).toFixed(2)}€
 												{/if}
-												{#if transaction.date.toISOString() != expense.bookingStart.toISOString() || transaction.date.toISOString() != expense.bookingEnd.toISOString()}
+												{#if transaction.date.toISOString() != expense.accrualStart.toISOString() || transaction.date.toISOString() != expense.accrualEnd.toISOString()}
 													am {transaction.date.toLocaleDateString('de-DE', {
 														year: 'numeric',
 														month: '2-digit',

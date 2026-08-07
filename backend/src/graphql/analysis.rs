@@ -421,7 +421,7 @@ impl AnalysisQuery {
     ///
     /// The booking period is what makes this work without the prepayment accounts and
     /// compensation flags MoneyDB needed: an expense whose money left on the transaction date
-    /// but whose value is spread over a period is simply one with `bookingEnd > bookingStart`.
+    /// but whose value is spread over a period is simply one with `accrualEnd > accrualStart`.
     /// Every imported expense has a zero-length period, so nothing shows up here until a
     /// period is actually widened.
     ///
@@ -439,10 +439,10 @@ impl AnalysisQuery {
         let found: Vec<RenderedExpense> = expenses_rendered::table
             .filter(expenses_rendered::user_id.eq(user_id))
             .filter(expenses_rendered::is_template.eq(false))
-            // a zero-length period degenerates to an ordinary expense, and `booking_end > at`
+            // a zero-length period degenerates to an ordinary expense, and `accrual_end > at`
             // is what leaves out everything already consumed
-            .filter(expenses_rendered::booking_end.gt(expenses_rendered::booking_start))
-            .filter(expenses_rendered::booking_end.gt(at))
+            .filter(expenses_rendered::accrual_end.gt(expenses_rendered::accrual_start))
+            .filter(expenses_rendered::accrual_end.gt(at))
             .filter(expenses_rendered::effective_amount.ne(0.0))
             .select(RenderedExpense::as_select())
             .load(conn)
@@ -452,7 +452,7 @@ impl AnalysisQuery {
             .into_iter()
             .map(|expense| {
                 let consumed_fraction =
-                    consumed_fraction(expense.booking_start, expense.booking_end, at);
+                    consumed_fraction(expense.accrual_start, expense.accrual_end, at);
                 Prepayment {
                     remaining: expense.effective_amount * (1.0 - consumed_fraction),
                     consumed_fraction,

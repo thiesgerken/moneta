@@ -22,16 +22,16 @@
 		{ value: CUSTOM_SPAN, name: 'Eigener Zeitraum', months: null }
 	];
 
-	// Sorted by booking start rather than by a transaction date, which is not a sort the list
+	// Sorted by accrual start rather than by a transaction date, which is not a sort the list
 	// offers -- for an imported expense the two are the same day anyway.
 	const firstExpenseStore = graphql(`
 		query AnalysisRangeStart {
 			expenses {
-				list(limit: 1, sortBy: BOOKING_START, sortDir: ASC) {
+				list(limit: 1, sortBy: ACCRUAL_START, sortDir: ASC) {
 					edges {
 						node {
 							id
-							bookingStart
+							accrualStart
 						}
 					}
 				}
@@ -44,7 +44,7 @@
 	});
 
 	const dataStart = $derived(
-		$firstExpenseStore.data?.expenses.list.edges[0]?.node.bookingStart?.getTime()
+		$firstExpenseStore.data?.expenses.list.edges[0]?.node.accrualStart?.getTime()
 	);
 	// resolved, whether or not it found anything — an empty database has no first expense
 	const ready = $derived($firstExpenseStore.data != null);

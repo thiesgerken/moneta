@@ -19,7 +19,7 @@ INSERT INTO accounts (id, user_id, name, description, kind, availability, risk, 
     -- it that counts towards the owner's wealth
     ('00000000-0000-7000-8000-0000000000a5', '00000000-0000-7000-8000-000000000001', 's5', '', 'debit', 'immediately', 'none', '2025-01-01Z', 0.5);
 
-INSERT INTO expenses (id, title, store, description, comments, reference_amount, booking_start, booking_end) VALUES
+INSERT INTO expenses (id, title, store, description, comments, reference_amount, accrual_start, accrual_end) VALUES
     ('00000000-0000-7000-8000-0000000000e1', 'e1', '', '', '', NULL, '2025-06-05T12:00:00Z', '2025-06-05T12:00:00Z'),
     ('00000000-0000-7000-8000-0000000000e2', 'e2', '', '', '', NULL, '2025-06-11T12:00:00Z', '2025-06-11T12:00:00Z'),
     ('00000000-0000-7000-8000-0000000000e3', 'e3', '', '', '', NULL, '2025-06-25T12:00:00Z', '2025-06-25T12:00:00Z'),
@@ -35,7 +35,7 @@ INSERT INTO expenses (id, title, store, description, comments, reference_amount,
 
 -- A rule's stanza, sitting on s1 inside the forward window. It carries a real transaction with
 -- a real date, so nothing but the flag distinguishes it from something that happened.
-INSERT INTO expenses (id, title, store, description, comments, reference_amount, booking_start, booking_end, is_template) VALUES
+INSERT INTO expenses (id, title, store, description, comments, reference_amount, accrual_start, accrual_end, is_template) VALUES
     ('00000000-0000-7000-8000-0000000000ef', 'template', '', '', '', NULL, '2025-06-11T18:00:00Z', '2025-06-11T18:00:00Z', true);
 
 INSERT INTO expense_transactions (expense_id, account_id, idx, date, amount, fraction, comments, statement) VALUES

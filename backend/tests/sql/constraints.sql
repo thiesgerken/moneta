@@ -12,7 +12,7 @@ INSERT INTO accounts (id, user_id, name, description, kind, availability, risk, 
     ('00000000-0000-7000-8000-0000000000a1', '00000000-0000-7000-8000-000000000001', 'a1', '', 'debit', 'immediately', 'none', '2025-01-01Z', 1.0),
     ('00000000-0000-7000-8000-0000000000a2', '00000000-0000-7000-8000-000000000001', 'a2', '', 'debit', 'immediately', 'none', '2025-01-01Z', 1.0);
 INSERT INTO categories (id, name, description) VALUES ('00000000-0000-7000-8000-0000000000c1', 'c', '');
-INSERT INTO expenses (id, title, store, description, comments, booking_start, booking_end)
+INSERT INTO expenses (id, title, store, description, comments, accrual_start, accrual_end)
 VALUES ('00000000-0000-7000-8000-0000000000e1', 'e', '', '', '', '2025-06-01Z', '2025-06-01Z');
 
 DO $$
@@ -23,7 +23,7 @@ DECLARE
 BEGIN
     FOR c IN SELECT * FROM (VALUES
         ('backwards booking period',
-         $q$INSERT INTO expenses (title, store, description, comments, booking_start, booking_end)
+         $q$INSERT INTO expenses (title, store, description, comments, accrual_start, accrual_end)
             VALUES ('bad', '', '', '', '2025-12-31Z', '2025-01-01Z')$q$),
 
         ('transaction with both amount and fraction',
@@ -112,11 +112,11 @@ BEGIN
             ('00000000-0000-7000-8000-000000000001', '00000000-0000-7000-8000-0000000000a1', '2025-06-01Z', -100, 'REWE')$q$),
 
         ('receipts that are not a json array',
-         $q$INSERT INTO expenses (title, store, description, comments, booking_start, booking_end, receipts)
+         $q$INSERT INTO expenses (title, store, description, comments, accrual_start, accrual_end, receipts)
             VALUES ('bad', '', '', '', '2025-06-01Z', '2025-06-01Z', '{"uri": "x"}')$q$),
 
         ('positions that are not a json array',
-         $q$INSERT INTO expenses (title, store, description, comments, booking_start, booking_end, positions)
+         $q$INSERT INTO expenses (title, store, description, comments, accrual_start, accrual_end, positions)
             VALUES ('bad', '', '', '', '2025-06-01Z', '2025-06-01Z', '"nope"')$q$),
 
         ('monthly limit of zero',
@@ -159,11 +159,11 @@ END $$;
 DO $$
 BEGIN
     -- every imported expense has a single-instant booking period
-    INSERT INTO expenses (title, store, description, comments, booking_start, booking_end)
+    INSERT INTO expenses (title, store, description, comments, accrual_start, accrual_end)
     VALUES ('ok', '', '', '', '2025-06-01Z', '2025-06-01Z');
 
     -- a prepayment consumed over a year
-    INSERT INTO expenses (title, store, description, comments, booking_start, booking_end)
+    INSERT INTO expenses (title, store, description, comments, accrual_start, accrual_end)
     VALUES ('ok', '', '', '', '2025-01-01Z', '2025-12-31Z');
 
     RAISE NOTICE 'valid rows still accepted';

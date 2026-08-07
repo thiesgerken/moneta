@@ -142,6 +142,6 @@ data is therefore client-side only; there is no SSR of query results.
   `docker-compose.yaml` carries a committed `MONETA__API__SECRET_KEY`. Both are known and
   accepted for now — the deployment is private infrastructure.
 - `/analysis` reads real data throughout and `analysis_mock.ts` is gone. What is still open is
-  which views should offer a transaction-date/booking-period toggle — everything analytical
+  which views should offer a value-date/accrual-period toggle — everything analytical
   follows transaction dates today, and `expenses.list` grew `valuedAfter`/`valuedBefore` for
   exactly that axis.

@@ -86,7 +86,7 @@ enum DeliveryStatus {
 }
 
 enum ExpenseSortField {
-  BOOKING_START
+  ACCRUAL_START
   TITLE
   STORE
   DESCRIPTION
@@ -113,7 +113,7 @@ enum PeriodicRuleSortField {
 """
   Which way a list is ordered.
 
-  Lists used to take a mongo sort document built in the browser (`{"bookingStart": -1}`) and
+  Lists used to take a mongo sort document built in the browser (`{"accrualStart": -1}`) and
   a mongo filter document alongside it. Both are gone: the client now names a column from a
   per-entity enum and a direction, so nothing it sends can reach a column the resolver did
   not offer, and there is no query language to parse.
@@ -178,7 +178,12 @@ input ExpenseCategorizationInput {
 """
 input ExpenseDelivery {
   accountId: UUID!
-  date: DateTime!
+  "when the money moved (Wertstellung), which is the date everything is filed under" date: DateTime!
+  """
+    when the bank posted the line, where the statement says so. Kept on the transaction it
+    produces, and used for nothing else: two statements of the same payment can disagree
+    about it, so it must not decide what a thing cost or when.
+  """ bookingDate: DateTime
   "in cents, using the same sign convention as expense transactions" amount: Int!
   statement: String!
 }
@@ -202,8 +207,8 @@ input ExpenseInput {
   description: String!
   comments: String!
   referenceAmount: Int
-  bookingStart: DateTime!
-  bookingEnd: DateTime!
+  accrualStart: DateTime!
+  accrualEnd: DateTime!
   "set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis" isTemplate: Boolean!
   "to track expenses that should be looked at again when preparing tax forms" isTaxRelevant: Boolean!
   "needs to be looked at by a user first (missing info, low confidence, ...)" isUnchecked: Boolean!
@@ -230,7 +235,8 @@ input ExpenseReceiptInput {
 
 input ExpenseTransactionInput {
   accountId: UUID!
-  date: DateTime!
+  "when the money moved (Wertstellung)" date: DateTime!
+  "when the bank posted the line; only bank-delivered transactions have one" bookingDate: DateTime
   amount: Int
   fraction: Float
   comments: String!
@@ -341,7 +347,7 @@ type AnalysisQuery {
 
     The booking period is what makes this work without the prepayment accounts and
     compensation flags MoneyDB needed: an expense whose money left on the transaction date
-    but whose value is spread over a period is simply one with `bookingEnd > bookingStart`.
+    but whose value is spread over a period is simply one with `accrualEnd > accrualStart`.
     Every imported expense has a zero-length period, so nothing shows up here until a
     period is actually widened.
 
@@ -529,8 +535,8 @@ type Expense {
   description: String!
   comments: String!
   referenceAmount: Int
-  bookingStart: DateTime!
-  bookingEnd: DateTime!
+  accrualStart: DateTime!
+  accrualEnd: DateTime!
   isTemplate: Boolean!
   isTaxRelevant: Boolean!
   isUnchecked: Boolean!
@@ -608,7 +614,7 @@ type ExpensePosition {
 }
 
 type ExpenseQuery {
-  list(limit: Int, skip: Int, search: String, accountIds: [UUID!], categoryIds: [UUID!], flags: ExpenseFlagFilter, bookedAfter: DateTime, bookedBefore: DateTime, valuedAfter: DateTime, valuedBefore: DateTime, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
+  list(limit: Int, skip: Int, search: String, accountIds: [UUID!], categoryIds: [UUID!], flags: ExpenseFlagFilter, accruedAfter: DateTime, accruedBefore: DateTime, valuedAfter: DateTime, valuedBefore: DateTime, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
   get(id: UUID!): Expense!
   changelog(limit: Int, skip: Int, author: ChangelogAuthor): ExpenseChangelogConnection!
 }
@@ -637,8 +643,8 @@ type ExpenseState {
   comments: String!
   "reference for fractional transactions, can be None if only fixed transactions are used"
   referenceAmount: Int
-  bookingStart: DateTime!
-  bookingEnd: DateTime!
+  accrualStart: DateTime!
+  accrualEnd: DateTime!
   "set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis"
   isTemplate: Boolean!
   "to track expenses that should be looked at again when preparing tax forms"
@@ -664,7 +670,10 @@ type ExpenseStateCategorization {
 
 type ExpenseStateTransaction {
   accountId: UUID!
+  "when the money moved (Wertstellung)"
   date: DateTime!
+  "when the bank posted the line, if it came from one at all"
+  bookingDate: DateTime
   amount: Int
   fraction: Float
   comments: String!

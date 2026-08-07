@@ -149,12 +149,12 @@ impl GraphQLExpense {
         self.data.reference_amount
     }
 
-    fn booking_start(&self) -> DateTime<Utc> {
-        self.data.booking_start
+    fn accrual_start(&self) -> DateTime<Utc> {
+        self.data.accrual_start
     }
 
-    fn booking_end(&self) -> DateTime<Utc> {
-        self.data.booking_end
+    fn accrual_end(&self) -> DateTime<Utc> {
+        self.data.accrual_end
     }
 
     fn is_template(&self) -> bool {
@@ -324,7 +324,7 @@ pub enum ChangelogAuthor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, GraphQLEnum)]
 pub enum ExpenseSortField {
     #[default]
-    BookingStart,
+    AccrualStart,
     Title,
     Store,
     Description,
@@ -410,8 +410,8 @@ impl ExpenseQuery {
         account_ids: Option<Vec<Uuid>>,
         category_ids: Option<Vec<Uuid>>,
         flags: Option<ExpenseFlagFilter>,
-        booked_after: Option<DateTime<Utc>>,
-        booked_before: Option<DateTime<Utc>>,
+        accrued_after: Option<DateTime<Utc>>,
+        accrued_before: Option<DateTime<Utc>>,
         valued_after: Option<DateTime<Utc>>,
         valued_before: Option<DateTime<Utc>>,
         sort_by: Option<ExpenseSortField>,
@@ -486,11 +486,11 @@ impl ExpenseQuery {
                 );
             }
 
-            if let Some(after) = booked_after {
-                query = query.filter(expenses_rendered::booking_start.ge(after));
+            if let Some(after) = accrued_after {
+                query = query.filter(expenses_rendered::accrual_start.ge(after));
             }
-            if let Some(before) = booked_before {
-                query = query.filter(expenses_rendered::booking_end.le(before));
+            if let Some(before) = accrued_before {
+                query = query.filter(expenses_rendered::accrual_end.le(before));
             }
 
             // The booking period is when an expense was *for*; these two are when the money
@@ -524,8 +524,8 @@ impl ExpenseQuery {
 
         let query = filtered();
         let query = match sort_by.unwrap_or_default() {
-            ExpenseSortField::BookingStart => {
-                crate::order_by!(query, direction, expenses_rendered::booking_start)
+            ExpenseSortField::AccrualStart => {
+                crate::order_by!(query, direction, expenses_rendered::accrual_start)
             }
             ExpenseSortField::Title => crate::order_by!(query, direction, expenses_rendered::title),
             ExpenseSortField::Store => crate::order_by!(query, direction, expenses_rendered::store),
@@ -557,13 +557,13 @@ impl ExpenseQuery {
                     expenses_rendered::is_template.desc(),
                     expenses_rendered::is_incomplete.asc(),
                     expenses_rendered::is_unchecked.asc(),
-                    expenses_rendered::booking_start.desc(),
+                    expenses_rendered::accrual_start.desc(),
                 )),
                 SortDirection::Desc => query.order_by((
                     expenses_rendered::is_template.asc(),
                     expenses_rendered::is_incomplete.desc(),
                     expenses_rendered::is_unchecked.desc(),
-                    expenses_rendered::booking_start.desc(),
+                    expenses_rendered::accrual_start.desc(),
                 )),
             },
         };

@@ -39,7 +39,7 @@ INSERT INTO categories (id, name, description) VALUES
     ('00000000-0000-7000-8000-0000000000c1', 'Lebensmittel', ''),
     ('00000000-0000-7000-8000-0000000000c2', 'Haushalt', '');
 
-INSERT INTO expenses (id, title, store, description, comments, reference_amount, booking_start, booking_end) VALUES
+INSERT INTO expenses (id, title, store, description, comments, reference_amount, accrual_start, accrual_end) VALUES
     ('00000000-0000-7000-8000-0000000000e1', 'e1', '', '', '', NULL,  '2025-06-01T12:00:00Z', '2025-06-01T12:00:00Z'),
     ('00000000-0000-7000-8000-0000000000e2', 'e2', '', '', '', NULL,  '2025-06-01T12:00:00Z', '2025-06-01T12:00:00Z'),
     ('00000000-0000-7000-8000-0000000000e3', 'e3', '', '', '', -2000, '2025-06-01T12:00:00Z', '2025-06-01T12:00:00Z'),
@@ -203,8 +203,8 @@ BEGIN
     WHERE upstream_id = '00000000-0000-7000-8000-0000000000e4';
 
     IF (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(tx -> 0) k)
-        <> ARRAY['accountId', 'amount', 'calculatedAmount', 'comments', 'date',
-                 'effectiveAmount', 'fraction', 'statement']::text[]
+        <> ARRAY['accountId', 'amount', 'bookingDate', 'calculatedAmount', 'comments',
+                 'date', 'effectiveAmount', 'fraction', 'statement']::text[]
     THEN
         RAISE EXCEPTION 'unexpected transaction keys: %',
             (SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(tx -> 0) k);
@@ -216,6 +216,12 @@ BEGIN
 
     IF (tx -> 0 ->> 'date') !~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}' THEN
         RAISE EXCEPTION 'date is not rfc3339: %', tx -> 0 ->> 'date';
+    END IF;
+
+    -- a transaction that never came from a bank carries a json null here, not a missing key:
+    -- the Rust side reads it as Option<DateTime>, and an absent key would fail the read
+    IF jsonb_typeof(tx -> 0 -> 'bookingDate') <> 'null' THEN
+        RAISE EXCEPTION 'expected a null bookingDate, got %', tx -> 0 -> 'bookingDate';
     END IF;
 
     RAISE NOTICE 'transaction json shape ok';

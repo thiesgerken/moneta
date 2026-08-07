@@ -61,8 +61,8 @@
 							newState {
 								title
 								store
-								bookingStart
-								bookingEnd
+								accrualStart
+								accrualEnd
 								referenceAmount
 								categories {
 									categoryId
@@ -177,16 +177,16 @@
 			.filter((e) => e !== undefined);
 	}
 
-	/// The booking period, short: same-day expenses are the common case and need no range.
-	function period(state: { bookingStart: Date; bookingEnd: Date }): string {
+	/// The accrual period, short: same-day expenses are the common case and need no range.
+	function period(state: { accrualStart: Date; accrualEnd: Date }): string {
 		// `de-DE` puts a trailing dot on a day-and-month date, which a year must not follow
 		const short = (d: Date) =>
 			d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }).replace(/\.$/, '');
 		const full = (d: Date) => d.toLocaleDateString('de-DE');
 
-		return state.bookingStart.getTime() === state.bookingEnd.getTime()
-			? full(state.bookingStart)
-			: `${short(state.bookingStart)}–${full(state.bookingEnd)}`;
+		return state.accrualStart.getTime() === state.accrualEnd.getTime()
+			? full(state.accrualStart)
+			: `${short(state.accrualStart)}–${full(state.accrualEnd)}`;
 	}
 
 	const toggleDiff = (id: string) =>

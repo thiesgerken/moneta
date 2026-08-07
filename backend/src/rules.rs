@@ -31,7 +31,7 @@ pub fn occurrences(
     until: DateTime<Utc>,
 ) -> Vec<DateTime<Utc>> {
     let mut res = Vec::new();
-    let mut t = template.booking_start;
+    let mut t = template.accrual_start;
 
     // a template dated far in the past would otherwise iterate for a long time before
     // reaching the window, but this is bounded by the period and stays cheap in practice
@@ -55,13 +55,13 @@ pub fn occurrences(
 /// The whole booking window and every transaction date shift by the same delta, so a
 /// template spanning several days keeps its shape.
 pub fn instantiate(rule: &PeriodicRule, template: &Expense, at: DateTime<Utc>) -> Expense {
-    let shift = at - template.booking_start;
+    let shift = at - template.accrual_start;
 
     let mut e = template.clone();
     e.id = Uuid::now_v7();
     e.is_template = false;
-    e.booking_start = at;
-    e.booking_end = template.booking_end + shift;
+    e.accrual_start = at;
+    e.accrual_end = template.accrual_end + shift;
     e.created_at = at;
     e.updated_at = at;
 
@@ -153,12 +153,12 @@ pub fn impose(
     e.is_template = false;
     // the delivery is a bank statement line, so it is worth a human look before it counts
     e.is_unchecked = true;
-    e.booking_start = delivery.date;
-    e.booking_end = delivery.date + (template.booking_end - template.booking_start);
+    e.accrual_start = delivery.date;
+    e.accrual_end = delivery.date + (template.accrual_end - template.accrual_start);
     e.created_at = now;
     e.updated_at = now;
 
-    let shift = delivery.date - template.booking_start;
+    let shift = delivery.date - template.accrual_start;
     for t in e.transactions.iter_mut() {
         t.date += shift;
     }
@@ -182,6 +182,7 @@ pub fn impose(
     t.amount = Some(delivery.amount);
     t.fraction = None;
     t.date = delivery.date;
+    t.booking_date = delivery.booking_date;
     t.statement = delivery.statement.clone();
 
     // the remaining fractional transactions are shares of the delivered amount
@@ -453,8 +454,8 @@ mod tests {
             description: String::new(),
             comments: String::new(),
             reference_amount: None,
-            booking_start: at(2025, 1, 15),
-            booking_end: at(2025, 1, 15),
+            accrual_start: at(2025, 1, 15),
+            accrual_end: at(2025, 1, 15),
             is_template: true,
             is_tax_relevant: false,
             is_unchecked: false,
@@ -473,6 +474,7 @@ mod tests {
         ExpenseTransaction {
             account_id,
             date: at(2025, 1, 15),
+            booking_date: None,
             amount,
             fraction: None,
             comments: String::new(),
@@ -516,6 +518,7 @@ mod tests {
         ExpenseDelivery {
             account_id,
             date: at(2025, 3, 4),
+            booking_date: None,
             amount,
             statement: statement.into(),
         }
@@ -561,7 +564,7 @@ mod tests {
 
         assert!(!e.is_template);
         assert_ne!(e.id, tpl.id);
-        assert_eq!(e.booking_start, at(2025, 4, 15));
+        assert_eq!(e.accrual_start, at(2025, 4, 15));
     }
 
     /// a template booked across several days keeps that span, and its transactions move with it
@@ -569,12 +572,12 @@ mod tests {
     fn instantiation_shifts_the_whole_booking_window() {
         let rule = periodic(PeriodicInterval::Monthly, at(2025, 3, 1));
         let mut tpl = template(vec![transaction(Uuid::now_v7(), Some(-500))]);
-        tpl.booking_end = at(2025, 1, 18);
+        tpl.accrual_end = at(2025, 1, 18);
 
         let e = instantiate(&rule, &tpl, at(2025, 4, 15));
 
-        assert_eq!(e.booking_start, at(2025, 4, 15));
-        assert_eq!(e.booking_end, at(2025, 4, 18));
+        assert_eq!(e.accrual_start, at(2025, 4, 15));
+        assert_eq!(e.accrual_end, at(2025, 4, 18));
         assert_eq!(e.transactions[0].date, at(2025, 4, 15));
     }
 
@@ -901,6 +904,7 @@ mod tests {
         let d = ExpenseDelivery {
             account_id: Uuid::now_v7(),
             date: Utc.with_ymd_and_hms(2025, 3, 4, 9, 5, 0).unwrap(),
+            booking_date: None,
             amount: -100,
             statement: String::new(),
         };
@@ -922,7 +926,7 @@ mod tests {
 
         assert!(!e.is_template);
         assert!(e.is_unchecked);
-        assert_eq!(e.booking_start, d.date);
+        assert_eq!(e.accrual_start, d.date);
 
         let touched = e
             .transactions

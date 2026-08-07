@@ -3,7 +3,7 @@ use similar::TextDiff;
 
 /// Which way a list is ordered.
 ///
-/// Lists used to take a mongo sort document built in the browser (`{"bookingStart": -1}`) and
+/// Lists used to take a mongo sort document built in the browser (`{"accrualStart": -1}`) and
 /// a mongo filter document alongside it. Both are gone: the client now names a column from a
 /// per-entity enum and a direction, so nothing it sends can reach a column the resolver did
 /// not offer, and there is no query language to parse.

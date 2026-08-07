@@ -37,8 +37,8 @@ pub struct RenderedExpense {
 
     pub reference_amount: Option<i32>,
 
-    pub booking_start: DateTime<Utc>,
-    pub booking_end: DateTime<Utc>,
+    pub accrual_start: DateTime<Utc>,
+    pub accrual_end: DateTime<Utc>,
 
     pub is_template: bool,
     pub is_tax_relevant: bool,
@@ -67,6 +67,8 @@ pub struct RenderedExpense {
 pub struct RenderedExpenseTransaction {
     pub account_id: Uuid,
     pub date: DateTime<Utc>,
+    /// when the bank posted the line; null for anything not delivered by one
+    pub booking_date: Option<DateTime<Utc>>,
 
     pub amount: Option<i32>,
     pub fraction: Option<f64>,
@@ -126,8 +128,8 @@ pub struct RenderedExpenseInput {
 
     pub reference_amount: Option<i32>,
 
-    pub booking_start: DateTime<Utc>,
-    pub booking_end: DateTime<Utc>,
+    pub accrual_start: DateTime<Utc>,
+    pub accrual_end: DateTime<Utc>,
 
     /// set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis
     pub is_template: bool,

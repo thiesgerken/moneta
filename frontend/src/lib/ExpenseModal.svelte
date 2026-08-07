@@ -40,8 +40,8 @@
 			readonly title: string;
 			readonly description: string;
 			readonly store: string;
-			readonly bookingStart: Date;
-			readonly bookingEnd: Date;
+			readonly accrualStart: Date;
+			readonly accrualEnd: Date;
 			readonly comments: string;
 			readonly isTaxRelevant: boolean;
 			readonly isTemplate: boolean;
@@ -100,11 +100,11 @@
 	let referenceAmount: string | undefined = $derived(
 		expense?.referenceAmount ? (expense.referenceAmount / 100).toFixed(2) : undefined
 	);
-	let bookingStart: Date | undefined = $derived(
-		expense?.bookingStart ? new Date(expense.bookingStart) : undefined
+	let accrualStart: Date | undefined = $derived(
+		expense?.accrualStart ? new Date(expense.accrualStart) : undefined
 	);
-	let bookingEnd: Date | undefined = $derived(
-		expense?.bookingEnd ? new Date(expense.bookingEnd) : undefined
+	let accrualEnd: Date | undefined = $derived(
+		expense?.accrualEnd ? new Date(expense.accrualEnd) : undefined
 	);
 
 	// Categories and transactions state
@@ -224,9 +224,9 @@
 		// Must be provided when relative transactions exist
 		return !referenceAmount || !Number(referenceAmount);
 	});
-	const bookingStartError = $derived(!bookingStart);
-	const bookingEndError = $derived.by(() => {
-		if (bookingStart && bookingEnd && bookingEnd < bookingStart) return true;
+	const accrualStartError = $derived(!accrualStart);
+	const accrualEndError = $derived.by(() => {
+		if (accrualStart && accrualEnd && accrualEnd < accrualStart) return true;
 		return false;
 	});
 
@@ -282,8 +282,8 @@
 			storeError ||
 			descriptionError ||
 			referenceAmountError ||
-			bookingStartError ||
-			bookingEndError ||
+			accrualStartError ||
+			accrualEndError ||
 			hasCategoryErrors ||
 			hasTransactionErrors ||
 			hasPositionErrors
@@ -313,7 +313,7 @@
 		event.preventDefault();
 		if (formHasErrors) return;
 
-		const endDate = bookingEnd || bookingStart;
+		const endDate = accrualEnd || accrualStart;
 
 		const input: ExpenseInput = {
 			title,
@@ -328,8 +328,8 @@
 			referenceAmount: transactions.some((tx) => tx.isRelative)
 				? Number(referenceAmount) * 100
 				: undefined,
-			bookingStart: bookingStart!,
-			bookingEnd: endDate!,
+			accrualStart: accrualStart!,
+			accrualEnd: endDate!,
 			receipts: receipts
 				.filter((r) => r.uri.trim())
 				.map((r) => ({ uri: r.uri.trim(), ocr: r.ocr })),
@@ -338,7 +338,7 @@
 				weight: cat.weight ? Number(cat.weight) : 1
 			})),
 			transactions: transactions.map((tx) => ({
-				date: tx.date || bookingStart!,
+				date: tx.date || accrualStart!,
 				accountId: tx.accountId,
 				amount: !tx.isRelative ? Number(tx.amount) * 100 : undefined,
 				fraction: tx.isRelative ? Number(tx.percentage) / 100 : undefined,
@@ -415,19 +415,19 @@
 				/>
 			</div>
 			<div>
-				<Label class="mb-2 block">Buchungsbeginn</Label>
+				<Label class="mb-2 block">Leistung von</Label>
 				<Datepicker
-					bind:value={bookingStart}
+					bind:value={accrualStart}
 					placeholder="Startdatum"
-					inputClass={bookingStartError ? 'border-red-600 bg-red-100 text-red-400' : ''}
+					inputClass={accrualStartError ? 'border-red-600 bg-red-100 text-red-400' : ''}
 				/>
 			</div>
 			<div>
-				<Label class="mb-2 block">Buchungsende</Label>
+				<Label class="mb-2 block">Leistung bis</Label>
 				<Datepicker
-					bind:value={bookingEnd}
+					bind:value={accrualEnd}
 					placeholder="optionales Enddatum"
-					inputClass={bookingEndError ? 'border-red-600 bg-red-100 text-red-400' : ''}
+					inputClass={accrualEndError ? 'border-red-600 bg-red-100 text-red-400' : ''}
 				/>
 			</div>
 			<div>

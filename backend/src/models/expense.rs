@@ -30,8 +30,8 @@ pub struct Expense {
     /// reference for fractional transactions, can be None if only fixed transactions are used
     pub reference_amount: Option<i32>,
 
-    pub booking_start: DateTime<Utc>,
-    pub booking_end: DateTime<Utc>,
+    pub accrual_start: DateTime<Utc>,
+    pub accrual_end: DateTime<Utc>,
 
     /// set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis
     pub is_template: bool,
@@ -55,7 +55,7 @@ pub struct Expense {
 
 impl Expense {
     pub fn validate(&self) -> Result<(), Box<dyn Error>> {
-        // booking_end >= booking_start, positive weights and quantities, the amount-xor-fraction
+        // accrual_end >= accrual_start, positive weights and quantities, the amount-xor-fraction
         // rule and non-zero fractions are CHECK constraints now. What is left here is what a
         // CHECK cannot see: facts about the expense as a whole rather than about one row.
         if self.transactions.is_empty() {
@@ -89,8 +89,8 @@ impl Expense {
             description: self.description.clone(),
             comments: self.comments.clone(),
             reference_amount: self.reference_amount,
-            booking_start: self.booking_start,
-            booking_end: self.booking_end,
+            accrual_start: self.accrual_start,
+            accrual_end: self.accrual_end,
             is_template: self.is_template,
             is_tax_relevant: self.is_tax_relevant,
             is_unchecked: self.is_unchecked,
@@ -112,6 +112,7 @@ impl Expense {
                 account_id: t.account_id,
                 idx: idx as i32,
                 date: t.date,
+                booking_date: t.booking_date,
                 amount: t.amount,
                 fraction: t.fraction,
                 comments: t.comments.clone(),
@@ -146,8 +147,8 @@ impl Expense {
             description: row.description,
             comments: row.comments,
             reference_amount: row.reference_amount,
-            booking_start: row.booking_start,
-            booking_end: row.booking_end,
+            accrual_start: row.accrual_start,
+            accrual_end: row.accrual_end,
             is_template: row.is_template,
             is_tax_relevant: row.is_tax_relevant,
             is_unchecked: row.is_unchecked,
@@ -160,6 +161,7 @@ impl Expense {
                 .map(|t| ExpenseTransaction {
                     account_id: t.account_id,
                     date: t.date,
+                    booking_date: t.booking_date,
                     amount: t.amount,
                     fraction: t.fraction,
                     comments: t.comments,
@@ -191,8 +193,8 @@ pub struct ExpenseRow {
 
     pub reference_amount: Option<i32>,
 
-    pub booking_start: DateTime<Utc>,
-    pub booking_end: DateTime<Utc>,
+    pub accrual_start: DateTime<Utc>,
+    pub accrual_end: DateTime<Utc>,
 
     pub is_template: bool,
     pub is_tax_relevant: bool,
@@ -218,6 +220,7 @@ pub struct ExpenseTransactionRow {
     pub idx: i32,
 
     pub date: DateTime<Utc>,
+    pub booking_date: Option<DateTime<Utc>>,
     pub amount: Option<i32>,
     pub fraction: Option<f64>,
     pub comments: String,
@@ -237,7 +240,10 @@ pub struct ExpenseCategorizationRow {
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseTransaction {
     pub account_id: Uuid,
+    /// when the money moved (Wertstellung)
     pub date: DateTime<Utc>,
+    /// when the bank posted the line, if it came from one at all
+    pub booking_date: Option<DateTime<Utc>>,
 
     // constraint: amount is null OR fraction is null
     // constraint: fraction can only be used if the expense has a reference amount
@@ -281,7 +287,10 @@ pub struct ExpenseReceipt {
 #[serde(rename_all = "camelCase")]
 pub struct ExpenseTransactionInput {
     pub account_id: Uuid,
+    /// when the money moved (Wertstellung)
     pub date: DateTime<Utc>,
+    /// when the bank posted the line; only bank-delivered transactions have one
+    pub booking_date: Option<DateTime<Utc>>,
 
     pub amount: Option<i32>,
     pub fraction: Option<f64>,
@@ -319,6 +328,7 @@ impl ExpenseTransactionInput {
         ExpenseTransaction {
             account_id: self.account_id,
             date: self.date,
+            booking_date: self.booking_date,
             amount: self.amount,
             fraction: self.fraction,
             comments: self.comments,
@@ -374,8 +384,8 @@ mod tests {
             description: String::new(),
             comments: String::new(),
             reference_amount,
-            booking_start: at(2026, 1, 1),
-            booking_end: at(2026, 1, 1),
+            accrual_start: at(2026, 1, 1),
+            accrual_end: at(2026, 1, 1),
             is_template: false,
             is_tax_relevant: false,
             is_unchecked: false,
@@ -394,6 +404,7 @@ mod tests {
         ExpenseTransaction {
             account_id: Uuid::now_v7(),
             date: at(2026, 1, 1),
+            booking_date: None,
             amount,
             fraction,
             comments: String::new(),

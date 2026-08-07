@@ -15,13 +15,13 @@
 	const templateStore = graphql(`
 		query TemplateCandidates($search: String, $flags: ExpenseFlagFilter) {
 			expenses {
-				list(limit: 25, search: $search, flags: $flags, sortBy: BOOKING_START, sortDir: DESC) {
+				list(limit: 25, search: $search, flags: $flags, sortBy: ACCRUAL_START, sortDir: DESC) {
 					edges {
 						node {
 							id
 							title
 							store
-							bookingStart
+							accrualStart
 							effectiveAmount
 						}
 					}
@@ -60,7 +60,7 @@
 			: []),
 		...candidates.map((c) => ({
 			value: c.id,
-			name: `${c.title}${c.store ? ' · ' + c.store : ''} · ${c.bookingStart?.toLocaleDateString('de-DE')} · ${(c.effectiveAmount / 100).toFixed(2)}€`
+			name: `${c.title}${c.store ? ' · ' + c.store : ''} · ${c.accrualStart?.toLocaleDateString('de-DE')} · ${(c.effectiveAmount / 100).toFixed(2)}€`
 		}))
 	]);
 </script>

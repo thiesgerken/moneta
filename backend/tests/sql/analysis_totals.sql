@@ -19,7 +19,7 @@ INSERT INTO categories (id, name, description) VALUES
     ('00000000-0000-7000-8000-0000000000c1', 'Essen', ''),
     ('00000000-0000-7000-8000-0000000000c2', 'Haushalt', '');
 
-INSERT INTO expenses (id, title, store, description, comments, reference_amount, booking_start, booking_end, is_template) VALUES
+INSERT INTO expenses (id, title, store, description, comments, reference_amount, accrual_start, accrual_end, is_template) VALUES
     ('00000000-0000-7000-8000-0000000000e1', 'juni klein',  '', '', '', NULL, '2025-06-03Z', '2025-06-03Z', false),
     ('00000000-0000-7000-8000-0000000000e2', 'juni gross',  '', '', '', NULL, '2025-06-20Z', '2025-06-20Z', false),
     ('00000000-0000-7000-8000-0000000000e3', 'juni gehalt', '', '', '', NULL, '2025-06-12Z', '2025-06-12Z', false),

@@ -112,13 +112,25 @@ The analysis endpoints go one step further and compute in SQL as well
 Money is stored as integer cents (`amount: i32`). Computed values that involve fractions are
 `f64` (`calculatedAmount`, `effectiveAmount`).
 
+### The three dates
+
+- **`date`** on a transaction — when the money moved (Wertstellung). Everything analytical is
+  filed under this: balances, monthly totals, the calendar.
+- **`bookingDate`** on a transaction — when the bank posted the line to its own ledger
+  (Buchungstag). Null unless a bank delivered it, and deliberately used for nothing: two
+  statements of the same payment can disagree about it.
+- **`accrualStart`/`accrualEnd`** on an expense — the period the expense is *for*
+  (Leistungszeitraum). Equal endpoints mean an ordinary expense; a span is a prepayment, and
+  is what `analysis.prepayments` accrues over. Never null: an expense with no period of its
+  own is accrued on the day it was paid.
+
 ### Rules
 
 Two kinds of rule create expenses by copying a *template* expense (`periodic_rules`,
 `automation_rules`, logic in `src/rules.rs`):
 
 - **periodic rules** fire on a schedule (daily/weekly/monthly/yearly). Occurrences are
-  anchored on the template's `bookingStart`, so a monthly rule keeps its day of month however
+  anchored on the template's `accrualStart`, so a monthly rule keeps its day of month however
   long it lay dormant. `titleReplacement` substitutes `%d`/`%m`/`%y`, `amountReplacement`
   replaces the reference amount and, when the template has exactly one fixed transaction,
   that transaction too — the shape almost every shared expense has.

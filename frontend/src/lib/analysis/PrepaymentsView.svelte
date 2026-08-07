@@ -28,8 +28,8 @@
 						id
 						title
 						store
-						bookingStart
-						bookingEnd
+						accrualStart
+						accrualEnd
 						effectiveAmount
 						transactions {
 							date
@@ -55,7 +55,7 @@
 						incomplete: true
 						normal: false
 					}
-					sortBy: BOOKING_START
+					sortBy: ACCRUAL_START
 					sortDir: DESC
 					limit: 100
 				) {
@@ -64,7 +64,7 @@
 							id
 							title
 							store
-							bookingStart
+							accrualStart
 							effectiveAmount
 						}
 					}
@@ -126,7 +126,7 @@
 	<Card class="max-w-none p-4">
 		<h3 class="text-lg font-semibold">Vorauszahlungen</h3>
 		<p class="mb-2 text-sm text-gray-500 dark:text-gray-400">
-			Ausgaben, deren Wert sich über einen Buchungszeitraum verteilt und an diesem Stichtag noch
+			Ausgaben, deren Wert sich über einen Leistungszeitraum verteilt und an diesem Stichtag noch
 			nicht aufgebraucht ist. Der Verbrauch läuft linear über den Zeitraum.
 		</p>
 		{#if $prepaymentStore.errors}
@@ -136,7 +136,7 @@
 		{:else if rows.length === 0 && !$prepaymentStore.fetching}
 			<p class="text-sm text-gray-500 dark:text-gray-400">
 				Zu diesem Stichtag ist nichts offen. Eine Ausgabe taucht hier auf, sobald ihr
-				Buchungszeitraum länger als ein Zeitpunkt ist.
+				Leistungszeitraum länger als ein Zeitpunkt ist.
 			</p>
 		{:else}
 			<Table hoverable striped class="w-full text-left text-sm">
@@ -162,7 +162,7 @@
 								{paid ? paid.toLocaleDateString('de-DE') : '–'}
 							</TableBodyCell>
 							<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
-								{p.expense.bookingStart.toLocaleDateString('de-DE')} – {p.expense.bookingEnd.toLocaleDateString(
+								{p.expense.accrualStart.toLocaleDateString('de-DE')} – {p.expense.accrualEnd.toLocaleDateString(
 									'de-DE'
 								)}
 							</TableBodyCell>
@@ -216,7 +216,7 @@
 								{/if}
 							</TableBodyCell>
 							<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
-								{e.bookingStart.toLocaleDateString('de-DE')}
+								{e.accrualStart.toLocaleDateString('de-DE')}
 							</TableBodyCell>
 							<TableBodyCell class="px-4 py-3">{euro(e.effectiveAmount)}</TableBodyCell>
 							<TableBodyCell class="px-4 py-3">

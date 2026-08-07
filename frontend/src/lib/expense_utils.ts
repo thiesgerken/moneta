@@ -1,4 +1,4 @@
-export function formatBookingPeriod(begin: Date, end: Date, time: boolean = false) {
+export function formatAccrualPeriod(begin: Date, end: Date, time: boolean = false) {
 	const fmt: Intl.DateTimeFormatOptions = time
 		? {
 				month: '2-digit',

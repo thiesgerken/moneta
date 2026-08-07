@@ -12,7 +12,7 @@ INSERT INTO accounts (id, user_id, name, description, kind, availability, risk, 
     ('00000000-0000-7000-8000-0000000000a2', '00000000-0000-7000-8000-000000000001', 'a2', '', 'debit', 'immediately', 'none', '2025-01-01Z', 1.0),
     ('00000000-0000-7000-8000-0000000000a3', '00000000-0000-7000-8000-000000000002', 'a3', '', 'debit', 'immediately', 'none', '2025-01-01Z', 1.0);
 
-INSERT INTO expenses (id, title, store, description, comments, reference_amount, booking_start, booking_end, is_template) VALUES
+INSERT INTO expenses (id, title, store, description, comments, reference_amount, accrual_start, accrual_end, is_template) VALUES
     -- before the range: reflected in the opening balance, not listed
     ('00000000-0000-7000-8000-0000000000e1', 'before', 'S1', '', '', NULL, '2025-05-20Z', '2025-05-20Z', false),
     ('00000000-0000-7000-8000-0000000000e2', 'rewe',   'Rewe', '', '', NULL, '2025-06-03Z', '2025-06-03Z', false),
