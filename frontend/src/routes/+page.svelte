@@ -117,9 +117,13 @@
 				changes: changelog(author: OTHERS, since: $since, limit: 1) {
 					totalCount
 				}
-				# what the "pruefen" link on /expenses lands on, so the number and the list agree
+				# what the "pruefen" link on /expenses lands on, so the number and the list agree.
+				# Oldest first, since how long the oldest one has been waiting says more about
+				# whether this needs attention than the count does.
 				review: list(
 					limit: 1
+					sortBy: ACCRUAL_START
+					sortDir: ASC
 					flags: {
 						templates: false
 						taxRelevant: false
@@ -130,6 +134,13 @@
 					}
 				) {
 					totalCount
+					edges {
+						node {
+							id
+							title
+							accrualStart
+						}
+					}
 				}
 			}
 		}
@@ -244,6 +255,7 @@
 
 	const changeCount = $derived(data?.expenses.changes.totalCount ?? 0);
 	const reviewCount = $derived(data?.expenses.review.totalCount ?? 0);
+	const oldestReview = $derived(data?.expenses.review.edges[0]?.node);
 
 	const monthName = (d: Date) => d.toLocaleDateString('de-DE', { month: 'long' });
 
@@ -366,10 +378,17 @@
 						<span class="min-w-0 flex-1">
 							<span class="block font-medium">
 								{reviewCount}
-								{reviewCount === 1 ? 'Ausgabe' : 'Ausgaben'} brauchen Prüfung
+								{reviewCount === 1 ? 'Ausgabe braucht' : 'Ausgaben brauchen'} Prüfung
 							</span>
-							<span class="block text-sm text-gray-500 dark:text-gray-400">
-								ungeprüft oder unvollständig
+							<span class="block truncate text-sm text-gray-500 dark:text-gray-400">
+								{#if oldestReview}
+									<!-- the age of the oldest is what says whether this has been sitting
+									     there; a count alone reads the same after a day and after a year -->
+									älteste: {oldestReview.title || 'Ohne Titel'} vom
+									{oldestReview.accrualStart.toLocaleDateString('de-DE')}
+								{:else}
+									ungeprüft oder unvollständig
+								{/if}
 							</span>
 						</span>
 						<ArrowRightOutline class="h-4 w-4 shrink-0 text-gray-400" />
