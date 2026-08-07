@@ -293,13 +293,15 @@
 
 <div class="mx-auto max-w-3xl">
 	<div class="flex items-center justify-between gap-3 pb-2">
+		<!-- the same words the entries use, which say "von dir" and "von Krösus"; the default
+		     leads, so the row reads as everything first and then two ways to narrow it -->
 		<ToggleGroup
 			bind:value={feedState.author}
 			size="sm"
 			options={[
-				{ value: 'OTHERS', label: 'Nur andere' },
-				{ value: 'ME', label: 'Nur meine' },
-				{ value: 'ANYONE', label: 'Alle' }
+				{ value: 'ANYONE', label: 'Alle' },
+				{ value: 'ME', label: 'Von mir' },
+				{ value: 'OTHERS', label: 'Von anderen' }
 			]}
 		/>
 		{#if $changelogStore.fetching}
