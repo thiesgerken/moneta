@@ -43,14 +43,72 @@
 		open(d.getUTCFullYear(), d.getUTCMonth() + 1);
 	};
 
-	/// The heading is a month input, so this page reads as one of a series rather than as a
-	/// place you arrived at: the arrows only ever offer the two next to it, and getting to
-	/// March of last year meant either counting clicks or going back to the overview.
-	const picked = $derived(`${year}-${`${month}`.padStart(2, '0')}`);
+	/// The heading is a picker, so this page reads as one of a series rather than as a place you
+	/// arrived at: the arrows only ever offer the two months next to it, and getting to March of
+	/// last year meant either counting clicks or going back to the overview.
+	///
+	/// A select rather than `input type="month"`: firefox has no month picker and renders one as
+	/// a plain text field, which put "2026-07" where the heading used to be.
+	const picked = $derived(`${year}-${month}`);
+
+	/// Every month from the first expense to this one, newest first — the ones there is anything
+	/// to see in. The range query is the picker's own, and cheap: one expense, sorted.
+	const startStore = graphql(`
+		query MonthPickerStart {
+			expenses {
+				list(limit: 1, sortBy: ACCRUAL_START, sortDir: ASC) {
+					edges {
+						node {
+							id
+							accrualStart
+						}
+					}
+				}
+			}
+		}
+	`);
+
+	$effect(() => {
+		void startStore.fetch();
+	});
+
+	const choices = $derived.by(() => {
+		const first = $startStore.data?.expenses.list.edges[0]?.node.accrualStart;
+		const now = new Date();
+
+		// the month being looked at is always offered, even where it is outside the data
+		let y = first?.getUTCFullYear() ?? year;
+		let m = (first?.getUTCMonth() ?? month - 1) + 1;
+		const out: { value: string; label: string }[] = [];
+
+		while (y < now.getFullYear() || (y === now.getFullYear() && m <= now.getMonth() + 1)) {
+			out.push({
+				value: `${y}-${m}`,
+				label: new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('de-DE', {
+					month: 'long',
+					year: 'numeric',
+					timeZone: 'UTC'
+				})
+			});
+			if (m === 12) [y, m] = [y + 1, 1];
+			else m += 1;
+		}
+
+		if (!out.some((o) => o.value === picked)) {
+			out.push({
+				value: picked,
+				label: start.toLocaleDateString('de-DE', {
+					month: 'long',
+					year: 'numeric',
+					timeZone: 'UTC'
+				})
+			});
+		}
+
+		return out.reverse();
+	});
 
 	function pick(value: string) {
-		// an emptied input, which the picker allows
-		if (!value) return;
 		const [y, m] = value.split('-').map(Number);
 		if (y && m) open(y, m);
 	}
@@ -200,17 +258,18 @@
 			<Button color="alternative" size="sm" onclick={() => shift(-1)}>
 				<ChevronLeftOutline class="h-4 w-4" />
 			</Button>
-			<!-- a month input rather than a heading: the browser's own picker is a year and a
-			     month grid, which is exactly the choice on offer here -->
 			<h2 class="text-xl font-semibold">
 				<label>
 					<span class="sr-only">Monat</span>
-					<input
-						type="month"
+					<select
 						value={picked}
-						onchange={(e) => pick((e.target as HTMLInputElement).value)}
+						onchange={(e) => pick((e.target as HTMLSelectElement).value)}
 						class="focus:border-primary-500 cursor-pointer rounded-lg border border-transparent bg-transparent px-2 py-1 text-xl font-semibold hover:border-gray-300 focus:ring-0 dark:hover:border-gray-600"
-					/>
+					>
+						{#each choices as choice (choice.value)}
+							<option value={choice.value}>{choice.label}</option>
+						{/each}
+					</select>
 				</label>
 			</h2>
 			<Button color="alternative" size="sm" onclick={() => shift(1)}>
