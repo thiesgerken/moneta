@@ -42,6 +42,7 @@
 	} from './expense_utils';
 	import ExpenseModal from './ExpenseModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
+	import { page } from '$app/state';
 
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
@@ -72,6 +73,16 @@
 	let showUnchecked = $state(true);
 	let showIncomplete = $state(true);
 	let showNormal = $state(true);
+
+	// Read once rather than tracked: these are how the dashboard hands over -- "12 Ausgaben
+	// brauchen Prüfung" has to land on those twelve, and "Neue Ausgabe" on the open form. Once
+	// here the toggles are the reader's again, so a later edit must not be reset by the url.
+	if (page.url.searchParams.has('neu')) showNewExpenseModal = true;
+	if (page.url.searchParams.has('pruefen')) {
+		showTaxRelevant = false;
+		showExtraordinary = false;
+		showNormal = false;
+	}
 
 	// The column the header clicks name, mapped onto what the API offers. The backend used to
 	// take a mongo sort document built right here; it now names its own columns.
