@@ -239,6 +239,10 @@
 						size: '68%',
 						labels: {
 							show: true,
+							// the number in the middle when a slice is hovered, which is a
+							// different formatter from the total's and from the tooltip's --
+							// apex hands it the value as a string off the DOM
+							value: { formatter: (v: string) => euroExact(Number(v) * 100) },
 							total: {
 								show: true,
 								label: 'Ausgegeben',
