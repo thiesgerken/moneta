@@ -20,6 +20,7 @@
 	import SeriesToggle from './SeriesToggle.svelte';
 	import { AVAILABILITY_LABELS, availabilityColor } from './availability';
 	import { CUSTOM_SPAN, wealthState } from './state.svelte';
+	import { todayIso } from './dates';
 	import { ANALYSIS_CARD, WEALTH_COLOR } from './cards';
 
 	const euro = (cents: number) =>
@@ -190,6 +191,11 @@
 
 		try {
 			chart.removeAnnotation(STICHTAG);
+			// Today is where the chart already ends, so the line would sit on its right edge
+			// and label the axis' own last point. It is worth drawing once it means something
+			// other than "now", which is to say once it has been moved.
+			if (wealthState.date === todayIso()) return;
+
 			chart.addXaxisAnnotation(
 				{
 					id: STICHTAG,
