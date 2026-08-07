@@ -29,14 +29,14 @@
 		<TabItem title="Kategorien">
 			<CategoriesView />
 		</TabItem>
+		<TabItem title="Vorauszahlungen">
+			<PrepaymentsView />
+		</TabItem>
 		<TabItem title="Kontoauszug">
 			<StatementView />
 		</TabItem>
 		<TabItem title="Kalender">
 			<CalendarView />
-		</TabItem>
-		<TabItem title="Vorauszahlungen">
-			<PrepaymentsView />
 		</TabItem>
 	</Tabs>
 </div>

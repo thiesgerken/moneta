@@ -34,9 +34,14 @@ export const wealthState = $state({
 	split: 'total',
 	/// the Stichtag for the availability totals and the computed balances
 	date: todayIso(),
-	/// series hidden from the chart, by name; only meaningful when split by account or
-	/// availability, and remembered so a tab switch does not un-hide them
-	hiddenSeries: [] as string[]
+	/// Series hidden from the chart, by name, remembered so a tab switch does not un-hide them.
+	///
+	/// One list per split rather than one shared: the toggle drops names the chart no longer
+	/// draws, so a shared list lost the account choices the moment you looked at availability.
+	hiddenAccounts: [] as string[],
+	hiddenAvailability: [] as string[],
+	/// whether the closed accounts have been collapsed for this session yet
+	accountsSeeded: false
 });
 
 export const overviewsState = $state({ range: range('1y') });

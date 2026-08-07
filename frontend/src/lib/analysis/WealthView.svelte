@@ -58,6 +58,8 @@
 							id
 							name
 							color
+							# only to decide which series start collapsed
+							closed
 						}
 						amounts
 					}
@@ -121,6 +123,24 @@
 	$effect(() => {
 		void balanceStore.fetch({ variables: { date: new Date(wealthState.date) } });
 	});
+
+	/// A closed account held money once, so it belongs in the history — but a decade of accounts
+	/// you have since given up is not what the chart is opened for, and with thirty-odd series
+	/// the legend alone fills a phone. They start collapsed, once per session: after that the
+	/// choice is the reader's, including the choice to bring them back.
+	$effect(() => {
+		const loaded = history;
+		if (!loaded || wealthState.accountsSeeded) return;
+
+		wealthState.accountsSeeded = true;
+		const closed = loaded.byAccount.filter((s) => s.account.closed).map((s) => s.account.name);
+		if (closed.length > 0) wealthState.hiddenAccounts = closed;
+	});
+
+	/// which list the toggle and the chart read, since each split hides its own names
+	const hidden = $derived(
+		wealthState.split === 'account' ? wealthState.hiddenAccounts : wealthState.hiddenAvailability
+	);
 
 	const balances = $derived($balanceStore.data?.analysis.balances ?? []);
 
@@ -190,7 +210,7 @@
 		const chart = chartInstance;
 		void wealthState.date;
 		// hiding or showing a series re-renders the chart, which drops this line with it
-		void wealthState.hiddenSeries.length;
+		void hidden.length;
 
 		// a frame late, so it lands after whatever redraw prompted it rather than under it
 		const timer = setTimeout(() => drawStichtag(chart));
@@ -318,9 +338,11 @@
 				legendClick: (_c: unknown, index: number) => {
 					const name = series[index]?.name;
 					if (!name) return;
-					wealthState.hiddenSeries = wealthState.hiddenSeries.includes(name)
-						? wealthState.hiddenSeries.filter((n) => n !== name)
-						: [...wealthState.hiddenSeries, name];
+
+					const next = hidden.includes(name) ? hidden.filter((n) => n !== name) : [...hidden, name];
+
+					if (wealthState.split === 'account') wealthState.hiddenAccounts = next;
+					else wealthState.hiddenAvailability = next;
 				}
 			}
 		},
@@ -329,7 +351,7 @@
 		// dozen accounts froze the tab for seconds.
 		series: series.map((s) => ({
 			name: s.name,
-			hidden: wealthState.hiddenSeries.includes(s.name),
+			hidden: hidden.includes(s.name),
 			data: dates.map((d, i) => [d, s.amounts[i] / 100])
 		})),
 		colors: series.map((s) => s.color),
@@ -370,8 +392,10 @@
 				{/if}
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
-				{#if wealthState.split !== 'total'}
-					<SeriesToggle names={seriesNames} bind:hidden={wealthState.hiddenSeries} />
+				{#if wealthState.split === 'account'}
+					<SeriesToggle names={seriesNames} bind:hidden={wealthState.hiddenAccounts} />
+				{:else if wealthState.split === 'availability'}
+					<SeriesToggle names={seriesNames} bind:hidden={wealthState.hiddenAvailability} />
 				{/if}
 				<RangePicker bind:range={wealthState.range} />
 				<ToggleGroup
