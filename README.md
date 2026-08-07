@@ -208,6 +208,10 @@ for what each shows and why. Month pages live under `/analysis/[year]/[month]`.
 
 The navbar entries live in `src/lib/navigation.ts`, which is also where page titles come from.
 
+What the UI is supposed to look like — the two typefaces, what each colour means, how dates and
+money are written, and the handful of flowbite defaults that are overridden — is
+[frontend/DESIGN.md](frontend/DESIGN.md). Read it before adding a screen.
+
 Queries are declared inline with `graphql(...)` and fetched explicitly:
 
 ```svelte
