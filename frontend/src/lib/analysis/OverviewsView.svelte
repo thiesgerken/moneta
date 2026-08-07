@@ -94,15 +94,19 @@
 			<h3 class="mb-2 text-lg font-semibold">Monatliche Übersichten</h3>
 			<div class="overflow-x-auto">
 				<Table hoverable striped class="w-full text-left text-sm">
+					<!-- Delta right after the month: it is what the row is read for, and on a phone
+					     the columns behind it are off the screen. What is dropped there is what
+					     answers a question nobody asks on a phone -- where the month started, how
+					     many expenses it took, and how far the two ways of counting disagree. -->
 					<TableHead>
 						<TableHeadCell class="px-4 py-3">Monat</TableHeadCell>
-						<TableHeadCell class="px-4 py-3">Vermögen Beginn</TableHeadCell>
+						<TableHeadCell class="px-4 py-3">Delta</TableHeadCell>
+						<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Vermögen Beginn</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Vermögen Ende</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Einnahmen</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Ausgaben</TableHeadCell>
-						<TableHeadCell class="px-4 py-3">Delta</TableHeadCell>
-						<TableHeadCell class="px-4 py-3">Anzahl</TableHeadCell>
-						<TableHeadCell class="px-4 py-3">
+						<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Anzahl</TableHeadCell>
+						<TableHeadCell class="hidden px-4 py-3 sm:table-cell">
 							<span class="underline decoration-dotted">Fehler</span>
 							<Tooltip class="max-w-xs text-xs font-normal normal-case">
 								Die Lücke zwischen dem fortgeschriebenen und dem gemessenen Endvermögen. Eine große
@@ -128,14 +132,6 @@
 										})}
 									</a>
 								</TableBodyCell>
-								<TableBodyCell class="px-4 py-3">{euro(o.startTotal)}</TableBodyCell>
-								<TableBodyCell class="px-4 py-3">{euro(o.endTotal)}</TableBodyCell>
-								<TableBodyCell class="px-4 py-3 text-green-700 dark:text-green-400"
-									>{euro(o.income)}</TableBodyCell
-								>
-								<TableBodyCell class="px-4 py-3 text-red-600 dark:text-red-400"
-									>{euro(o.expenses)}</TableBodyCell
-								>
 								<TableBodyCell class="px-4 py-3">
 									<Badge
 										color={deltaColor(o.endTotal - o.startTotal)}
@@ -144,8 +140,22 @@
 										{euro(o.endTotal - o.startTotal)}
 									</Badge>
 								</TableBodyCell>
-								<TableBodyCell class="px-4 py-3">{o.expenseCount}</TableBodyCell>
-								<TableBodyCell class="px-4 py-3 {errorClass(integrationError(o))}">
+								<TableBodyCell class="hidden px-4 py-3 sm:table-cell"
+									>{euro(o.startTotal)}</TableBodyCell
+								>
+								<TableBodyCell class="px-4 py-3">{euro(o.endTotal)}</TableBodyCell>
+								<TableBodyCell class="px-4 py-3 text-green-700 dark:text-green-400"
+									>{euro(o.income)}</TableBodyCell
+								>
+								<TableBodyCell class="px-4 py-3 text-red-600 dark:text-red-400"
+									>{euro(o.expenses)}</TableBodyCell
+								>
+								<TableBodyCell class="hidden px-4 py-3 sm:table-cell"
+									>{o.expenseCount}</TableBodyCell
+								>
+								<TableBodyCell
+									class="hidden px-4 py-3 sm:table-cell {errorClass(integrationError(o))}"
+								>
 									{euro(integrationError(o))}
 								</TableBodyCell>
 							</TableBodyRow>

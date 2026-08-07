@@ -89,36 +89,43 @@
 
 <div class="flex flex-wrap items-center gap-2">
 	<!-- an explicit height on both: flowbite's `sm` is padding, and a select and a date input
-	     do not arrive at the same height from the same padding -->
+	     do not arrive at the same height from the same padding.
+	     The preset takes the whole line on a phone, which leaves the next one to the two dates:
+	     sharing a line with it squeezed them to five characters apiece. -->
 	<Select
 		value={range.span}
 		onchange={(e) => (range.span = (e.target as HTMLSelectElement).value)}
 		items={SPANS.map((s) => ({ value: s.value, name: s.name }))}
 		size="sm"
-		class="w-44"
+		class="w-full sm:w-44"
 		selectClass="h-9 py-0"
 		placeholder=""
 	/>
 	{#if dates}
-		<!-- flowbite's Input fills its container, so the width lives on a wrapper -->
-		<div class="w-40">
-			<Input
-				type="date"
-				size="sm"
-				class="h-9 py-0"
-				value={range.from ? isoDate(new Date(range.from)) : ''}
-				onchange={(e) => edit('from', (e.target as HTMLInputElement).value)}
-			/>
-		</div>
-		<span class="text-gray-500 dark:text-gray-400">–</span>
-		<div class="w-40">
-			<Input
-				type="date"
-				size="sm"
-				class="h-9 py-0"
-				value={range.to ? isoDate(new Date(range.to)) : ''}
-				onchange={(e) => edit('to', (e.target as HTMLInputElement).value)}
-			/>
+		<!-- The two ends wrap as one: loose in the row, a narrow screen broke the line between
+		     them and left the end date underneath the start looking like a control of its own.
+		     They share what is left of the row there, and keep their fixed width from `sm` up. -->
+		<div class="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
+			<!-- flowbite's Input fills its container, so the width lives on a wrapper -->
+			<div class="min-w-0 flex-1 sm:w-40 sm:flex-none">
+				<Input
+					type="date"
+					size="sm"
+					class="h-9 py-0"
+					value={range.from ? isoDate(new Date(range.from)) : ''}
+					onchange={(e) => edit('from', (e.target as HTMLInputElement).value)}
+				/>
+			</div>
+			<span class="text-gray-500 dark:text-gray-400">–</span>
+			<div class="min-w-0 flex-1 sm:w-40 sm:flex-none">
+				<Input
+					type="date"
+					size="sm"
+					class="h-9 py-0"
+					value={range.to ? isoDate(new Date(range.to)) : ''}
+					onchange={(e) => edit('to', (e.target as HTMLInputElement).value)}
+				/>
+			</div>
 		</div>
 	{/if}
 </div>
