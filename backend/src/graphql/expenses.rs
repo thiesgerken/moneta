@@ -302,6 +302,9 @@ impl GraphQLExpenseChangelogEntry {
 #[derive(GraphQLObject)]
 #[graphql(context=Context)]
 pub struct ExpenseChangelogConnection {
+    /// how many entries match, which for a caller that only wants the number is the whole
+    /// answer: "3 Änderungen seit gestern" needs no entry to be read
+    pub total_count: i32,
     pub edges: Vec<ExpenseChangelogNode>,
 }
 
@@ -617,35 +620,48 @@ impl ExpenseQuery {
         limit: Option<i32>,
         skip: Option<i32>,
         author: Option<ChangelogAuthor>,
+        since: Option<DateTime<Utc>>,
     ) -> FieldResult<ExpenseChangelogConnection> {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
         let (limit, offset) = util::page(limit.or(Some(50)), skip);
 
-        // A change outlives the expense it describes, so this reaches the visible expenses
-        // through the view rather than joining: a deleted expense has no rendering left and
-        // its changes drop out of the list, which is what the old query did too.
-        let mut query = expense_changes::table
-            .filter(
-                expense_changes::target_id.eq_any(
-                    expenses_rendered::table
-                        .filter(expenses_rendered::user_id.eq(user_id))
-                        .select(expenses_rendered::upstream_id),
-                ),
-            )
-            .into_boxed();
+        // A boxed query is consumed by the count, so the filter is built twice rather than
+        // cloned.
+        let filtered = || {
+            // A change outlives the expense it describes, so this reaches the visible expenses
+            // through the view rather than joining: a deleted expense has no rendering left
+            // and its changes drop out of the list, which is what the old query did too.
+            let mut query = expense_changes::table
+                .filter(
+                    expense_changes::target_id.eq_any(
+                        expenses_rendered::table
+                            .filter(expenses_rendered::user_id.eq(user_id))
+                            .select(expenses_rendered::upstream_id),
+                    ),
+                )
+                .into_boxed();
 
-        // An automation writes the owner's id, so "someone else" means a different person, not
-        // a different actor: a rule of mine firing is still mine.
-        query = match author.unwrap_or_default() {
-            ChangelogAuthor::Anyone => query,
-            ChangelogAuthor::Me => query.filter(expense_changes::user_id.eq(user_id)),
-            // an entry with no author is nobody's -- an import, which is not someone else
-            ChangelogAuthor::Others => query.filter(expense_changes::user_id.ne(user_id)),
+            // An automation writes the owner's id, so "someone else" means a different person,
+            // not a different actor: a rule of mine firing is still mine.
+            query = match author.unwrap_or_default() {
+                ChangelogAuthor::Anyone => query,
+                ChangelogAuthor::Me => query.filter(expense_changes::user_id.eq(user_id)),
+                // an entry with no author is nobody's -- an import, which is not someone else
+                ChangelogAuthor::Others => query.filter(expense_changes::user_id.ne(user_id)),
+            };
+
+            if let Some(since) = since {
+                query = query.filter(expense_changes::date.ge(since));
+            }
+
+            query
         };
 
-        let entries = query
+        let total_count: i64 = filtered().count().get_result(conn).await?;
+
+        let entries = filtered()
             .order_by(expense_changes::date.desc())
             .then_order_by(expense_changes::id.desc())
             .limit(limit)
@@ -655,6 +671,7 @@ impl ExpenseQuery {
             .await?;
 
         Ok(ExpenseChangelogConnection {
+            total_count: total_count as i32,
             edges: entries
                 .into_iter()
                 .map(|node| ExpenseChangelogNode {

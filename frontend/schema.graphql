@@ -556,6 +556,11 @@ type ExpenseCategorization {
 }
 
 type ExpenseChangelogConnection {
+  """
+    how many entries match, which for a caller that only wants the number is the whole
+    answer: "3 Änderungen seit gestern" needs no entry to be read
+  """
+  totalCount: Int!
   edges: [ExpenseChangelogNode!]!
 }
 
@@ -616,7 +621,7 @@ type ExpensePosition {
 type ExpenseQuery {
   list(limit: Int, skip: Int, search: String, accountIds: [UUID!], categoryIds: [UUID!], flags: ExpenseFlagFilter, accruedAfter: DateTime, accruedBefore: DateTime, valuedAfter: DateTime, valuedBefore: DateTime, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
   get(id: UUID!): Expense!
-  changelog(limit: Int, skip: Int, author: ChangelogAuthor): ExpenseChangelogConnection!
+  changelog(limit: Int, skip: Int, author: ChangelogAuthor, since: DateTime): ExpenseChangelogConnection!
 }
 
 type ExpenseReceipt {
