@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 
 use uuid::Uuid;
@@ -568,14 +569,30 @@ impl ExpenseQuery {
             },
         };
 
-        let found = query
+        // The page is picked and rendered in two steps on purpose. Rendering an expense means
+        // aggregating its transactions, categories and positions into jsonb, and a sort the
+        // view cannot answer from an index has to render every row it might return before it
+        // can order them -- every one of them to hand back fifteen, which is 550 ms of the 560 ms
+        // the default sort used to take. Ordering ids alone touches none of that.
+        let ids: Vec<Uuid> = query
             // without a tiebreaker, two pages of an equal sort key can repeat or skip rows
             .then_order_by(expenses_rendered::id.asc())
             .limit(limit)
             .offset(offset)
+            .select(expenses_rendered::id)
+            .load(conn)
+            .await?;
+
+        let mut found: Vec<RenderedExpense> = expenses_rendered::table
+            .filter(expenses_rendered::user_id.eq(user_id))
+            .filter(expenses_rendered::id.eq_any(&ids))
             .select(RenderedExpense::as_select())
             .load(conn)
             .await?;
+
+        // `IN` says nothing about order, and the order is the whole point of the first query
+        let position: HashMap<Uuid, usize> = ids.iter().copied().zip(0..).collect();
+        found.sort_by_key(|e| position.get(&e.id).copied().unwrap_or(usize::MAX));
 
         Ok(ExpenseConnection {
             total_count: total_count as i32,
