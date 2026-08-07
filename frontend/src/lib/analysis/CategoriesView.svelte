@@ -15,6 +15,9 @@
 	} from './overviews';
 	import { categoriesState } from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
+	import { isoDate } from './dates';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -109,8 +112,8 @@
 
 	// a treemap rather than MoneyDB's sunburst: same category -> expense hierarchy, but
 	// readable at the sizes where a sunburst's outer ring becomes unlabelable slivers
-	const treemapOptions = $derived.by(() => {
-		const series = breakdown
+	const treemapSeries = $derived(
+		breakdown
 			.map((c) => {
 				const children = c.biggest
 					.filter((e) => (categoriesState.sign === 'expenses' ? e.amount < 0 : e.amount > 0))
@@ -120,14 +123,57 @@
 				const rest = Math.abs(categoriesState.sign === 'expenses' ? c.restExpenses : c.restIncome);
 				if (rest > 0) children.push({ x: 'Rest', y: rest / 100 });
 
-				return { name: name(c.category), color: categoryColor(c.category), data: children };
+				return {
+					name: name(c.category),
+					categoryId: c.category?.id,
+					color: categoryColor(c.category),
+					data: children
+				};
 			})
 			// Filtered out rather than declared `hidden`: a treemap has no collapsed state to
 			// put a series into, and the tiles are laid out from whatever is left.
-			.filter((s) => s.data.length > 0 && !categoriesState.hiddenSeries.includes(s.name));
+			.filter((s) => s.data.length > 0 && !categoriesState.hiddenSeries.includes(s.name))
+	);
+
+	/// The expenses behind a tile, in the list that can actually show them.
+	///
+	/// Which is what the "Rest" tile is for: it stands for everything the treemap had no room
+	/// to name, and there is no bound on how much that is, so it belongs in a list rather than
+	/// in a tooltip. The ends are snapped to whole months, which is what the backend does to
+	/// the range before it answers -- a list ending mid-month would not add up to the tile.
+	function openCategory(seriesIndex: number) {
+		const id = treemapSeries[seriesIndex]?.categoryId;
+		const { from, to } = categoriesState.range;
+		// nothing to filter on: "Ohne Kategorie" is the absence of one, which the expense list
+		// cannot ask for
+		if (!id || !from || !to) return;
+
+		const start = new Date(from);
+		const end = new Date(to);
+		const params = new URLSearchParams({
+			kategorie: id.toString(),
+			von: isoDate(new Date(start.getFullYear(), start.getMonth(), 1)),
+			bis: isoDate(new Date(end.getFullYear(), end.getMonth() + 1, 0))
+		});
+
+		// the rule wants a literal resolve() call, which cannot carry a query string
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		void goto(`${resolve('/expenses')}?${params}`);
+	}
+
+	const treemapOptions = $derived.by(() => {
+		const series = treemapSeries;
 
 		return {
-			chart: { type: 'treemap', height: 420, toolbar: { show: false } },
+			chart: {
+				type: 'treemap',
+				height: 420,
+				toolbar: { show: false },
+				events: {
+					dataPointSelection: (...args: unknown[]) =>
+						openCategory((args[2] as { seriesIndex?: number } | undefined)?.seriesIndex ?? -1)
+				}
+			},
 			series: series.map((s) => ({ name: s.name, data: s.data })),
 			colors: series.map((s) => s.color),
 			legend: { show: true, position: 'bottom' },

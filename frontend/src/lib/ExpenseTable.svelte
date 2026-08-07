@@ -74,15 +74,25 @@
 	let showIncomplete = $state(true);
 	let showNormal = $state(true);
 
-	// Read once rather than tracked: these are how the dashboard hands over -- "12 Ausgaben
-	// brauchen Prüfung" has to land on those twelve, and "Neue Ausgabe" on the open form. Once
-	// here the toggles are the reader's again, so a later edit must not be reset by the url.
+	// Read once rather than tracked: this is how the rest of the app hands over -- "12 Ausgaben
+	// brauchen Prüfung" has to land on those twelve, a treemap tile on the expenses behind it.
+	// Once here the filters are the reader's again, so a later edit must not be reset by the url.
 	if (page.url.searchParams.has('neu')) showNewExpenseModal = true;
 	if (page.url.searchParams.has('pruefen')) {
 		showTaxRelevant = false;
 		showExtraordinary = false;
 		showNormal = false;
 	}
+
+	const category = page.url.searchParams.get('kategorie');
+	if (category) filteredCategories = [category];
+
+	// A period the caller worked out; the analysis pages snap theirs to whole months, and a
+	// list that quietly used different ends would not add up to the chart it came from.
+	const from = page.url.searchParams.get('von');
+	const to = page.url.searchParams.get('bis');
+	if (from) filterDateRange.from = new Date(from);
+	if (to) filterDateRange.to = new Date(to);
 
 	// The column the header clicks name, mapped onto what the API offers. The backend used to
 	// take a mongo sort document built right here; it now names its own columns.
