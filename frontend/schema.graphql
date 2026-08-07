@@ -566,8 +566,8 @@ type ExpenseChangelogEntry {
   tool: String
   automatic: Boolean!
   confidence: Float!
-  oldState: Expense
-  newState: Expense
+  oldState: ExpenseState
+  newState: ExpenseState
   diff: String
   user: User
 }
@@ -617,6 +617,58 @@ type ExpenseReceipt {
   uri: String!
   "can be a local file or e.g. a reference to a document in a dms"
   ocr: String
+}
+
+"""
+  An expense with everything that belongs to it in one value.
+
+  The tables store it across three relations, because the analysis groups by account, date
+  and category. This shape is what the changelog remembers and what the importer builds;
+  [`ExpenseRow`] and friends are what actually goes to the database.
+  Named apart from the rendering the API otherwise serves: both are called `Expense` in Rust,
+  and juniper let the two share one GraphQL name, so the SDL advertised the rendering's fields
+  on a changelog state that does not have them.
+"""
+type ExpenseState {
+  id: UUID!
+  title: String!
+  store: String!
+  description: String!
+  comments: String!
+  "reference for fractional transactions, can be None if only fixed transactions are used"
+  referenceAmount: Int
+  bookingStart: DateTime!
+  bookingEnd: DateTime!
+  "set to true if this expense is only a stanza for a recurring expense; this means it will not be counted in any analysis"
+  isTemplate: Boolean!
+  "to track expenses that should be looked at again when preparing tax forms"
+  isTaxRelevant: Boolean!
+  "needs to be looked at by a user first (missing info, low confidence, ...)"
+  isUnchecked: Boolean!
+  "if we anticipate more transactions to appear before this can be completed; e.g. payback when a order hasn't arrived"
+  isIncomplete: Boolean!
+  "if this expense should not be considered for monthly spending and so on"
+  isExtraordinary: Boolean!
+  receipts: [ExpenseReceipt!]!
+  categories: [ExpenseStateCategorization!]!
+  transactions: [ExpenseStateTransaction!]!
+  positions: [ExpensePosition!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type ExpenseStateCategorization {
+  categoryId: UUID!
+  weight: Float!
+}
+
+type ExpenseStateTransaction {
+  accountId: UUID!
+  date: DateTime!
+  amount: Int
+  fraction: Float
+  comments: String!
+  statement: String!
 }
 
 type ExpenseTransaction {

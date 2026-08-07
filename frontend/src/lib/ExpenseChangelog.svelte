@@ -9,6 +9,7 @@
 	} from 'flowbite-svelte-icons';
 	import ToggleGroup from './ToggleGroup.svelte';
 	import { changedFields, summarizeFields, stateAmount } from './changelog';
+	import { categoryColor } from './analysis/overviews';
 	import { feedState } from './analysis/state.svelte';
 
 	let expandedDiffs = $state<string[]>([]);
@@ -18,6 +19,24 @@
 			users {
 				me {
 					name
+				}
+			}
+
+			# a changelog state stores ids, not the accounts and categories themselves, so the
+			# chips are looked up here -- both lists are short enough to fetch whole
+			accounts {
+				list {
+					id
+					name
+					color
+				}
+			}
+
+			categories {
+				list {
+					id
+					name
+					color
 				}
 			}
 
@@ -45,9 +64,13 @@
 								bookingStart
 								bookingEnd
 								referenceAmount
+								categories {
+									categoryId
+								}
 								transactions {
 									amount
 									fraction
+									accountId
 								}
 							}
 						}
@@ -126,10 +149,32 @@
 	/// What the entry did, in one phrase. The diff says which fields moved, which beats
 	/// "hat die Ausgabe verändert" on every single row.
 	function action(entry: Entry): string {
-		if (!entry.oldState) return `${actor(entry)} sie angelegt`;
+		if (!entry.oldState) return 'sie angelegt';
 
 		const fields = summarizeFields(entry.diff ? changedFields(entry.diff) : []);
-		return fields ? `${actor(entry)} ${fields} geändert` : `${actor(entry)} sie geändert`;
+		return fields ? `${fields} geändert` : 'sie geändert';
+	}
+
+	const named = $derived(
+		[...(feed?.categories.list ?? []), ...(feed?.accounts.list ?? [])].map((e) => ({
+			id: e.id.toString(),
+			name: e.name,
+			color: categoryColor(e)
+		}))
+	);
+
+	/// One chip per category and account the expense touches. Deduplicated, since an expense
+	/// split over two cards names the same account twice, and the second chip adds nothing.
+	function chips(state: NonNullable<Entry['newState']>) {
+		const ids = [
+			...state.categories.map((c) => c.categoryId.toString()),
+			...state.transactions.map((t) => t.accountId.toString())
+		];
+
+		return ids
+			.filter((id, i) => ids.indexOf(id) === i)
+			.map((id) => named.find((e) => e.id === id))
+			.filter((e) => e !== undefined);
 	}
 
 	/// The booking period, short: same-day expenses are the common case and need no range.
@@ -232,9 +277,16 @@
 							<div
 								class="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500 dark:text-gray-400"
 							>
+								<!-- the clock lives here rather than in the row: the day header already places
+								     the entry, so the exact minute is only ever worth asking for -->
+								<span
+									class="underline decoration-gray-300 decoration-dotted dark:decoration-gray-600"
+									title={entry.date.toLocaleString('de-DE', {
+										dateStyle: 'full',
+										timeStyle: 'short'
+									})}>{actor(entry)}</span
+								>
 								<span>{action(entry)}</span>
-								<span aria-hidden="true">·</span>
-								<span>{entry.date.toLocaleTimeString('de-DE', { timeStyle: 'short' })}</span>
 								{#if entry.newState}
 									<span aria-hidden="true">·</span>
 									<span>gebucht {period(entry.newState)}</span>
@@ -243,6 +295,19 @@
 									<span aria-hidden="true">·</span>
 									<span class="truncate">{entry.newState.store}</span>
 								{/if}
+								{#each entry.newState ? chips(entry.newState) : [] as chip (chip.id)}
+									<span
+										class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-1.5 py-0.5 dark:bg-gray-800"
+									>
+										<!-- a dot rather than a tinted pill: the colours are picked for a chart, and
+										     half of them cannot carry readable text behind them -->
+										<span
+											class="h-2 w-2 shrink-0 rounded-full"
+											style="background-color: {chip.color}"
+										></span>
+										{chip.name}
+									</span>
+								{/each}
 								{#if entry.tool}
 									<span aria-hidden="true">·</span>
 									<span>{entry.tool}</span>
