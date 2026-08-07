@@ -34,10 +34,14 @@
 	});
 
 	// The backend caps the point count, and asking for more than the chart can draw only
-	// makes the response bigger; ~120 is what fits across a screen.
-	const TARGET_POINTS = 120;
+	// makes the response bigger; ~120 is what fits across a screen. A phone has a fifth of
+	// that width, where 120 samples land two pixels apart and the line reads as a row of dots.
+	let viewport = $state(0);
+	const compact = $derived(viewport > 0 && viewport < 640);
+	const targetPoints = $derived(compact ? 40 : 120);
+
 	const stepDays = $derived(
-		visible ? Math.max(1, Math.ceil((visible.max - visible.min) / DAY / TARGET_POINTS)) : 30
+		visible ? Math.max(1, Math.ceil((visible.max - visible.min) / DAY / targetPoints)) : 30
 	);
 
 	type HistoryData = NonNullable<
@@ -339,7 +343,9 @@
 		},
 		dataLabels: { enabled: false },
 		stroke: { curve: 'smooth', width: 2 },
-		markers: { size: 3, strokeWidth: 0, hover: { size: 6 } },
+		// no dots on a phone: even at forty samples they sit close enough to thicken the line
+		// rather than mark anything, and the hover marker still appears with the tooltip
+		markers: { size: compact ? 0 : 3, strokeWidth: 0, hover: { size: 6 } },
 		fill: { type: 'gradient', gradient: { opacityFrom: 0.4, opacityTo: 0.05 } },
 		xaxis: { type: 'datetime', min: visible?.min, max: visible?.max },
 		yaxis: { labels: { formatter: (v: number) => Math.round(v / 1000) + 'k €' } },
@@ -351,6 +357,8 @@
 		legend: { show: wealthState.split !== 'total' }
 	}) as ApexOptions;
 </script>
+
+<svelte:window bind:innerWidth={viewport} />
 
 <div class="space-y-4">
 	<Card class={ANALYSIS_CARD}>
