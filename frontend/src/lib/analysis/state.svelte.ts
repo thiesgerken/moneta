@@ -39,10 +39,10 @@ export const wealthState = $state({
 	hiddenSeries: [] as string[]
 });
 
-export const overviewsState = $state({ range: range('10y') });
+export const overviewsState = $state({ range: range('1y') });
 
 export const categoriesState = $state({
-	range: range('10y'),
+	range: range('1y'),
 	sign: 'expenses',
 	hiddenSeries: [] as string[]
 });
