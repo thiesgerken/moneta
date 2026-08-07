@@ -6,6 +6,7 @@
 	import { calendarState } from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
 	import { shiftMonth } from './dates';
+	import { resolve } from '$app/paths';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -109,9 +110,17 @@
 		<Button color="alternative" size="sm" onclick={() => shift(-1)}>
 			<ChevronLeftOutline class="h-4 w-4" />
 		</Button>
-		<span class="w-48 text-center text-lg font-semibold">
+		<!-- the month you are looking at is also a page of its own, and this is the only place
+		     that already knows which one -->
+		<a
+			class="hover:text-primary-600 dark:hover:text-primary-500 w-48 text-center text-lg font-semibold hover:underline"
+			href={resolve('/analysis/[year]/[month]', {
+				year: `${month.getFullYear()}`,
+				month: `${month.getMonth() + 1}`
+			})}
+		>
 			{month.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}
-		</span>
+		</a>
 		<Button color="alternative" size="sm" onclick={() => shift(1)}>
 			<ChevronRightOutline class="h-4 w-4" />
 		</Button>

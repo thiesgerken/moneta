@@ -21,6 +21,7 @@
 	import { AVAILABILITY_LABELS, availabilityColor } from './availability';
 	import { CUSTOM_SPAN, wealthState } from './state.svelte';
 	import { todayIso } from './dates';
+	import { resolve } from '$app/paths';
 	import { ANALYSIS_CARD, WEALTH_COLOR } from './cards';
 
 	const euro = (cents: number) =>
@@ -142,6 +143,12 @@
 	const hidden = $derived(
 		wealthState.split === 'account' ? wealthState.hiddenAccounts : wealthState.hiddenAvailability
 	);
+
+	/// The Stichtag as a date, or null while the input holds something that is not one.
+	const stichtag = $derived.by(() => {
+		const at = new Date(wealthState.date);
+		return Number.isNaN(at.getTime()) ? null : at;
+	});
 
 	const balances = $derived($balanceStore.data?.analysis.balances ?? []);
 
@@ -425,10 +432,24 @@
 		</div>
 	</Card>
 
-	<Label class="space-y-2">
-		<span>Stichtag</span>
-		<Input type="date" bind:value={wealthState.date} class="w-48" />
-	</Label>
+	<div class="flex flex-wrap items-end gap-3">
+		<Label class="space-y-2">
+			<span>Stichtag</span>
+			<Input type="date" bind:value={wealthState.date} class="w-48" />
+		</Label>
+		<!-- the Stichtag sits on a date and had nothing to offer about it; its month is a page -->
+		{#if stichtag}
+			<a
+				class="text-primary-600 dark:text-primary-500 pb-2 text-sm hover:underline"
+				href={resolve('/analysis/[year]/[month]', {
+					year: `${stichtag.getFullYear()}`,
+					month: `${stichtag.getMonth() + 1}`
+				})}
+			>
+				{stichtag.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })} ansehen
+			</a>
+		{/if}
+	</div>
 
 	<Card class={ANALYSIS_CARD}>
 		<h3 class="mb-2 text-lg font-semibold">Berechnete Kontostände</h3>
