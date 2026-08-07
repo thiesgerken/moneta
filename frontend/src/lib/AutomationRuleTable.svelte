@@ -128,7 +128,7 @@
 	rule={ruleToEdit}
 />
 
-<Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5">
+<Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}

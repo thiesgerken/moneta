@@ -49,6 +49,9 @@
 	let expandedRows = $state<string[]>([]);
 	let sortBy: { field: string; direction: number } = $state({ field: 'status', direction: -1 });
 
+	/// only consulted below `md`, where the filters are collapsed
+	let filtersOpen = $state(false);
+
 	let showNewExpenseModal = $state(false);
 	let showEditExpenseModal = $state(false);
 	let showDeleteExpenseModal = $state(false);
@@ -382,7 +385,7 @@
 	})) || []}
 />
 
-<Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5">
+<Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
@@ -393,79 +396,98 @@
 	>
 		{#snippet header()}
 			<div
-				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end space-y-2 md:w-auto md:flex-row md:items-center md:space-y-0 md:space-x-3"
+				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
 			>
-				<Button onclick={() => (showNewExpenseModal = true)}>
-					<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
-				</Button>
-				<Datepicker
-					range
-					bind:rangeFrom={filterDateRange.from}
-					bind:rangeTo={filterDateRange.to}
-					placeholder="Datum"
-				/>
-				<MultiSelect
-					items={filterableAccounts ?? []}
-					bind:value={filteredAccounts}
-					size="lg"
-					class="ml-2 h-1 min-w-48"
-					placeholder="Konten"
+				<div class="flex items-center gap-2">
+					<Button class="grow md:grow-0" onclick={() => (showNewExpenseModal = true)}>
+						<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
+					</Button>
+					<!-- Stacked, the filters filled a phone screen before a single expense appeared,
+					     so on small screens they fold behind this. -->
+					<Button
+						color="alternative"
+						class="md:hidden"
+						aria-label="Filter"
+						aria-expanded={filtersOpen}
+						onclick={() => (filtersOpen = !filtersOpen)}
+					>
+						<FilterSolid class="h-4 w-4" />
+					</Button>
+				</div>
+				<div
+					class="{filtersOpen
+						? 'flex'
+						: 'hidden'} flex-col gap-2 md:flex md:flex-row md:items-center md:gap-3"
 				>
-					{#snippet children({ item, clear })}
-						<Badge
-							style={`background-color: ${item.color}`}
-							class="text-black"
-							dismissable
-							params={{ duration: 100 }}
-							onclose={clear}
-						>
-							{item.name}
-						</Badge>
-					{/snippet}
-				</MultiSelect>
-				<MultiSelect
-					items={filterableCategories ?? []}
-					bind:value={filteredCategories}
-					size="lg"
-					class="ml-2 h-1 min-w-48"
-					placeholder="Kategorien"
-				>
-					{#snippet children({ item, clear })}
-						<Badge
-							style={`background-color: ${item.color}`}
-							class="text-black"
-							dismissable
-							params={{ duration: 100 }}
-							onclose={clear}
-						>
-							{item.name}
-						</Badge>
-					{/snippet}
-				</MultiSelect>
-				<Button size="lg" color="alternative">Filter<FilterSolid class="ml-2 h-3 w-3 " /></Button>
-				<Dropdown class="w-48 space-y-2 p-3 text-sm">
-					<h6 class="mb-3 text-sm font-medium text-gray-900 dark:text-white">Zustand</h6>
-					<List tag="dl">
-						<Li>
-							<Checkbox bind:checked={showTaxRelevant}>Steuerrelevant</Checkbox>
-						</Li>
-						<Li>
-							<Checkbox bind:checked={showTemplates}>Vorlage</Checkbox>
-						</Li>
-						<Li>
-							<Checkbox bind:checked={showExtraordinary}>Außergewöhnlich</Checkbox>
-						</Li>
-						<Li>
-							<Checkbox bind:checked={showUnchecked}>Unbestätigt</Checkbox>
-						</Li>
-						<Li>
-							<Checkbox bind:checked={showIncomplete}>Unvollständig</Checkbox>
-						</Li>
-						<Li>
-							<Checkbox bind:checked={showNormal}>Normal</Checkbox>
-						</Li>
-					</List>
-				</Dropdown>
+					<Datepicker
+						range
+						bind:rangeFrom={filterDateRange.from}
+						bind:rangeTo={filterDateRange.to}
+						placeholder="Datum"
+					/>
+					<MultiSelect
+						items={filterableAccounts ?? []}
+						bind:value={filteredAccounts}
+						size="lg"
+						class="ml-2 h-1 min-w-48"
+						placeholder="Konten"
+					>
+						{#snippet children({ item, clear })}
+							<Badge
+								style={`background-color: ${item.color}`}
+								class="text-black"
+								dismissable
+								params={{ duration: 100 }}
+								onclose={clear}
+							>
+								{item.name}
+							</Badge>
+						{/snippet}
+					</MultiSelect>
+					<MultiSelect
+						items={filterableCategories ?? []}
+						bind:value={filteredCategories}
+						size="lg"
+						class="ml-2 h-1 min-w-48"
+						placeholder="Kategorien"
+					>
+						{#snippet children({ item, clear })}
+							<Badge
+								style={`background-color: ${item.color}`}
+								class="text-black"
+								dismissable
+								params={{ duration: 100 }}
+								onclose={clear}
+							>
+								{item.name}
+							</Badge>
+						{/snippet}
+					</MultiSelect>
+					<Button size="lg" color="alternative">Filter<FilterSolid class="ml-2 h-3 w-3 " /></Button>
+					<Dropdown class="w-48 space-y-2 p-3 text-sm">
+						<h6 class="mb-3 text-sm font-medium text-gray-900 dark:text-white">Zustand</h6>
+						<List tag="dl">
+							<Li>
+								<Checkbox bind:checked={showTaxRelevant}>Steuerrelevant</Checkbox>
+							</Li>
+							<Li>
+								<Checkbox bind:checked={showTemplates}>Vorlage</Checkbox>
+							</Li>
+							<Li>
+								<Checkbox bind:checked={showExtraordinary}>Außergewöhnlich</Checkbox>
+							</Li>
+							<Li>
+								<Checkbox bind:checked={showUnchecked}>Unbestätigt</Checkbox>
+							</Li>
+							<Li>
+								<Checkbox bind:checked={showIncomplete}>Unvollständig</Checkbox>
+							</Li>
+							<Li>
+								<Checkbox bind:checked={showNormal}>Normal</Checkbox>
+							</Li>
+						</List>
+					</Dropdown>
+				</div>
 			</div>
 		{/snippet}
 

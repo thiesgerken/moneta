@@ -24,7 +24,8 @@
 		ChevronDownOutline,
 		EditOutline,
 		TrashBinOutline,
-		ExclamationCircleOutline
+		ExclamationCircleOutline,
+		FilterSolid
 	} from 'flowbite-svelte-icons';
 	import { accountSorter } from './expense_utils';
 	import BalanceModal from './BalanceModal.svelte';
@@ -35,6 +36,9 @@
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
 	let sortBy: { field: string; direction: number } = $state({ field: 'date', direction: -1 });
+
+	/// only consulted below `md`, where the filters are collapsed
+	let filtersOpen = $state(false);
 
 	let showNewBalanceModal = $state(false);
 	let showEditBalanceModal = $state(false);
@@ -263,7 +267,7 @@
 	})) || []}
 />
 
-<Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-3 sm:p-5">
+<Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
@@ -274,37 +278,55 @@
 	>
 		{#snippet header()}
 			<div
-				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end space-y-2 md:w-auto md:flex-row md:items-center md:space-y-0 md:space-x-3"
+				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
 			>
-				<Button onclick={() => (showNewBalanceModal = true)}>
-					<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
-				</Button>
-				<Datepicker
-					range
-					bind:rangeFrom={filterDateRange.from}
-					bind:rangeTo={filterDateRange.to}
-					placeholder="Datum"
-				/>
-				<MultiSelect
-					items={filterableAccounts ?? []}
-					bind:value={filteredAccounts}
-					size="lg"
-					class="ml-2 h-1 min-w-48"
-					placeholder="Konten"
+				<div class="flex items-center gap-2">
+					<Button class="grow md:grow-0" onclick={() => (showNewBalanceModal = true)}>
+						<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
+					</Button>
+					<!-- as in the expense list: stacked, the filters filled the screen before the
+					     first balance did -->
+					<Button
+						color="alternative"
+						class="md:hidden"
+						aria-label="Filter"
+						aria-expanded={filtersOpen}
+						onclick={() => (filtersOpen = !filtersOpen)}
+					>
+						<FilterSolid class="h-4 w-4" />
+					</Button>
+				</div>
+				<div
+					class="{filtersOpen
+						? 'flex'
+						: 'hidden'} flex-col gap-2 md:flex md:flex-row md:items-center md:gap-3"
 				>
-					{#snippet children({ item, clear })}
-						<Badge
-							style={`background-color: ${item.color}`}
-							class="text-black"
-							dismissable
-							params={{ duration: 100 }}
-							onclose={clear}
-						>
-							{item.name}
-						</Badge>
-					{/snippet}
-				</MultiSelect>
-				<!-- <Button size="lg" color="alternative">Filter<FilterSolid class="ml-2 h-3 w-3 " /></Button> -->
+					<Datepicker
+						range
+						bind:rangeFrom={filterDateRange.from}
+						bind:rangeTo={filterDateRange.to}
+						placeholder="Datum"
+					/>
+					<MultiSelect
+						items={filterableAccounts ?? []}
+						bind:value={filteredAccounts}
+						size="lg"
+						class="ml-2 h-1 min-w-48"
+						placeholder="Konten"
+					>
+						{#snippet children({ item, clear })}
+							<Badge
+								style={`background-color: ${item.color}`}
+								class="text-black"
+								dismissable
+								params={{ duration: 100 }}
+								onclose={clear}
+							>
+								{item.name}
+							</Badge>
+						{/snippet}
+					</MultiSelect>
+				</div>
 			</div>
 		{/snippet}
 

@@ -134,6 +134,12 @@
 
 	const name = (c: { name: string } | null) => c?.name ?? 'Ohne Kategorie';
 
+	/// One tile per category on a phone, rather than one per expense: forty tiles across 326
+	/// pixels leaves none of them wide enough to carry its own name, which is the whole point of
+	/// the picture. The categories stay, and with them the sense of what the month went on.
+	let viewport = $state(0);
+	const compact = $derived(viewport > 0 && viewport < 640);
+
 	const treemapOptions = $derived.by(() => {
 		const series = breakdown
 			.map((c) => {
@@ -148,17 +154,29 @@
 			})
 			.filter((s) => s.data.length > 0);
 
+		// `distributed` is what colours a single series per tile; with one series per category
+		// the colour comes from the series instead, and the two cannot be mixed.
+		const compactSeries = [
+			{
+				name: 'Kategorien',
+				data: series.map((s) => ({ x: s.name, y: s.data.reduce((sum, d) => sum + d.y, 0) }))
+			}
+		];
+
 		return {
-			chart: { type: 'treemap', height: 380, toolbar: { show: false } },
-			series: series.map((s) => ({ name: s.name, data: s.data })),
+			chart: { type: 'treemap', height: compact ? 460 : 380, toolbar: { show: false } },
+			series: compact ? compactSeries : series.map((s) => ({ name: s.name, data: s.data })),
 			colors: series.map((s) => s.color),
-			legend: { show: true, position: 'bottom' },
-			dataLabels: { enabled: true, style: { fontSize: '12px' } },
-			plotOptions: { treemap: { distributed: false, enableShades: true } },
+			// the tiles carry their own names when there is one per category
+			legend: { show: !compact, position: 'bottom' },
+			dataLabels: { enabled: true, style: { fontSize: compact ? '13px' : '12px' } },
+			plotOptions: { treemap: { distributed: compact, enableShades: true } },
 			tooltip: { y: { formatter: (v: number) => euro(v * 100) } }
 		} as ApexOptions;
 	});
 </script>
+
+<svelte:window bind:innerWidth={viewport} />
 
 <div class="space-y-4 px-4 sm:px-8">
 	<div class="flex flex-wrap items-center gap-3">
