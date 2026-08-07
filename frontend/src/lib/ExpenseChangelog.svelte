@@ -1,5 +1,10 @@
 <script lang="ts">
-	import { graphql, type ChangelogAuthor$options, type ExpenseChangelog$result } from '$houdini';
+	import {
+		cache,
+		graphql,
+		type ChangelogAuthor$options,
+		type ExpenseChangelog$result
+	} from '$houdini';
 	import { Badge, Spinner } from 'flowbite-svelte';
 	import {
 		CirclePlusOutline,
@@ -8,6 +13,7 @@
 		ChevronRightOutline
 	} from 'flowbite-svelte-icons';
 	import ToggleGroup from './ToggleGroup.svelte';
+	import ExpenseModal from './ExpenseModal.svelte';
 	import { changedFields, summarizeFields, stateAmount } from './changelog';
 	import { formatAccount } from './expense_utils';
 	import { categoryColor } from './analysis/overviews';
@@ -86,19 +92,89 @@
 		}
 	`);
 
+	/// An entry names an expense but does not carry it: the states it stores are snapshots, and
+	/// what the editor needs is the expense as it is now.
+	const expenseStore = graphql(`
+		query ChangelogExpense($id: UUID!) {
+			expenses {
+				get(id: $id) {
+					id
+					title
+					description
+					store
+					accrualStart
+					accrualEnd
+					comments
+					isTaxRelevant
+					isTemplate
+					isUnchecked
+					isIncomplete
+					isExtraordinary
+					referenceAmount
+					receipts {
+						uri
+						ocr
+					}
+					positions {
+						title
+						amount
+						quantity
+						unit
+						comments
+					}
+					categories {
+						weight
+						category {
+							id
+						}
+					}
+					transactions {
+						fraction
+						effectiveAmount
+						amount
+						date
+						statement
+						account {
+							id
+						}
+					}
+				}
+			}
+		}
+	`);
+
 	// the store is cleared while a fetch is in flight, which empties the list between filters
 	let latestRequest = 0;
 	let feed = $state<ExpenseChangelog$result | null>(null);
 
-	$effect(() => {
+	async function load() {
 		const request = ++latestRequest;
-		void changelogStore
-			.fetch({ variables: { author: feedState.author as ChangelogAuthor$options } })
-			.then((result) => {
-				if (request !== latestRequest) return;
-				feed = result.data ?? null;
-			});
+		const result = await changelogStore.fetch({
+			variables: { author: feedState.author as ChangelogAuthor$options }
+		});
+		if (request === latestRequest) feed = result.data ?? null;
+	}
+
+	$effect(() => {
+		void feedState.author;
+		void load();
 	});
+
+	let editing = $state(false);
+	const expense = $derived($expenseStore.data?.expenses.get);
+
+	/// Opened only once the expense is there, so a click never shows an empty form -- and an
+	/// entry whose expense has since been deleted opens nothing at all.
+	async function edit(id: string) {
+		const result = await expenseStore.fetch({ variables: { id } });
+		editing = result.data?.expenses.get != null;
+	}
+
+	// editing an expense writes another changelog entry, so the feed itself is out of date
+	async function saved() {
+		cache.markStale('Expense');
+		await load();
+	}
 
 	const me = $derived(feed?.users.me?.name);
 
@@ -267,8 +343,14 @@
 						</span>
 
 						<div class="min-w-0 flex-1">
-							<div class="flex items-baseline justify-between gap-3">
-								<span class="truncate font-medium text-gray-900 dark:text-white">
+							<button
+								type="button"
+								class="group flex w-full items-baseline justify-between gap-3 text-left"
+								onclick={() => edit(entry.expenseId.toString())}
+							>
+								<span
+									class="truncate font-medium text-gray-900 group-hover:underline dark:text-white"
+								>
 									{entry.newState?.title || 'Ohne Titel'}
 								</span>
 								{#if amount !== null}
@@ -284,7 +366,7 @@
 										{euro(amount)}
 									</span>
 								{/if}
-							</div>
+							</button>
 
 							<div
 								class="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500 dark:text-gray-400"
@@ -363,3 +445,23 @@
 		</section>
 	{/each}
 </div>
+
+{#if expense}
+	<ExpenseModal
+		bind:open={editing}
+		onsubmit={saved}
+		userName={me}
+		{expense}
+		accounts={(feed?.accounts.list ?? []).map((a) => ({
+			id: a.id.toString(),
+			name: a.name,
+			owner: { name: a.owner.name, firstName: a.owner.firstName },
+			color: a.color
+		}))}
+		categories={(feed?.categories.list ?? []).map((c) => ({
+			id: c.id.toString(),
+			name: c.name,
+			color: c.color
+		}))}
+	/>
+{/if}
