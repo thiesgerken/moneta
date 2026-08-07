@@ -277,16 +277,22 @@
 							<div
 								class="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500 dark:text-gray-400"
 							>
-								<!-- the clock lives here rather than in the row: the day header already places
-								     the entry, so the exact minute is only ever worth asking for -->
-								<span
-									class="underline decoration-gray-300 decoration-dotted dark:decoration-gray-600"
-									title={entry.date.toLocaleString('de-DE', {
-										dateStyle: 'full',
-										timeStyle: 'short'
-									})}>{actor(entry)}</span
-								>
-								<span>{action(entry)}</span>
+								<!-- Subject and verb in one flex item: the row's gap is sized to separate the
+								     ·-delimited segments, and using it between the words of a sentence spaces
+								     them like a heading. Inside, a plain space does what a space should.
+
+								     The clock lives on the subject rather than in the row: the day header
+								     already places the entry, so the exact minute is only worth asking for -->
+								<span>
+									<span
+										class="underline decoration-gray-300 decoration-dotted dark:decoration-gray-600"
+										title={entry.date.toLocaleString('de-DE', {
+											dateStyle: 'full',
+											timeStyle: 'short'
+										})}>{actor(entry)}</span
+									>
+									{action(entry)}
+								</span>
 								{#if entry.newState}
 									<span aria-hidden="true">·</span>
 									<span>gebucht {period(entry.newState)}</span>
@@ -309,8 +315,10 @@
 									</span>
 								{/each}
 								{#if entry.tool}
-									<span aria-hidden="true">·</span>
-									<span>{entry.tool}</span>
+									<!-- which client wrote the change is the least of what the row says, and
+									     on a phone it was the part that pushed it onto a fourth line -->
+									<span class="hidden sm:inline" aria-hidden="true">·</span>
+									<span class="hidden sm:inline">{entry.tool}</span>
 								{/if}
 								{#if entry.automatic}
 									<Badge color="gray" class="px-1.5 py-0">automatisch</Badge>
