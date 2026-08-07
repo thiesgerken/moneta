@@ -1,10 +1,21 @@
 @import 'tailwindcss';
 
+/* Shipped rather than asked for from the system: the default stack resolves to SF Pro on a
+   Mac and to whatever fontconfig picks on Linux -- usually DejaVu Sans, which is wide and has
+   digits that are hard to tell apart. Two people looking at the same figures were not seeing
+   the same page. One variable file covers every weight, and the subsets carry unicode-range,
+   so a German reader downloads the latin one and nothing else. */
+@import '@fontsource-variable/inter';
+
 @plugin 'flowbite/plugin';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
+	--font-sans:
+		'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+		Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+
 	--color-primary-50: #fff5f2;
 	--color-primary-100: #fff1ee;
 	--color-primary-200: #ffe4de;
@@ -36,4 +47,25 @@
 	input[type='search']::-webkit-search-cancel-button {
 		display: none;
 	}
+
+	body {
+		/* Inter's default 1 is narrower than its 0, so a column of amounts shifts from row to
+		   row. This is the whole reason for choosing a font with a tabular set. */
+		font-variant-numeric: tabular-nums;
+	}
+}
+
+/* Deliberately outside every layer: flowbite dresses its tables in utility classes, and an
+   unlayered rule is the one thing that outranks them without !important on forty elements.
+   What it undoes is 12px ALL CAPS headers over 500-weight body rows -- which leaves a table
+   where the labels shout and nothing in the rows stands out from anything else. */
+table thead th {
+	font-size: 0.875rem;
+	line-height: 1.25rem;
+	text-transform: none;
+	letter-spacing: 0;
+}
+
+table tbody td {
+	font-weight: 400;
 }
