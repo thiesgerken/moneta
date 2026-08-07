@@ -4,6 +4,7 @@
 	import { graphql } from '$houdini';
 	import { categoryColor } from './overviews';
 	import { calendarState } from './state.svelte';
+	import { ANALYSIS_CARD } from './cards';
 	import { shiftMonth } from './dates';
 
 	const euro = (cents: number) =>
@@ -125,7 +126,7 @@
 			{$calendarStore.errors.map((e) => e.message).join(', ')}
 		</p>
 	{:else}
-		<Card class="max-w-none p-4">
+		<Card class={ANALYSIS_CARD}>
 			<div class="grid grid-cols-7 gap-px">
 				{#each ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'] as d (d)}
 					<div class="pb-1 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">

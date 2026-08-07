@@ -25,6 +25,7 @@
 		type OverviewsData
 	} from './overviews';
 	import { overviewsState } from './state.svelte';
+	import { ANALYSIS_CARD } from './cards';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -84,12 +85,12 @@
 			{$overviewsStore.errors.map((e) => e.message).join(', ')}
 		</p>
 	{:else}
-		<Card class="max-w-none p-4">
+		<Card class={ANALYSIS_CARD}>
 			<h3 class="mb-2 text-lg font-semibold">Einnahmen und Ausgaben je Monat</h3>
 			<Chart options={chartOptions} />
 		</Card>
 
-		<Card class="max-w-none p-4">
+		<Card class={ANALYSIS_CARD}>
 			<h3 class="mb-2 text-lg font-semibold">Monatliche Übersichten</h3>
 			<div class="overflow-x-auto">
 				<Table hoverable striped class="w-full text-left text-sm">

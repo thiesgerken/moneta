@@ -13,6 +13,7 @@
 		type OverviewsData
 	} from './overviews';
 	import { categoriesState } from './state.svelte';
+	import { ANALYSIS_CARD } from './cards';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -150,7 +151,7 @@
 			{$overviewsStore.errors.map((e) => e.message).join(', ')}
 		</p>
 	{:else}
-		<Card class="max-w-none p-4">
+		<Card class={ANALYSIS_CARD}>
 			<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
 				<h3 class="text-lg font-semibold">Nach Kategorie je Monat</h3>
 				<SeriesToggle names={barNames} bind:hidden={categoriesState.hiddenSeries} />
@@ -158,7 +159,7 @@
 			<Chart options={barOptions} />
 		</Card>
 
-		<Card class="max-w-none p-4">
+		<Card class={ANALYSIS_CARD}>
 			<h3 class="text-lg font-semibold">Gesamter Zeitraum</h3>
 			<p class="mb-2 text-sm text-gray-500 dark:text-gray-400">
 				Eine auf mehrere Kategorien verteilte Ausgabe zählt anteilig in jede.

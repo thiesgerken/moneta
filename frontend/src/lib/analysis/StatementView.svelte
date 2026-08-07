@@ -17,6 +17,7 @@
 	import { DownloadOutline } from 'flowbite-svelte-icons';
 	import { graphql } from '$houdini';
 	import { statementState } from './state.svelte';
+	import { ANALYSIS_CARD } from './cards';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -147,24 +148,24 @@
 	</div>
 
 	<div class="grid gap-4 md:grid-cols-3">
-		<Card class="max-w-none p-4">
+		<Card class={ANALYSIS_CARD}>
 			<span class="text-sm text-gray-500 dark:text-gray-400">Eingang</span>
 			<span class="text-2xl font-semibold text-green-700 dark:text-green-400"
 				>{euro(turnover.in)}</span
 			>
 		</Card>
-		<Card class="max-w-none p-4">
+		<Card class={ANALYSIS_CARD}>
 			<span class="text-sm text-gray-500 dark:text-gray-400">Ausgang</span>
 			<span class="text-2xl font-semibold text-red-600 dark:text-red-400">{euro(turnover.out)}</span
 			>
 		</Card>
-		<Card class="max-w-none p-4">
+		<Card class={ANALYSIS_CARD}>
 			<span class="text-sm text-gray-500 dark:text-gray-400">Saldo am {statementState.to}</span>
 			<span class="text-2xl font-semibold">{euro(rows[0]?.balance ?? 0)}</span>
 		</Card>
 	</div>
 
-	<Card class="max-w-none p-4">
+	<Card class={ANALYSIS_CARD}>
 		<h3 class="mb-2 text-lg font-semibold">
 			{#if account}
 				<span

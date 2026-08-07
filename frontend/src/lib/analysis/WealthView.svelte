@@ -20,6 +20,7 @@
 	import SeriesToggle from './SeriesToggle.svelte';
 	import { AVAILABILITY_LABELS, availabilityColor } from './availability';
 	import { CUSTOM_SPAN, wealthState } from './state.svelte';
+	import { ANALYSIS_CARD } from './cards';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -352,7 +353,7 @@
 </script>
 
 <div class="space-y-4">
-	<Card class="max-w-none p-4">
+	<Card class={ANALYSIS_CARD}>
 		<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
 			<div class="flex flex-wrap items-center gap-3">
 				<h3 class="text-lg font-semibold">Vermögensverlauf</h3>
@@ -391,18 +392,22 @@
 		<Input type="date" bind:value={wealthState.date} class="w-48" />
 	</Label>
 
-	<Card class="max-w-none p-4">
+	<Card class={ANALYSIS_CARD}>
 		<h3 class="mb-2 text-lg font-semibold">Berechnete Kontostände</h3>
 		<Table hoverable striped class="w-full text-left text-sm">
 			<TableHead>
 				<TableHeadCell class="px-4 py-3">Konto</TableHeadCell>
 				<TableHeadCell class="px-4 py-3">Stand</TableHeadCell>
-				<TableHeadCell class="px-4 py-3">Berechnet aus</TableHeadCell>
+				<!-- what the number was worked out from is the footnote, not the reading, and it is
+				     what made the table wider than a phone -->
+				<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Berechnet aus</TableHeadCell>
 			</TableHead>
 			<TableBody class="divide-y">
 				{#each balances as b (b.account.id)}
 					<TableBodyRow>
-						<TableBodyCell class="px-4 py-3">
+						<!-- long account names wrap rather than widen the table; on a phone that is
+						     the difference between two lines and a sideways scroll -->
+						<TableBodyCell class="max-w-40 px-4 py-3 whitespace-normal sm:max-w-none">
 							<span
 								class="mr-2 inline-block h-3 w-3 rounded-full align-middle"
 								style="background-color: {b.account.color ?? '#94a3b8'}"
@@ -415,7 +420,7 @@
 						>
 							{euro(b.amount)}
 						</TableBodyCell>
-						<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
+						<TableBodyCell class="hidden px-4 py-3 text-gray-500 sm:table-cell dark:text-gray-400">
 							{euro(b.reference.amount)} am {b.reference.date.toLocaleDateString(
 								'de-DE'
 							)}{b.expenseCount > 0
@@ -427,7 +432,7 @@
 				<TableBodyRow>
 					<TableBodyCell class="px-4 py-3 font-semibold">Gesamt</TableBodyCell>
 					<TableBodyCell class="px-4 py-3 font-semibold">{euro(total)}</TableBodyCell>
-					<TableBodyCell class="px-4 py-3"></TableBodyCell>
+					<TableBodyCell class="hidden px-4 py-3 sm:table-cell"></TableBodyCell>
 				</TableBodyRow>
 			</TableBody>
 		</Table>

@@ -14,6 +14,7 @@
 	} from 'flowbite-svelte';
 	import { graphql } from '$houdini';
 	import { prepaymentsState } from './state.svelte';
+	import { ANALYSIS_CARD } from './cards';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -107,15 +108,15 @@
 	</div>
 
 	<div class="grid gap-4 md:grid-cols-3">
-		<Card class="max-w-none p-4">
+		<Card class={ANALYSIS_CARD}>
 			<span class="text-sm text-gray-500 dark:text-gray-400">Vorausgezahlt</span>
 			<span class="text-2xl font-semibold">{euro(totalPaid)}</span>
 		</Card>
-		<Card class="max-w-none p-4">
+		<Card class={ANALYSIS_CARD}>
 			<span class="text-sm text-gray-500 dark:text-gray-400">Davon verbraucht</span>
 			<span class="text-2xl font-semibold">{euro(totalPaid - totalRemaining)}</span>
 		</Card>
-		<Card class="max-w-none p-4">
+		<Card class={ANALYSIS_CARD}>
 			<span class="text-sm text-gray-500 dark:text-gray-400">Noch offen</span>
 			<span class="text-2xl font-semibold text-orange-600 dark:text-orange-400"
 				>{euro(totalRemaining)}</span
@@ -123,7 +124,7 @@
 		</Card>
 	</div>
 
-	<Card class="max-w-none p-4">
+	<Card class={ANALYSIS_CARD}>
 		<h3 class="text-lg font-semibold">Vorauszahlungen</h3>
 		<p class="mb-2 text-sm text-gray-500 dark:text-gray-400">
 			Ausgaben, deren Wert sich über einen Leistungszeitraum verteilt und an diesem Stichtag noch
@@ -190,7 +191,7 @@
 		{/if}
 	</Card>
 
-	<Card class="max-w-none p-4">
+	<Card class={ANALYSIS_CARD}>
 		<h3 class="text-lg font-semibold">Unvollständige Ausgaben</h3>
 		<p class="mb-2 text-sm text-gray-500 dark:text-gray-400">
 			Hier fehlen noch Transaktionen, deren Höhe unbekannt ist – anders als bei Vorauszahlungen gibt
