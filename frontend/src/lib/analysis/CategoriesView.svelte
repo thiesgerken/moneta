@@ -39,8 +39,11 @@
 
 	const breakdown = $derived(overviews?.byCategory ?? []);
 
+	/// The magnitude, not the sign: spending is stored negative, which drew the stack downwards
+	/// from zero for the one of the two views that is read most. Which side of zero it is on is
+	/// what the toggle above the chart says, so the bars are free to grow the way bars do.
 	const pick = (t: { income: number; expenses: number }) =>
-		categoriesState.sign === 'expenses' ? t.expenses : t.income;
+		Math.abs(categoriesState.sign === 'expenses' ? t.expenses : t.income);
 	const name = (c: { name: string } | null) => c?.name ?? 'Ohne Kategorie';
 
 	// The bars are stacked per month, so every category needs a value at every month even
