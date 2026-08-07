@@ -120,7 +120,9 @@
 
 				return { name: name(c.category), color: categoryColor(c.category), data: children };
 			})
-			.filter((s) => s.data.length > 0);
+			// Filtered out rather than declared `hidden`: a treemap has no collapsed state to
+			// put a series into, and the tiles are laid out from whatever is left.
+			.filter((s) => s.data.length > 0 && !categoriesState.hiddenSeries.includes(s.name));
 
 		return {
 			chart: { type: 'treemap', height: 420, toolbar: { show: false } },
@@ -163,7 +165,12 @@
 		</Card>
 
 		<Card class={ANALYSIS_CARD}>
-			<h3 class="text-lg font-semibold">Gesamter Zeitraum</h3>
+			<!-- the same list of hidden categories as the bars above, so the tab filters as one
+			     rather than asking twice which categories are of interest -->
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<h3 class="text-lg font-semibold">Gesamter Zeitraum</h3>
+				<SeriesToggle names={barNames} bind:hidden={categoriesState.hiddenSeries} />
+			</div>
 			<p class="mb-2 text-sm text-gray-500 dark:text-gray-400">
 				Eine auf mehrere Kategorien verteilte Ausgabe zählt anteilig in jede.
 			</p>
