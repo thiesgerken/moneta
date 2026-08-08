@@ -60,11 +60,17 @@
 	let firstVisit = $state(false);
 
 	$effect(() => {
-		void visitMutation.mutate(null).then((result) => {
-			const previous = result.data?.users.visit.previous ?? null;
-			firstVisit = previous === null;
-			since = previous ?? new Date(now.getTime() - RECENT_DAYS * DAY);
-		});
+		void visitMutation
+			.mutate(null)
+			.then((result) => result.data?.users.visit.previous ?? null)
+			// The marker is a nicety; the page is not. `since` gates the query below, so a visit
+			// that could not be recorded -- one 502 during a rollout is enough -- left a greeting
+			// with nothing under it and no way out but a reload.
+			.catch(() => null)
+			.then((previous) => {
+				firstVisit = previous === null;
+				since = previous ?? new Date(now.getTime() - RECENT_DAYS * DAY);
+			});
 	});
 
 	const dashboardStore = graphql(`

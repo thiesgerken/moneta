@@ -30,18 +30,21 @@
 
 		// decide on the resolved result rather than on store state: `users.me` errors out
 		// when logged out, so the pre-fetch and logged-out states look identical
-		Session.fetch().then((result) => {
-			if (result.data?.users.me) {
-				if (onLoginPage) window.location.href = '/';
-				return;
-			}
+		Session.fetch()
+			.then((result) => {
+				if (result.data?.users.me) {
+					if (onLoginPage) window.location.href = '/';
+					return;
+				}
 
-			// only an ended session belongs on the login form. Anything else that makes the query
-			// fail -- backend down, database gone, a bug -- used to look identical from here and
-			// bounced you to a login you did not need.
-			const loggedOut = result.errors?.some((e) => e.extensions?.code === 'UNAUTHENTICATED');
-			if (loggedOut && !onLoginPage) window.location.href = '/login';
-		});
+				// only an ended session belongs on the login form. Anything else that makes the
+				// query fail -- backend down, database gone, a bug -- used to look identical from
+				// here and bounced you to a login you did not need.
+				const loggedOut = result.errors?.some((e) => e.extensions?.code === 'UNAUTHENTICATED');
+				if (loggedOut && !onLoginPage) window.location.href = '/login';
+			})
+			// a request that never came back is a backend that is down, not a session that ended
+			.catch(() => {});
 	});
 </script>
 
