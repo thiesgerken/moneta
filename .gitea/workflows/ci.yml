@@ -10,6 +10,14 @@ on:
       - main
       - devel
 
+# One run per branch: the runner takes one job at a time, so without this a series of pushes
+# spends an hour testing commits nobody is waiting for any more. This does cancel a rollout
+# that is already running, which is harmless -- the run that superseded it deploys the newer
+# image anyway, and kubernetes finishes the restart whether or not anyone is watching it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-backend:
     runs-on: ubuntu-latest
