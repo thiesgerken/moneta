@@ -59,6 +59,25 @@ to keep in sync and no rerender step. If you change them, re-run `tests/sql/rend
 it mutation-tests the ownership-fraction and sync-inversion paths, and four of its cases
 passed against an earlier, wrong version of the views.
 
+**Never hold a pool connection while awaiting a dataloader.** A loader batch takes a connection
+of its own, so a resolver that keeps one and asks for a second deadlocks the moment there are as
+many concurrent requests as the pool has connections: each holds one, each waits for another,
+and the pool can never refill. It does not recover. From outside it looks like the backend
+accepting requests and answering none — the log stops at `Matched` with no `Outcome`, and
+postgres shows its connections idle with a stale `last query`. `compute()` and `overviews()` both
+did this; both now scope the connection into a block that ends before the loader runs.
+`prime_many` is safe, it touches no connection.
+
+**The pool is 16 with a 15 second wait timeout, and both numbers are deliberate.** After the
+above, a request holds one connection at a time, so the size is just a cap on concurrent
+DB-touching requests — a page load fires around six. Bigger buys nothing: the pod has a 1 CPU
+limit and postgres is happier with a small pool than a large one. `max_connections` is 100, so
+`16 × replicas` plus the cronjobs is the budget to respect before scaling out. The timeout is
+what makes a mistake survivable: without it the wait is unbounded and one bad resolver takes the
+process down silently. `Timeout occurred while waiting for a slot to become available` in the
+log is the signal that the pool is genuinely too small — or that something is nesting again.
+Size it off that line, not off a guess.
+
 **Render the transactions once per request, not once per row you need them for.**
 `expense_users` is a `UNION` over the whole transaction table, so no filter on account or date
 narrows it — reading `expense_transactions_rendered` from inside a lateral rebuilds the entire
@@ -167,11 +186,6 @@ data is therefore client-side only; there is no SSR of query results.
 
 ## Known gaps worth knowing before you plan work
 
-- **The backend deployment has no readiness probe**, so a pod takes traffic from the moment its
-  container starts — before Rocket has bound its port. A crash at startup therefore shows up as
-  requests that never answer rather than as requests that fail, and it took a network tab and a
-  `kubectl logs --previous` to find. `migrate()` retrying its first connection removes the
-  crash this repo can cause; the probe itself lives with the manifests, not here.
 - No frontend tests. `tests/sql/` covers the views, the constraints and the balance
   simulation, but nothing exercises the GraphQL resolvers against a database.
 - No upload client feeds `deliveries.submit` from a real bank export; that is deliberately
