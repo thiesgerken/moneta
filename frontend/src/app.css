@@ -8,8 +8,7 @@
 @import '@fontsource-variable/inter';
 
 /* Headings only. A serif beside Inter's figures gives the app a voice without touching the
-   part that has to be read rather than looked at -- and this one carries real small caps,
-   should the table headers ever want them. */
+   part that has to be read rather than looked at. */
 @import '@fontsource-variable/source-serif-4';
 
 @plugin 'flowbite/plugin';
@@ -84,4 +83,17 @@ table thead th {
 
 table tbody td {
 	font-weight: 400;
+}
+
+/* Rows are already separated by `divide-y`, so this only has to draw the columns. Without them
+   the expense list runs three coloured cells together -- accounts, categories, amount -- and
+   the colours read as one band rather than as three answers. */
+table thead th:not(:last-child),
+table tbody td:not(:last-child) {
+	border-right: 1px solid var(--color-gray-200);
+}
+
+.dark table thead th:not(:last-child),
+.dark table tbody td:not(:last-child) {
+	border-right-color: var(--color-gray-700);
 }

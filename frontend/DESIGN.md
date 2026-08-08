@@ -93,6 +93,9 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
 ## Tables
 
 - One shared look through `table_styles.ts`; the body is `text-sm`.
+- **Rules in both directions.** Rows come from `divide-y`, columns from a global rule in
+  `app.css`. The expense list puts three coloured cells next to each other — accounts,
+  categories, amount — and horizontal rules alone let them read as one band.
 - Sorting and filtering are **server-side**, through typed arguments. The header cell that
   sorts carries the arrow.
 - A filtered list says so: `ExpenseTable` renders a "Gefiltert nach …" line with one removable
@@ -121,8 +124,8 @@ instantiate apex directly.
 ## Interaction
 
 - Anything clickable looks it: a pointer cursor, and a hover state that changes something.
-- Deep links carry state in the URL: `?tab=` on the analysis tabs, `?kategorie=&von=&bis=` and
-  `?pruefen` / `?neu` on the expense list. URL parameters are read **once** on mount — after
+- Deep links carry state in the URL: `?tab=` on the analysis tabs, `?category=&from=&to=` and
+  `?review` / `?new` on the expense list. URL parameters are read **once** on mount — after
   that the controls belong to the reader and must not be reset from the address bar.
 - State that should survive a tab switch lives in `analysis/state.svelte.ts`, not in the
   component.
