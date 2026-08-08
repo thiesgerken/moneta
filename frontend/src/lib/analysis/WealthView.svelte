@@ -466,9 +466,10 @@
 				<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Berechnet aus</TableHeadCell>
 			</TableHead>
 			<TableBody class="divide-y">
-				<!-- first, because it is the number the table exists to produce; the rows below are
-				     how it was arrived at -->
-				<TableBodyRow>
+				<!-- First, because it is the number the table exists to produce; the rows below are
+				     how it was arrived at. The rule under it is what keeps `striped` from making
+				     this read as an ordinary row that happens to be bold. -->
+				<TableBodyRow class="border-b-2 border-gray-300 dark:border-gray-600">
 					<TableBodyCell class="px-4 py-3 font-semibold">Gesamt</TableBodyCell>
 					<TableBodyCell class="px-4 py-3 font-semibold">{euro(total)}</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 sm:table-cell"></TableBodyCell>
