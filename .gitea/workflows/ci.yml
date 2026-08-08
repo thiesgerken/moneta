@@ -24,29 +24,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Everything is one job because that is the only ordering this gitea honours: `needs` leaves a
+# job blocked forever with all of its dependencies green (measured with a probe job; restarting
+# gitea changed nothing). Steps, unlike jobs, stop at the first failure -- so the images are
+# built and deployed only after the tests have passed, which is the point.
+#
+# The runner takes one job at a time anyway, so nothing was running in parallel to lose. Put
+# the jobs back once `needs` works.
 jobs:
-  test-backend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Install dependencies
-        run: apt-get update -y && apt-get install -y --no-install-recommends libssl-dev gcc
-
-      - uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1
-        with:
-          components: rustfmt, clippy
-          # `cache-workspaces`, not `workspaces`: the latter is not an input of this action,
-          # so it was dropped silently and the cache step looked for a Cargo.toml in the repo
-          # root, where there is none. It only surfaced when the save got far enough to run
-          # `cargo metadata`, which failed the whole job from a post step.
-          cache-workspaces: backend
-
-      - run: cd backend && cargo fmt --all -- --check
-      - run: cd backend && cargo clippy --all-targets -- -D warnings
-      - run: cd backend && cargo test
-
-  test-schema:
+  ci:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -63,8 +49,23 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Install psql
-        run: apt-get update -y && apt-get install -y --no-install-recommends postgresql-client
+      - name: Install dependencies
+        run: |
+          apt-get update -y
+          apt-get install -y --no-install-recommends libssl-dev gcc postgresql-client
+
+      - uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1
+        with:
+          components: rustfmt, clippy
+          # `cache-workspaces`, not `workspaces`: the latter is not an input of this action,
+          # so it was dropped silently and the cache step looked for a Cargo.toml in the repo
+          # root, where there is none. It only surfaced when the save got far enough to run
+          # `cargo metadata`, which failed the whole job from a post step.
+          cache-workspaces: backend
+
+      - run: cd backend && cargo fmt --all -- --check
+      - run: cd backend && cargo clippy --all-targets -- -D warnings
+      - run: cd backend && cargo test
 
       # applies every migration to an empty database, then asserts that the rendered views and
       # the CHECK constraints still do what they claim
@@ -72,16 +73,12 @@ jobs:
         env:
           PGURL: postgres://moneta:moneta@postgres:5432/moneta
 
-  test-frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: "24"
       - run: npm install -g pnpm
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         run: cd frontend && pnpm install --frozen-lockfile
 
       # build first: it runs houdini codegen, which lint and check both need
@@ -89,25 +86,14 @@ jobs:
       - run: cd frontend && pnpm check
       - run: cd frontend && pnpm lint
 
-  # No `needs` on the test jobs, deliberately: this gitea never unblocks a job that has one.
-  # A probe job depending on a single succeeded job stayed blocked just the same, so the
-  # images would simply never be built. main is merged from pull requests that ran the tests,
-  # so the gate bought little. Put it back once `needs` works again.
-  #
-  # Two steps rather than a matrix over the components, because checkout, buildx and the
-  # registry login are shared. The rollout is in the same job for the same reason `needs` is
-  # missing above: as a job of its own it would have nothing holding it behind the build, and
-  # would restart the deployments onto the image the previous run pushed.
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
-
+      # Everything below only on a push, so a pull request runs the tests without building or
+      # deploying anything.
       - name: Set up Docker Buildx
+        if: github.event_name == 'push'
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
 
       - name: Login to Gitea Container Registry
+        if: github.event_name == 'push'
         uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3
         with:
           registry: gitea.gerken.haus
@@ -115,6 +101,7 @@ jobs:
           password: ${{ secrets.DOCKER_REGISTRY_GITEA }}
 
       - name: Build and push the backend
+        if: github.event_name == 'push'
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: ./backend
@@ -124,6 +111,7 @@ jobs:
           cache-to: type=inline
 
       - name: Build and push the frontend
+        if: github.event_name == 'push'
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: ./frontend
@@ -133,11 +121,13 @@ jobs:
           cache-to: type=inline
 
       - name: Setup kubectl
+        if: github.event_name == 'push'
         uses: azure/setup-kubectl@829323503d1be3d00ca8346e5391ca0b07a9ab0d # v5
         with:
           version: "latest"
 
       - name: Configure kubectl
+        if: github.event_name == 'push'
         run: |
           echo "${{ secrets.K8S_CA_CERT }}" | base64 -d > /tmp/ca.crt
           kubectl config set-cluster cluster \
@@ -155,6 +145,7 @@ jobs:
       # new image up. The periodic CronJob runs the backend image too, but it pulls on its own
       # next tick and there is nothing to restart.
       - name: Restart the deployments
+        if: github.event_name == 'push'
         run: |
           kubectl rollout restart deployment/backend deployment/frontend -n apps-moneta
           kubectl rollout status deployment/backend -n apps-moneta --timeout=300s
