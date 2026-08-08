@@ -9,7 +9,6 @@
 		TableHeadCell,
 		Input,
 		Label,
-		Checkbox,
 		Spinner
 	} from 'flowbite-svelte';
 	import { graphql } from '$houdini';
@@ -151,7 +150,7 @@
 	const closedCount = $derived(balances.filter((b) => b.account.closed).length);
 
 	const shownBalances = $derived(
-		wealthState.showClosedBalances ? balances : balances.filter((b) => !b.account.closed)
+		wealthState.balanceAccounts === 'all' ? balances : balances.filter((b) => !b.account.closed)
 	);
 
 	/// Of what is shown: a total that counts rows you cannot see is a total of nothing in
@@ -445,12 +444,17 @@
 		<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
 			<h3 class="text-lg font-semibold">Berechnete Kontostände</h3>
 			<!-- A closed account keeps its last balance for ever, so it sits in this table at
-			     whatever it held on the day it was closed and never moves again. Off by default,
-			     since that is a row that answers nothing; the total follows the toggle. -->
+			     whatever it held on the day it was closed and never moves again. Open ones only
+			     by default; the total follows whichever is shown. -->
 			{#if closedCount > 0}
-				<Checkbox bind:checked={wealthState.showClosedBalances} class="text-sm">
-					{closedCount} geschlossene {closedCount === 1 ? 'Konto' : 'Konten'} anzeigen
-				</Checkbox>
+				<ToggleGroup
+					bind:value={wealthState.balanceAccounts}
+					size="sm"
+					options={[
+						{ value: 'open', label: 'Aktive Konten' },
+						{ value: 'all', label: 'Alle' }
+					]}
+				/>
 			{/if}
 		</div>
 		<Table hoverable striped class="w-full text-left text-sm">
@@ -462,6 +466,13 @@
 				<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Berechnet aus</TableHeadCell>
 			</TableHead>
 			<TableBody class="divide-y">
+				<!-- first, because it is the number the table exists to produce; the rows below are
+				     how it was arrived at -->
+				<TableBodyRow>
+					<TableBodyCell class="px-4 py-3 font-semibold">Gesamt</TableBodyCell>
+					<TableBodyCell class="px-4 py-3 font-semibold">{euro(total)}</TableBodyCell>
+					<TableBodyCell class="hidden px-4 py-3 sm:table-cell"></TableBodyCell>
+				</TableBodyRow>
 				{#each shownBalances as b (b.account.id)}
 					<TableBodyRow>
 						<!-- long account names wrap rather than widen the table; on a phone that is
@@ -486,11 +497,6 @@
 						</TableBodyCell>
 					</TableBodyRow>
 				{/each}
-				<TableBodyRow>
-					<TableBodyCell class="px-4 py-3 font-semibold">Gesamt</TableBodyCell>
-					<TableBodyCell class="px-4 py-3 font-semibold">{euro(total)}</TableBodyCell>
-					<TableBodyCell class="hidden px-4 py-3 sm:table-cell"></TableBodyCell>
-				</TableBodyRow>
 			</TableBody>
 		</Table>
 	</Card>
