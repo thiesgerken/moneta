@@ -461,7 +461,7 @@
 	selected: string[],
 	toggle: (id: string) => void
 )}
-	<Button color="alternative" size="lg" class="justify-between md:w-48">
+	<Button color="alternative" class="justify-between md:w-48">
 		{selected.length ? `${label} (${selected.length})` : label}
 		<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 	</Button>
@@ -617,12 +617,15 @@
 					     range mode it prints a bare " - " instead of its placeholder when nothing is
 					     chosen -- which left the control that decides what the table shows unreadable
 					     in both states, and with nowhere to undo it. -->
-					<Button color="alternative" size="lg" class="justify-between md:w-64">
+					<Button color="alternative" class="justify-between whitespace-nowrap md:w-64">
 						{dateRangeLabel ?? 'Zeitraum'}
 						<CalendarMonthOutline class="ml-2 h-4 w-4 shrink-0" />
 					</Button>
-					<Dropdown class="p-2">
+					<Dropdown class="space-y-2 p-2">
+						<!-- the inline calendar draws its own white, shadowed, padded card, which inside
+						     the dropdown's card is a second box around the same thing -->
 						<Datepicker
+							class="bg-transparent p-0 shadow-none dark:bg-transparent"
 							inline
 							range
 							bind:rangeFrom={filterDateRange.from}
@@ -652,7 +655,7 @@
 						filteredCategories,
 						(id) => (filteredCategories = toggleOption(filteredCategories, id))
 					)}
-					<Button size="lg" color="alternative">Filter<FilterSolid class="ml-2 h-3 w-3 " /></Button>
+					<Button color="alternative">Filter<FilterSolid class="ml-2 h-3 w-3 " /></Button>
 					<Dropdown class="w-48 space-y-2 p-3 text-sm">
 						<h6 class="mb-3 text-sm font-medium text-gray-900 dark:text-white">Zustand</h6>
 						<List tag="dl">
