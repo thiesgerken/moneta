@@ -465,16 +465,18 @@
 		{selected.length ? `${label} (${selected.length})` : label}
 		<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 	</Button>
-	<Dropdown class="max-h-80 w-64 space-y-2 overflow-y-auto p-3 text-sm">
-		{#each options as option (option.value)}
-			<Checkbox checked={selected.includes(option.value)} onchange={() => toggle(option.value)}>
-				<span
-					class="mr-2 inline-block h-3 w-3 shrink-0 rounded-sm"
-					style="background-color: {option.color}"
-				></span>
-				{option.name}
-			</Checkbox>
-		{/each}
+	<Dropdown class="max-h-80 w-64 divide-y-0 overflow-y-auto p-3 text-sm">
+		<div class="space-y-2">
+			{#each options as option (option.value)}
+				<Checkbox checked={selected.includes(option.value)} onchange={() => toggle(option.value)}>
+					<span
+						class="mr-2 inline-block h-3 w-3 shrink-0 rounded-sm"
+						style="background-color: {option.color}"
+					></span>
+					{option.name}
+				</Checkbox>
+			{/each}
+		</div>
 	</Dropdown>
 {/snippet}
 
@@ -621,7 +623,7 @@
 						{dateRangeLabel ?? 'Zeitraum'}
 						<CalendarMonthOutline class="ml-2 h-4 w-4 shrink-0" />
 					</Button>
-					<Dropdown class="space-y-2 p-2">
+					<Dropdown class="flex w-fit flex-col gap-2 divide-y-0 p-2">
 						<!-- the inline calendar draws its own white, shadowed, padded card, which inside
 						     the dropdown's card is a second box around the same thing -->
 						<Datepicker
@@ -636,7 +638,6 @@
 						<Button
 							size="xs"
 							color="alternative"
-							class="w-full"
 							disabled={!dateRangeLabel}
 							onclick={clearDateRange}
 						>
