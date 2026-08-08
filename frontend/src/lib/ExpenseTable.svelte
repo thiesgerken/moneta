@@ -30,7 +30,8 @@
 		ChevronDownOutline,
 		EditOutline,
 		TrashBinOutline,
-		ExclamationCircleOutline
+		ExclamationCircleOutline,
+		CalendarMonthOutline
 	} from 'flowbite-svelte-icons';
 	import {
 		accountSorter,
@@ -100,6 +101,16 @@
 		};
 	}
 
+	/// The chosen period, spelled out. This is the control's own label as well as its chip, so
+	/// what the filter row says and what the button says cannot drift apart.
+	const dateRangeLabel = $derived.by(() => {
+		const { from, to } = filterDateRange;
+		if (from && to) return `${shortDate(from)} – ${shortDate(to)}`;
+		if (from) return `ab ${shortDate(from)}`;
+		if (to) return `bis ${shortDate(to)}`;
+		return null;
+	});
+
 	/// What is currently being filtered on, and how to undo each of them.
 	///
 	/// The filters live behind a button on a phone and in a row of empty-looking selects on a
@@ -126,13 +137,8 @@
 			});
 		}
 
-		const { from, to } = filterDateRange;
-		if (from || to) {
-			const day = (d: Date | undefined) => (d ? shortDate(d) : '');
-			out.push({
-				label: from && to ? `${day(from)} – ${day(to)}` : `ab ${day(from)}${day(to)}`,
-				clear: () => (filterDateRange = { from: undefined, to: undefined })
-			});
+		if (dateRangeLabel) {
+			out.push({ label: dateRangeLabel, clear: clearDateRange });
 		}
 
 		// one chip for the lot: which of the six is off matters less than the fact that the
@@ -151,6 +157,10 @@
 		return out;
 	});
 
+	function clearDateRange() {
+		filterDateRange = { from: undefined, to: undefined };
+	}
+
 	function resetFlags() {
 		showTemplates = false;
 		showTaxRelevant = true;
@@ -164,7 +174,7 @@
 		searchTerm = '';
 		filteredAccounts = [];
 		filteredCategories = [];
-		filterDateRange = { from: undefined, to: undefined };
+		clearDateRange();
 		resetFlags();
 	}
 
@@ -562,12 +572,34 @@
 						? 'flex'
 						: 'hidden'} flex-col gap-2 md:flex md:flex-row md:items-center md:gap-3"
 				>
-					<Datepicker
-						range
-						bind:rangeFrom={filterDateRange.from}
-						bind:rangeTo={filterDateRange.to}
-						placeholder="Datum"
-					/>
+					<!-- The period is the button's label rather than the contents of a text field.
+					     flowbite's own input is sized for one date, so a range arrived clipped, and in
+					     range mode it prints a bare " - " instead of its placeholder when nothing is
+					     chosen -- which left the control that decides what the table shows unreadable
+					     in both states, and with nowhere to undo it. -->
+					<Button color="alternative" size="lg" class="justify-between md:w-64">
+						{dateRangeLabel ?? 'Zeitraum'}
+						<CalendarMonthOutline class="ml-2 h-4 w-4 shrink-0" />
+					</Button>
+					<Dropdown class="p-2">
+						<Datepicker
+							inline
+							range
+							bind:rangeFrom={filterDateRange.from}
+							bind:rangeTo={filterDateRange.to}
+							locale="de-DE"
+							firstDayOfWeek={1}
+						/>
+						<Button
+							size="xs"
+							color="alternative"
+							class="w-full"
+							disabled={!dateRangeLabel}
+							onclick={clearDateRange}
+						>
+							Zeitraum zurücksetzen
+						</Button>
+					</Dropdown>
 					<MultiSelect
 						items={filterableAccounts ?? []}
 						bind:value={filteredAccounts}
