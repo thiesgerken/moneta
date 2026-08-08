@@ -3,6 +3,8 @@
 	import { Navbar, NavBrand, NavHamburger, NavUl, NavLi, Avatar, Tooltip } from 'flowbite-svelte';
 	import { NAV } from '$lib/navigation';
 
+	// No error surface, deliberately: a bar across the top of every page is the wrong place
+	// to report one, and the only thing lost is the menu. An ended session is the layout's job.
 	const basicStore = graphql(`
 		query UserInformation {
 			users {

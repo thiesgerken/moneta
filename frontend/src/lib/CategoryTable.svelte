@@ -22,6 +22,7 @@
 	} from 'flowbite-svelte-icons';
 	import CategoryModal from './CategoryModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
+	import QueryError from './QueryError.svelte';
 
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
@@ -219,6 +220,11 @@
 />
 
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
+	<QueryError
+		errors={$categoryStore.errors}
+		message="Die Kategorien konnten nicht geladen werden."
+		class="mb-4"
+	/>
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}

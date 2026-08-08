@@ -13,6 +13,7 @@
 	import { Section } from 'flowbite-svelte-blocks';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
 	import { shortDate } from './analysis/dates';
+	import QueryError from './QueryError.svelte';
 
 	let searchTerm = $state('');
 	let onlyUnmatched = $state(false);
@@ -58,6 +59,11 @@
 </script>
 
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
+	<QueryError
+		errors={$deliveryStore.errors}
+		message="Die Lieferungen konnten nicht geladen werden."
+		class="mb-4"
+	/>
 	<TableSearch
 		placeholder="Verwendungszweck durchsuchen"
 		hoverable={true}

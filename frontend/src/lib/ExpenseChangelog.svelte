@@ -19,6 +19,7 @@
 	import { categoryColor } from './analysis/overviews';
 	import { feedState } from './analysis/state.svelte';
 	import { shortDate } from './analysis/dates';
+	import QueryError from './QueryError.svelte';
 
 	/// The dashboard shows the same feed in a column beside everything else, where the filters
 	/// belong to the tab that owns them and six entries are as many as fit.
@@ -355,7 +356,19 @@
 		</div>
 	{/if}
 
-	{#if $changelogStore.fetching && entries.length === 0}
+	<QueryError
+		errors={$expenseStore.errors}
+		message="Die Ausgabe konnte nicht geöffnet werden."
+		class="my-4"
+	/>
+
+	{#if $changelogStore.errors}
+		<QueryError
+			errors={$changelogStore.errors}
+			message="Die Änderungen konnten nicht geladen werden."
+			class="my-4"
+		/>
+	{:else if $changelogStore.fetching && entries.length === 0}
 		<div class="flex justify-center py-12"><Spinner size="6" /></div>
 	{:else if entries.length === 0}
 		<p class="py-12 text-center text-sm text-gray-500 dark:text-gray-400">

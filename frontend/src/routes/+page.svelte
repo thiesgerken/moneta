@@ -15,6 +15,7 @@
 	import { categoryColor } from '$lib/analysis/overviews';
 	import { WEALTH_COLOR } from '$lib/analysis/cards';
 	import { shortDate } from '$lib/analysis/dates';
+	import QueryError from '$lib/QueryError.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', {
@@ -315,48 +316,62 @@
 </script>
 
 <div class="mx-auto max-w-7xl space-y-4 px-4 py-2 sm:px-8">
+	<QueryError
+		errors={$dashboardStore.errors}
+		message="Die Übersicht konnte nicht geladen werden."
+	/>
 	<!-- Hero: the number the whole app exists to produce, and the shape it got there by. On a
-	     phone the curve goes under it; from lg they share the row. -->
-	<Card class="max-w-none border-0 bg-white p-4 sm:p-6 dark:bg-gray-800">
-		<div class="grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-			<div>
-				<p class="text-sm text-gray-500 dark:text-gray-400">
-					Hallo{greeting ? ` ${greeting}` : ''}, du hast
-				</p>
-				<!-- on `data` rather than on `fetching`, which is false before the first fetch is
+	     phone the curve goes under it; from lg they share the row.
+
+	     Dropped entirely when the query failed, rather than left standing empty: its greeting
+	     runs into the figure ("Hallo Thies, du hast …"), and without one it is a sentence that
+	     stops mid-way inside an otherwise blank card. The banner above has already said why. -->
+	{#if !$dashboardStore.errors}
+		<Card class="max-w-none border-0 bg-white p-4 sm:p-6 dark:bg-gray-800">
+			<div class="grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+				<div>
+					<p class="text-sm text-gray-500 dark:text-gray-400">
+						Hallo{greeting ? ` ${greeting}` : ''}, du hast
+					</p>
+					<!-- on `data` rather than on `fetching`, which is false before the first fetch is
 				     issued -- the page is rendered on the server, where there is none -->
-				{#if !data}
-					<div class="py-3"><Spinner size="6" /></div>
-				{:else}
-					<p class="text-4xl font-semibold tracking-tight tabular-nums sm:text-5xl">
-						{euro(total)}
-					</p>
-					<p class="mt-1 text-sm">
-						<span
-							class={delta < 0
-								? 'text-red-600 dark:text-red-400'
-								: delta > 0
-									? 'text-green-600 dark:text-green-400'
-									: 'text-gray-500 dark:text-gray-400'}
-						>
-							{delta > 0 ? '+' : ''}{euroExact(delta)}
-						</span>
-						<!-- the month spelt out and the year left off: this is always a month back,
+					{#if !data}
+						<!-- the banner above already says what happened; a spinner under it would go on
+					     forever, since a failed query leaves `data` null for good -->
+						{#if !$dashboardStore.errors}
+							<div class="py-3"><Spinner size="6" /></div>
+						{/if}
+					{:else}
+						<p class="text-4xl font-semibold tracking-tight tabular-nums sm:text-5xl">
+							{euro(total)}
+						</p>
+						<p class="mt-1 text-sm">
+							<span
+								class={delta < 0
+									? 'text-red-600 dark:text-red-400'
+									: delta > 0
+										? 'text-green-600 dark:text-green-400'
+										: 'text-gray-500 dark:text-gray-400'}
+							>
+								{delta > 0 ? '+' : ''}{euroExact(delta)}
+							</span>
+							<!-- the month spelt out and the year left off: this is always a month back,
 						     so the year is either obvious or the same one -->
-						<span class="text-gray-500 dark:text-gray-400">
-							im Vergleich zum {monthAgo.toLocaleDateString('de-DE', {
-								day: 'numeric',
-								month: 'long'
-							})}
-						</span>
-					</p>
-				{/if}
+							<span class="text-gray-500 dark:text-gray-400">
+								im Vergleich zum {monthAgo.toLocaleDateString('de-DE', {
+									day: 'numeric',
+									month: 'long'
+								})}
+							</span>
+						</p>
+					{/if}
+				</div>
+				<div class="min-w-0">
+					<Chart options={sparkOptions} />
+				</div>
 			</div>
-			<div class="min-w-0">
-				<Chart options={sparkOptions} />
-			</div>
-		</div>
-	</Card>
+		</Card>
+	{/if}
 
 	<div class="grid gap-4 lg:grid-cols-2">
 		<div class="space-y-4">
@@ -473,7 +488,9 @@
 					</p>
 				{/if}
 				{#if !data}
-					<div class="flex justify-center py-12"><Spinner size="6" /></div>
+					{#if !$dashboardStore.errors}
+						<div class="flex justify-center py-12"><Spinner size="6" /></div>
+					{/if}
 				{:else if amount(thisMonth) > 0}
 					<Chart options={donut} />
 				{:else}

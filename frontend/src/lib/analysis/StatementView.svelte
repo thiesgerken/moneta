@@ -19,6 +19,7 @@
 	import { statementState } from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
 	import { shortDate } from './dates';
+	import QueryError from '$lib/QueryError.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -123,6 +124,7 @@
 </script>
 
 <div class="space-y-4">
+	<QueryError errors={$accountStore.errors} message="Die Konten konnten nicht geladen werden." />
 	<div class="flex flex-wrap items-end gap-4">
 		<Label class="space-y-2">
 			<span>Konto</span>
@@ -176,9 +178,10 @@
 			{/if}
 		</h3>
 		{#if $statementStore.errors}
-			<p class="text-sm text-red-600 dark:text-red-400">
-				{$statementStore.errors.map((e) => e.message).join(', ')}
-			</p>
+			<QueryError
+				errors={$statementStore.errors}
+				message="Der Kontoauszug konnte nicht geladen werden."
+			/>
 		{:else}
 			<div class="overflow-x-auto">
 				<Table hoverable striped class="w-full text-left text-sm">

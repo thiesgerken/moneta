@@ -13,6 +13,8 @@
 
 	const { children } = $props() as Props;
 
+	// No error surface, deliberately: this one is *read* for its errors below, and every page
+	// under it already reports its own. A banner here would double each of them.
 	const Session = graphql(`
 		query Session {
 			users {

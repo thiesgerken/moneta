@@ -131,6 +131,17 @@ instantiate apex directly.
   component.
 - Empty states say which emptiness it is: "Niemand sonst hat etwas geändert" and "In diesem
   Zeitraum ist nichts passiert" are different sentences for a reason.
+- **A failed query is not an empty result.** Every query store that feeds something a reader
+  looks at renders `QueryError.svelte` — a red panel naming what is missing, with the raw
+  message under it, since that is the only thing that says whether it was a timeout, an ended
+  session or a bug. It takes the whole sentence rather than a noun: German makes the verb agree
+  with the subject, so composing one here produced "Die Übersicht konnten nicht geladen werden".
+- A spinner keyed on "no data yet" must also check for an error, or it spins for ever under a
+  panel that already explained itself. Anything that would show a **derived** figure — a total,
+  a count — is hidden outright rather than shown at zero. A wrong number is worse than none.
+- The few stores with no error surface say so in a comment at the query, with the reason: the
+  session query in the layout is read for its errors, and the nav and the range picker fall back
+  rather than leaving a hole.
 
 ## Tried and rejected
 

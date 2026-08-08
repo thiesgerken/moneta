@@ -7,6 +7,7 @@
 	import { ANALYSIS_CARD } from './cards';
 	import { shiftMonth } from './dates';
 	import { resolve } from '$app/paths';
+	import QueryError from '$lib/QueryError.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -131,9 +132,10 @@
 	</div>
 
 	{#if $calendarStore.errors}
-		<p class="text-sm text-red-600 dark:text-red-400">
-			{$calendarStore.errors.map((e) => e.message).join(', ')}
-		</p>
+		<QueryError
+			errors={$calendarStore.errors}
+			message="Der Kalender konnte nicht geladen werden."
+		/>
 	{:else}
 		<Card class={ANALYSIS_CARD}>
 			<div class="grid grid-cols-7 gap-px">

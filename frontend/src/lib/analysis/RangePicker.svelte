@@ -24,6 +24,8 @@
 
 	// Sorted by accrual start rather than by a transaction date, which is not a sort the list
 	// offers -- for an imported expense the two are the same day anyway.
+	// No error surface, deliberately: this only finds how far back the data goes, and a failure
+	// falls back to the last year (see `ready`). The views it feeds report their own.
 	const firstExpenseStore = graphql(`
 		query AnalysisRangeStart {
 			expenses {
@@ -46,8 +48,11 @@
 	const dataStart = $derived(
 		$firstExpenseStore.data?.expenses.list.edges[0]?.node.accrualStart?.getTime()
 	);
-	// resolved, whether or not it found anything — an empty database has no first expense
-	const ready = $derived($firstExpenseStore.data != null);
+	// Resolved, whether or not it found anything — an empty database has no first expense, and a
+	// failed lookup knows no more than that. Waiting on it would be worse than guessing: `ready`
+	// gates the range, the range gates every query on the tab, so a lookup that never arrives
+	// leaves the whole page blank with nothing on it to explain why.
+	const ready = $derived($firstExpenseStore.data != null || $firstExpenseStore.errors != null);
 
 	// `from`/`to` stay undefined until a preset can be resolved, which is how a caller knows
 	// not to query yet: a guessed window would be replaced a moment later and the two races.

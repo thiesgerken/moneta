@@ -21,6 +21,7 @@
 	import AutomationRuleModal from './AutomationRuleModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
 	import { shortDate } from './analysis/dates';
+	import QueryError from './QueryError.svelte';
 
 	let searchTerm = $state('');
 	let showNewModal = $state(false);
@@ -130,6 +131,11 @@
 />
 
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
+	<QueryError
+		errors={$ruleStore.errors}
+		message="Die Regeln konnten nicht geladen werden."
+		class="mb-4"
+	/>
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}

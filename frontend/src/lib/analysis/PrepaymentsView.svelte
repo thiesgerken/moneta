@@ -16,6 +16,7 @@
 	import { prepaymentsState } from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
 	import { shortDate } from './dates';
+	import QueryError from '$lib/QueryError.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -132,9 +133,10 @@
 			nicht aufgebraucht ist. Der Verbrauch läuft linear über den Zeitraum.
 		</p>
 		{#if $prepaymentStore.errors}
-			<p class="text-sm text-red-600 dark:text-red-400">
-				{$prepaymentStore.errors.map((e) => e.message).join(', ')}
-			</p>
+			<QueryError
+				errors={$prepaymentStore.errors}
+				message="Die Vorauszahlungen konnten nicht geladen werden."
+			/>
 		{:else if rows.length === 0 && !$prepaymentStore.fetching}
 			<p class="text-sm text-gray-500 dark:text-gray-400">
 				Zu diesem Stichtag ist nichts offen. Eine Ausgabe taucht hier auf, sobald ihr
@@ -196,7 +198,12 @@
 			Hier fehlen noch Transaktionen, deren Höhe unbekannt ist – anders als bei Vorauszahlungen gibt
 			es keinen Restbetrag zu berechnen.
 		</p>
-		{#if incomplete.length === 0}
+		{#if $incompleteStore.errors}
+			<QueryError
+				errors={$incompleteStore.errors}
+				message="Die unvollständigen Ausgaben konnten nicht geladen werden."
+			/>
+		{:else if incomplete.length === 0}
 			<p class="text-sm text-gray-500 dark:text-gray-400">Keine offenen Posten.</p>
 		{:else}
 			<Table hoverable striped class="w-full text-left text-sm">

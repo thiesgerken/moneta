@@ -22,6 +22,7 @@
 	import { CUSTOM_SPAN, wealthState } from './state.svelte';
 	import { shortDate, todayIso } from './dates';
 	import { ANALYSIS_CARD, WEALTH_COLOR } from './cards';
+	import QueryError from '$lib/QueryError.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -426,9 +427,10 @@
 		</div>
 		<div bind:this={plotEl}>
 			{#if $historyStore.errors}
-				<p class="p-4 text-sm text-red-600 dark:text-red-400">
-					{$historyStore.errors.map((e) => e.message).join(', ')}
-				</p>
+				<QueryError
+					errors={$historyStore.errors}
+					message="Der Verlauf konnte nicht geladen werden."
+				/>
 			{:else}
 				<Chart options={chartOptions} bind:instance={chartInstance} onUpdated={drawStichtag} />
 			{/if}
@@ -441,64 +443,76 @@
 	</Label>
 
 	<Card class={ANALYSIS_CARD}>
-		<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-			<h3 class="text-lg font-semibold">Berechnete Kontostände</h3>
-			<!-- A closed account keeps its last balance for ever, so it sits in this table at
+		<QueryError
+			errors={$balanceStore.errors}
+			message="Die Kontostände konnten nicht berechnet werden."
+			class="mb-3"
+		/>
+		<!-- Everything below is hidden rather than shown empty: the total row sums whatever the
+		     table has, so with no balances it asserts a wealth of 0,00 EUR. A number that is
+		     wrong is worse than a number that is missing. -->
+		{#if !$balanceStore.errors}
+			<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+				<h3 class="text-lg font-semibold">Berechnete Kontostände</h3>
+				<!-- A closed account keeps its last balance for ever, so it sits in this table at
 			     whatever it held on the day it was closed and never moves again. Open ones only
 			     by default; the total follows whichever is shown. -->
-			{#if closedCount > 0}
-				<ToggleGroup
-					bind:value={wealthState.balanceAccounts}
-					size="sm"
-					options={[
-						{ value: 'open', label: 'Aktive Konten' },
-						{ value: 'all', label: 'Alle' }
-					]}
-				/>
-			{/if}
-		</div>
-		<Table hoverable striped class="w-full text-left text-sm">
-			<TableHead>
-				<TableHeadCell class="px-4 py-3">Konto</TableHeadCell>
-				<TableHeadCell class="px-4 py-3">Stand</TableHeadCell>
-				<!-- what the number was worked out from is the footnote, not the reading, and it is
+				{#if closedCount > 0}
+					<ToggleGroup
+						bind:value={wealthState.balanceAccounts}
+						size="sm"
+						options={[
+							{ value: 'open', label: 'Aktive Konten' },
+							{ value: 'all', label: 'Alle' }
+						]}
+					/>
+				{/if}
+			</div>
+			<Table hoverable striped class="w-full text-left text-sm">
+				<TableHead>
+					<TableHeadCell class="px-4 py-3">Konto</TableHeadCell>
+					<TableHeadCell class="px-4 py-3">Stand</TableHeadCell>
+					<!-- what the number was worked out from is the footnote, not the reading, and it is
 				     what made the table wider than a phone -->
-				<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Berechnet aus</TableHeadCell>
-			</TableHead>
-			<TableBody class="divide-y">
-				<!-- First, because it is the number the table exists to produce; the rows below are
+					<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Berechnet aus</TableHeadCell>
+				</TableHead>
+				<TableBody class="divide-y">
+					<!-- First, because it is the number the table exists to produce; the rows below are
 				     how it was arrived at. The rule under it is what keeps `striped` from making
 				     this read as an ordinary row that happens to be bold. -->
-				<TableBodyRow class="border-b-2 border-gray-300 dark:border-gray-600">
-					<TableBodyCell class="px-4 py-3 font-semibold">Gesamt</TableBodyCell>
-					<TableBodyCell class="px-4 py-3 font-semibold">{euro(total)}</TableBodyCell>
-					<TableBodyCell class="hidden px-4 py-3 sm:table-cell"></TableBodyCell>
-				</TableBodyRow>
-				{#each shownBalances as b (b.account.id)}
-					<TableBodyRow>
-						<!-- long account names wrap rather than widen the table; on a phone that is
-						     the difference between two lines and a sideways scroll -->
-						<TableBodyCell class="max-w-40 px-4 py-3 whitespace-normal sm:max-w-none">
-							<span
-								class="mr-2 inline-block h-3 w-3 rounded-full align-middle"
-								style="background-color: {b.account.color ?? '#94a3b8'}"
-							></span>{b.account.name}
-						</TableBodyCell>
-						<TableBodyCell
-							class="px-4 py-3 {b.amount < 0
-								? 'text-red-600 dark:text-red-400'
-								: 'text-green-700 dark:text-green-400'}"
-						>
-							{euro(b.amount)}
-						</TableBodyCell>
-						<TableBodyCell class="hidden px-4 py-3 text-gray-500 sm:table-cell dark:text-gray-400">
-							{euro(b.reference.amount)} am {shortDate(b.reference.date)}{b.expenseCount > 0
-								? ` + ${b.expenseCount} ${b.expenseCount === 1 ? 'Ausgabe' : 'Ausgaben'}`
-								: ''}
-						</TableBodyCell>
+					<TableBodyRow class="border-b-2 border-gray-300 dark:border-gray-600">
+						<TableBodyCell class="px-4 py-3 font-semibold">Gesamt</TableBodyCell>
+						<TableBodyCell class="px-4 py-3 font-semibold">{euro(total)}</TableBodyCell>
+						<TableBodyCell class="hidden px-4 py-3 sm:table-cell"></TableBodyCell>
 					</TableBodyRow>
-				{/each}
-			</TableBody>
-		</Table>
+					{#each shownBalances as b (b.account.id)}
+						<TableBodyRow>
+							<!-- long account names wrap rather than widen the table; on a phone that is
+						     the difference between two lines and a sideways scroll -->
+							<TableBodyCell class="max-w-40 px-4 py-3 whitespace-normal sm:max-w-none">
+								<span
+									class="mr-2 inline-block h-3 w-3 rounded-full align-middle"
+									style="background-color: {b.account.color ?? '#94a3b8'}"
+								></span>{b.account.name}
+							</TableBodyCell>
+							<TableBodyCell
+								class="px-4 py-3 {b.amount < 0
+									? 'text-red-600 dark:text-red-400'
+									: 'text-green-700 dark:text-green-400'}"
+							>
+								{euro(b.amount)}
+							</TableBodyCell>
+							<TableBodyCell
+								class="hidden px-4 py-3 text-gray-500 sm:table-cell dark:text-gray-400"
+							>
+								{euro(b.reference.amount)} am {shortDate(b.reference.date)}{b.expenseCount > 0
+									? ` + ${b.expenseCount} ${b.expenseCount === 1 ? 'Ausgabe' : 'Ausgaben'}`
+									: ''}
+							</TableBodyCell>
+						</TableBodyRow>
+					{/each}
+				</TableBody>
+			</Table>
+		{/if}
 	</Card>
 </div>

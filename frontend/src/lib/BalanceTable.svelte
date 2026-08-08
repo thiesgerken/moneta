@@ -30,6 +30,7 @@
 	import { accountSorter } from './expense_utils';
 	import BalanceModal from './BalanceModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
+	import QueryError from './QueryError.svelte';
 
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
@@ -268,6 +269,11 @@
 />
 
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
+	<QueryError
+		errors={[...($balanceStore.errors ?? []), ...($basicStore.errors ?? [])]}
+		message="Die Kontostände konnten nicht geladen werden."
+		class="mb-4"
+	/>
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}

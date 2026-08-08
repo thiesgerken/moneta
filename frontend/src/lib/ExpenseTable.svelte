@@ -44,6 +44,7 @@
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
 	import { page } from '$app/state';
 	import { shortDate } from './analysis/dates';
+	import QueryError from './QueryError.svelte';
 
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
@@ -548,6 +549,11 @@
 />
 
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
+	<QueryError
+		errors={[...($expenseStore.errors ?? []), ...($basicStore.errors ?? [])]}
+		message="Die Ausgaben konnten nicht geladen werden."
+		class="mb-4"
+	/>
 	{#if activeFilters.length > 0}
 		<div class="flex flex-wrap items-center gap-2 px-4 pb-3 text-sm sm:px-0">
 			<span class="text-gray-500 dark:text-gray-400">Gefiltert nach</span>

@@ -20,6 +20,7 @@
 	import Chart from '$lib/Chart.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import { integrationError, errorClass, deltaColor, categoryColor } from '$lib/analysis/overviews';
+	import QueryError from '$lib/QueryError.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -53,6 +54,9 @@
 
 	/// Every month from the first expense to this one, newest first — the ones there is anything
 	/// to see in. The range query is the picker's own, and cheap: one expense, sorted.
+	// No error surface, deliberately: this only widens the month picker to the earliest data,
+	// and the month being viewed is offered regardless. A failure shortens a list, it empties
+	// nothing.
 	const startStore = graphql(`
 		query MonthPickerStart {
 			expenses {
@@ -282,9 +286,7 @@
 	</div>
 
 	{#if $detailStore.errors}
-		<p class="text-sm text-red-600 dark:text-red-400">
-			{$detailStore.errors.map((e) => e.message).join(', ')}
-		</p>
+		<QueryError errors={$detailStore.errors} message="Der Monat konnte nicht geladen werden." />
 	{:else if detail}
 		<div class="grid gap-4 md:grid-cols-4">
 			<Card class="max-w-none p-4">
@@ -380,6 +382,11 @@
 
 			<Card class="max-w-none min-w-0 p-4">
 				<h3 class="mb-2 text-lg font-semibold">Größte Ausgaben</h3>
+				<QueryError
+					errors={$biggestStore.errors}
+					message="Die größten Ausgaben konnten nicht geladen werden."
+					class="mb-3"
+				/>
 				<Table hoverable striped class="w-full text-left text-sm">
 					<TableHead>
 						<TableHeadCell class="px-4 py-3">Titel</TableHeadCell>

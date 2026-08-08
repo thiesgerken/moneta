@@ -27,6 +27,7 @@
 	} from './overviews';
 	import { overviewsState } from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
+	import QueryError from '$lib/QueryError.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -88,9 +89,10 @@
 	</div>
 
 	{#if $overviewsStore.errors}
-		<p class="text-sm text-red-600 dark:text-red-400">
-			{$overviewsStore.errors.map((e) => e.message).join(', ')}
-		</p>
+		<QueryError
+			errors={$overviewsStore.errors}
+			message="Die Monatsübersichten konnten nicht geladen werden."
+		/>
 	{:else}
 		<Card class={ANALYSIS_CARD}>
 			<h3 class="mb-2 text-lg font-semibold">Einnahmen und Ausgaben je Monat</h3>

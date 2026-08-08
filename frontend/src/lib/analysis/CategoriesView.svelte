@@ -18,6 +18,7 @@
 	import { isoDate } from './dates';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import QueryError from '$lib/QueryError.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -200,9 +201,10 @@
 	</div>
 
 	{#if $overviewsStore.errors}
-		<p class="text-sm text-red-600 dark:text-red-400">
-			{$overviewsStore.errors.map((e) => e.message).join(', ')}
-		</p>
+		<QueryError
+			errors={$overviewsStore.errors}
+			message="Die Auswertung konnte nicht geladen werden."
+		/>
 	{:else}
 		<Card class={ANALYSIS_CARD}>
 			<div class="mb-2 flex flex-wrap items-center justify-between gap-2">

@@ -2,6 +2,7 @@
 	import { Label, Input, Select } from 'flowbite-svelte';
 	import { graphql } from '$houdini';
 	import { shortDate } from './analysis/dates';
+	import QueryError from '$lib/QueryError.svelte';
 
 	interface Props {
 		templateId: string;
@@ -65,6 +66,12 @@
 		}))
 	]);
 </script>
+
+<QueryError
+	errors={$templateStore.errors}
+	message="Die Vorlagen konnten nicht geladen werden."
+	class="mb-3"
+/>
 
 <Label class="space-y-2">
 	<span>Vorlage suchen</span>
