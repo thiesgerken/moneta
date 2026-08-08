@@ -12,8 +12,14 @@ import { build, files, version } from '$service-worker';
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
-const CACHE = `moneta-${version}`;
+/// `version` is a build timestamp, so the keys sort oldest-first as strings.
+const PREFIX = 'moneta-';
+const CACHE = `${PREFIX}${version}`;
 const ASSETS = new Set([...build, ...files]);
+
+/// Content-hashed, so a hit from an older build's cache is the file it asked for and not a
+/// stale one. This is what a page from before the last deploy is served from.
+const IMMUTABLE = '/_app/immutable/';
 
 sw.addEventListener('install', (event) => {
 	// the new build takes over on the next load rather than waiting for every tab to close,
@@ -29,7 +35,20 @@ sw.addEventListener('install', (event) => {
 sw.addEventListener('activate', (event) => {
 	event.waitUntil(
 		(async () => {
-			for (const key of await caches.keys()) if (key !== CACHE) await caches.delete(key);
+			// The build before this one is kept. A tab that was already open is still running it
+			// and still asks for its chunks -- which the server stopped serving the moment the
+			// image was replaced, so the cache is the only place left that has them. Deleting
+			// them here on every deploy is what turned an open tab into a dead one.
+			const keys = await caches.keys();
+			const keep = new Set([
+				CACHE,
+				...keys
+					.filter((k) => k.startsWith(PREFIX))
+					.sort()
+					.slice(-2)
+			]);
+
+			for (const key of keys) if (!keep.has(key)) await caches.delete(key);
 			await sw.clients.claim();
 		})()
 	);
@@ -39,7 +58,21 @@ sw.addEventListener('fetch', (event) => {
 	if (event.request.method !== 'GET') return;
 
 	const url = new URL(event.request.url);
-	if (url.origin !== location.origin || !ASSETS.has(url.pathname)) return;
+	if (url.origin !== location.origin) return;
+	if (!ASSETS.has(url.pathname) && !url.pathname.startsWith(IMMUTABLE)) return;
 
-	event.respondWith(caches.match(event.request).then((cached) => cached ?? fetch(event.request)));
+	// This build's cache first, and only then the generation behind it -- and that one only for
+	// content-hashed paths. Everything under `files` keeps its name between builds, so an older
+	// cache answering for the favicon or the manifest would be answering with a stale one; an
+	// older cache answering for a hashed chunk is answering with the only copy left anywhere.
+	event.respondWith(
+		caches
+			.open(CACHE)
+			.then((cache) => cache.match(event.request))
+			.then(
+				(hit) =>
+					hit ?? (url.pathname.startsWith(IMMUTABLE) ? caches.match(event.request) : undefined)
+			)
+			.then((cached) => cached ?? fetch(event.request))
+	);
 });
