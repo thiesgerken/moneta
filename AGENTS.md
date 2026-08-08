@@ -127,13 +127,12 @@ needs a running backend and therefore a database, which is a lot of setup for a 
 depends on neither; it also sorts arguments alphabetically, so switching between the two
 reformats the whole file. Stay on `cargo run -- schema`.
 
-**`needs:` does not work on this gitea, so the workflow has no job graph.** A job that
-declares one stays blocked forever with every dependency green — measured with a probe job
-that depended on a single succeeded job, against an otherwise identical job that ran.
-Restarting gitea did not help. That is why the image build neither gates on the test jobs nor
-lives in a job of its own: as a separate job it would have nothing holding it behind the
-build and would deploy the previous run's image. Don't "fix" the missing `needs` without
-checking whether the bug is gone.
+**A job stuck in blocked with all of its dependencies green is a gitea problem, not a
+workflow one.** `needs` is evaluated by a queue worker; when the `actions_ready_job` queue
+stops draining, gitea keeps enqueuing "re-evaluate this run" and nothing acts on it, so every
+job with a dependency waits until the `cancel_abandoned_jobs` cron cancels it. Nothing is
+logged below Debug. Site Administration → Monitoring → Queues shows the item count; clearing
+that queue is what fixed it in August 2026, after it had been broken since early 2025.
 
 **The registry is `gitea.gerken.haus`, not `git.gerken.haus`.** The latter answers `/v2/`
 with 403 and cost a red pipeline; every other app on that cluster pulls from the former.
