@@ -18,7 +18,8 @@
 		MultiSelect,
 		Badge,
 		Datepicker,
-		Modal
+		Modal,
+		Spinner
 	} from 'flowbite-svelte';
 	import { Section } from 'flowbite-svelte-blocks';
 	import {
@@ -367,6 +368,26 @@
 		$expenseStore.data?.expenses.list.edges.map((expense) => expense.node) || []
 	);
 
+	/// Whether the running fetch has been running long enough to say so.
+	///
+	/// Houdini keeps the previous result up while it fetches, so a slow page turn showed the old
+	/// page's rows under the new page number -- nothing said anything was on its way. The delay is
+	/// what keeps a fast answer from flashing a spinner on its way past.
+	let slow = $state(false);
+	$effect(() => {
+		if (!$expenseStore.fetching) {
+			slow = false;
+			return;
+		}
+
+		const timer = setTimeout(() => (slow = true), 300);
+		return () => clearTimeout(timer);
+	});
+
+	// What the table draws, as opposed to what the modals reach into: an edit begun before a
+	// refetch still has its expense, the rows behind it do not stay up pretending to be the answer.
+	let rows = $derived(slow ? [] : expenses);
+
 	let expenseToEdit = $derived(expenses.find((e) => e.id === expenseIdToEdit) || undefined);
 	let expenseToDelete = $derived(expenses.find((e) => e.id === expenseIdToDelete) || undefined);
 
@@ -648,7 +669,14 @@
 			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
-			{#each expenses as expense (expense.id)}
+			{#if slow}
+				<tr>
+					<td colspan="8" class="px-4 py-16 text-center">
+						<Spinner size="8" />
+					</td>
+				</tr>
+			{/if}
+			{#each rows as expense (expense.id)}
 				<TableBodyRow onclick={() => toggleRow(expense.id)}>
 					<TableBodyCell class="px-4 py-3">
 						<button type="button" class="mr-2 focus:outline-none">
