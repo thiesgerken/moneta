@@ -137,6 +137,10 @@ checking whether the bug is gone.
 **The registry is `gitea.gerken.haus`, not `git.gerken.haus`.** The latter answers `/v2/`
 with 403 and cost a red pipeline; every other app on that cluster pulls from the former.
 
+**One CI run per branch.** `concurrency` with `cancel-in-progress` is set, so pushing again
+cancels the run in flight, deploy included. A cancelled run is what a superseded commit looks
+like here, not a failure to investigate.
+
 **Component queries do not load themselves.** houdini 2 removed `@load`, the `_<Name>Variables`
 convention and route-level `+page.gql` codegen. Every query needs an explicit
 `$effect(() => void store.fetch())`, and for filtered tables the variables have to be passed
