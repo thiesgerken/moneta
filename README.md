@@ -250,8 +250,8 @@ the rendered views and the CHECK constraints do what they claim — the views ca
 math, so they are where a mistake would be expensive.
 
 CI (`.gitea/workflows/ci.yml`) runs exactly those, then builds and pushes both images on
-pushes to `main`/`devel`, and on `main` restarts the two deployments in the cluster. There
-are no frontend tests.
+pushes to `main`, and then restarts the two deployments in the cluster. There are no frontend
+tests.
 
 ## Status
 

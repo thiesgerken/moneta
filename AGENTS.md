@@ -21,7 +21,8 @@ CI runs exactly these and is strict — `clippy -D warnings` and `fmt --check` b
 build, including on test code.
 
 A push to `main` also builds both images and restarts the deployments in the cluster, so a
-merge is a deploy. `devel` builds images without deploying.
+merge is a deploy. `main` is the only branch CI runs on; work happens in pull requests
+against it, which run the tests but neither build nor deploy.
 
 **Run `pnpm build` before `pnpm check` or `pnpm lint`.** The build triggers houdini codegen;
 without it `$houdini` types are stale or missing and you will chase type errors that aren't

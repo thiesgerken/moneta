@@ -4,11 +4,9 @@ on:
   push:
     branches:
       - main
-      - devel
   pull_request:
     branches:
       - main
-      - devel
 
 # One run per branch: the runner takes one job at a time, so without this a series of pushes
 # spends an hour testing commits nobody is waiting for any more. This does cancel a rollout
@@ -81,9 +79,8 @@ jobs:
 
   # No `needs` on the test jobs, deliberately: this gitea never unblocks a job that has one.
   # A probe job depending on a single succeeded job stayed blocked just the same, so the
-  # images would simply never be built. They are pushed from main and devel only, and both
-  # are merged from pull requests that ran the tests, so the gate bought little. Put it back
-  # once `needs` works again.
+  # images would simply never be built. main is merged from pull requests that ran the tests,
+  # so the gate bought little. Put it back once `needs` works again.
   #
   # Two steps rather than a matrix over the components, because checkout, buildx and the
   # registry login are shared. The rollout is in the same job for the same reason `needs` is
@@ -91,7 +88,7 @@ jobs:
   # would restart the deployments onto the image the previous run pushed.
   build-and-deploy:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/devel')
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
 
@@ -123,15 +120,12 @@ jobs:
           cache-from: type=registry,ref=gitea.gerken.haus/thies/moneta/frontend:${{ github.ref_name }}
           cache-to: type=inline
 
-      # devel builds an image but does not deploy; the cluster runs main.
       - name: Setup kubectl
-        if: github.ref_name == 'main'
         uses: azure/setup-kubectl@829323503d1be3d00ca8346e5391ca0b07a9ab0d # v5
         with:
           version: "latest"
 
       - name: Configure kubectl
-        if: github.ref_name == 'main'
         run: |
           echo "${{ secrets.K8S_CA_CERT }}" | base64 -d > /tmp/ca.crt
           kubectl config set-cluster cluster \
@@ -149,7 +143,6 @@ jobs:
       # new image up. The periodic CronJob runs the backend image too, but it pulls on its own
       # next tick and there is nothing to restart.
       - name: Restart the deployments
-        if: github.ref_name == 'main'
         run: |
           kubectl rollout restart deployment/backend deployment/frontend -n apps-moneta
           kubectl rollout status deployment/backend -n apps-moneta --timeout=300s
