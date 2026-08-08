@@ -36,7 +36,11 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6 # v1
         with:
           components: rustfmt, clippy
-          workspaces: backend
+          # `cache-workspaces`, not `workspaces`: the latter is not an input of this action,
+          # so it was dropped silently and the cache step looked for a Cargo.toml in the repo
+          # root, where there is none. It only surfaced when the save got far enough to run
+          # `cargo metadata`, which failed the whole job from a post step.
+          cache-workspaces: backend
 
       - run: cd backend && cargo fmt --all -- --check
       - run: cd backend && cargo clippy --all-targets -- -D warnings
