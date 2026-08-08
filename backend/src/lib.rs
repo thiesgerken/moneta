@@ -27,6 +27,10 @@ pub type Pool = deadpool::Pool<AsyncPgConnection>;
 pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
     diesel_migrations::embed_migrations!("migrations");
 
+/// One a second, so a database that is genuinely gone still fails inside half a minute rather
+/// than leaving a pod that looks alive and answers nothing.
+const DATABASE_CONNECT_ATTEMPTS: u32 = 30;
+
 /// Brings the schema up to date, on a connection of its own.
 ///
 /// diesel's migration harness is synchronous, so it runs on a blocking thread through the
@@ -35,7 +39,27 @@ pub async fn migrate(database_url: &str) -> Result<(), Box<dyn std::error::Error
     use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
     use diesel_migrations::MigrationHarness;
 
-    let conn = AsyncPgConnection::establish(database_url).await?;
+    // Postgres is not always up when we are. A rolling restart schedules the new pod while the
+    // old one still holds its connections, and a cold cluster starts both at once; the first
+    // connect then fails with "error connecting to server". Panicking there costs a container
+    // restart, and without a readiness probe the pod takes traffic for the whole of it -- which
+    // is a request that never answers rather than one that fails.
+    let mut attempt = 0u32;
+    let conn = loop {
+        match AsyncPgConnection::establish(database_url).await {
+            Ok(conn) => break conn,
+            Err(e) => {
+                attempt += 1;
+                if attempt >= DATABASE_CONNECT_ATTEMPTS {
+                    return Err(e.into());
+                }
+
+                warn!("database not reachable yet ({e}), retrying in a second");
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }
+        }
+    };
+
     let mut wrapper = AsyncConnectionWrapper::<AsyncPgConnection>::from(conn);
 
     tokio::task::spawn_blocking(move || {

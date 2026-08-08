@@ -167,6 +167,11 @@ data is therefore client-side only; there is no SSR of query results.
 
 ## Known gaps worth knowing before you plan work
 
+- **The backend deployment has no readiness probe**, so a pod takes traffic from the moment its
+  container starts — before Rocket has bound its port. A crash at startup therefore shows up as
+  requests that never answer rather than as requests that fail, and it took a network tab and a
+  `kubectl logs --previous` to find. `migrate()` retrying its first connection removes the
+  crash this repo can cause; the probe itself lives with the manifests, not here.
 - No frontend tests. `tests/sql/` covers the views, the constraints and the balance
   simulation, but nothing exercises the GraphQL resolvers against a database.
 - No upload client feeds `deliveries.submit` from a real bank export; that is deliberately
