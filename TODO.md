@@ -16,4 +16,6 @@
   that axis and `accruedAfter`/`accruedBefore` for the other, so it is a UI question now.
   See [docs/analysis-dashboard.md](docs/analysis-dashboard.md).
 - push notifications
-- ausgabe in transaktion umwandeln (zB Retoure mit original zusammenfassen, dann automatisch buchungszeitraum anpassen?)
+- ausgabe in transaktion umwandeln (zB Retoure mit original zusammenfassen, dann automatisch
+  buchungszeitraum anpassen?). Der Import macht das inzwischen für die moneydb-Altlasten
+  (`Chain` in `src/import.rs`); was fehlt, ist die Bedienung dafür im Frontend.

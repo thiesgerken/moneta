@@ -38,6 +38,13 @@ cargo run -- import --clear < moneydb-export.json
 docker compose exec -T backend moneta import --clear < backend/moneydb-export.json
 ```
 
+The import is not a row-for-row copy. moneydb had no accrual period and only one date per
+expense, so anything paid at a different time than it was for went through a "Vorauszahlungen"
+clearing account: the payment moved the whole sum onto it and one expense per month drew that
+month's share back out again, and a refund left the money sitting there until it came back.
+Moneta says both with a single expense, so the import folds those chains up — see
+[The three dates](#the-three-dates) below and `Chain` in `backend/src/import.rs`.
+
 ### Configuration
 
 Settings come from environment variables prefixed `MONETA__`, nested with `__`
@@ -124,6 +131,14 @@ Money is stored as integer cents (`amount: i32`). Computed values that involve f
   (Leistungszeitraum). Equal endpoints mean an ordinary expense; a span is a prepayment, and
   is what `analysis.prepayments` accrues over. Never null: an expense with no period of its
   own is accrued on the day it was paid.
+
+Between them these are what makes moneydb's clearing account unnecessary, and the import
+([`Chain`](backend/src/import.rs)) undoes it. A quarterly newspaper invoice is one expense with
+one bank transaction and a three month period rather than the payment plus three monthly
+drawdowns; a cancelled order is one expense holding the debit and the credit, each on its own
+date, costing nothing in between. What the source never resolved — money paid out that nothing
+has come back from — is what `isIncomplete` means: more transactions are expected and their size
+is not known yet, so unlike a prepayment there is no remainder to compute.
 
 ### Rules
 
