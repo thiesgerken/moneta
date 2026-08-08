@@ -13,6 +13,12 @@ const config = {
 	kit: {
 		adapter: adapter(),
 
+		// Nothing notices a deploy otherwise: `updated` only moves when something asks, and the
+		// layout leaves for the new build on the next navigation once it has.
+		version: {
+			pollInterval: 300_000
+		},
+
 		alias: {
 			$houdini: '.houdini/'
 		}
