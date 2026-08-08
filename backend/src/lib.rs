@@ -31,6 +31,10 @@ pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
 /// than leaving a pod that looks alive and answers nothing.
 const DATABASE_CONNECT_ATTEMPTS: u32 = 30;
 
+/// deadpool's default is derived from the core count, which in a container with a 1 CPU limit
+/// left a pool small enough that a handful of concurrent dashboard requests emptied it.
+const POOL_SIZE: usize = 16;
+
 /// Brings the schema up to date, on a connection of its own.
 ///
 /// diesel's migration harness is synchronous, so it runs on a blocking thread through the
@@ -97,7 +101,16 @@ pub fn pool(database_url: &str, app_name: &str) -> Result<Pool, Box<dyn std::err
 
     let manager =
         AsyncDieselConnectionManager::<AsyncPgConnection>::new_with_config(database_url, config);
-    Ok(deadpool::Pool::builder(manager).build()?)
+
+    // A wait that cannot time out is how one bug takes the whole backend down: a resolver that
+    // holds a connection while asking for a second one empties the pool under concurrency, and
+    // every request after that waits forever. Rocket keeps accepting them, nothing is logged
+    // past "Matched", and only a restart clears it. Failing the request says what happened.
+    Ok(deadpool::Pool::builder(manager)
+        .max_size(POOL_SIZE)
+        .runtime(::deadpool::Runtime::Tokio1)
+        .wait_timeout(Some(std::time::Duration::from_secs(15)))
+        .build()?)
 }
 
 /// Parameters are taken from the stored PHC string, so hashes written by older

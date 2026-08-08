@@ -499,29 +499,35 @@ impl AnalysisQuery {
         let (range_from, range_to) = (starts[0], starts[starts.len() - 1]);
 
         let simulated = simulate(context, &starts, None).await?;
-        let conn = &mut context.conn().await?;
 
-        let month_rows: Vec<MonthTotalRow> = diesel::sql_query(MONTH_TOTALS)
-            .bind::<diesel::sql_types::Uuid, _>(user_id)
-            .bind::<Timestamptz, _>(range_from)
-            .bind::<Timestamptz, _>(range_to)
-            .load(conn)
-            .await?;
+        // see `compute`: the connection goes back before the loaders take one of their own
+        let (month_rows, category_rows, expense_rows) = {
+            let conn = &mut context.conn().await?;
 
-        let category_rows: Vec<CategoryTotalRow> = diesel::sql_query(CATEGORY_TOTALS)
-            .bind::<diesel::sql_types::Uuid, _>(user_id)
-            .bind::<Timestamptz, _>(range_from)
-            .bind::<Timestamptz, _>(range_to)
-            .load(conn)
-            .await?;
+            let month_rows: Vec<MonthTotalRow> = diesel::sql_query(MONTH_TOTALS)
+                .bind::<diesel::sql_types::Uuid, _>(user_id)
+                .bind::<Timestamptz, _>(range_from)
+                .bind::<Timestamptz, _>(range_to)
+                .load(conn)
+                .await?;
 
-        let expense_rows: Vec<CategoryExpenseRow> = diesel::sql_query(CATEGORY_EXPENSES)
-            .bind::<diesel::sql_types::Uuid, _>(user_id)
-            .bind::<Timestamptz, _>(range_from)
-            .bind::<Timestamptz, _>(range_to)
-            .bind::<Integer, _>(TREEMAP_EXPENSES_PER_CATEGORY)
-            .load(conn)
-            .await?;
+            let category_rows: Vec<CategoryTotalRow> = diesel::sql_query(CATEGORY_TOTALS)
+                .bind::<diesel::sql_types::Uuid, _>(user_id)
+                .bind::<Timestamptz, _>(range_from)
+                .bind::<Timestamptz, _>(range_to)
+                .load(conn)
+                .await?;
+
+            let expense_rows: Vec<CategoryExpenseRow> = diesel::sql_query(CATEGORY_EXPENSES)
+                .bind::<diesel::sql_types::Uuid, _>(user_id)
+                .bind::<Timestamptz, _>(range_from)
+                .bind::<Timestamptz, _>(range_to)
+                .bind::<Integer, _>(TREEMAP_EXPENSES_PER_CATEGORY)
+                .load(conn)
+                .await?;
+
+            (month_rows, category_rows, expense_rows)
+        };
 
         let accounts = context
             .account_loader
@@ -836,21 +842,32 @@ async fn compute(
 ) -> FieldResult<Vec<ComputedBalance>> {
     let user_id = require_user(context).await?;
     let rows = simulate(context, &[date], account_id).await?;
-    let conn = &mut context.conn().await?;
 
-    let counts: Vec<ExpenseCountRow> = diesel::sql_query(COUNT_EXPENSES)
-        .bind::<diesel::sql_types::Uuid, _>(user_id)
-        .bind::<Timestamptz, _>(date)
-        .bind::<Nullable<diesel::sql_types::Uuid>, _>(account_id)
-        .load(conn)
-        .await?;
+    // Scoped so the connection is back in the pool before the loader below asks for one of its
+    // own. A dataloader batch takes a connection too, and holding one while waiting for another
+    // deadlocks as soon as there are as many concurrent requests as the pool has connections:
+    // each keeps one, each waits for a second, and the pool never refills.
+    let (counts, references) = {
+        let conn = &mut context.conn().await?;
 
-    let references: Vec<RenderedBalance> = balances_rendered::table
-        .filter(balances_rendered::user_id.eq(user_id))
-        .filter(balances_rendered::id.eq_any(rows.iter().map(|r| r.balance_id).collect::<Vec<_>>()))
-        .select(RenderedBalance::as_select())
-        .load(conn)
-        .await?;
+        let counts: Vec<ExpenseCountRow> = diesel::sql_query(COUNT_EXPENSES)
+            .bind::<diesel::sql_types::Uuid, _>(user_id)
+            .bind::<Timestamptz, _>(date)
+            .bind::<Nullable<diesel::sql_types::Uuid>, _>(account_id)
+            .load(conn)
+            .await?;
+
+        let references: Vec<RenderedBalance> = balances_rendered::table
+            .filter(balances_rendered::user_id.eq(user_id))
+            .filter(
+                balances_rendered::id.eq_any(rows.iter().map(|r| r.balance_id).collect::<Vec<_>>()),
+            )
+            .select(RenderedBalance::as_select())
+            .load(conn)
+            .await?;
+
+        (counts, references)
+    };
 
     let accounts = context
         .account_loader

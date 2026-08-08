@@ -33,6 +33,9 @@ diesel-async = { version = "0.9", features = [
     "postgres",
 ] }
 diesel_migrations = "2.3"
+# Direct, only for `Runtime`: diesel-async re-exports deadpool's Pool and PoolBuilder as type
+# aliases but not the runtime enum, and a pool without one refuses to take a wait timeout.
+deadpool = { version = "0.13", features = ["rt_tokio_1"] }
 uuid = { version = "1", features = ["v7", "serde"] }
 dataloader = { version = "0.18", default-features = false, features = [
     "runtime-tokio",
