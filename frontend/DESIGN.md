@@ -129,8 +129,9 @@ instantiate apex directly.
 - Empty states say which emptiness it is: "Niemand sonst hat etwas geändert" and "In diesem
   Zeitraum ist nichts passiert" are different sentences for a reason.
 
-## Open
+## Tried and rejected
 
 - **Small caps for table headers.** Source Serif's Google build has no `smcp`, so the browser
-  would synthesise them and they read light. Getting real ones means vendoring Adobe's own
-  build of the same typeface. Undecided.
+  synthesises them by scaling the capitals down and they read thin and light. Real ones would
+  mean vendoring Adobe's own build of the same typeface, and the look was not wanted anyway.
+  Headers stay 14 px mixed case in Inter.

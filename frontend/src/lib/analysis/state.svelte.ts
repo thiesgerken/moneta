@@ -36,6 +36,9 @@ export const wealthState = $state({
 	split: 'total',
 	/// the Stichtag for the availability totals and the computed balances
 	date: todayIso(),
+	/// A closed account keeps its last balance for ever, so it sits in the table at whatever it
+	/// held on its last day and never moves again -- a row that answers nothing.
+	showClosedBalances: false,
 	/// Series hidden from the chart, by name, remembered so a tab switch does not un-hide them.
 	///
 	/// One list per split rather than one shared: the toggle drops names the chart no longer

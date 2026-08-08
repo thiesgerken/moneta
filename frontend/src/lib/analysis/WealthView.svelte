@@ -9,6 +9,7 @@
 		TableHeadCell,
 		Input,
 		Label,
+		Checkbox,
 		Spinner
 	} from 'flowbite-svelte';
 	import { graphql } from '$houdini';
@@ -21,7 +22,6 @@
 	import { AVAILABILITY_LABELS, availabilityColor } from './availability';
 	import { CUSTOM_SPAN, wealthState } from './state.svelte';
 	import { shortDate, todayIso } from './dates';
-	import { resolve } from '$app/paths';
 	import { ANALYSIS_CARD, WEALTH_COLOR } from './cards';
 
 	const euro = (cents: number) =>
@@ -84,6 +84,8 @@
 						id
 						name
 						color
+						# a closed account keeps its last balance for ever; the table hides those
+						closed
 					}
 					reference {
 						id
@@ -144,15 +146,17 @@
 		wealthState.split === 'account' ? wealthState.hiddenAccounts : wealthState.hiddenAvailability
 	);
 
-	/// The Stichtag as a date, or null while the input holds something that is not one.
-	const stichtag = $derived.by(() => {
-		const at = new Date(wealthState.date);
-		return Number.isNaN(at.getTime()) ? null : at;
-	});
-
 	const balances = $derived($balanceStore.data?.analysis.balances ?? []);
 
-	const total = $derived(balances.reduce((sum, b) => sum + b.amount, 0));
+	const closedCount = $derived(balances.filter((b) => b.account.closed).length);
+
+	const shownBalances = $derived(
+		wealthState.showClosedBalances ? balances : balances.filter((b) => !b.account.closed)
+	);
+
+	/// Of what is shown: a total that counts rows you cannot see is a total of nothing in
+	/// particular, and a closed account contributes the same figure for ever.
+	const total = $derived(shownBalances.reduce((sum, b) => sum + b.amount, 0));
 
 	const dates = $derived(history?.dates.map((d) => d.getTime()) ?? []);
 
@@ -432,27 +436,23 @@
 		</div>
 	</Card>
 
-	<div class="flex flex-wrap items-end gap-3">
-		<Label class="space-y-2">
-			<span>Stichtag</span>
-			<Input type="date" bind:value={wealthState.date} class="w-48" />
-		</Label>
-		<!-- the Stichtag sits on a date and had nothing to offer about it; its month is a page -->
-		{#if stichtag}
-			<a
-				class="text-primary-600 dark:text-primary-500 pb-2 text-sm hover:underline"
-				href={resolve('/analysis/[year]/[month]', {
-					year: `${stichtag.getFullYear()}`,
-					month: `${stichtag.getMonth() + 1}`
-				})}
-			>
-				{stichtag.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })} ansehen
-			</a>
-		{/if}
-	</div>
+	<Label class="space-y-2">
+		<span>Stichtag</span>
+		<Input type="date" bind:value={wealthState.date} class="w-48" />
+	</Label>
 
 	<Card class={ANALYSIS_CARD}>
-		<h3 class="mb-2 text-lg font-semibold">Berechnete Kontostände</h3>
+		<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+			<h3 class="text-lg font-semibold">Berechnete Kontostände</h3>
+			<!-- A closed account keeps its last balance for ever, so it sits in this table at
+			     whatever it held on the day it was closed and never moves again. Off by default,
+			     since that is a row that answers nothing; the total follows the toggle. -->
+			{#if closedCount > 0}
+				<Checkbox bind:checked={wealthState.showClosedBalances} class="text-sm">
+					{closedCount} geschlossene {closedCount === 1 ? 'Konto' : 'Konten'} anzeigen
+				</Checkbox>
+			{/if}
+		</div>
 		<Table hoverable striped class="w-full text-left text-sm">
 			<TableHead>
 				<TableHeadCell class="px-4 py-3">Konto</TableHeadCell>
@@ -462,7 +462,7 @@
 				<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Berechnet aus</TableHeadCell>
 			</TableHead>
 			<TableBody class="divide-y">
-				{#each balances as b (b.account.id)}
+				{#each shownBalances as b (b.account.id)}
 					<TableBodyRow>
 						<!-- long account names wrap rather than widen the table; on a phone that is
 						     the difference between two lines and a sideways scroll -->
