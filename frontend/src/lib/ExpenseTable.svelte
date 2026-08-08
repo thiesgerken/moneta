@@ -15,8 +15,6 @@
 		ButtonGroup,
 		List,
 		Li,
-		MultiSelect,
-		Badge,
 		Datepicker,
 		Modal,
 		Spinner
@@ -117,23 +115,27 @@
 	/// desktop, so a list arriving pre-filtered from somewhere else looked like the whole list,
 	/// only shorter. Saying it out loud is also the only way to notice a filter you forgot.
 	const activeFilters = $derived.by(() => {
-		const out: { label: string; clear: () => void }[] = [];
+		const out: { label: string; color?: string | null; clear: () => void }[] = [];
 
 		if (searchTerm.trim()) {
 			out.push({ label: `Suche: ${searchTerm.trim()}`, clear: () => (searchTerm = '') });
 		}
 
 		for (const id of filteredAccounts) {
+			const account = filterableAccounts?.find((a) => a.value === id);
 			out.push({
-				label: filterableAccounts?.find((a) => a.value === id)?.name ?? 'Konto',
-				clear: () => (filteredAccounts = filteredAccounts.filter((other) => other !== id))
+				label: account?.name ?? 'Konto',
+				color: account?.color,
+				clear: () => (filteredAccounts = withoutOption(filteredAccounts, id))
 			});
 		}
 
 		for (const id of filteredCategories) {
+			const category = filterableCategories?.find((c) => c.value === id);
 			out.push({
-				label: filterableCategories?.find((c) => c.value === id)?.name ?? 'Kategorie',
-				clear: () => (filteredCategories = filteredCategories.filter((other) => other !== id))
+				label: category?.name ?? 'Kategorie',
+				color: category?.color,
+				clear: () => (filteredCategories = withoutOption(filteredCategories, id))
 			});
 		}
 
@@ -156,6 +158,12 @@
 
 		return out;
 	});
+
+	const withoutOption = (selected: string[], id: string) =>
+		selected.filter((other) => other !== id);
+
+	const toggleOption = (selected: string[], id: string) =>
+		selected.includes(id) ? withoutOption(selected, id) : [...selected, id];
 
 	function clearDateRange() {
 		filterDateRange = { from: undefined, to: undefined };
@@ -443,6 +451,33 @@
 	}
 </script>
 
+<!-- Accounts and categories carry a colour, and that colour is how a reader recognises them --
+     it is what the cells in the table below are tinted with. flowbite's MultiSelect prints its
+     options as bare text and offers no hook to change that, so the filters are a checkbox list
+     with the swatch in front of each name, like the Zustand filter beside them. -->
+{#snippet optionFilter(
+	label: string,
+	options: { name: string; value: string; color?: string | null }[],
+	selected: string[],
+	toggle: (id: string) => void
+)}
+	<Button color="alternative" size="lg" class="justify-between md:w-48">
+		{selected.length ? `${label} (${selected.length})` : label}
+		<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
+	</Button>
+	<Dropdown class="max-h-80 w-64 space-y-2 overflow-y-auto p-3 text-sm">
+		{#each options as option (option.value)}
+			<Checkbox checked={selected.includes(option.value)} onchange={() => toggle(option.value)}>
+				<span
+					class="mr-2 inline-block h-3 w-3 shrink-0 rounded-sm"
+					style="background-color: {option.color}"
+				></span>
+				{option.name}
+			</Checkbox>
+		{/each}
+	</Dropdown>
+{/snippet}
+
 {#snippet sortIcon(field: string)}
 	{#if isSortedBy(field) === -1}
 		▲
@@ -515,8 +550,13 @@
 		<div class="flex flex-wrap items-center gap-2 px-4 pb-3 text-sm sm:px-0">
 			<span class="text-gray-500 dark:text-gray-400">Gefiltert nach</span>
 			{#each activeFilters as filter (filter.label)}
+				<!-- tinted where what is being filtered on has a colour of its own, so the chip and
+				     the cells it left standing look like each other -->
 				<span
-					class="inline-flex items-center gap-1 rounded-full bg-gray-200 px-2 py-0.5 dark:bg-gray-700"
+					class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 {filter.color
+						? 'text-black'
+						: 'bg-gray-200 dark:bg-gray-700'}"
+					style={filter.color ? `background-color: ${filter.color}` : undefined}
 				>
 					{filter.label}
 					<button
@@ -600,44 +640,18 @@
 							Zeitraum zurücksetzen
 						</Button>
 					</Dropdown>
-					<MultiSelect
-						items={filterableAccounts ?? []}
-						bind:value={filteredAccounts}
-						size="lg"
-						class="ml-2 h-1 min-w-48"
-						placeholder="Konten"
-					>
-						{#snippet children({ item, clear })}
-							<Badge
-								style={`background-color: ${item.color}`}
-								class="text-black"
-								dismissable
-								params={{ duration: 100 }}
-								onclose={clear}
-							>
-								{item.name}
-							</Badge>
-						{/snippet}
-					</MultiSelect>
-					<MultiSelect
-						items={filterableCategories ?? []}
-						bind:value={filteredCategories}
-						size="lg"
-						class="ml-2 h-1 min-w-48"
-						placeholder="Kategorien"
-					>
-						{#snippet children({ item, clear })}
-							<Badge
-								style={`background-color: ${item.color}`}
-								class="text-black"
-								dismissable
-								params={{ duration: 100 }}
-								onclose={clear}
-							>
-								{item.name}
-							</Badge>
-						{/snippet}
-					</MultiSelect>
+					{@render optionFilter(
+						'Konten',
+						filterableAccounts ?? [],
+						filteredAccounts,
+						(id) => (filteredAccounts = toggleOption(filteredAccounts, id))
+					)}
+					{@render optionFilter(
+						'Kategorien',
+						filterableCategories ?? [],
+						filteredCategories,
+						(id) => (filteredCategories = toggleOption(filteredCategories, id))
+					)}
 					<Button size="lg" color="alternative">Filter<FilterSolid class="ml-2 h-3 w-3 " /></Button>
 					<Dropdown class="w-48 space-y-2 p-3 text-sm">
 						<h6 class="mb-3 text-sm font-medium text-gray-900 dark:text-white">Zustand</h6>
