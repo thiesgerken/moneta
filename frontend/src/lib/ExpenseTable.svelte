@@ -78,20 +78,20 @@
 	// Read once rather than tracked: this is how the rest of the app hands over -- "12 Ausgaben
 	// brauchen Prüfung" has to land on those twelve, a treemap tile on the expenses behind it.
 	// Once here the filters are the reader's again, so a later edit must not be reset by the url.
-	if (page.url.searchParams.has('neu')) showNewExpenseModal = true;
-	if (page.url.searchParams.has('pruefen')) {
+	if (page.url.searchParams.has('new')) showNewExpenseModal = true;
+	if (page.url.searchParams.has('review')) {
 		showTaxRelevant = false;
 		showExtraordinary = false;
 		showNormal = false;
 	}
 
-	const category = page.url.searchParams.get('kategorie');
+	const category = page.url.searchParams.get('category');
 	if (category) filteredCategories = [category];
 
 	// A period the caller worked out; the analysis pages snap theirs to whole months, and a
 	// list that quietly used different ends would not add up to the chart it came from.
-	const from = page.url.searchParams.get('von');
-	const to = page.url.searchParams.get('bis');
+	const from = page.url.searchParams.get('from');
+	const to = page.url.searchParams.get('to');
 	if (from || to) {
 		filterDateRange = {
 			from: from ? new Date(from) : undefined,

@@ -10,9 +10,23 @@
 	import PrepaymentsView from '$lib/analysis/PrepaymentsView.svelte';
 	import StatementView from '$lib/analysis/StatementView.svelte';
 
+	/// The tabs, in the order they are shown. The slug is what `?tab=` carries and is English
+	/// like the rest of the code; only `title` is what a reader sees.
+	const TABS = [
+		{ slug: 'wealth', title: 'Vermögen' },
+		{ slug: 'months', title: 'Monate' },
+		{ slug: 'categories', title: 'Kategorien' },
+		{ slug: 'prepayments', title: 'Vorauszahlungen' },
+		{ slug: 'statement', title: 'Kontoauszug' },
+		{ slug: 'calendar', title: 'Kalender' },
+		// Last, and no longer what the page opens on: the feed is a log, and the start page now
+		// carries the part of it worth arriving at.
+		{ slug: 'activity', title: 'Aktivität' }
+	];
+
 	/// Which tab a link may ask for. Read once: from here on the tabs own their own state, and
 	/// re-deriving this would fight them for it.
-	const initial = page.url.searchParams.get('tab') ?? 'vermoegen';
+	const initial = page.url.searchParams.get('tab') ?? TABS[0].slug;
 
 	/// So that the tab survives a reload and can be linked to -- the start page sends "alle
 	/// anzeigen" straight to the feed. `replaceState` rather than `goto`, since switching tabs
@@ -35,44 +49,24 @@
 		class="flex-nowrap overflow-x-auto whitespace-nowrap"
 		classes={{ content: 'mt-4 rounded-lg bg-gray-50 p-2 sm:p-4 dark:bg-gray-800' }}
 	>
-		<TabItem open={initial === 'vermoegen'} onclick={() => remember('vermoegen')} title="Vermögen">
-			<WealthView />
-		</TabItem>
-		<TabItem open={initial === 'monate'} onclick={() => remember('monate')} title="Monate">
-			<OverviewsView />
-		</TabItem>
-		<TabItem
-			open={initial === 'kategorien'}
-			onclick={() => remember('kategorien')}
-			title="Kategorien"
-		>
-			<CategoriesView />
-		</TabItem>
-		<TabItem
-			open={initial === 'vorauszahlungen'}
-			onclick={() => remember('vorauszahlungen')}
-			title="Vorauszahlungen"
-		>
-			<PrepaymentsView />
-		</TabItem>
-		<TabItem
-			open={initial === 'kontoauszug'}
-			onclick={() => remember('kontoauszug')}
-			title="Kontoauszug"
-		>
-			<StatementView />
-		</TabItem>
-		<TabItem open={initial === 'kalender'} onclick={() => remember('kalender')} title="Kalender">
-			<CalendarView />
-		</TabItem>
-		<!-- Last, and no longer what the page opens on: the feed is a log, and the start page
-		     now carries the part of it worth arriving at. -->
-		<TabItem
-			open={initial === 'aktivitaet'}
-			onclick={() => remember('aktivitaet')}
-			title="Aktivität"
-		>
-			<ExpenseChangelog />
-		</TabItem>
+		{#each TABS as tab (tab.slug)}
+			<TabItem open={initial === tab.slug} onclick={() => remember(tab.slug)} title={tab.title}>
+				{#if tab.slug === 'wealth'}
+					<WealthView />
+				{:else if tab.slug === 'months'}
+					<OverviewsView />
+				{:else if tab.slug === 'categories'}
+					<CategoriesView />
+				{:else if tab.slug === 'prepayments'}
+					<PrepaymentsView />
+				{:else if tab.slug === 'statement'}
+					<StatementView />
+				{:else if tab.slug === 'calendar'}
+					<CalendarView />
+				{:else if tab.slug === 'activity'}
+					<ExpenseChangelog />
+				{/if}
+			</TabItem>
+		{/each}
 	</Tabs>
 </div>

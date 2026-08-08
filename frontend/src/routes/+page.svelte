@@ -358,7 +358,7 @@
 			     them show up when there is nothing to say -->
 			<div class="space-y-2">
 				<a
-					href="{resolve('/expenses')}?neu"
+					href="{resolve('/expenses')}?new"
 					class="hover:border-primary-400 flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
 				>
 					<span
@@ -377,7 +377,7 @@
 
 				{#if changeCount > 0}
 					<a
-						href="{resolve('/analysis')}?tab=aktivitaet"
+						href="{resolve('/analysis')}?tab=activity"
 						class="hover:border-primary-400 flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
 					>
 						<span
@@ -400,7 +400,7 @@
 
 				{#if reviewCount > 0}
 					<a
-						href="{resolve('/expenses')}?pruefen"
+						href="{resolve('/expenses')}?review"
 						class="hover:border-primary-400 flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800"
 					>
 						<span
@@ -491,7 +491,7 @@
 						{sinceLastVisit ? 'Seit du das letzte Mal hier warst' : 'Zuletzt passiert'}
 					</h2>
 					<a
-						href="{resolve('/analysis')}?tab=aktivitaet"
+						href="{resolve('/analysis')}?tab=activity"
 						class="text-primary-600 dark:text-primary-400 shrink-0 text-sm hover:underline"
 					>
 						alle anzeigen

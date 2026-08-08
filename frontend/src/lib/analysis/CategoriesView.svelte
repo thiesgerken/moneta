@@ -151,9 +151,9 @@
 		const start = new Date(from);
 		const end = new Date(to);
 		const params = new URLSearchParams({
-			kategorie: id.toString(),
-			von: isoDate(new Date(start.getFullYear(), start.getMonth(), 1)),
-			bis: isoDate(new Date(end.getFullYear(), end.getMonth() + 1, 0))
+			category: id.toString(),
+			from: isoDate(new Date(start.getFullYear(), start.getMonth(), 1)),
+			to: isoDate(new Date(end.getFullYear(), end.getMonth() + 1, 0))
 		});
 
 		// the rule wants a literal resolve() call, which cannot carry a query string

@@ -38,7 +38,10 @@
 <Navbar fluid class="px-4 sm:px-8">
 	<NavBrand href="/">
 		<img src="/logo.svg" class="me-2.5 h-7 sm:h-8" alt="" />
-		<span class="self-center text-xl font-semibold whitespace-nowrap dark:text-white">Moneta</span>
+		<!-- the wordmark is the one place the display face is the point rather than a heading -->
+		<span class="font-display self-center text-2xl font-semibold whitespace-nowrap dark:text-white">
+			Moneta
+		</span>
 	</NavBrand>
 	<!-- The open state is ours rather than flowbite's: its hamburger and its list talk to each
 	     other through a context the two never share here, so the menu stayed shut on phones. -->

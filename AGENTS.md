@@ -101,7 +101,7 @@ declares support.
 
 **A rendered id is the upstream id.** A reader only ever sees their own rendering, so the view
 returns the same value for both. What `graphql/rules.rs` still has to check is that the caller
-can *see* the expense a rule points at — a rule pointing at somebody else's expense would copy
+can _see_ the expense a rule points at — a rule pointing at somebody else's expense would copy
 money they cannot read.
 
 **A modal inside a `<TabItem>` cannot close itself.** Writing to a `bind:open` prop from a
@@ -114,7 +114,7 @@ text between provisional and final bookings. Widening the comparison would dupli
 expenses; narrowing it would drop real payments. There are tests for both directions.
 
 **`moneta import` reads the export on stdin and matches users by name**, so every user in the
-export must already exist in moneta or it panics. `--clear` wipes everything *except* users.
+export must already exist in moneta or it panics. `--clear` wipes everything _except_ users.
 
 **`GRAPHQL_API_URL` is vestigial.** It fed the server-side houdini client, which no longer
 exists — the request url now comes from `houdini.config.js` and is relative. It is still set
@@ -147,7 +147,15 @@ data is therefore client-side only; there is no SSR of query results.
 
 - Indentation: rustfmt defaults in the backend, tabs in the frontend (`.prettierrc` sets
   `useTabs`). Just run the formatters.
-- Comments explain *why*, not what changed. No changelog narration in source.
+- Comments explain _why_, not what changed. No changelog narration in source.
+- **The UI is German; everything else is English.** Only what a reader sees on screen is
+  German — labels, headings, messages, empty states. Identifiers, comments, commit messages,
+  GraphQL field names, URL paths and query parameters are English: `?tab=activity`, not
+  `?tab=aktivitaet`. A url is part of the interface a developer works with, not part of the
+  copy. The exception is a value that _is_ the German text, such as a downloaded file's name.
+- The frontend has a look, written down in [frontend/DESIGN.md](frontend/DESIGN.md): two
+  typefaces and what each is for, what every colour means, how dates and money are written.
+  Read it before adding a screen.
 - Commit messages: imperative subject, body explaining the reasoning behind non-obvious
   choices. Don't restate the diff.
 - Ask before switching branches or force-pushing.
