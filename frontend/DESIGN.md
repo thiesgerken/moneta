@@ -48,6 +48,12 @@ dark:text-green-400` and `text-red-600 dark:text-red-400`. `deltaColor()` in
 - **Categories and accounts** carry their own colour from the database. `categoryColor()` falls
   back to a fixed palette hashed from the name, so a category without one at least keeps the
   same colour between renders.
+- **Text on one of those colours is never a fixed colour.** The picker allows anything,
+  near-black included, so anything tinted takes its text from `readableTextOn()` in
+  `expense_utils.ts` — through `tint()` where there is one colour, and through
+  `makeStripedBackground()` where a cell carries several, which follows the widest stripe.
+  `text-black` beside a background that came from the database is the bug those two exist to
+  prevent.
 - **Availability** has no colour of its own, so it gets a warm-to-cool ramp along the liquidity
   order — see `analysis/availability.ts`.
 

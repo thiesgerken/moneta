@@ -27,7 +27,7 @@
 		ExclamationCircleOutline,
 		FilterSolid
 	} from 'flowbite-svelte-icons';
-	import { accountSorter } from './expense_utils';
+	import { accountSorter, tint } from './expense_utils';
 	import BalanceModal from './BalanceModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
 	import QueryError from './QueryError.svelte';
@@ -322,8 +322,7 @@
 					>
 						{#snippet children({ item, clear })}
 							<Badge
-								style={`background-color: ${item.color}`}
-								class="text-black"
+								style={tint(item.color)}
 								dismissable
 								params={{ duration: 100 }}
 								onclose={clear}
@@ -380,8 +379,8 @@
 						})}
 					</TableBodyCell>
 					<TableBodyCell
-						class="w-full max-w-0 truncate px-2 py-3 text-black md:px-4"
-						style={balance.account.color ? `background-color: ${balance.account.color}` : undefined}
+						class="w-full max-w-0 truncate px-2 py-3 md:px-4"
+						style={tint(balance.account.color)}
 					>
 						{#if balance.account.owner.name != $basicStore.data?.users.me.name}
 							{balance.account.owner.firstName} / {balance.account.name}
@@ -423,12 +422,7 @@
 								{/if}
 								<div>
 									<b>Konto:</b>
-									<span
-										class="rounded-md px-1.5 py-0.5"
-										style={balance.account.color
-											? `background-color: ${balance.account.color}`
-											: undefined}
-									>
+									<span class="rounded-md px-1.5 py-0.5" style={tint(balance.account.color)}>
 										{#if balance.account.owner.name != $basicStore.data?.users.me.name}
 											{balance.account.owner.firstName} / {balance.account.name}
 										{:else}

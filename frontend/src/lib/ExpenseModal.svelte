@@ -12,7 +12,7 @@
 
 	import { graphql } from '$houdini';
 	import type { ExpenseInput } from '$houdini/graphql/inputs';
-	import { formatAccount } from './expense_utils';
+	import { formatAccount, tint } from './expense_utils';
 	import {
 		CircleMinusOutline,
 		CirclePlusOutline,
@@ -559,9 +559,7 @@
 												)
 											}))}
 											bind:value={tx.accountId}
-											style={tx.accountId
-												? `background-color: ${accounts.find((a) => a.id === tx.accountId)?.color}`
-												: undefined}
+											style={tint(accounts.find((a) => a.id === tx.accountId)?.color)}
 											selectClass={transactionErrors[i]?.accountId
 												? 'text-red-700 border-red-700 bg-red-100'
 												: undefined}
@@ -686,9 +684,7 @@
 												)}
 											bind:value={cat.categoryId}
 											placeholder="Kategorie"
-											style={cat.categoryId
-												? `background-color: ${categories.find((c) => c.id === cat.categoryId)?.color}`
-												: undefined}
+											style={tint(categories.find((c) => c.id === cat.categoryId)?.color)}
 											selectClass={categoryErrors[i]?.categoryId
 												? 'text-red-700 border-red-700 bg-red-100'
 												: undefined}

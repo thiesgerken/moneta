@@ -111,7 +111,54 @@ export function makeCategoryColor(
 	return makeStripedBackground(segments);
 }
 
+/// One sRGB channel, undone from the display gamma, as the luminance formula wants it.
+function linear(channel: number): number {
+	const c = channel / 255;
+	return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
+/// Text that can be read on `color`.
+///
+/// Account and category colours come out of a picker, so nothing stops one being near-black --
+/// and the cells tinted with them wrote their name in black regardless, which on a dark purple
+/// was a black bar with no text in it.
+///
+/// The threshold is 0.179 rather than a midpoint: white text and black text have equal contrast
+/// against a background of exactly that luminance, so it is the point where the better of the
+/// two changes over. Half-way would call the mid greens and purples this palette is full of
+/// light and leave them barely legible.
+export function readableTextOn(color: string): string {
+	const hex = color.replace('#', '');
+	const full =
+		hex.length < 6
+			? hex
+					.slice(0, 3)
+					.split('')
+					.map((c) => c + c)
+					.join('')
+			: hex.slice(0, 6);
+
+	const [r, g, b] = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+	// an unparseable colour is nobody's idea of dark; leave the page's own text colour alone
+	if ([r, g, b].some(Number.isNaN)) return 'inherit';
+
+	const luminance = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+	return luminance > 0.179 ? '#000' : '#fff';
+}
+
+/// The whole inline style for something drawn in an account's or a category's own colour.
+///
+/// Text colour belongs with the tint rather than with the element: every caller needs both, and
+/// the ones that hardcoded `text-black` are exactly the ones that went unreadable.
+export function tint(color: string | null | undefined): string | undefined {
+	return color ? `background-color: ${color}; color: ${readableTextOn(color)};` : undefined;
+}
+
 export function makeStripedBackground(segments: { color: string; percentage: number }[]) {
+	// An empty list used to produce `linear-gradient(to right, )`, which is not a gradient and
+	// which the browser therefore dropped along with the rest of the declaration.
+	if (segments.length === 0) return undefined;
+
 	segments.sort((a, b) => b.percentage - a.percentage);
 	let s = 'background: linear-gradient(to right, ';
 
@@ -125,7 +172,9 @@ export function makeStripedBackground(segments: { color: string; percentage: num
 		sum += segments[i].percentage;
 	}
 
-	return s + ');';
+	// One piece of text over several stripes, so it follows the widest one -- which is the one
+	// most of the text sits on, and for the single-colour case is the only one there is.
+	return `${s});color: ${readableTextOn(segments[0].color)};`;
 }
 
 export interface SortableAccount {
