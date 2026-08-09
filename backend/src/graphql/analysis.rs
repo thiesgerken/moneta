@@ -10,6 +10,7 @@ use std::collections::HashMap;
 
 use uuid::Uuid;
 
+use crate::graphql::cache::{bucket, cached};
 use crate::graphql::root::{Context, require_user};
 use crate::models::AccountAvailability;
 use crate::models::rendering::{RenderedBalance, RenderedExpense};
@@ -352,13 +353,20 @@ impl AnalysisQuery {
         date: Option<DateTime<Utc>>,
     ) -> FieldResult<Vec<ComputedBalance>> {
         let date = date.unwrap_or_else(Utc::now);
-        require_user(context).await?;
+        let user_id = require_user(context).await?;
 
-        Ok(compute(context, date, None)
-            .await?
-            .into_iter()
-            .sorted_by_key(|b| b.account.data.name.clone())
-            .collect())
+        cached(
+            &context.cache,
+            format!("balances:{user_id}:{}", bucket(date)),
+            async {
+                Ok(compute(context, date, None)
+                    .await?
+                    .into_iter()
+                    .sorted_by_key(|b| b.account.data.name.clone())
+                    .collect())
+            },
+        )
+        .await
     }
 
     /// The same computation as [`AnalysisQuery::balances`], repeated across a range.
@@ -372,63 +380,19 @@ impl AnalysisQuery {
         to: DateTime<Utc>,
         step_days: Option<i32>,
     ) -> FieldResult<History> {
-        require_user(context).await?;
+        let user_id = require_user(context).await?;
+        let step_days = step_days.unwrap_or(30);
 
-        let dates = sample_dates(from, to, step_days.unwrap_or(30))?;
-        let rows = simulate(context, &dates, None).await?;
-
-        let accounts = context
-            .account_loader
-            .load_many(rows.iter().map(|r| r.account_id).unique().collect())
-            .await;
-
-        let mut by_account: HashMap<Uuid, Vec<f64>> = HashMap::new();
-        for row in &rows {
-            let amounts = by_account
-                .entry(row.account_id)
-                .or_insert_with(|| vec![0.0; dates.len()]);
-            // WITH ORDINALITY counts from one
-            amounts[row.sample_idx as usize - 1] = row.amount;
-        }
-
-        let mut by_availability: HashMap<AccountAvailability, Vec<f64>> = HashMap::new();
-        let mut series = Vec::with_capacity(by_account.len());
-        for (account_id, amounts) in by_account {
-            let account = accounts
-                .get(&account_id)
-                .ok_or_else(|| format!("Account {account_id} does not exist"))?;
-
-            let bucket = by_availability
-                .entry(account.availability)
-                .or_insert_with(|| vec![0.0; dates.len()]);
-            for (total, amount) in bucket.iter_mut().zip(&amounts) {
-                *total += amount;
-            }
-
-            series.push(AccountSeries {
-                account: GraphQLAccount::new(account.clone()),
-                amounts,
-            });
-        }
-
-        series.sort_by(|a, b| a.account.data.name.cmp(&b.account.data.name));
-
-        Ok(History {
-            dates,
-            by_account: series,
-            // liquid first, so a stack reads from the money you can spend today upwards
-            by_availability: AccountAvailability::ORDERED
-                .iter()
-                .filter_map(|availability| {
-                    by_availability
-                        .remove(availability)
-                        .map(|amounts| AvailabilitySeries {
-                            availability: *availability,
-                            amounts,
-                        })
-                })
-                .collect(),
-        })
+        cached(
+            &context.cache,
+            format!(
+                "history:{user_id}:{}:{}:{step_days}",
+                bucket(from),
+                bucket(to)
+            ),
+            history_uncached(context, from, to, step_days),
+        )
+        .await
     }
 
     /// Expenses whose value is not yet fully consumed at `at`.
@@ -494,176 +458,12 @@ impl AnalysisQuery {
     ) -> FieldResult<Overviews> {
         let user_id = require_user(context).await?;
 
-        // one more boundary than there are months: month i runs [starts[i], starts[i + 1])
-        let starts = month_starts(from, to)?;
-        let (range_from, range_to) = (starts[0], starts[starts.len() - 1]);
-
-        let simulated = simulate(context, &starts, None).await?;
-
-        // see `compute`: the connection goes back before the loaders take one of their own
-        let (month_rows, category_rows, expense_rows) = {
-            let conn = &mut context.conn().await?;
-
-            let month_rows: Vec<MonthTotalRow> = diesel::sql_query(MONTH_TOTALS)
-                .bind::<diesel::sql_types::Uuid, _>(user_id)
-                .bind::<Timestamptz, _>(range_from)
-                .bind::<Timestamptz, _>(range_to)
-                .load(conn)
-                .await?;
-
-            let category_rows: Vec<CategoryTotalRow> = diesel::sql_query(CATEGORY_TOTALS)
-                .bind::<diesel::sql_types::Uuid, _>(user_id)
-                .bind::<Timestamptz, _>(range_from)
-                .bind::<Timestamptz, _>(range_to)
-                .load(conn)
-                .await?;
-
-            let expense_rows: Vec<CategoryExpenseRow> = diesel::sql_query(CATEGORY_EXPENSES)
-                .bind::<diesel::sql_types::Uuid, _>(user_id)
-                .bind::<Timestamptz, _>(range_from)
-                .bind::<Timestamptz, _>(range_to)
-                .bind::<Integer, _>(TREEMAP_EXPENSES_PER_CATEGORY)
-                .load(conn)
-                .await?;
-
-            (month_rows, category_rows, expense_rows)
-        };
-
-        let accounts = context
-            .account_loader
-            .load_many(simulated.iter().map(|r| r.account_id).unique().collect())
-            .await;
-        let categories = context
-            .category_loader
-            .load_many(
-                category_rows
-                    .iter()
-                    .filter_map(|r| r.category_id)
-                    .unique()
-                    .collect(),
-            )
-            .await;
-
-        // (sample index, account) -> the balance there, so a month can look up both its ends
-        let mut balances: HashMap<(usize, Uuid), f64> = HashMap::new();
-        for row in &simulated {
-            balances.insert((row.sample_idx as usize - 1, row.account_id), row.amount);
-        }
-
-        let mut months = Vec::with_capacity(starts.len() - 1);
-        for (index, month) in starts.iter().take(starts.len() - 1).enumerate() {
-            let mut by_account = Vec::new();
-
-            // The roll-up row, whose count is distinct across the month rather than within one
-            // account -- summing the per-account counts would count an expense that books
-            // against two of your own accounts twice.
-            let rolled_up = month_rows
-                .iter()
-                .find(|r| r.month == *month && r.account_id.is_none());
-            let income = rolled_up.map_or(0.0, |t| t.income);
-            let expenses = rolled_up.map_or(0.0, |t| t.expenses);
-            let expense_count = rolled_up.map_or(0, |t| t.expense_count);
-
-            for (account_id, account) in accounts.iter().sorted_by_key(|(_, a)| a.name.clone()) {
-                let totals = month_rows
-                    .iter()
-                    .find(|r| r.month == *month && r.account_id == Some(*account_id));
-
-                let start_amount = *balances.get(&(index, *account_id)).unwrap_or(&0.0);
-                let end_amount = *balances.get(&(index + 1, *account_id)).unwrap_or(&0.0);
-                let moved = totals.map_or(0.0, |t| t.income + t.expenses);
-
-                by_account.push(AccountOverview {
-                    account: GraphQLAccount::new(account.clone()),
-                    start_amount,
-                    end_amount,
-                    integrated_end_amount: start_amount + moved,
-                    income: totals.map_or(0.0, |t| t.income),
-                    expenses: totals.map_or(0.0, |t| t.expenses),
-                    expense_count: totals.map_or(0, |t| t.expense_count) as i32,
-                });
-            }
-
-            let start_total: f64 = by_account.iter().map(|a| a.start_amount).sum();
-            let end_total: f64 = by_account.iter().map(|a| a.end_amount).sum();
-
-            months.push(MonthOverview {
-                month: *month,
-                start_total,
-                end_total,
-                integrated_end_total: start_total + income + expenses,
-                income,
-                expenses,
-                expense_count: expense_count as i32,
-                by_account,
-                by_category: category_rows
-                    .iter()
-                    .filter(|r| r.month == *month)
-                    .map(|r| CategoryTotal {
-                        category: r
-                            .category_id
-                            .and_then(|id| categories.get(&id))
-                            .map(|c| GraphQLCategory::new(c.clone())),
-                        income: r.income,
-                        expenses: r.expenses,
-                    })
-                    .sorted_by(|a, b| a.expenses.total_cmp(&b.expenses))
-                    .collect(),
-            });
-        }
-
-        // whole range at once for the treemap, which is not a sum of the monthly ones: the
-        // biggest expenses of a year are not the biggest of each of its months
-        let mut by_category: Vec<CategoryBreakdown> = category_rows
-            .iter()
-            .map(|r| r.category_id)
-            .unique()
-            .map(|category_id| {
-                let (income, expenses) = category_rows
-                    .iter()
-                    .filter(|r| r.category_id == category_id)
-                    .fold((0.0, 0.0), |(i, e), r| (i + r.income, e + r.expenses));
-
-                let biggest: Vec<CategoryExpense> = expense_rows
-                    .iter()
-                    .filter(|r| r.category_id == category_id)
-                    .map(|r| CategoryExpense {
-                        expense_id: r.expense_id,
-                        title: r.title.clone(),
-                        amount: r.amount,
-                    })
-                    .collect();
-
-                CategoryBreakdown {
-                    category: category_id
-                        .and_then(|id| categories.get(&id))
-                        .map(|c| GraphQLCategory::new(c.clone())),
-                    income,
-                    expenses,
-                    rest_income: income
-                        - biggest
-                            .iter()
-                            .filter(|e| e.amount > 0.0)
-                            .map(|e| e.amount)
-                            .sum::<f64>(),
-                    rest_expenses: expenses
-                        - biggest
-                            .iter()
-                            .filter(|e| e.amount < 0.0)
-                            .map(|e| e.amount)
-                            .sum::<f64>(),
-                    biggest,
-                }
-            })
-            .collect();
-
-        // biggest spender first, which is the order a treemap wants to lay out in
-        by_category.sort_by(|a, b| a.expenses.total_cmp(&b.expenses));
-
-        Ok(Overviews {
-            months,
-            by_category,
-        })
+        cached(
+            &context.cache,
+            format!("overviews:{user_id}:{}:{}", bucket(from), bucket(to)),
+            overviews_uncached(context, user_id, from, to),
+        )
+        .await
     }
 
     /// One account's ledger over a range, as a bank statement reads it.
@@ -722,6 +522,251 @@ impl AnalysisQuery {
             })
             .collect()
     }
+}
+
+/// The body of [`AnalysisQuery::overviews`], outside the resolver so the cache can hold the
+/// future without running it.
+async fn overviews_uncached(
+    context: &Context,
+    user_id: Uuid,
+    from: DateTime<Utc>,
+    to: DateTime<Utc>,
+) -> FieldResult<Overviews> {
+    // one more boundary than there are months: month i runs [starts[i], starts[i + 1])
+    let starts = month_starts(from, to)?;
+    let (range_from, range_to) = (starts[0], starts[starts.len() - 1]);
+
+    let simulated = simulate(context, &starts, None).await?;
+
+    // see `compute`: the connection goes back before the loaders take one of their own
+    let (month_rows, category_rows, expense_rows) = {
+        let conn = &mut context.conn().await?;
+
+        let month_rows: Vec<MonthTotalRow> = diesel::sql_query(MONTH_TOTALS)
+            .bind::<diesel::sql_types::Uuid, _>(user_id)
+            .bind::<Timestamptz, _>(range_from)
+            .bind::<Timestamptz, _>(range_to)
+            .load(conn)
+            .await?;
+
+        let category_rows: Vec<CategoryTotalRow> = diesel::sql_query(CATEGORY_TOTALS)
+            .bind::<diesel::sql_types::Uuid, _>(user_id)
+            .bind::<Timestamptz, _>(range_from)
+            .bind::<Timestamptz, _>(range_to)
+            .load(conn)
+            .await?;
+
+        let expense_rows: Vec<CategoryExpenseRow> = diesel::sql_query(CATEGORY_EXPENSES)
+            .bind::<diesel::sql_types::Uuid, _>(user_id)
+            .bind::<Timestamptz, _>(range_from)
+            .bind::<Timestamptz, _>(range_to)
+            .bind::<Integer, _>(TREEMAP_EXPENSES_PER_CATEGORY)
+            .load(conn)
+            .await?;
+
+        (month_rows, category_rows, expense_rows)
+    };
+
+    let accounts = context
+        .account_loader
+        .load_many(simulated.iter().map(|r| r.account_id).unique().collect())
+        .await;
+    let categories = context
+        .category_loader
+        .load_many(
+            category_rows
+                .iter()
+                .filter_map(|r| r.category_id)
+                .unique()
+                .collect(),
+        )
+        .await;
+
+    // (sample index, account) -> the balance there, so a month can look up both its ends
+    let mut balances: HashMap<(usize, Uuid), f64> = HashMap::new();
+    for row in &simulated {
+        balances.insert((row.sample_idx as usize - 1, row.account_id), row.amount);
+    }
+
+    let mut months = Vec::with_capacity(starts.len() - 1);
+    for (index, month) in starts.iter().take(starts.len() - 1).enumerate() {
+        let mut by_account = Vec::new();
+
+        // The roll-up row, whose count is distinct across the month rather than within one
+        // account -- summing the per-account counts would count an expense that books
+        // against two of your own accounts twice.
+        let rolled_up = month_rows
+            .iter()
+            .find(|r| r.month == *month && r.account_id.is_none());
+        let income = rolled_up.map_or(0.0, |t| t.income);
+        let expenses = rolled_up.map_or(0.0, |t| t.expenses);
+        let expense_count = rolled_up.map_or(0, |t| t.expense_count);
+
+        for (account_id, account) in accounts.iter().sorted_by_key(|(_, a)| a.name.clone()) {
+            let totals = month_rows
+                .iter()
+                .find(|r| r.month == *month && r.account_id == Some(*account_id));
+
+            let start_amount = *balances.get(&(index, *account_id)).unwrap_or(&0.0);
+            let end_amount = *balances.get(&(index + 1, *account_id)).unwrap_or(&0.0);
+            let moved = totals.map_or(0.0, |t| t.income + t.expenses);
+
+            by_account.push(AccountOverview {
+                account: GraphQLAccount::new(account.clone()),
+                start_amount,
+                end_amount,
+                integrated_end_amount: start_amount + moved,
+                income: totals.map_or(0.0, |t| t.income),
+                expenses: totals.map_or(0.0, |t| t.expenses),
+                expense_count: totals.map_or(0, |t| t.expense_count) as i32,
+            });
+        }
+
+        let start_total: f64 = by_account.iter().map(|a| a.start_amount).sum();
+        let end_total: f64 = by_account.iter().map(|a| a.end_amount).sum();
+
+        months.push(MonthOverview {
+            month: *month,
+            start_total,
+            end_total,
+            integrated_end_total: start_total + income + expenses,
+            income,
+            expenses,
+            expense_count: expense_count as i32,
+            by_account,
+            by_category: category_rows
+                .iter()
+                .filter(|r| r.month == *month)
+                .map(|r| CategoryTotal {
+                    category: r
+                        .category_id
+                        .and_then(|id| categories.get(&id))
+                        .map(|c| GraphQLCategory::new(c.clone())),
+                    income: r.income,
+                    expenses: r.expenses,
+                })
+                .sorted_by(|a, b| a.expenses.total_cmp(&b.expenses))
+                .collect(),
+        });
+    }
+
+    // whole range at once for the treemap, which is not a sum of the monthly ones: the
+    // biggest expenses of a year are not the biggest of each of its months
+    let mut by_category: Vec<CategoryBreakdown> = category_rows
+        .iter()
+        .map(|r| r.category_id)
+        .unique()
+        .map(|category_id| {
+            let (income, expenses) = category_rows
+                .iter()
+                .filter(|r| r.category_id == category_id)
+                .fold((0.0, 0.0), |(i, e), r| (i + r.income, e + r.expenses));
+
+            let biggest: Vec<CategoryExpense> = expense_rows
+                .iter()
+                .filter(|r| r.category_id == category_id)
+                .map(|r| CategoryExpense {
+                    expense_id: r.expense_id,
+                    title: r.title.clone(),
+                    amount: r.amount,
+                })
+                .collect();
+
+            CategoryBreakdown {
+                category: category_id
+                    .and_then(|id| categories.get(&id))
+                    .map(|c| GraphQLCategory::new(c.clone())),
+                income,
+                expenses,
+                rest_income: income
+                    - biggest
+                        .iter()
+                        .filter(|e| e.amount > 0.0)
+                        .map(|e| e.amount)
+                        .sum::<f64>(),
+                rest_expenses: expenses
+                    - biggest
+                        .iter()
+                        .filter(|e| e.amount < 0.0)
+                        .map(|e| e.amount)
+                        .sum::<f64>(),
+                biggest,
+            }
+        })
+        .collect();
+
+    // biggest spender first, which is the order a treemap wants to lay out in
+    by_category.sort_by(|a, b| a.expenses.total_cmp(&b.expenses));
+
+    Ok(Overviews {
+        months,
+        by_category,
+    })
+}
+
+/// The body of [`AnalysisQuery::history`], outside the resolver so the cache can hold the
+/// future without running it.
+async fn history_uncached(
+    context: &Context,
+    from: DateTime<Utc>,
+    to: DateTime<Utc>,
+    step_days: i32,
+) -> FieldResult<History> {
+    let dates = sample_dates(from, to, step_days)?;
+    let rows = simulate(context, &dates, None).await?;
+
+    let accounts = context
+        .account_loader
+        .load_many(rows.iter().map(|r| r.account_id).unique().collect())
+        .await;
+
+    let mut by_account: HashMap<Uuid, Vec<f64>> = HashMap::new();
+    for row in &rows {
+        let amounts = by_account
+            .entry(row.account_id)
+            .or_insert_with(|| vec![0.0; dates.len()]);
+        // WITH ORDINALITY counts from one
+        amounts[row.sample_idx as usize - 1] = row.amount;
+    }
+
+    let mut by_availability: HashMap<AccountAvailability, Vec<f64>> = HashMap::new();
+    let mut series = Vec::with_capacity(by_account.len());
+    for (account_id, amounts) in by_account {
+        let account = accounts
+            .get(&account_id)
+            .ok_or_else(|| format!("Account {account_id} does not exist"))?;
+
+        let bucket = by_availability
+            .entry(account.availability)
+            .or_insert_with(|| vec![0.0; dates.len()]);
+        for (total, amount) in bucket.iter_mut().zip(&amounts) {
+            *total += amount;
+        }
+
+        series.push(AccountSeries {
+            account: GraphQLAccount::new(account.clone()),
+            amounts,
+        });
+    }
+
+    series.sort_by(|a, b| a.account.data.name.cmp(&b.account.data.name));
+
+    Ok(History {
+        dates,
+        by_account: series,
+        // liquid first, so a stack reads from the money you can spend today upwards
+        by_availability: AccountAvailability::ORDERED
+            .iter()
+            .filter_map(|availability| {
+                by_availability
+                    .remove(availability)
+                    .map(|amounts| AvailabilitySeries {
+                        availability: *availability,
+                        amounts,
+                    })
+            })
+            .collect(),
+    })
 }
 
 /// The first of every month the range touches, plus the first of the month after it.
