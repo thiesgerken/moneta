@@ -117,7 +117,12 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
 - The bank's own text is **monospace** wherever it is shown in full — reference numbers and
   IBANs are read character by character. It is a column of its own from `lg`.
 - Sorting and filtering are **server-side**, through typed arguments. The header cell that
-  sorts carries the arrow.
+  sorts carries the arrow, and clicking it a third time drops back to the list's default sort —
+  sorting lives in the component rather than in the url, so without that there was no way back
+  to it but a reload. One column at a time; the API takes one `sortBy`.
+- **Column widths are fixed**, not derived from the page being shown. `table-fixed` with a width
+  on every header cell but the one or two that take what is left. Auto layout re-measured on
+  every page turn, so the same list moved its columns as you paged through it.
 - A filtered list says so: `ExpenseTable` renders a "Gefiltert nach …" line with one removable
   chip per active filter. A list that arrives pre-filtered from somewhere else must never look
   like the whole list, only shorter.

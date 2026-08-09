@@ -51,7 +51,11 @@
 	let itemsPerPage = $derived(15);
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
-	let sortBy: { field: string; direction: number } = $state({ field: 'status', direction: -1 });
+	/// Unbestätigt and unvollständig first, which is the list somebody opens this page to work
+	/// through. A third click on a header comes back here.
+	const DEFAULT_SORT = { field: 'status', direction: -1 };
+
+	let sortBy: { field: string; direction: number } = $state({ ...DEFAULT_SORT });
 
 	/// only consulted below `md`, where the filters are collapsed
 	let filtersOpen = $state(false);
@@ -425,8 +429,13 @@
 		else expandedRows = [...expandedRows, id];
 	}
 
+	/// Descending, ascending, off. The third state is what there was no way back to: sorting
+	/// lives in the component rather than in the url, so a header clicked by accident could only
+	/// be undone by reloading the page.
 	function sortByField(field: string) {
-		sortBy = { field, direction: sortBy.field === field ? -sortBy.direction : -1 };
+		if (sortBy.field !== field) sortBy = { field, direction: -1 };
+		else if (sortBy.direction === -1) sortBy = { field, direction: 1 };
+		else sortBy = { ...DEFAULT_SORT };
 	}
 
 	function isSortedBy(field: string) {
@@ -627,7 +636,7 @@
 		placeholder="Suchen"
 		hoverable={true}
 		bind:inputValue={searchTerm}
-		class={tableSearchTableClass}
+		class="{tableSearchTableClass} table-fixed"
 		classes={tableSearchClasses}
 	>
 		{#snippet header()}
@@ -731,7 +740,7 @@
 		     columns on a 390px screen meant scrolling sideways past the date to reach the amount. -->
 		<TableHead>
 			<TableHeadCell
-				class="px-2 py-3 whitespace-nowrap md:px-4"
+				class="w-24 px-2 py-3 whitespace-nowrap md:w-28 md:px-4"
 				scope="col"
 				onclick={() => sortByField('accrualStart')}
 			>
@@ -743,7 +752,7 @@
 				{@render sortIcon('title')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-32"
 				scope="col"
 				onclick={() => sortByField('accounts')}
 			>
@@ -751,7 +760,7 @@
 				{@render sortIcon('accounts')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
 				onclick={() => sortByField('categories')}
 			>
@@ -759,7 +768,7 @@
 				{@render sortIcon('categories')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="px-2 py-3 text-right md:px-4"
+				class="w-24 px-2 py-3 text-right md:w-28 md:px-4"
 				scope="col"
 				onclick={() => sortByField('effectiveAmount')}
 			>
@@ -767,7 +776,7 @@
 				{@render sortIcon('effectiveAmount')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-28"
 				scope="col"
 				onclick={() => sortByField('store')}
 			>
@@ -775,7 +784,7 @@
 				{@render sortIcon('store')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
 				onclick={() => sortByField('description')}
 			>
@@ -783,13 +792,14 @@
 				{@render sortIcon('description')}
 			</TableHeadCell>
 			<!-- What the bank wrote. No sort arrow: the backend names its sortable columns and this
-			     is not one of them. From lg only -- it is the widest thing in the row and the one
-			     you go looking for rather than scan. -->
-			<TableHeadCell class="hidden px-4 py-3 lg:table-cell" scope="col">
+			     is not one of them. From 2xl only, and it shares what the fixed columns leave with
+			     the title: at 1280 the nine columns together are wider than the window, and both of
+			     them end up too narrow to read. Below that the expanded row still has it in full. -->
+			<TableHeadCell class="hidden px-4 py-3 2xl:table-cell" scope="col">
 				Transaktionstext
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
 				onclick={() => sortByField('status')}
 			>
@@ -827,9 +837,7 @@
 					     itself is gone now that the cell holds two lines rather than one string. Zero
 					     max-width plus full width leaves it exactly the space the other columns did
 					     not take. -->
-					<TableBodyCell
-						class="w-full max-w-0 px-2 py-3 whitespace-normal md:w-auto md:max-w-96 md:px-4"
-					>
+					<TableBodyCell class="px-2 py-3 whitespace-normal md:px-4">
 						<!-- wraps rather than truncates on a phone: with five columns gone the title is
 						     most of what identifies the row, and there is no second place to read it -->
 						<!-- wrap-anywhere, not break-words: only `overflow-wrap: anywhere` counts towards
@@ -877,7 +885,7 @@
 					<!-- monospace because it is machine output: the reference numbers and IBANs in it
 					     are read character by character, and a proportional font makes that work -->
 					<TableBodyCell
-						class="hidden w-full max-w-0 truncate px-4 py-3 font-mono text-xs lg:table-cell"
+						class="hidden truncate px-4 py-3 font-mono text-xs 2xl:table-cell"
 						title={transactionText(expense.transactions)}
 					>
 						{transactionText(expense.transactions)}

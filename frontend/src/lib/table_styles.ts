@@ -9,9 +9,11 @@ export const tableSearchClasses = {
 	root: 'bg-white dark:bg-gray-800 relative border border-gray-200 dark:border-gray-700 shadow-none sm:rounded-lg overflow-x-auto',
 	// p-2 on a phone: the page, the section and this bar each used to add their own gutter, which
 	// together took a fifth of the screen before anything was in it
+	// flex-wrap and a narrower search: the filter row is a fixed 600px of buttons, and at a 1280px
+	// window the search claiming half the width pushed the last of them 14px past the card
 	inner:
-		'flex flex-col md:flex-row items-center justify-between space-y-2 md:space-y-0 md:space-x-4 p-2 sm:p-3',
-	search: 'w-full md:w-1/2 relative'
+		'flex flex-col md:flex-row md:flex-wrap items-center justify-between gap-y-2 space-y-2 md:space-y-0 md:space-x-4 p-2 sm:p-3',
+	search: 'w-full md:w-2/5 relative'
 };
 
 export const tableSearchTableClass = 'w-full text-left text-sm';
