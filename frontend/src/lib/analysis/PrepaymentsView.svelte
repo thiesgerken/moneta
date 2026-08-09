@@ -17,6 +17,7 @@
 	import { ANALYSIS_CARD } from './cards';
 	import { shortDate } from './dates';
 	import QueryError from '$lib/QueryError.svelte';
+	import ExpenseDetailModal from '$lib/ExpenseDetailModal.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
@@ -90,6 +91,15 @@
 	const totalPaid = $derived(rows.reduce((sum, p) => sum + p.expense.effectiveAmount, 0));
 	const totalRemaining = $derived(rows.reduce((sum, p) => sum + p.remaining, 0));
 
+	let openExpenseId: string | undefined = $state(undefined);
+
+	async function reload() {
+		await Promise.all([
+			prepaymentStore.fetch({ variables: { at: new Date(prepaymentsState.date) } }),
+			incompleteStore.fetch()
+		]);
+	}
+
 	// when the money actually left, as opposed to the period its value is spread over
 	const paidOn = (p: (typeof rows)[number]) =>
 		p.expense.transactions.reduce<Date | null>(
@@ -97,6 +107,8 @@
 			null
 		);
 </script>
+
+<ExpenseDetailModal bind:expenseId={openExpenseId} onsubmit={reload} />
 
 <div class="space-y-4">
 	<div class="flex flex-wrap items-end gap-4">
@@ -155,9 +167,11 @@
 				<TableBody class="divide-y">
 					{#each rows as p (p.expense.id)}
 						{@const paid = paidOn(p)}
-						<TableBodyRow>
+						<TableBodyRow class="cursor-pointer" onclick={() => (openExpenseId = p.expense.id)}>
 							<TableBodyCell class="px-4 py-3">
-								{p.expense.title}
+								<button type="button" class="text-left hover:underline">
+									{p.expense.title}
+								</button>
 								{#if p.expense.store}
 									<span class="text-gray-500 dark:text-gray-400"> · {p.expense.store}</span>
 								{/if}
@@ -215,9 +229,11 @@
 				</TableHead>
 				<TableBody class="divide-y">
 					{#each incomplete as e (e.id)}
-						<TableBodyRow>
+						<TableBodyRow class="cursor-pointer" onclick={() => (openExpenseId = e.id)}>
 							<TableBodyCell class="px-4 py-3">
-								{e.title}
+								<button type="button" class="text-left hover:underline">
+									{e.title}
+								</button>
 								{#if e.store}
 									<span class="text-gray-500 dark:text-gray-400"> · {e.store}</span>
 								{/if}
