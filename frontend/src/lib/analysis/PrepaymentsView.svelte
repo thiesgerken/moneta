@@ -17,9 +17,15 @@
 	import { ANALYSIS_CARD } from './cards';
 	import { shortDate } from './dates';
 	import QueryError from '$lib/QueryError.svelte';
+	import ExpenseDetailModal from '$lib/ExpenseDetailModal.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+
+	// How much of a prepayment is laid out, used up or still to come is a quantity of it, not a
+	// movement on an account: 145 € were prepaid, not -145 €. Expense amounts stay signed the way
+	// the rest of the app writes them, so `Betrag` keeps its minus and only these turn around.
+	const outstanding = (cents: number) => euro(-cents);
 
 	const prepaymentStore = graphql(`
 		query AnalysisPrepayments($at: DateTime!) {
@@ -90,6 +96,15 @@
 	const totalPaid = $derived(rows.reduce((sum, p) => sum + p.expense.effectiveAmount, 0));
 	const totalRemaining = $derived(rows.reduce((sum, p) => sum + p.remaining, 0));
 
+	let openExpenseId: string | undefined = $state(undefined);
+
+	async function reload() {
+		await Promise.all([
+			prepaymentStore.fetch({ variables: { at: new Date(prepaymentsState.date) } }),
+			incompleteStore.fetch()
+		]);
+	}
+
 	// when the money actually left, as opposed to the period its value is spread over
 	const paidOn = (p: (typeof rows)[number]) =>
 		p.expense.transactions.reduce<Date | null>(
@@ -97,6 +112,8 @@
 			null
 		);
 </script>
+
+<ExpenseDetailModal bind:expenseId={openExpenseId} onsubmit={reload} />
 
 <div class="space-y-4">
 	<div class="flex flex-wrap items-end gap-4">
@@ -112,16 +129,16 @@
 	<div class="grid gap-4 md:grid-cols-3">
 		<Card class={ANALYSIS_CARD}>
 			<span class="text-sm text-gray-500 dark:text-gray-400">Vorausgezahlt</span>
-			<span class="text-2xl font-semibold">{euro(totalPaid)}</span>
+			<span class="text-2xl font-semibold">{outstanding(totalPaid)}</span>
 		</Card>
 		<Card class={ANALYSIS_CARD}>
 			<span class="text-sm text-gray-500 dark:text-gray-400">Davon verbraucht</span>
-			<span class="text-2xl font-semibold">{euro(totalPaid - totalRemaining)}</span>
+			<span class="text-2xl font-semibold">{outstanding(totalPaid - totalRemaining)}</span>
 		</Card>
 		<Card class={ANALYSIS_CARD}>
 			<span class="text-sm text-gray-500 dark:text-gray-400">Noch offen</span>
 			<span class="text-2xl font-semibold text-orange-600 dark:text-orange-400"
-				>{euro(totalRemaining)}</span
+				>{outstanding(totalRemaining)}</span
 			>
 		</Card>
 	</div>
@@ -155,9 +172,11 @@
 				<TableBody class="divide-y">
 					{#each rows as p (p.expense.id)}
 						{@const paid = paidOn(p)}
-						<TableBodyRow>
+						<TableBodyRow class="cursor-pointer" onclick={() => (openExpenseId = p.expense.id)}>
 							<TableBodyCell class="px-4 py-3">
-								{p.expense.title}
+								<button type="button" class="text-left hover:underline">
+									{p.expense.title}
+								</button>
 								{#if p.expense.store}
 									<span class="text-gray-500 dark:text-gray-400"> · {p.expense.store}</span>
 								{/if}
@@ -183,7 +202,7 @@
 								</div>
 							</TableBodyCell>
 							<TableBodyCell class="px-4 py-3 font-medium text-orange-600 dark:text-orange-400">
-								{euro(p.remaining)}
+								{outstanding(p.remaining)}
 							</TableBodyCell>
 						</TableBodyRow>
 					{/each}
@@ -215,9 +234,11 @@
 				</TableHead>
 				<TableBody class="divide-y">
 					{#each incomplete as e (e.id)}
-						<TableBodyRow>
+						<TableBodyRow class="cursor-pointer" onclick={() => (openExpenseId = e.id)}>
 							<TableBodyCell class="px-4 py-3">
-								{e.title}
+								<button type="button" class="text-left hover:underline">
+									{e.title}
+								</button>
 								{#if e.store}
 									<span class="text-gray-500 dark:text-gray-400"> · {e.store}</span>
 								{/if}
