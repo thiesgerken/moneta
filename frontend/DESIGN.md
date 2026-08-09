@@ -108,9 +108,14 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   `currentColor`, so the rules between rows came out in that same `gray-500`. Both are fixed in
   `app.css`, on the `tr`, so that a cell with a colour of its own — an amount, a tinted account
   — still wins.
-- **Rules in both directions.** Rows come from `divide-y`, columns from a global rule in
-  `app.css`. The expense list puts three coloured cells next to each other — accounts,
-  categories, amount — and horizontal rules alone let them read as one band.
+- **Rules in both directions.** Rows come from `divide-y`, columns and the rule under the header
+  from a global rule in `app.css`. The expense list puts three coloured cells next to each other
+  — accounts, categories, amount — and horizontal rules alone let them read as one band.
+- **Hover and open are the same shade**, `gray-100`, set in `app.css`. There is no zebra
+  striping: flowbite painted the even rows in `gray-50` and hovered in `gray-50` too, so half
+  the table did not react to the pointer.
+- The bank's own text is **monospace** wherever it is shown in full — reference numbers and
+  IBANs are read character by character. It is a column of its own from `lg`.
 - Sorting and filtering are **server-side**, through typed arguments. The header cell that
   sorts carries the arrow.
 - A filtered list says so: `ExpenseTable` renders a "Gefiltert nach …" line with one removable

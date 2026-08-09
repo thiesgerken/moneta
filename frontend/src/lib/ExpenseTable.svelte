@@ -411,6 +411,15 @@
 	let expenseToEdit = $derived(expenses.find((e) => e.id === expenseIdToEdit) || undefined);
 	let expenseToDelete = $derived(expenses.find((e) => e.id === expenseIdToDelete) || undefined);
 
+	/// The bank's own text for an expense, which is several strings when it is split over more
+	/// than one transaction. Newlines collapse: the cell is one line and the full text is in the
+	/// expanded row.
+	const transactionText = (transactions: { statement: string | null }[]) =>
+		transactions
+			.map((t) => t.statement?.replace(/\s+/g, ' ').trim())
+			.filter(Boolean)
+			.join(' · ');
+
 	function toggleRow(id: string) {
 		if (expandedRows.includes(id)) expandedRows = expandedRows.filter((rowId) => rowId !== id);
 		else expandedRows = [...expandedRows, id];
@@ -617,7 +626,6 @@
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
-		striped={true}
 		bind:inputValue={searchTerm}
 		class={tableSearchTableClass}
 		classes={tableSearchClasses}
@@ -774,6 +782,12 @@
 				Beschreibung
 				{@render sortIcon('description')}
 			</TableHeadCell>
+			<!-- What the bank wrote. No sort arrow: the backend names its sortable columns and this
+			     is not one of them. From lg only -- it is the widest thing in the row and the one
+			     you go looking for rather than scan. -->
+			<TableHeadCell class="hidden px-4 py-3 lg:table-cell" scope="col">
+				Transaktionstext
+			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell"
 				scope="col"
@@ -786,13 +800,16 @@
 		<TableBody class="divide-y">
 			{#if slow}
 				<tr>
-					<td colspan="8" class="px-4 py-16 text-center">
+					<td colspan="9" class="px-4 py-16 text-center">
 						<Spinner size="8" />
 					</td>
 				</tr>
 			{/if}
 			{#each rows as expense (expense.id)}
-				<TableBodyRow onclick={() => toggleRow(expense.id)}>
+				<TableBodyRow
+					onclick={() => toggleRow(expense.id)}
+					data-expanded={expandedRows.includes(expense.id) ? '' : undefined}
+				>
 					<!-- text-xs on a phone: a date is what the row is filed under rather than what it
 					     says, and the ten characters it takes are ten the title does not get -->
 					<TableBodyCell class="px-2 py-3 text-xs whitespace-nowrap md:px-4 md:text-sm">
@@ -810,7 +827,9 @@
 					     itself is gone now that the cell holds two lines rather than one string. Zero
 					     max-width plus full width leaves it exactly the space the other columns did
 					     not take. -->
-					<TableBodyCell class="w-full max-w-0 px-2 py-3 whitespace-normal md:px-4">
+					<TableBodyCell
+						class="w-full max-w-0 px-2 py-3 whitespace-normal md:w-auto md:max-w-96 md:px-4"
+					>
 						<!-- wraps rather than truncates on a phone: with five columns gone the title is
 						     most of what identifies the row, and there is no second place to read it -->
 						<!-- wrap-anywhere, not break-words: only `overflow-wrap: anywhere` counts towards
@@ -846,7 +865,7 @@
 					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
 						>{expense.store}</TableBodyCell
 					>
-					<TableBodyCell class="hidden max-w-96 truncate px-4 py-3 md:table-cell"
+					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
 						>{expense.description}
 						{expense.positions
 							.map(
@@ -855,13 +874,21 @@
 							)
 							.join(', ')}
 					</TableBodyCell>
+					<!-- monospace because it is machine output: the reference numbers and IBANs in it
+					     are read character by character, and a proportional font makes that work -->
+					<TableBodyCell
+						class="hidden w-full max-w-0 truncate px-4 py-3 font-mono text-xs lg:table-cell"
+						title={transactionText(expense.transactions)}
+					>
+						{transactionText(expense.transactions)}
+					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{@render statusBadges(expense)}
 					</TableBodyCell>
 				</TableBodyRow>
 				{#if expandedRows.includes(expense.id)}
-					<tr>
-						<td colspan="8" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
+					<tr data-expanded>
+						<td colspan="9" class="border-b px-4 py-3">
 							<div class="flex flex-col gap-2">
 								<div>
 									<b>Leistungszeitraum:</b>

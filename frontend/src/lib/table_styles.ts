@@ -4,7 +4,9 @@
 export const tableSearchClasses = {
 	// A hairline rather than a drop shadow: the table is the page here, not a card floating on
 	// it, and the shadow was the widest of the several frames between the window and the data.
-	root: 'bg-white dark:bg-gray-800 relative border border-gray-200 dark:border-gray-700 sm:rounded-lg overflow-x-auto',
+	// shadow-none because flowbite merges its own `shadow-md` in rather than being replaced, and
+	// a hairline under a drop shadow is two frames doing one frame's job
+	root: 'bg-white dark:bg-gray-800 relative border border-gray-200 dark:border-gray-700 shadow-none sm:rounded-lg overflow-x-auto',
 	// p-2 on a phone: the page, the section and this bar each used to add their own gutter, which
 	// together took a fifth of the screen before anything was in it
 	inner:
