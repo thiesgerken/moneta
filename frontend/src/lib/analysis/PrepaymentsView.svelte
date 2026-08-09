@@ -22,6 +22,11 @@
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
+	// How much of a prepayment is laid out, used up or still to come is a quantity of it, not a
+	// movement on an account: 145 € were prepaid, not -145 €. Expense amounts stay signed the way
+	// the rest of the app writes them, so `Betrag` keeps its minus and only these turn around.
+	const outstanding = (cents: number) => euro(-cents);
+
 	const prepaymentStore = graphql(`
 		query AnalysisPrepayments($at: DateTime!) {
 			analysis {
@@ -124,16 +129,16 @@
 	<div class="grid gap-4 md:grid-cols-3">
 		<Card class={ANALYSIS_CARD}>
 			<span class="text-sm text-gray-500 dark:text-gray-400">Vorausgezahlt</span>
-			<span class="text-2xl font-semibold">{euro(totalPaid)}</span>
+			<span class="text-2xl font-semibold">{outstanding(totalPaid)}</span>
 		</Card>
 		<Card class={ANALYSIS_CARD}>
 			<span class="text-sm text-gray-500 dark:text-gray-400">Davon verbraucht</span>
-			<span class="text-2xl font-semibold">{euro(totalPaid - totalRemaining)}</span>
+			<span class="text-2xl font-semibold">{outstanding(totalPaid - totalRemaining)}</span>
 		</Card>
 		<Card class={ANALYSIS_CARD}>
 			<span class="text-sm text-gray-500 dark:text-gray-400">Noch offen</span>
 			<span class="text-2xl font-semibold text-orange-600 dark:text-orange-400"
-				>{euro(totalRemaining)}</span
+				>{outstanding(totalRemaining)}</span
 			>
 		</Card>
 	</div>
@@ -197,7 +202,7 @@
 								</div>
 							</TableBodyCell>
 							<TableBodyCell class="px-4 py-3 font-medium text-orange-600 dark:text-orange-400">
-								{euro(p.remaining)}
+								{outstanding(p.remaining)}
 							</TableBodyCell>
 						</TableBodyRow>
 					{/each}
