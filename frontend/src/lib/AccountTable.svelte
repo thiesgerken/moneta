@@ -392,7 +392,11 @@
 				Name
 				{@render sortIcon('name')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('description')}>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('description')}
+			>
 				Beschreibung
 				{@render sortIcon('description')}
 			</TableHeadCell>
@@ -400,23 +404,43 @@
 				Typ
 				{@render sortIcon('kind')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('availability')}>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('availability')}
+			>
 				Verfügbarkeit
 				{@render sortIcon('availability')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('risk')}>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('risk')}
+			>
 				Risiko
 				{@render sortIcon('risk')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('ownershipFraction')}>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('ownershipFraction')}
+			>
 				Anteil
 				{@render sortIcon('ownershipFraction')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('opened')}>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('opened')}
+			>
 				Eröffnet
 				{@render sortIcon('opened')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('closed')}>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('closed')}
+			>
 				Geschlossen
 				{@render sortIcon('closed')}
 			</TableHeadCell>
@@ -438,31 +462,31 @@
 						></span>
 						{account.name}
 					</TableBodyCell>
-					<TableBodyCell class="max-w-96 truncate px-4 py-3">
+					<TableBodyCell class="hidden max-w-96 truncate px-4 py-3 md:table-cell">
 						{account.description || '-'}
 					</TableBodyCell>
 					<TableBodyCell class="px-4 py-3">
 						{getKindDisplayName(account.kind)}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{getAvailabilityDisplayName(account.availability)}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						<span class={`rounded-md px-2 py-1 text-xs ${getRiskColor(account.risk)}`}>
 							{getRiskDisplayName(account.risk)}
 						</span>
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{(account.ownershipFraction * 100).toFixed(0)}%
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{account.opened.toLocaleDateString('de-DE', {
 							year: 'numeric',
 							month: '2-digit',
 							day: '2-digit'
 						})}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{account.closed?.toLocaleDateString('de-DE', {
 							year: 'numeric',
 							month: '2-digit',
@@ -472,7 +496,7 @@
 				</TableBodyRow>
 				{#if expandedRows.includes(account.id)}
 					<tr>
-						<td colspan="7" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
+						<td colspan="8" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
 							<div class="flex flex-col gap-2">
 								<div>
 									<b>Name:</b>

@@ -248,7 +248,11 @@
 				Name
 				{@render sortIcon('name')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('description')}>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('description')}
+			>
 				Beschreibung
 				{@render sortIcon('description')}
 			</TableHeadCell>
@@ -256,7 +260,11 @@
 				Übergeordnet
 				{@render sortIcon('parent')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('monthlyLimit')}>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('monthlyLimit')}
+			>
 				Monatliches Limit
 				{@render sortIcon('monthlyLimit')}
 			</TableHeadCell>
@@ -264,7 +272,7 @@
 		<TableBody class="divide-y">
 			{#each filteredCategories as category (category.id)}
 				<TableBodyRow onclick={() => toggleRow(category.id)}>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="w-full max-w-0 px-4 py-3 wrap-anywhere whitespace-normal">
 						<button type="button" class="mr-2 focus:outline-none">
 							{#if expandedRows.includes(category.id)}
 								<ChevronDownOutline class="inline h-4 w-4" />
@@ -278,13 +286,13 @@
 						></span>
 						{category.name}
 					</TableBodyCell>
-					<TableBodyCell class="max-w-96 truncate px-4 py-3">
+					<TableBodyCell class="hidden max-w-96 truncate px-4 py-3 md:table-cell">
 						{category.description || '-'}
 					</TableBodyCell>
 					<TableBodyCell class="px-4 py-3">
 						{category.parent?.name || '-'}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{category.monthlyLimit ? (category.monthlyLimit / 100).toFixed(2) + '€' : '-'}
 					</TableBodyCell>
 				</TableBodyRow>
