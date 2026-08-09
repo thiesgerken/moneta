@@ -71,6 +71,33 @@ pub async fn require_user(context: &Context) -> juniper::FieldResult<Uuid> {
     })
 }
 
+/// What a response should do with the session cookie.
+#[derive(Debug, PartialEq, Eq)]
+enum SessionCookie {
+    /// The request signed somebody in; there was no cookie before it.
+    Login(Uuid),
+    /// An authenticated request, so the cookie is written again with a fresh week on it.
+    Renew(Uuid),
+    /// The request signed somebody out.
+    Clear(Uuid),
+    /// Nobody was signed in before or after, so there is nothing to say.
+    Absent,
+}
+
+/// Rocket stamps `Expires` when a private cookie is written, and a browser never sends that
+/// date back — so a cookie written once at login runs out exactly a week later, in the middle
+/// of whatever the reader was doing, no matter how much they used the app in between. Writing
+/// it again on every authenticated request is what turns the week into a sliding one. There is
+/// no cheaper test for "is it about to expire": the request carries the value and nothing else.
+fn session_cookie(before: Option<Uuid>, after: Option<Uuid>) -> SessionCookie {
+    match (before, after) {
+        (Some(_), Some(uid)) => SessionCookie::Renew(uid),
+        (None, Some(uid)) => SessionCookie::Login(uid),
+        (Some(uid), None) => SessionCookie::Clear(uid),
+        (None, None) => SessionCookie::Absent,
+    }
+}
+
 pub async fn graphql_handler(
     pool: &rocket::State<crate::Pool>,
     config: &rocket::State<crate::config::Config>,
@@ -101,15 +128,21 @@ pub async fn graphql_handler(
         context.cache.clear();
     }
 
-    let new_user_id = user_id_writer.read().await;
-    if *new_user_id != user_id {
-        if let Some(uid) = *new_user_id {
+    let new_user_id = *user_id_writer.read().await;
+    match session_cookie(user_id, new_user_id) {
+        SessionCookie::Login(uid) => {
             info!("Login for user_id {}", uid);
             cookies.add_private(rocket::http::Cookie::new("user_id", uid.to_string()));
-        } else {
-            info!("Logout for user_id {}", user_id.unwrap());
+        }
+        // silent: this is every authenticated request, and a line each would drown the log
+        SessionCookie::Renew(uid) => {
+            cookies.add_private(rocket::http::Cookie::new("user_id", uid.to_string()));
+        }
+        SessionCookie::Clear(uid) => {
+            info!("Logout for user_id {}", uid);
             cookies.remove_private(rocket::http::Cookie::build("user_id"));
         }
+        SessionCookie::Absent => {}
     }
 
     r
@@ -255,5 +288,19 @@ mod tests {
     #[tokio::test]
     async fn recording_a_visit_does_not() {
         assert!(!wrote("mutation { users { visit { previous } } }").await);
+    }
+
+    /// The renewal case is the one worth holding: without it the cookie is written once and
+    /// the session ends a week after the login rather than a week after the last use.
+    #[test]
+    fn an_authenticated_request_renews_the_session() {
+        let uid = Uuid::from_u128(1);
+        assert_eq!(
+            session_cookie(Some(uid), Some(uid)),
+            SessionCookie::Renew(uid)
+        );
+        assert_eq!(session_cookie(None, Some(uid)), SessionCookie::Login(uid));
+        assert_eq!(session_cookie(Some(uid), None), SessionCookie::Clear(uid));
+        assert_eq!(session_cookie(None, None), SessionCookie::Absent);
     }
 }
