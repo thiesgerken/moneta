@@ -87,6 +87,8 @@ enum DeliveryStatus {
 
 enum ExpenseSortField {
   ACCRUAL_START
+  "earliest Wertstellung among the transactions" VALUE_DATE
+  "earliest Buchungstag among the transactions that have one" BOOKING_DATE
   TITLE
   STORE
   DESCRIPTION
@@ -619,7 +621,7 @@ type ExpensePosition {
 }
 
 type ExpenseQuery {
-  list(limit: Int, skip: Int, search: String, accountIds: [UUID!], categoryIds: [UUID!], flags: ExpenseFlagFilter, accruedAfter: DateTime, accruedBefore: DateTime, valuedAfter: DateTime, valuedBefore: DateTime, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
+  list(limit: Int, skip: Int, search: String, accountIds: [UUID!], categoryIds: [UUID!], flags: ExpenseFlagFilter, accruedAfter: DateTime, accruedBefore: DateTime, valuedAfter: DateTime, valuedBefore: DateTime, bookedAfter: DateTime, bookedBefore: DateTime, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
   get(id: UUID!): Expense!
   changelog(limit: Int, skip: Int, author: ChangelogAuthor, since: DateTime): ExpenseChangelogConnection!
 }
@@ -688,6 +690,8 @@ type ExpenseStateTransaction {
 type ExpenseTransaction {
   account: Account!
   date: DateTime!
+  "Null on anything the bank did not post: a manual entry has no posting date."
+  bookingDate: DateTime
   amount: Int
   fraction: Float
   comments: String!

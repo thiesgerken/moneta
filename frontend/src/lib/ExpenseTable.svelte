@@ -53,6 +53,22 @@
 	let expandedRows = $state<string[]>([]);
 	let sortBy: { field: string; direction: number } = $state({ field: 'status', direction: -1 });
 
+	/// Which of the three dates the date column, its sort and the period filter mean.
+	///
+	/// They answer different questions -- what a cost was *for* against when the money left --
+	/// and a list showing one while filtering by another does not add up. So it is one choice
+	/// for the column, not a column each: eight columns already do not fit a phone.
+	const DATE_AXES = {
+		accrual: { label: 'Zeitraum', name: 'Leistungszeitraum', sort: 'accrualStart' },
+		value: { label: 'Wertstellung', name: 'Wertstellung', sort: 'valueDate' },
+		booking: { label: 'Buchung', name: 'Buchungstag', sort: 'bookingDate' }
+	} as const;
+	type DateAxis = keyof typeof DATE_AXES;
+
+	let dateAxis = $state<DateAxis>('accrual');
+	let dateAxisOpen = $state(false);
+	const axis = $derived(DATE_AXES[dateAxis]);
+
 	/// only consulted below `md`, where the filters are collapsed
 	let filtersOpen = $state(false);
 
@@ -141,8 +157,9 @@
 			});
 		}
 
+		// named, because the same range means a different set of expenses per date column
 		if (dateRangeLabel) {
-			out.push({ label: dateRangeLabel, clear: clearDateRange });
+			out.push({ label: `${axis.label}: ${dateRangeLabel}`, clear: clearDateRange });
 		}
 
 		// one chip for the lot: which of the six is off matters less than the fact that the
@@ -193,6 +210,8 @@
 	const SORT_FIELDS: Record<string, ExpenseSortField$options> = {
 		status: 'STATUS',
 		accrualStart: 'ACCRUAL_START',
+		valueDate: 'VALUE_DATE',
+		bookingDate: 'BOOKING_DATE',
 		title: 'TITLE',
 		store: 'STORE',
 		description: 'DESCRIPTION',
@@ -216,8 +235,14 @@
 			incomplete: showIncomplete,
 			normal: showNormal
 		},
-		accruedAfter: filterDateRange.from,
-		accruedBefore: filterDateRange.to,
+		// the period filter follows the column: "März" means the month it was for, or the month
+		// it was paid in, depending on which of them the reader is looking at
+		accruedAfter: dateAxis === 'accrual' ? filterDateRange.from : undefined,
+		accruedBefore: dateAxis === 'accrual' ? filterDateRange.to : undefined,
+		valuedAfter: dateAxis === 'value' ? filterDateRange.from : undefined,
+		valuedBefore: dateAxis === 'value' ? filterDateRange.to : undefined,
+		bookedAfter: dateAxis === 'booking' ? filterDateRange.from : undefined,
+		bookedBefore: dateAxis === 'booking' ? filterDateRange.to : undefined,
 		sortBy: SORT_FIELDS[sortBy.field],
 		sortDir: (sortBy.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options
 	});
@@ -265,6 +290,10 @@
 			$flags: ExpenseFlagFilter
 			$accruedAfter: DateTime
 			$accruedBefore: DateTime
+			$valuedAfter: DateTime
+			$valuedBefore: DateTime
+			$bookedAfter: DateTime
+			$bookedBefore: DateTime
 			$sortBy: ExpenseSortField
 			$sortDir: SortDirection
 		) {
@@ -278,6 +307,10 @@
 					flags: $flags
 					accruedAfter: $accruedAfter
 					accruedBefore: $accruedBefore
+					valuedAfter: $valuedAfter
+					valuedBefore: $valuedBefore
+					bookedAfter: $bookedAfter
+					bookedBefore: $bookedBefore
 					sortBy: $sortBy
 					sortDir: $sortDir
 				) {
@@ -336,6 +369,7 @@
 								effectiveAmount
 								amount
 								date
+								bookingDate
 								statement
 								account {
 									id
@@ -422,6 +456,38 @@
 
 	function isSortedBy(field: string) {
 		return sortBy.field === field ? sortBy.direction : null;
+	}
+
+	/// Switching the column takes the sort with it, but only if the sort was on a date: someone
+	/// who ordered by amount asked for that, and it does not become a different question here.
+	function setDateAxis(next: DateAxis) {
+		const onDate = Object.values(DATE_AXES).some((a) => a.sort === sortBy.field);
+		if (onDate) sortBy = { field: DATE_AXES[next].sort, direction: sortBy.direction };
+		dateAxis = next;
+		currentPage = 1;
+		dateAxisOpen = false;
+	}
+
+	/// What the date column shows: the accrual period, or the span the transactions cover.
+	///
+	/// Value and booking dates sit on the transactions, and an expense can have several -- a
+	/// refund is the debit and the credit months apart, a chained prepayment more still. Both
+	/// ends, then, and `formatAccrualPeriod` collapses them when they agree, which is the
+	/// common case. Null where no transaction carries the date at all.
+	function axisPeriod(expense: {
+		accrualStart: Date;
+		accrualEnd: Date;
+		transactions: { date: Date; bookingDate: Date | null }[];
+	}): [Date, Date] | null {
+		if (dateAxis === 'accrual') return [expense.accrualStart, expense.accrualEnd];
+
+		const dates = expense.transactions
+			.map((t) => (dateAxis === 'value' ? t.date : t.bookingDate))
+			.filter((d) => d !== null)
+			.map((d) => d.getTime());
+		if (dates.length === 0) return null;
+
+		return [new Date(Math.min(...dates)), new Date(Math.max(...dates))];
 	}
 
 	$effect(() => void basicStore.fetch());
@@ -653,7 +719,7 @@
 					     chosen -- which left the control that decides what the table shows unreadable
 					     in both states, and with nowhere to undo it. -->
 					<Button color="alternative" class="justify-between whitespace-nowrap md:w-64">
-						{dateRangeLabel ?? 'Zeitraum'}
+						{dateRangeLabel ?? axis.label}
 						<CalendarMonthOutline class="ml-2 h-4 w-4 shrink-0" />
 					</Button>
 					<Dropdown class="flex w-fit flex-col gap-2 divide-y-0 p-2">
@@ -722,13 +788,43 @@
 		     line, since "braucht Prüfung" is what somebody opens this list on a phone for. Eight
 		     columns on a 390px screen meant scrolling sideways past the date to reach the amount. -->
 		<TableHead>
-			<TableHeadCell
-				class="px-2 py-3 whitespace-nowrap md:px-4"
-				scope="col"
-				onclick={() => sortByField('accrualStart')}
-			>
-				Datum
-				{@render sortIcon('accrualStart')}
+			<!-- The only header that is two controls: the label sorts like every other one, the
+			     chevron beside it picks which date the column is about. -->
+			<TableHeadCell class="px-2 py-3 whitespace-nowrap md:px-4" scope="col">
+				<button type="button" class="uppercase" onclick={() => sortByField(axis.sort)}>
+					{axis.label}
+					{@render sortIcon(axis.sort)}
+				</button>
+				<button
+					type="button"
+					id="date-axis-trigger"
+					aria-label="Datum wählen"
+					class="ml-1 align-middle"
+				>
+					<ChevronDownOutline class="inline h-3 w-3" />
+				</button>
+				<!-- named rather than left to the preceding sibling, which in a table header resolves
+				     to the sort button next to it -->
+				<!-- `whitespace-normal` because the popover is a child of the header cell and would
+				     otherwise inherit its `nowrap`, which laid the three options out in a row -->
+				<Dropdown
+					bind:isOpen={dateAxisOpen}
+					triggeredBy="#date-axis-trigger"
+					class="flex w-56 flex-col gap-1 p-2 text-sm whitespace-normal"
+				>
+					{#each Object.entries(DATE_AXES) as [key, option] (key)}
+						<button
+							type="button"
+							class="w-full rounded-md px-2 py-1.5 text-left normal-case hover:bg-gray-100 dark:hover:bg-gray-600 {key ===
+							dateAxis
+								? 'text-primary-600 dark:text-primary-500 font-semibold'
+								: ''}"
+							onclick={() => setDateAxis(key as DateAxis)}
+						>
+							{option.name}
+						</button>
+					{/each}
+				</Dropdown>
 			</TableHeadCell>
 			<TableHeadCell class="px-2 py-3 md:px-4" scope="col" onclick={() => sortByField('title')}>
 				Titel
@@ -803,7 +899,12 @@
 								<ChevronRightOutline class="inline h-4 w-4" />
 							{/if}
 						</button>
-						{formatAccrualPeriod(expense.accrualStart, expense.accrualEnd, false)}
+						{@const period = axisPeriod(expense)}
+						{#if period}
+							{formatAccrualPeriod(period[0], period[1], false)}
+						{:else}
+							<span class="text-gray-400 dark:text-gray-500">—</span>
+						{/if}
 					</TableBodyCell>
 					<!-- `w-full max-w-0` is what makes the inner block truncate: a table cell is as wide
 					     as its content unless something says otherwise, and `truncate` on the cell

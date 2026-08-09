@@ -27,7 +27,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use diesel::dsl::sql;
 use diesel::prelude::*;
-use diesel::sql_types::{Bool, Text};
+use diesel::sql_types::{Bool, Nullable, Text, Timestamptz};
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 use juniper::{FieldResult, GraphQLEnum, GraphQLObject, graphql_object};
 
@@ -82,6 +82,11 @@ impl GraphQLExpenseTransaction {
 
     fn date(&self) -> DateTime<Utc> {
         self.data.date
+    }
+
+    /// Null on anything the bank did not post: a manual entry has no posting date.
+    fn booking_date(&self) -> Option<DateTime<Utc>> {
+        self.data.booking_date
     }
 
     fn amount(&self) -> Option<i32> {
@@ -329,6 +334,10 @@ pub enum ChangelogAuthor {
 pub enum ExpenseSortField {
     #[default]
     AccrualStart,
+    /// earliest Wertstellung among the transactions
+    ValueDate,
+    /// earliest Buchungstag among the transactions that have one
+    BookingDate,
     Title,
     Store,
     Description,
@@ -418,6 +427,8 @@ impl ExpenseQuery {
         accrued_before: Option<DateTime<Utc>>,
         valued_after: Option<DateTime<Utc>>,
         valued_before: Option<DateTime<Utc>>,
+        booked_after: Option<DateTime<Utc>>,
+        booked_before: Option<DateTime<Utc>>,
         sort_by: Option<ExpenseSortField>,
         sort_dir: Option<SortDirection>,
     ) -> FieldResult<ExpenseConnection> {
@@ -521,6 +532,29 @@ impl ExpenseQuery {
                 );
             }
 
+            // A transaction the bank never posted has no booking date, so these exclude it
+            // rather than treating a null as inside the period.
+            if let Some(after) = booked_after {
+                query = query.filter(
+                    expenses_rendered::id.eq_any(
+                        expense_transactions_rendered::table
+                            .filter(expense_transactions_rendered::user_id.eq(user_id))
+                            .filter(expense_transactions_rendered::booking_date.ge(after))
+                            .select(expense_transactions_rendered::expense_id),
+                    ),
+                );
+            }
+            if let Some(before) = booked_before {
+                query = query.filter(
+                    expenses_rendered::id.eq_any(
+                        expense_transactions_rendered::table
+                            .filter(expense_transactions_rendered::user_id.eq(user_id))
+                            .filter(expense_transactions_rendered::booking_date.lt(before))
+                            .select(expense_transactions_rendered::expense_id),
+                    ),
+                );
+            }
+
             query
         };
 
@@ -530,6 +564,30 @@ impl ExpenseQuery {
         let query = match sort_by.unwrap_or_default() {
             ExpenseSortField::AccrualStart => {
                 crate::order_by!(query, direction, expenses_rendered::accrual_start)
+            }
+            // The dates live on the transactions, of which an expense can have several on
+            // several days, so the column shows a span and sorts on where it begins. Read back
+            // out of the rendered jsonb rather than joining, because that is already the
+            // reader's own view of them -- a mirrored transaction included, a stranger's not.
+            ExpenseSortField::ValueDate => crate::order_by!(
+                query,
+                direction,
+                sql::<Nullable<Timestamptz>>(
+                    "(SELECT min((t->>'date')::timestamptz) FROM jsonb_array_elements(transactions) t)"
+                )
+            ),
+            // and explicitly last either way, because two fifths of the transactions were never
+            // posted by a bank: sorting descending would otherwise open on those
+            ExpenseSortField::BookingDate => {
+                const BOOKED: &str = "(SELECT min((t->>'bookingDate')::timestamptz) FROM jsonb_array_elements(transactions) t)";
+                match direction {
+                    SortDirection::Asc => {
+                        query.order_by(sql::<Nullable<Timestamptz>>(BOOKED).asc().nulls_last())
+                    }
+                    SortDirection::Desc => {
+                        query.order_by(sql::<Nullable<Timestamptz>>(BOOKED).desc().nulls_last())
+                    }
+                }
             }
             ExpenseSortField::Title => crate::order_by!(query, direction, expenses_rendered::title),
             ExpenseSortField::Store => crate::order_by!(query, direction, expenses_rendered::store),

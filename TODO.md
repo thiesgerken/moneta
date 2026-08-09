@@ -21,10 +21,14 @@
 
 ## would be nice
 
-- decide which analysis views should offer a transaction-date / booking-period toggle. Today
-  everything follows transaction dates; `expenses.list` has `valuedAfter`/`valuedBefore` for
-  that axis and `accruedAfter`/`accruedBefore` for the other, so it is a UI question now.
-  See [docs/analysis-dashboard.md](docs/analysis-dashboard.md).
+- carry the date axis into the analysis views. The expense list picks one of the three dates for
+  its column, its sort and its period filter; the analysis pages are all still on the value date,
+  `analysis.prepayments` excepted. Switching them is not a different `GROUP BY`: an expense that
+  accrues over six months belongs to six of them, in proportion, so the monthly and category
+  totals need the linear-consumption model `analysis.prepayments` already computes, lifted into
+  SQL and shared. `simulate_balances` and `analysis_statement` stay on the value date whatever
+  the reader picks -- an accrued amount is not money in an account, and the *Fehler* column
+  reconciles against recorded balances. See [docs/analysis-dashboard.md](docs/analysis-dashboard.md).
 - push notifications
 - ausgabe in transaktion umwandeln (zB Retoure mit original zusammenfassen, dann automatisch
   buchungszeitraum anpassen?). Der Import macht das inzwischen für die moneydb-Altlasten
