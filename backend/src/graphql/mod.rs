@@ -1,6 +1,7 @@
 pub mod accounts;
 pub mod analysis;
 pub mod balances;
+pub mod cache;
 pub mod categories;
 pub mod expenses;
 mod root;
@@ -16,6 +17,7 @@ use rocket::data::{Limits, ToByteUnit};
 use rocket::http::{CookieJar, Method};
 
 use crate::config::Config;
+use cache::AnalysisCache;
 
 #[rocket::get("/")]
 fn graphiql() -> rocket::response::content::RawHtml<String> {
@@ -40,22 +42,24 @@ pub fn sdl() -> String {
 async fn get_graphql_handler(
     pool: &State<crate::Pool>,
     config: &State<crate::config::Config>,
+    cache: &State<std::sync::Arc<AnalysisCache>>,
     cookies: &CookieJar<'_>,
     request: juniper_rocket::GraphQLRequest,
     schema: &State<root::Schema>,
 ) -> juniper_rocket::GraphQLResponse {
-    root::graphql_handler(pool, config, cookies, request, schema).await
+    root::graphql_handler(pool, config, cache, cookies, request, schema).await
 }
 
 #[rocket::post("/graphql", data = "<request>")]
 async fn post_graphql_handler(
     pool: &State<crate::Pool>,
     config: &State<crate::config::Config>,
+    cache: &State<std::sync::Arc<AnalysisCache>>,
     cookies: &CookieJar<'_>,
     request: juniper_rocket::GraphQLRequest,
     schema: &State<root::Schema>,
 ) -> juniper_rocket::GraphQLResponse {
-    root::graphql_handler(pool, config, cookies, request, schema).await
+    root::graphql_handler(pool, config, cache, cookies, request, schema).await
 }
 
 pub async fn handle(config: Config, pool: crate::Pool) {
@@ -98,6 +102,7 @@ pub async fn handle(config: Config, pool: crate::Pool) {
     let _rocket = rocket::custom(rocket_config)
         .manage(config.clone())
         .manage(pool.clone())
+        .manage(std::sync::Arc::new(AnalysisCache::default()))
         .manage(root::Schema::new(
             root::Query,
             root::Mutation,

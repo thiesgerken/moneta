@@ -172,30 +172,43 @@
 
 		<TableHead>
 			<TableHeadCell class="px-4 py-3">Titel</TableHeadCell>
-			<TableHeadCell class="px-4 py-3">Intervall</TableHeadCell>
-			<TableHeadCell class="px-4 py-3">Betrag</TableHeadCell>
-			<TableHeadCell class="px-4 py-3">Zuletzt erzeugt</TableHeadCell>
+			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Intervall</TableHeadCell>
+			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Betrag</TableHeadCell>
+			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Zuletzt erzeugt</TableHeadCell>
 			<TableHeadCell class="px-4 py-3">Fällig</TableHeadCell>
 			<TableHeadCell class="px-4 py-3"></TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each rules as rule (rule.id)}
 				<TableBodyRow>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="w-full max-w-0 px-4 py-3 whitespace-normal">
 						{rule.title}
 						{#if rule.titleReplacement}
 							<span class="block text-xs text-gray-500 dark:text-gray-400"
 								>→ {rule.titleReplacement}</span
 							>
 						{/if}
+						<!-- what the three hidden columns said, on one line: a rule without its interval
+						     and amount is just a name -->
+						<span class="mt-1 block text-xs text-gray-500 md:hidden dark:text-gray-400">
+							{periodNames[rule.period] ?? rule.period}
+							· {rule.amountReplacement != null
+								? (rule.amountReplacement / 100).toFixed(2) + '€'
+								: 'wie Vorlage'}
+							· zuletzt {shortDate(rule.lastCreation)}
+						</span>
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">{periodNames[rule.period] ?? rule.period}</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell"
+						>{periodNames[rule.period] ?? rule.period}</TableBodyCell
+					>
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{rule.amountReplacement != null
 							? (rule.amountReplacement / 100).toFixed(2) + '€'
 							: 'wie Vorlage'}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">{shortDate(rule.lastCreation)}</TableBodyCell>
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell"
+						>{shortDate(rule.lastCreation)}</TableBodyCell
+					>
 					<TableBodyCell class="px-4 py-3">
 						{#if !rule.templateId}
 							<Badge color="red">Vorlage fehlt</Badge>

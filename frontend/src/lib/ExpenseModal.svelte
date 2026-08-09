@@ -367,7 +367,11 @@
 
 <Modal title={expense ? 'Ausgabe bearbeiten' : 'Neue Ausgabe'} bind:open size="lg">
 	<form onsubmit={handleSubmit}>
-		<div class="mb-4 grid gap-4 sm:grid-cols-2">
+		<!-- *:min-w-0: a grid item is min-content wide by default, and the transaction and
+		     category tables inside this one are wider than a phone. Without it the whole form
+		     grew to their width and every field ran off the right of the screen; with it they
+		     scroll inside their own `overflow-x-auto` the way they were meant to. -->
+		<div class="mb-4 grid min-w-0 gap-4 *:min-w-0 sm:grid-cols-2">
 			<div>
 				<Label for="title" class="mb-2">Titel</Label>
 				<Input

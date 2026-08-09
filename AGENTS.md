@@ -78,6 +78,21 @@ process down silently. `Timeout occurred while waiting for a slot to become avai
 log is the signal that the pool is genuinely too small — or that something is nesting again.
 Size it off that line, not off a guess.
 
+**A new mutation has to invalidate the analysis cache.** `analysis.balances`, `history` and
+`overviews` are memoized in process for ten minutes (`graphql/cache.rs`). What keeps that
+honest is the mutation root in `root.rs`: every field there but `users` sets `context.wrote`,
+and `graphql_handler` empties the cache once the request is done. Add a mutation branch
+without that line and a write leaves stale months on the screen until the TTL runs out. The
+`users` exception is deliberate — `users.visit` is a write on every dashboard load, and
+clearing there would mean the dashboard invalidates the answers it is about to ask for. Two
+tests at the bottom of `root.rs` hold both halves.
+
+**Keys are rounded to ten minutes, on purpose.** Every range the frontend asks for ends at
+`Date.now()`, so a key built from the exact arguments is a fresh one on every page load and
+the cache never hits. `cache::bucket` floors the dates, which means an entry can answer a
+request for a window ending slightly after the one it was computed for. Anything that starts
+caching a query where that is *not* invisible needs its own key, not this one.
+
 **Render the transactions once per request, not once per row you need them for.**
 `expense_users` is a `UNION` over the whole transaction table, so no filter on account or date
 narrows it — reading `expense_transactions_rendered` from inside a lateral rebuilds the entire

@@ -481,6 +481,30 @@
 	</Dropdown>
 {/snippet}
 
+{#snippet statusBadges(expense: {
+	isTaxRelevant: boolean;
+	isTemplate: boolean;
+	isUnchecked: boolean;
+	isIncomplete: boolean;
+	isExtraordinary: boolean;
+})}
+	{#if expense.isTaxRelevant}
+		<span class="rounded-md bg-green-100 px-2 py-1 text-green-700">Steuerrelevant</span>
+	{/if}
+	{#if expense.isTemplate}
+		<span class="rounded-md bg-blue-100 px-2 py-1 text-blue-700">Vorlage</span>
+	{/if}
+	{#if expense.isUnchecked}
+		<span class="rounded-md bg-red-100 px-2 py-1 text-yellow-700">Unbestätigt</span>
+	{/if}
+	{#if expense.isIncomplete}
+		<span class="rounded-md bg-red-100 px-2 py-1 text-red-700">Unvollständig</span>
+	{/if}
+	{#if expense.isExtraordinary}
+		<span class="rounded-md bg-purple-100 px-2 py-1 text-purple-700">Außergewöhnlich</span>
+	{/if}
+{/snippet}
+
 {#snippet sortIcon(field: string)}
 	{#if isSortedBy(field) === -1}
 		▲
@@ -690,36 +714,68 @@
 			</div>
 		{/snippet}
 
+		<!-- A phone keeps date, title and amount and hides the other five. They are not lost: the
+		     row expands into all of them, and the title cell carries the status flags on its own
+		     line, since "braucht Prüfung" is what somebody opens this list on a phone for. Eight
+		     columns on a 390px screen meant scrolling sideways past the date to reach the amount. -->
 		<TableHead>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('accrualStart')}>
+			<TableHeadCell
+				class="px-2 py-3 whitespace-nowrap md:px-4"
+				scope="col"
+				onclick={() => sortByField('accrualStart')}
+			>
 				Datum
 				{@render sortIcon('accrualStart')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('title')}>
+			<TableHeadCell class="px-2 py-3 md:px-4" scope="col" onclick={() => sortByField('title')}>
 				Titel
 				{@render sortIcon('title')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('accounts')}>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('accounts')}
+			>
 				Konten
 				{@render sortIcon('accounts')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('categories')}>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('categories')}
+			>
 				Kategorien
 				{@render sortIcon('categories')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('effectiveAmount')}>
+			<TableHeadCell
+				class="px-2 py-3 text-right md:px-4"
+				scope="col"
+				onclick={() => sortByField('effectiveAmount')}
+			>
 				Betrag
 				{@render sortIcon('effectiveAmount')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('store')}>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('store')}
+			>
 				Geschäft
 				{@render sortIcon('store')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('description')}>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('description')}
+			>
 				Beschreibung
 				{@render sortIcon('description')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('status')}>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('status')}
+			>
 				Status
 				{@render sortIcon('status')}
 			</TableHeadCell>
@@ -734,8 +790,10 @@
 			{/if}
 			{#each rows as expense (expense.id)}
 				<TableBodyRow onclick={() => toggleRow(expense.id)}>
-					<TableBodyCell class="px-4 py-3">
-						<button type="button" class="mr-2 focus:outline-none">
+					<!-- text-xs on a phone: a date is what the row is filed under rather than what it
+					     says, and the ten characters it takes are ten the title does not get -->
+					<TableBodyCell class="px-2 py-3 text-xs whitespace-nowrap md:px-4 md:text-sm">
+						<button type="button" class="mr-1 focus:outline-none md:mr-2">
 							{#if expandedRows.includes(expense.id)}
 								<ChevronDownOutline class="inline h-4 w-4" />
 							{:else}
@@ -744,9 +802,25 @@
 						</button>
 						{formatAccrualPeriod(expense.accrualStart, expense.accrualEnd, false)}
 					</TableBodyCell>
-					<TableBodyCell class="max-w-96 truncate px-4 py-3">{expense.title}</TableBodyCell>
+					<!-- `w-full max-w-0` is what makes the inner block truncate: a table cell is as wide
+					     as its content unless something says otherwise, and `truncate` on the cell
+					     itself is gone now that the cell holds two lines rather than one string. Zero
+					     max-width plus full width leaves it exactly the space the other columns did
+					     not take. -->
+					<TableBodyCell class="w-full max-w-0 px-2 py-3 whitespace-normal md:px-4">
+						<!-- wraps rather than truncates on a phone: with five columns gone the title is
+						     most of what identifies the row, and there is no second place to read it -->
+						<!-- wrap-anywhere, not break-words: only `overflow-wrap: anywhere` counts towards
+					     the cell's min-content width, and a table column is sized by that. With
+					     break-word the column stayed as wide as "Auslandskrankenversicherung" and the
+					     title ran across the amount beside it. -->
+						<span class="block wrap-anywhere md:truncate">{expense.title}</span>
+						<span class="mt-1 flex flex-wrap gap-1 text-xs empty:mt-0 md:hidden">
+							{@render statusBadges(expense)}
+						</span>
+					</TableBodyCell>
 					<TableBodyCell
-						class="max-w-64 truncate px-4 py-3 text-black"
+						class="hidden max-w-64 truncate px-4 py-3 text-black md:table-cell"
 						style={makeAccountColor(expense.transactions, expense.referenceAmount)}
 						>{formatTransactionAccounts(
 							expense.transactions,
@@ -754,20 +828,22 @@
 						)}</TableBodyCell
 					>
 					<TableBodyCell
-						class="max-w-64 truncate px-4 py-3 text-black"
+						class="hidden max-w-64 truncate px-4 py-3 text-black md:table-cell"
 						style={makeCategoryColor(expense.categories)}
 						>{formatCategories(expense.categories)}</TableBodyCell
 					>
 					<TableBodyCell
-						class={'px-4 py-3 ' +
+						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' +
 							(expense.effectiveAmount < 0
 								? 'bg-red-100 text-red-700'
 								: expense.effectiveAmount > 0
 									? 'bg-green-100 text-green-700'
 									: '')}>{(expense.effectiveAmount / 100).toFixed(2)}€</TableBodyCell
 					>
-					<TableBodyCell class="max-w-64 truncate px-4 py-3">{expense.store}</TableBodyCell>
-					<TableBodyCell class="max-w-96 truncate px-4 py-3"
+					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
+						>{expense.store}</TableBodyCell
+					>
+					<TableBodyCell class="hidden max-w-96 truncate px-4 py-3 md:table-cell"
 						>{expense.description}
 						{expense.positions
 							.map(
@@ -776,28 +852,13 @@
 							)
 							.join(', ')}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
-						{#if expense.isTaxRelevant}
-							<span class="rounded-md bg-green-100 px-2 py-1 text-green-700">Steuerrelevant</span>
-						{/if}
-						{#if expense.isTemplate}
-							<span class="rounded-md bg-blue-100 px-2 py-1 text-blue-700">Vorlage</span>
-						{/if}
-						{#if expense.isUnchecked}
-							<span class="rounded-md bg-red-100 px-2 py-1 text-yellow-700">Unbestätigt</span>
-						{/if}
-						{#if expense.isIncomplete}
-							<span class="rounded-md bg-red-100 px-2 py-1 text-red-700">Unvollständig</span>
-						{/if}
-						{#if expense.isExtraordinary}
-							<span class="rounded-md bg-purple-100 px-2 py-1 text-purple-700">Außergewöhnlich</span
-							>
-						{/if}
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
+						{@render statusBadges(expense)}
 					</TableBodyCell>
 				</TableBodyRow>
 				{#if expandedRows.includes(expense.id)}
 					<tr>
-						<td colspan="5" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
+						<td colspan="8" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
 							<div class="flex flex-col gap-2">
 								<div>
 									<b>Leistungszeitraum:</b>
@@ -1003,23 +1064,34 @@
 					von
 					<span class="font-semibold text-gray-900 dark:text-white">{totalCount}</span>
 				</span>
+				<!-- Up to nine buttons do not fit next to each other on a phone, and the row wrapped
+				     into three. There the two arrows are the whole control: which page of how many
+				     is what the "Einträge 31-45 von 700" beside them already says. -->
 				<ButtonGroup>
 					<Button onclick={() => currentPage--} disabled={currentPage <= 1}>
 						<ChevronLeftOutline size="xs" class="m-1.5" />
 					</Button>
 					{#if currentPage > 3}
-						<Button disabled={currentPage === 1} onclick={() => (currentPage = 1)}>1</Button>
-						<Button disabled>...</Button>
+						<Button
+							class="hidden md:inline-flex"
+							disabled={currentPage === 1}
+							onclick={() => (currentPage = 1)}>1</Button
+						>
+						<Button class="hidden md:inline-flex" disabled>...</Button>
 					{/if}
 					{#each [currentPage - 2, currentPage - 1, currentPage, currentPage + 1, currentPage + 2].filter((page) => page > 0 && page <= totalPages) as pageNumber (pageNumber)}
-						<Button disabled={currentPage === pageNumber} onclick={() => (currentPage = pageNumber)}
-							>{pageNumber}</Button
+						<Button
+							class="hidden md:inline-flex"
+							disabled={currentPage === pageNumber}
+							onclick={() => (currentPage = pageNumber)}>{pageNumber}</Button
 						>
 					{/each}
 					{#if currentPage < totalPages - 2}
-						<Button disabled>...</Button>
-						<Button disabled={currentPage === totalPages} onclick={() => (currentPage = totalPages)}
-							>{totalPages}</Button
+						<Button class="hidden md:inline-flex" disabled>...</Button>
+						<Button
+							class="hidden md:inline-flex"
+							disabled={currentPage === totalPages}
+							onclick={() => (currentPage = totalPages)}>{totalPages}</Button
 						>
 					{/if}
 					<Button onclick={() => currentPage++} disabled={currentPage >= totalPages}>

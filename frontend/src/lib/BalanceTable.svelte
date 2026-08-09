@@ -345,11 +345,19 @@
 				Konto
 				{@render sortIcon('account')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('amount')}>
+			<TableHeadCell
+				class="px-2 py-3 text-right md:px-4"
+				scope="col"
+				onclick={() => sortByField('amount')}
+			>
 				Betrag
 				{@render sortIcon('amount')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('comments')}>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('comments')}
+			>
 				Kommentare
 				{@render sortIcon('comments')}
 			</TableHeadCell>
@@ -357,8 +365,8 @@
 		<TableBody class="divide-y">
 			{#each balances as balance (balance.id)}
 				<TableBodyRow onclick={() => toggleRow(balance.id)}>
-					<TableBodyCell class="px-4 py-3">
-						<button type="button" class="mr-2 focus:outline-none">
+					<TableBodyCell class="px-2 py-3 text-xs whitespace-nowrap md:px-4 md:text-sm">
+						<button type="button" class="mr-1 focus:outline-none md:mr-2">
 							{#if expandedRows.includes(balance.id)}
 								<ChevronDownOutline class="inline h-4 w-4" />
 							{:else}
@@ -372,7 +380,7 @@
 						})}
 					</TableBodyCell>
 					<TableBodyCell
-						class="max-w-64 truncate px-4 py-3 text-black"
+						class="w-full max-w-0 truncate px-2 py-3 text-black md:px-4"
 						style={balance.account.color ? `background-color: ${balance.account.color}` : undefined}
 					>
 						{#if balance.account.owner.name != $basicStore.data?.users.me.name}
@@ -382,14 +390,16 @@
 						{/if}
 					</TableBodyCell>
 					<TableBodyCell
-						class={'px-4 py-3 ' +
+						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' +
 							(balance.amount < 0
 								? 'bg-red-100 text-red-700'
 								: balance.amount > 0
 									? 'bg-green-100 text-green-700'
 									: '')}>{(balance.amount / 100).toFixed(2)}€</TableBodyCell
 					>
-					<TableBodyCell class="max-w-96 truncate px-4 py-3">{balance.comments}</TableBodyCell>
+					<TableBodyCell class="hidden max-w-96 truncate px-4 py-3 md:table-cell"
+						>{balance.comments}</TableBodyCell
+					>
 				</TableBodyRow>
 				{#if expandedRows.includes(balance.id)}
 					<tr>

@@ -82,24 +82,30 @@
 
 		<TableHead>
 			<TableHeadCell class="px-4 py-3">Datum</TableHeadCell>
-			<TableHeadCell class="px-4 py-3">Konto</TableHeadCell>
-			<TableHeadCell class="px-4 py-3">Betrag</TableHeadCell>
-			<TableHeadCell class="px-4 py-3">Verwendungszweck</TableHeadCell>
+			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Konto</TableHeadCell>
+			<TableHeadCell class="px-2 py-3 text-right md:px-4 md:text-left">Betrag</TableHeadCell>
+			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Verwendungszweck</TableHeadCell>
 			<TableHeadCell class="px-4 py-3">Status</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each deliveries as delivery (delivery.id)}
 				<TableBodyRow>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="w-full max-w-0 px-2 py-3 whitespace-normal md:px-4">
 						{shortDate(delivery.date)}
+						<!-- the account and the statement text, which are columns of their own from md
+						     on: a booking without its text says nothing about what it was -->
+						<span class="mt-1 block text-xs text-gray-500 md:hidden dark:text-gray-400">
+							{accountNames.get(delivery.accountId) ?? '?'} ·
+							<span class="wrap-anywhere">{delivery.statement}</span>
+						</span>
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{accountNames.get(delivery.accountId) ?? '?'}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="px-2 py-3 text-right whitespace-nowrap md:px-4 md:text-left">
 						{(delivery.amount / 100).toFixed(2)}€
 					</TableBodyCell>
-					<TableBodyCell class="max-w-md truncate px-4 py-3 text-xs">
+					<TableBodyCell class="hidden max-w-md truncate px-4 py-3 text-xs md:table-cell">
 						{delivery.statement}
 					</TableBodyCell>
 					<TableBodyCell class="px-4 py-3">

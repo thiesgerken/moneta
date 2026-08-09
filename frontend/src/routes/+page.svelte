@@ -373,8 +373,11 @@
 		</Card>
 	{/if}
 
-	<div class="grid gap-4 lg:grid-cols-2">
-		<div class="space-y-4">
+	<!-- min-w-0 on the cell as well as on the grid: a grid item is min-content wide by default,
+	     and apexcharts measures the box it is handed. The donut asked for 556px on a 390px
+	     screen, the column grew to fit it, and the whole page scrolled sideways. -->
+	<div class="grid min-w-0 gap-4 lg:grid-cols-2">
+		<div class="min-w-0 space-y-4">
 			<!-- Was ansteht: each card is a link to the thing it is talking about, and none of
 			     them show up when there is nothing to say -->
 			<div class="space-y-2">
@@ -505,7 +508,7 @@
 		     the page. Absolute inside a relative cell so the row is sized by the left column
 		     alone and the feed scrolls inside whatever is left; static below lg, where the two
 		     are stacked and there is nothing to line up with. -->
-		<div class="lg:relative">
+		<div class="min-w-0 lg:relative">
 			<Card
 				class="flex max-w-none flex-col border-0 bg-white p-4 lg:absolute lg:inset-0 dark:bg-gray-800"
 			>
@@ -532,8 +535,10 @@
 					{/if}
 				</p>
 				<!-- min-h-0, or the flex child refuses to shrink below its content and the card
-				     grows the row after all -->
-				<div class="max-h-112 min-h-0 flex-1 overflow-y-auto lg:max-h-none">
+				     grows the row after all. The scroll is only for the lg case, where the feed has
+				     to fit a cell sized by the column beside it: a scrolling box inside a scrolling
+				     page is a trap on a touch screen, and there is nothing to line up with anyway. -->
+				<div class="min-h-0 flex-1 lg:overflow-y-auto">
 					<ExpenseChangelog
 						limit={25}
 						controls={false}
