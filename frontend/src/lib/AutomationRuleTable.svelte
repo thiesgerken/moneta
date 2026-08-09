@@ -156,33 +156,43 @@
 
 		<TableHead>
 			<TableHeadCell class="px-4 py-3">Titel</TableHeadCell>
-			<TableHeadCell class="px-4 py-3">Verwendungszweck</TableHeadCell>
-			<TableHeadCell class="px-4 py-3">Konto</TableHeadCell>
-			<TableHeadCell class="px-4 py-3">Betrag</TableHeadCell>
-			<TableHeadCell class="px-4 py-3">Prio</TableHeadCell>
-			<TableHeadCell class="px-4 py-3">Zuletzt</TableHeadCell>
+			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Verwendungszweck</TableHeadCell>
+			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Konto</TableHeadCell>
+			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Betrag</TableHeadCell>
+			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Prio</TableHeadCell>
+			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Zuletzt</TableHeadCell>
 			<TableHeadCell class="px-4 py-3"></TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each rules as rule (rule.id)}
 				<TableBodyRow>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="w-full max-w-0 px-4 py-3 whitespace-normal">
 						{rule.title}
 						{#if !rule.templateId}
 							<Badge color="red" class="ml-2">Vorlage fehlt</Badge>
 						{/if}
+						<!-- Six columns do not fit on a phone, and a rule is nothing without the pattern
+						     it matches on, so the hidden ones come back as a line under the title
+						     rather than being dropped. -->
+						<span class="mt-1 block text-xs text-gray-500 md:hidden dark:text-gray-400">
+							<span class="font-mono wrap-anywhere">{rule.regexStatement ?? '–'}</span>
+							· {rule.filterAccountId ? (accountNames.get(rule.filterAccountId) ?? '?') : '–'}
+							· {rule.filterAmount != null ? (rule.filterAmount / 100).toFixed(2) + '€' : '–'}
+							· Prio {rule.priority}
+							· {rule.lastDelivery ? shortDate(rule.lastDelivery) : '–'}
+						</span>
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3 font-mono text-xs">
+					<TableBodyCell class="hidden px-4 py-3 font-mono text-xs md:table-cell">
 						{rule.regexStatement ?? '–'}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{rule.filterAccountId ? (accountNames.get(rule.filterAccountId) ?? '?') : '–'}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{rule.filterAmount != null ? (rule.filterAmount / 100).toFixed(2) + '€' : '–'}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">{rule.priority}</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">{rule.priority}</TableBodyCell>
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{rule.lastDelivery ? shortDate(rule.lastDelivery) : '–'}
 					</TableBodyCell>
 					<TableBodyCell class="px-4 py-3 text-right">
