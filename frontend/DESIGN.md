@@ -124,7 +124,13 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   to it but a reload. One column at a time; the API takes one `sortBy`.
 - **Column widths are fixed**, not derived from the page being shown. `table-fixed` with a width
   on every header cell but the one or two that take what is left. Auto layout re-measured on
-  every page turn, so the same list moved its columns as you paged through it.
+  every page turn, so the same list moved its columns as you paged through it. A fixed table
+  also lays out as many columns as the _widest row_ declares, so a detail row's `colspan` has to
+  match the number of columns the breakpoint is actually showing — nine over three invents six
+  empty ones and shares the width between all nine.
+- **A detail row is two columns from `lg`**: what is prose on the left as a `dl`, what is a table
+  on the right. A row of the expense list is two thousand pixels wide and its detail used to be
+  one narrow stack down the left of it.
 - A filtered list says so: `ExpenseTable` renders a "Gefiltert nach …" line with one removable
   chip per active filter. A list that arrives pre-filtered from somewhere else must never look
   like the whole list, only shorter.
