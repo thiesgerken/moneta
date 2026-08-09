@@ -739,8 +739,10 @@
 		     line, since "braucht Prüfung" is what somebody opens this list on a phone for. Eight
 		     columns on a 390px screen meant scrolling sideways past the date to reach the amount. -->
 		<TableHead>
+			<!-- pl to clear the chevron: it hangs in the column's left margin, and without this the
+			     label started 24px to the left of every date under it. -->
 			<TableHeadCell
-				class="w-24 px-2 py-3 whitespace-nowrap md:w-28 md:px-4"
+				class="w-24 py-3 pr-2 pl-7 whitespace-nowrap md:w-28 md:pr-4 md:pl-10"
 				scope="col"
 				onclick={() => sortByField('accrualStart')}
 			>
@@ -868,7 +870,11 @@
 								? 'bg-red-100 text-red-700'
 								: expense.effectiveAmount > 0
 									? 'bg-green-100 text-green-700'
-									: '')}>{(expense.effectiveAmount / 100).toFixed(2)}€</TableBodyCell
+									: // zero is not "no colour": it is an expense that moved money between two of
+										// your own accounts and came out even, which is a third thing rather than a
+										// missing one. Blue, since it is neither a loss nor a gain.
+										'bg-blue-100 text-blue-700')}
+						>{(expense.effectiveAmount / 100).toFixed(2)}€</TableBodyCell
 					>
 					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
 						>{expense.store}</TableBodyCell
