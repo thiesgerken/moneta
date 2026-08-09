@@ -18,6 +18,6 @@ RUN touch src/lib.rs && touch src/bin/moneta.rs
 RUN cargo build --release
 RUN strip -s target/release/moneta
 
-FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
+FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 COPY --from=builder /build/target/release/moneta /bin/moneta
 CMD moneta
