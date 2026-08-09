@@ -117,17 +117,8 @@ function linear(channel: number): number {
 	return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
 
-/// Text that can be read on `color`.
-///
-/// Account and category colours come out of a picker, so nothing stops one being near-black --
-/// and the cells tinted with them wrote their name in black regardless, which on a dark purple
-/// was a black bar with no text in it.
-///
-/// The threshold is 0.179 rather than a midpoint: white text and black text have equal contrast
-/// against a background of exactly that luminance, so it is the point where the better of the
-/// two changes over. Half-way would call the mid greens and purples this palette is full of
-/// light and leave them barely legible.
-export function readableTextOn(color: string): string {
+/// How bright a hex colour is, or null if it is not one.
+function luminance(color: string): number | null {
 	const hex = color.replace('#', '');
 	const full =
 		hex.length < 6
@@ -139,11 +130,35 @@ export function readableTextOn(color: string): string {
 			: hex.slice(0, 6);
 
 	const [r, g, b] = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
-	// an unparseable colour is nobody's idea of dark; leave the page's own text colour alone
-	if ([r, g, b].some(Number.isNaN)) return 'inherit';
+	if ([r, g, b].some(Number.isNaN)) return null;
 
-	const luminance = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
-	return luminance > 0.179 ? '#000' : '#fff';
+	return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+}
+
+/// Text that can be read on all of `colors` at once.
+///
+/// Account and category colours come out of a picker, so nothing stops one being near-black --
+/// and the cells tinted with them wrote their name in black regardless, which on a dark purple
+/// was a black bar with no text in it.
+///
+/// More than one colour because a shared expense stripes its account cell by weight and its text
+/// crosses every stripe: two thirds of the list here is shared, so this is the normal case rather
+/// than the exception. Black text is at its worst on the darkest stripe and white text on the
+/// lightest, so those two decide it and the ones in between cannot be worse than both. Where a
+/// cell mixes a light colour with a dark one neither answer is good, and this picks the less bad
+/// one; the honest fix for that is not to give two accounts colours that far apart.
+///
+/// With one colour it reduces to the usual crossover at a luminance of 0.179, which is where
+/// black and white have equal contrast. A midpoint would call the mid greens and purples this
+/// palette is full of light and leave them barely legible.
+export function readableTextOn(...colors: string[]): string {
+	const brightness = colors.map(luminance).filter((l) => l !== null);
+	// an unparseable colour is nobody's idea of dark; leave the page's own text colour alone
+	if (brightness.length === 0) return 'inherit';
+
+	const black = (Math.min(...brightness) + 0.05) / 0.05;
+	const white = 1.05 / (Math.max(...brightness) + 0.05);
+	return black >= white ? '#000' : '#fff';
 }
 
 /// The whole inline style for something drawn in an account's or a category's own colour.
@@ -172,9 +187,8 @@ export function makeStripedBackground(segments: { color: string; percentage: num
 		sum += segments[i].percentage;
 	}
 
-	// One piece of text over several stripes, so it follows the widest one -- which is the one
-	// most of the text sits on, and for the single-colour case is the only one there is.
-	return `${s});color: ${readableTextOn(segments[0].color)};`;
+	// One piece of text over every stripe, so it has to be readable on all of them at once.
+	return `${s});color: ${readableTextOn(...segments.map((segment) => segment.color))};`;
 }
 
 export interface SortableAccount {
