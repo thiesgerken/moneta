@@ -38,7 +38,8 @@
 		formatAccrualPeriod,
 		formatCategories,
 		makeAccountColor,
-		makeCategoryColor
+		makeCategoryColor,
+		tint
 	} from './expense_utils';
 	import ExpenseModal from './ExpenseModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
@@ -586,15 +587,17 @@
 				     the cells it left standing look like each other -->
 				<span
 					class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 {filter.color
-						? 'text-black'
+						? ''
 						: 'bg-gray-200 dark:bg-gray-700'}"
-					style={filter.color ? `background-color: ${filter.color}` : undefined}
+					style={tint(filter.color)}
 				>
 					{filter.label}
+					<!-- dimmed rather than grey: on a tinted chip the text colour is whatever the tint
+					     needs, and a fixed grey × was invisible on the dark ones -->
 					<button
 						type="button"
 						aria-label="{filter.label} entfernen"
-						class="text-gray-500 hover:text-gray-900 dark:hover:text-white"
+						class="opacity-60 hover:opacity-100"
 						onclick={filter.clear}
 					>
 						×
@@ -820,7 +823,7 @@
 						</span>
 					</TableBodyCell>
 					<TableBodyCell
-						class="hidden max-w-64 truncate px-4 py-3 text-black md:table-cell"
+						class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
 						style={makeAccountColor(expense.transactions, expense.referenceAmount)}
 						>{formatTransactionAccounts(
 							expense.transactions,
@@ -828,7 +831,7 @@
 						)}</TableBodyCell
 					>
 					<TableBodyCell
-						class="hidden max-w-64 truncate px-4 py-3 text-black md:table-cell"
+						class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
 						style={makeCategoryColor(expense.categories)}
 						>{formatCategories(expense.categories)}</TableBodyCell
 					>

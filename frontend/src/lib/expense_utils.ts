@@ -111,7 +111,69 @@ export function makeCategoryColor(
 	return makeStripedBackground(segments);
 }
 
+/// One sRGB channel, undone from the display gamma, as the luminance formula wants it.
+function linear(channel: number): number {
+	const c = channel / 255;
+	return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
+/// How bright a hex colour is, or null if it is not one.
+function luminance(color: string): number | null {
+	const hex = color.replace('#', '');
+	const full =
+		hex.length < 6
+			? hex
+					.slice(0, 3)
+					.split('')
+					.map((c) => c + c)
+					.join('')
+			: hex.slice(0, 6);
+
+	const [r, g, b] = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+	if ([r, g, b].some(Number.isNaN)) return null;
+
+	return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+}
+
+/// Text that can be read on all of `colors` at once.
+///
+/// Account and category colours come out of a picker, so nothing stops one being near-black --
+/// and the cells tinted with them wrote their name in black regardless, which on a dark purple
+/// was a black bar with no text in it.
+///
+/// More than one colour because a shared expense stripes its account cell by weight and its text
+/// crosses every stripe: two thirds of the list here is shared, so this is the normal case rather
+/// than the exception. Black text is at its worst on the darkest stripe and white text on the
+/// lightest, so those two decide it and the ones in between cannot be worse than both. Where a
+/// cell mixes a light colour with a dark one neither answer is good, and this picks the less bad
+/// one; the honest fix for that is not to give two accounts colours that far apart.
+///
+/// With one colour it reduces to the usual crossover at a luminance of 0.179, which is where
+/// black and white have equal contrast. A midpoint would call the mid greens and purples this
+/// palette is full of light and leave them barely legible.
+export function readableTextOn(...colors: string[]): string {
+	const brightness = colors.map(luminance).filter((l) => l !== null);
+	// an unparseable colour is nobody's idea of dark; leave the page's own text colour alone
+	if (brightness.length === 0) return 'inherit';
+
+	const black = (Math.min(...brightness) + 0.05) / 0.05;
+	const white = 1.05 / (Math.max(...brightness) + 0.05);
+	return black >= white ? '#000' : '#fff';
+}
+
+/// The whole inline style for something drawn in an account's or a category's own colour.
+///
+/// Text colour belongs with the tint rather than with the element: every caller needs both, and
+/// the ones that hardcoded `text-black` are exactly the ones that went unreadable.
+export function tint(color: string | null | undefined): string | undefined {
+	return color ? `background-color: ${color}; color: ${readableTextOn(color)};` : undefined;
+}
+
 export function makeStripedBackground(segments: { color: string; percentage: number }[]) {
+	// An empty list used to produce `linear-gradient(to right, )`, which is not a gradient and
+	// which the browser therefore dropped along with the rest of the declaration.
+	if (segments.length === 0) return undefined;
+
 	segments.sort((a, b) => b.percentage - a.percentage);
 	let s = 'background: linear-gradient(to right, ';
 
@@ -125,7 +187,8 @@ export function makeStripedBackground(segments: { color: string; percentage: num
 		sum += segments[i].percentage;
 	}
 
-	return s + ');';
+	// One piece of text over every stripe, so it has to be readable on all of them at once.
+	return `${s});color: ${readableTextOn(...segments.map((segment) => segment.color))};`;
 }
 
 export interface SortableAccount {
