@@ -151,6 +151,22 @@ expenses; narrowing it would drop real payments. There are tests for both direct
 **`moneta import` reads the export on stdin and matches users by name**, so every user in the
 export must already exist in moneta or it panics. `--clear` wipes everything _except_ users.
 
+**moneydb's own prepayment view is the reference for the chain logic.**
+`lib/Moneydb/Computation/Prepayment.hs` in the sibling checkout groups by title, runs the clearing
+balance to its last zero and reports what is left — the same two rules `Chain` uses, arrived at
+separately and then found to agree. It also skips anything flagged `Compensated`, which is what
+that flag is for: an entry a reader marked as not counting towards what is still open. Read that
+file before changing how chains are cut.
+
+**The import is not one moneta expense per moneydb expense.** `Chain` in `import.rs` folds the
+prepayment and refund chains that ran over moneydb's "Vorauszahlungen" clearing account back into
+one expense each — around 1650 rows become 340 — so a moneydb id resolves to a merged expense,
+several of them to the same one. Two things follow. Every real account keeps its balance to the
+cent, because a merge only ever drops legs on the clearing account, and that invariant is worth
+re-checking against the export after touching this. And a periodic rule whose template was one of
+the monthly drawdowns is dropped rather than kept: the mechanism it fed is gone, and left in place
+it would generate a copy of the whole merged expense every month.
+
 **`GRAPHQL_API_URL` is vestigial.** It fed the server-side houdini client, which no longer
 exists — the request url now comes from `houdini.config.js` and is relative. It is still set
 in `docker-compose.yaml` and read by the frontend `dev` script; neither has any effect.
