@@ -137,6 +137,15 @@ table thead th {
 	border-bottom-color: var(--color-gray-700);
 }
 
+/* A fixed layout gives a column the width the header asked for and nothing stops the content
+   from being wider -- the date ran twenty pixels past the rule into the title beside it. Sizing
+   the columns for their content is the fix; this is what keeps the next thing that outgrows one
+   from crossing a line, since a clipped cell is wrong in a way you can see. */
+table.table-fixed th,
+table.table-fixed td {
+	overflow: hidden;
+}
+
 /* Which row the pointer is on, and which one is open. Zebra striping did neither: flowbite
    paints the even rows in gray-50 and hovers in gray-50 as well, so half the table did not
    react to the pointer at all. One shade, two states, and the stripes go. */

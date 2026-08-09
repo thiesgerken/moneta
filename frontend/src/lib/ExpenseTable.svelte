@@ -742,7 +742,7 @@
 			<!-- pl to clear the chevron: it hangs in the column's left margin, and without this the
 			     label started 24px to the left of every date under it. -->
 			<TableHeadCell
-				class="w-24 py-3 pr-2 pl-7 whitespace-nowrap md:w-28 md:pr-4 md:pl-10"
+				class="w-28 py-3 pr-2 pl-7 whitespace-nowrap md:w-36 md:pr-4 md:pl-10"
 				scope="col"
 				onclick={() => sortByField('accrualStart')}
 			>
@@ -754,7 +754,7 @@
 				{@render sortIcon('title')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell md:w-32"
+				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
 				onclick={() => sortByField('accounts')}
 			>
@@ -770,7 +770,7 @@
 				{@render sortIcon('categories')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="w-24 px-2 py-3 text-right md:w-28 md:px-4"
+				class="w-28 px-2 py-3 text-right md:w-32 md:px-4"
 				scope="col"
 				onclick={() => sortByField('effectiveAmount')}
 			>
@@ -778,7 +778,7 @@
 				{@render sortIcon('effectiveAmount')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell md:w-28"
+				class="hidden px-4 py-3 md:table-cell md:w-32"
 				scope="col"
 				onclick={() => sortByField('store')}
 			>
@@ -786,7 +786,7 @@
 				{@render sortIcon('store')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell md:w-36"
+				class="hidden px-4 py-3 md:table-cell md:w-56"
 				scope="col"
 				onclick={() => sortByField('description')}
 			>
