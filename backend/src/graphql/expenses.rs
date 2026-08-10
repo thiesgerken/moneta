@@ -18,9 +18,10 @@ use crate::models::rendering::RenderedExpenseTransaction;
 use crate::models::rendering::{
     RenderedExpense, RenderedExpenseCreateInput, RenderedExpenseInput, RenderedExpenseUpdateInput,
 };
-use crate::models::{Account, Expense};
+use crate::models::{Account, AutomationRule, Expense};
 use crate::queries;
-use crate::schema::{expense_categorizations, expense_changes, expenses};
+use crate::rules;
+use crate::schema::{automation_rules, expense_categorizations, expense_changes, expenses};
 use crate::schema_views::{expense_transactions_rendered, expenses_rendered};
 
 use chrono::DateTime;
@@ -801,6 +802,83 @@ impl ExpenseMutation {
                     old_state: Some(Json(old_state)),
                     new_state: Some(Json(updated.clone())),
                     tool: None,
+                    automatic: false,
+                    confidence: 1.0,
+                })
+                .execute(conn)
+                .await?;
+
+            Ok(())
+        })
+        .await?;
+
+        Ok(GraphQLExpense::new(
+            load_rendered(conn, user_id, upstream_id).await?,
+        ))
+    }
+
+    /// Runs the automation rules over an expense again, as though its bank line had only just
+    /// arrived, and replaces it with what the matching rule produces.
+    ///
+    /// Everything the rule decides is overwritten -- title, categories, the other side of a
+    /// split, the flags. What the bank said stays: the amount, the date and the statement are
+    /// imposed back onto the template, exactly as they were on delivery. That is the whole
+    /// point of the button: a rule fixed after the fact should be able to reach the expenses
+    /// that were filed before it was.
+    ///
+    /// Nothing is recorded in `seen_deliveries`: the line was delivered once already, and a
+    /// second record of it is what would make the next statement upload skip a real payment.
+    pub async fn resort(context: &Context, id: Uuid) -> FieldResult<GraphQLExpense> {
+        let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
+
+        let upstream_id = load_rendered(conn, user_id, id).await?.upstream_id;
+        let now = Utc::now();
+
+        let old_state = queries::load_expense(conn, upstream_id)
+            .await?
+            .ok_or_else(|| -> juniper::FieldError { "Diese Ausgabe gibt es nicht mehr.".into() })?;
+
+        let delivery = rules::delivery_of(&old_state).ok_or_else(|| -> juniper::FieldError {
+            "Diese Ausgabe hat keine Banktransaktion, nach der sie einsortiert werden könnte."
+                .into()
+        })?;
+
+        let all_rules = automation_rules::table
+            .filter(automation_rules::user_id.eq(user_id))
+            .select(AutomationRule::as_select())
+            .load(conn)
+            .await?;
+
+        let rule = rules::best_match(&all_rules, &delivery).ok_or_else(|| -> juniper::FieldError {
+            "Keine Automatisierungsregel trifft auf diese Ausgabe zu.".into()
+        })?;
+
+        let template = queries::load_expense(conn, rule.template_id)
+            .await?
+            .ok_or_else(|| -> juniper::FieldError {
+                format!("Die Regel {:?} hat keine Vorlage.", rule.title).into()
+            })?;
+
+        let mut sorted = rules::impose(&template, &delivery, now).map_err(|e| e.to_string())?;
+        sorted.validate().map_err(|e| e.to_string())?;
+        sorted.id = upstream_id;
+        sorted.created_at = old_state.created_at;
+        sorted.updated_at = now;
+
+        conn.transaction::<_, diesel::result::Error, _>(async |conn| {
+            queries::replace_expense(conn, &sorted).await?;
+
+            diesel::insert_into(expense_changes::table)
+                .values(&ExpenseChangelogEntry {
+                    id: Uuid::now_v7(),
+                    user_id: Some(user_id),
+                    target_id: upstream_id,
+                    date: now,
+                    old_state: Some(Json(old_state)),
+                    new_state: Some(Json(sorted.clone())),
+                    tool: Some("Einsortieren".into()),
+                    // a person pressed the button; the rule only decided the outcome
                     automatic: false,
                     confidence: 1.0,
                 })

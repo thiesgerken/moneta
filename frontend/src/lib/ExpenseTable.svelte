@@ -26,6 +26,7 @@
 		ChevronRightOutline,
 		ChevronLeftOutline,
 		ChevronDownOutline,
+		ArchiveArrowDownOutline,
 		EditOutline,
 		TrashBinOutline,
 		ExclamationCircleOutline,
@@ -66,6 +67,7 @@
 	let showDeleteExpenseModal = $state(false);
 	let expenseIdToEdit: string | undefined = $state(undefined);
 	let expenseIdToDelete: string | undefined = $state(undefined);
+	let expenseIdToResort: string | undefined = $state(undefined);
 
 	let filteredAccounts = $state<string[]>([]);
 	let filteredCategories = $state<string[]>([]);
@@ -416,6 +418,7 @@
 
 	let expenseToEdit = $derived(expenses.find((e) => e.id === expenseIdToEdit) || undefined);
 	let expenseToDelete = $derived(expenses.find((e) => e.id === expenseIdToDelete) || undefined);
+	let expenseToResort = $derived(expenses.find((e) => e.id === expenseIdToResort) || undefined);
 
 	/// The bank's own text for an expense, which is several strings when it is split over more
 	/// than one transaction. Newlines collapse: the cell is one line and the full text is in the
@@ -492,6 +495,40 @@
 	`);
 
 	async function handleExpenseModalSubmit() {
+		cache.markStale('Expense');
+		await expenseStore.fetch({ variables: expenseVariables() });
+		expandedRows = [];
+	}
+
+	const ResortExpense = graphql(`
+		mutation ResortExpense($id: UUID!) {
+			expenses {
+				resort(id: $id) {
+					id
+				}
+			}
+		}
+	`);
+
+	let showResortExpenseModal = $state(false);
+	let resortError: string | undefined = $state(undefined);
+
+	async function handleResortExpense() {
+		if (!expenseToResort) return;
+		resortError = undefined;
+
+		const result = await ResortExpense.mutate({ id: expenseToResort.id });
+		// The two things that go wrong here are the reader's to fix -- no rule matches, or the
+		// expense never came from a bank -- so the modal says so and stays open rather than
+		// closing on a sentence nobody read.
+		if (result.errors?.length) {
+			resortError = result.errors.map((e) => e.message).join(' ');
+			return;
+		}
+
+		showResortExpenseModal = false;
+		expenseIdToResort = undefined;
+
 		cache.markStale('Expense');
 		await expenseStore.fetch({ variables: expenseVariables() });
 		expandedRows = [];
@@ -584,6 +621,40 @@
 		▼
 	{/if}
 {/snippet}
+
+<Modal bind:open={showResortExpenseModal} size="sm">
+	<div class="text-center">
+		<ExclamationCircleOutline class="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-200" />
+		<h3 class="mb-3 text-lg font-normal text-gray-500 dark:text-gray-400">
+			Soll <b>{expenseToResort?.title}</b> neu einsortiert werden?
+		</h3>
+		<!-- Said plainly because it cannot be undone from here: what the rule decides replaces
+		     what is there, including anything corrected by hand since. -->
+		<p class="mb-5 text-sm text-gray-500 dark:text-gray-400">
+			Die Automatisierungsregeln laufen erneut über die Ausgabe, als wäre ihre Bankzeile gerade erst
+			geliefert worden. Titel, Kategorien, Konten und Merkmale werden von der passenden Regel
+			überschrieben; Betrag, Datum und Transaktionstext bleiben.
+		</p>
+		{#if resortError}
+			<p class="mb-5 text-sm text-red-600 dark:text-red-400">{resortError}</p>
+		{/if}
+		<div class="space-x-2">
+			<Button type="submit" value="resort" onclick={handleResortExpense}>Einsortieren</Button>
+			<Button
+				type="submit"
+				value="cancel"
+				color="alternative"
+				onclick={() => {
+					showResortExpenseModal = false;
+					expenseIdToResort = undefined;
+					resortError = undefined;
+				}}
+			>
+				Abbrechen
+			</Button>
+		</div>
+	</div>
+</Modal>
 
 <Modal bind:open={showDeleteExpenseModal} size="xs">
 	<div class="text-center">
@@ -723,6 +794,18 @@
 						}}
 					>
 						<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
+					</Button>
+					<Button
+						color="alternative"
+						class="hidden md:inline-flex"
+						disabled={!selectedExpenseId}
+						onclick={() => {
+							expenseIdToResort = selectedExpenseId;
+							resortError = undefined;
+							showResortExpenseModal = true;
+						}}
+					>
+						<ArchiveArrowDownOutline class="mr-2 h-3.5 w-3.5" />Einsortieren
 					</Button>
 					<!-- Stacked, the filters filled a phone screen before a single expense appeared,
 					     so on small screens they fold behind this. -->
