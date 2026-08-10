@@ -687,7 +687,10 @@ type ExpenseStateTransaction {
 
 type ExpenseTransaction {
   account: Account!
+  "when the money moved (Wertstellung)"
   date: DateTime!
+  "when the bank posted the line; null for anything not delivered by one"
+  bookingDate: DateTime
   amount: Int
   fraction: Float
   comments: String!

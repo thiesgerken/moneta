@@ -72,6 +72,7 @@
 				readonly effectiveAmount: number;
 				readonly amount: number | null;
 				readonly date: Date;
+				readonly bookingDate: Date | null;
 				readonly statement: string;
 				readonly account: {
 					readonly id: string;
@@ -118,6 +119,7 @@
 	// been dead. An assignment into $state is proxied and reaches the template.
 	interface TransactionRow {
 		date: Date | undefined;
+		bookingDate: Date | undefined;
 		accountId: string;
 		amount: string;
 		statement: string;
@@ -134,6 +136,7 @@
 
 	const emptyTransaction = (): TransactionRow => ({
 		date: undefined,
+		bookingDate: undefined,
 		accountId: '',
 		amount: '',
 		statement: '',
@@ -156,6 +159,7 @@
 		})) || [{ categoryId: '', weight: '1' }];
 		transactions = expense?.transactions.map((tx) => ({
 			date: tx.date ? new Date(tx.date) : undefined,
+			bookingDate: tx.bookingDate ? new Date(tx.bookingDate) : undefined,
 			accountId: tx.account.id.toString(),
 			amount: tx.amount ? (tx.amount / 100).toFixed(2) : '',
 			statement: tx.statement || '',
@@ -204,6 +208,36 @@
 		if (transactions.length > 1) {
 			transactions = transactions.slice(0, i).concat(transactions.slice(i + 1));
 		}
+	}
+
+	/// Switching a transaction between a fixed amount and a share of the reference amount keeps
+	/// what it is worth. Without this the number stayed where it was and silently meant something
+	/// else: -16.49 € became -16.49 % of the reference amount, which is nobody's intention.
+	function toggleRelative(i: number) {
+		const tx = transactions[i];
+
+		if (!tx.isRelative) {
+			// A split is entered by taking the one transaction that is already there and adding a
+			// share beside it, so the amount on that one is what the shares are shares of. Only
+			// when it is unambiguous: one other transaction, with an amount, and nothing to
+			// overwrite.
+			if (!Number(referenceAmount)) {
+				const fixed = transactions.filter((t, j) => j !== i && !t.isRelative && Number(t.amount));
+				if (fixed.length === 1) referenceAmount = fixed[0].amount;
+			}
+
+			const reference = Number(referenceAmount);
+			if (reference && Number(tx.amount)) {
+				tx.percentage = String(Math.round((Number(tx.amount) / reference) * 10000) / 100);
+			}
+		} else {
+			const reference = Number(referenceAmount);
+			if (reference && tx.percentage !== '' && !isNaN(Number(tx.percentage))) {
+				tx.amount = ((Number(tx.percentage) / 100) * reference).toFixed(2);
+			}
+		}
+
+		tx.isRelative = !tx.isRelative;
 	}
 	function addPosition() {
 		positions = [
@@ -348,6 +382,7 @@
 			})),
 			transactions: transactions.map((tx) => ({
 				date: tx.date || accrualStart!,
+				bookingDate: tx.bookingDate,
 				accountId: tx.accountId,
 				amount: !tx.isRelative ? Number(tx.amount) * 100 : undefined,
 				fraction: tx.isRelative ? Number(tx.percentage) / 100 : undefined,
@@ -384,6 +419,10 @@
 	>
 		<CircleMinusOutline class="h-4 w-4" />
 	</Button>
+{/snippet}
+
+{#snippet hint(text: string)}
+	<span class="block text-xs font-normal text-gray-500 dark:text-gray-400">{text}</span>
 {/snippet}
 
 {#snippet textButton(label: string, onclick: () => void)}
@@ -543,8 +582,17 @@
 				<table data-form class="w-full text-left text-sm">
 					<thead class="bg-gray-50 dark:bg-gray-700">
 						<tr>
-							<th class="w-36 px-2" scope="col">Datum</th>
-							<th class="w-40 px-2" scope="col">Konto</th>
+							<!-- Two dates that are a day or two apart and neither of them labelled is a
+							     column nobody can fill in with confidence, so each says what it is. -->
+							<th class="w-32 px-2" scope="col">
+								Wertstellung
+								{@render hint('als das Geld floss')}
+							</th>
+							<th class="w-32 px-2" scope="col">
+								Buchung
+								{@render hint('wie die Bank sie führt')}
+							</th>
+							<th class="w-36 px-2" scope="col">Konto</th>
 							<th class="w-28 px-2" scope="col">Betrag</th>
 							<th class="px-2" scope="col">Transaktionstext</th>
 							<th class="w-10 px-2" scope="col"><span class="sr-only">Entfernen</span></th>
@@ -556,11 +604,21 @@
 								<td class="px-2">
 									<Datepicker
 										bind:value={tx.date}
-										placeholder="Datum"
+										placeholder="wie Leistung"
 										inputClass={transactionErrors[i]?.date
 											? 'border-red-600 bg-red-100 text-red-400'
 											: ''}
 									/>
+								</td>
+								<td class="px-2">
+									<!-- Only a line that came from a bank has one, and there is no way to
+									     clear a Datepicker once it holds a date -- hence the link. -->
+									{#if tx.bookingDate}
+										<Datepicker bind:value={tx.bookingDate} />
+										{@render textButton('entfernen', () => (tx.bookingDate = undefined))}
+									{:else}
+										{@render textButton('setzen', () => (tx.bookingDate = tx.date ?? accrualStart))}
+									{/if}
 								</td>
 								<td class="px-2">
 									<Select
@@ -607,7 +665,7 @@
 										{/if}
 										<button
 											type="button"
-											onclick={() => (tx.isRelative = !tx.isRelative)}
+											onclick={() => toggleRelative(i)}
 											title={tx.isRelative
 												? 'Anteil am Referenzbetrag — klicken für festen Betrag'
 												: 'Fester Betrag — klicken für Anteil am Referenzbetrag'}

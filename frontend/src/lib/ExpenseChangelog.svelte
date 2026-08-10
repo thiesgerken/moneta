@@ -176,6 +176,7 @@
 						effectiveAmount
 						amount
 						date
+						bookingDate
 						statement
 						account {
 							id

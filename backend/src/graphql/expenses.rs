@@ -80,8 +80,14 @@ impl GraphQLExpenseTransaction {
         ))
     }
 
+    /// when the money moved (Wertstellung)
     fn date(&self) -> DateTime<Utc> {
         self.data.date
+    }
+
+    /// when the bank posted the line; null for anything not delivered by one
+    fn booking_date(&self) -> Option<DateTime<Utc>> {
+        self.data.booking_date
     }
 
     fn amount(&self) -> Option<i32> {
