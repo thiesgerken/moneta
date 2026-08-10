@@ -872,8 +872,9 @@
 									? 'bg-green-100 text-green-700'
 									: // zero is not "no colour": it is an expense that moved money between two of
 										// your own accounts and came out even, which is a third thing rather than a
-										// missing one. Blue, since it is neither a loss nor a gain.
-										'bg-blue-100 text-blue-700')}
+										// missing one. Grey, since nothing left or arrived -- and gray-200 rather
+										// than the -100 the other two use, which is the shade a hovered row is.
+										'bg-gray-200 text-gray-600')}
 						>{(expense.effectiveAmount / 100).toFixed(2)}€</TableBodyCell
 					>
 					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
