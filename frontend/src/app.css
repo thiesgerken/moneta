@@ -141,8 +141,8 @@ table thead th {
    from being wider -- the date ran twenty pixels past the rule into the title beside it. Sizing
    the columns for their content is the fix; this is what keeps the next thing that outgrows one
    from crossing a line, since a clipped cell is wrong in a way you can see. */
-table.table-fixed th,
-table.table-fixed td {
+table.table-fixed > thead > tr > th,
+table.table-fixed > tbody > tr > td {
 	overflow: hidden;
 }
 

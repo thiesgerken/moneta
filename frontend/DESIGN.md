@@ -42,9 +42,10 @@ Colour carries meaning here; it is not decoration.
   nothing else. It is also the Stichtag marker, which is why the wealth curve is _not_ orange.
 - **Money direction**: green for what came in, red for what went out — `text-green-700
 dark:text-green-400` and `text-red-600 dark:text-red-400`. `deltaColor()` in
-  `analysis/overviews.ts` picks the badge colour by sign. **Zero is blue**, not blank: an expense
+  `analysis/overviews.ts` picks the badge colour by sign. **Zero is grey**, not blank: an expense
   that nets to nothing moved money between two of your own accounts, which is a third thing
-  rather than a missing one.
+  rather than a missing one. `gray-200` rather than the `-100` the other two use, since `-100`
+  is the shade a hovered row is and the cell would have vanished into it.
 - **Wealth** is `WEALTH_COLOR` (`#059669`, emerald) in `analysis/cards.ts`. A curve of what you
   own reads as a warning in orange.
 - **Categories and accounts** carry their own colour from the database. `categoryColor()` falls
@@ -124,7 +125,13 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   to it but a reload. One column at a time; the API takes one `sortBy`.
 - **Column widths are fixed**, not derived from the page being shown. `table-fixed` with a width
   on every header cell but the one or two that take what is left. Auto layout re-measured on
-  every page turn, so the same list moved its columns as you paged through it.
+  every page turn, so the same list moved its columns as you paged through it. A fixed table
+  also lays out as many columns as the _widest row_ declares, so a detail row's `colspan` has to
+  match the number of columns the breakpoint is actually showing — nine over three invents six
+  empty ones and shares the width between all nine.
+- **A detail row is two columns from `lg`**: what is prose on the left as a `dl`, what is a table
+  on the right. A row of the expense list is two thousand pixels wide and its detail used to be
+  one narrow stack down the left of it.
 - A filtered list says so: `ExpenseTable` renders a "Gefiltert nach …" line with one removable
   chip per active filter. A list that arrives pre-filtered from somewhere else must never look
   like the whole list, only shorter.

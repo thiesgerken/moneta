@@ -34,6 +34,7 @@
 	import {
 		accountSorter,
 		categorySorter,
+		formatAccount,
 		formatTransactionAccounts,
 		formatAccrualPeriod,
 		formatCategories,
@@ -424,6 +425,37 @@
 			.filter(Boolean)
 			.join(' · ');
 
+	/// How many columns the header is showing, which is what the detail row has to span.
+	///
+	/// A fixed layout lays out as many columns as the widest row declares, so `colspan="9"` over
+	/// the three columns a phone shows invents six empty ones and shares the width between all
+	/// nine -- the title ended up a character wide. Auto layout collapsed them to nothing, which
+	/// is why this only became a problem with `table-fixed`.
+	let columns = $state(9);
+	$effect(() => {
+		const wide = window.matchMedia('(min-width: 768px)');
+		const widest = window.matchMedia('(min-width: 1536px)');
+		const update = () => (columns = wide.matches ? (widest.matches ? 9 : 8) : 3);
+
+		update();
+		wide.addEventListener('change', update);
+		widest.addEventListener('change', update);
+		return () => {
+			wide.removeEventListener('change', update);
+			widest.removeEventListener('change', update);
+		};
+	});
+
+	/// The colour an amount is written in. Zero is its own answer rather than the absence of one:
+	/// an expense that nets out moved money between two of your own accounts. `gray-200` rather
+	/// than the `-100` the other two use, since `-100` is the shade a hovered row is.
+	const amountTint = (amount: number) =>
+		amount < 0
+			? 'bg-red-100 text-red-700'
+			: amount > 0
+				? 'bg-green-100 text-green-700'
+				: 'bg-gray-200 text-gray-600';
+
 	function toggleRow(id: string) {
 		if (expandedRows.includes(id)) expandedRows = expandedRows.filter((rowId) => rowId !== id);
 		else expandedRows = [...expandedRows, id];
@@ -498,6 +530,21 @@
 			{/each}
 		</div>
 	</Dropdown>
+{/snippet}
+
+{#snippet fieldLabel(text: string)}
+	<dt class="text-xs font-semibold text-gray-500 dark:text-gray-400">{text}</dt>
+{/snippet}
+
+{#snippet field(label: string, value: string)}
+	<div class="py-2">
+		{@render fieldLabel(label)}
+		<dd class="mt-0.5 wrap-anywhere">{value}</dd>
+	</div>
+{/snippet}
+
+{#snippet sectionLabel(text: string)}
+	<h4 class="mb-1 text-xs font-semibold text-gray-500 dark:text-gray-400">{text}</h4>
 {/snippet}
 
 {#snippet statusBadges(expense: {
@@ -812,7 +859,7 @@
 		<TableBody class="divide-y">
 			{#if slow}
 				<tr>
-					<td colspan="9" class="px-4 py-16 text-center">
+					<td colspan={columns} class="px-4 py-16 text-center">
 						<Spinner size="8" />
 					</td>
 				</tr>
@@ -866,14 +913,7 @@
 					>
 					<TableBodyCell
 						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' +
-							(expense.effectiveAmount < 0
-								? 'bg-red-100 text-red-700'
-								: expense.effectiveAmount > 0
-									? 'bg-green-100 text-green-700'
-									: // zero is not "no colour": it is an expense that moved money between two of
-										// your own accounts and came out even, which is a third thing rather than a
-										// missing one. Blue, since it is neither a loss nor a gain.
-										'bg-blue-100 text-blue-700')}
+							amountTint(expense.effectiveAmount)}
 						>{(expense.effectiveAmount / 100).toFixed(2)}€</TableBodyCell
 					>
 					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
@@ -902,190 +942,260 @@
 				</TableBodyRow>
 				{#if expandedRows.includes(expense.id)}
 					<tr data-expanded>
-						<td colspan="9" class="border-b px-4 py-3">
-							<div class="flex flex-col gap-2">
-								<div>
-									<b>Leistungszeitraum:</b>
-									{formatAccrualPeriod(expense.accrualStart, expense.accrualEnd, true)}
-								</div>
-								{#if expense.description}
-									<div>
-										<b>Beschreibung:</b>
-										{expense.description}
+						<td colspan={columns} class="border-b px-4 py-4">
+							<!-- Two columns from lg. Everything here used to be one narrow stack down the
+							     left of a table two thousand pixels wide, so a statement of a dozen lines
+							     pushed the buttons under it off the screen while most of the row stayed
+							     empty. What is prose goes left, what is a table goes right. -->
+							<div class="grid gap-x-8 gap-y-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+								<dl class="divide-y divide-gray-200 dark:divide-gray-700">
+									{@render field('Titel', expense.title || 'Ohne Titel')}
+									{@render field(
+										'Leistungszeitraum',
+										formatAccrualPeriod(expense.accrualStart, expense.accrualEnd, true)
+									)}
+									{#if expense.description}
+										{@render field('Beschreibung', expense.description)}
+									{/if}
+									{#if expense.store}
+										{@render field('Geschäft', expense.store)}
+									{/if}
+									{#if expense.comments}
+										{@render field('Kommentare', expense.comments)}
+									{/if}
+									<div class="py-2">
+										{@render fieldLabel('Status')}
+										<dd class="mt-1 flex flex-wrap gap-1 text-xs">
+											{#if expense.isTaxRelevant || expense.isTemplate || expense.isUnchecked || expense.isIncomplete || expense.isExtraordinary}
+												{@render statusBadges(expense)}
+											{:else}
+												<span class="text-sm text-gray-500 dark:text-gray-400">Normal</span>
+											{/if}
+										</dd>
 									</div>
-								{/if}
-								{#if expense.store}
-									<div>
-										<b>Geschäft:</b>
-										{expense.store}
-									</div>
-								{/if}
-								{#if expense.comments}
-									<div>
-										<b>Kommentare:</b>
-										{expense.comments}
-									</div>
-								{/if}
-								{#if expense.isTaxRelevant || expense.isTemplate || expense.isUnchecked || expense.isIncomplete || expense.isExtraordinary}
-									<div>
-										<b>Status:</b>
-										{[
-											expense.isTaxRelevant && 'Steuerrelevant',
-											expense.isTemplate && 'Vorlage',
-											expense.isUnchecked && 'Unbestätigt',
-											expense.isIncomplete && 'Unvollständig',
-											expense.isExtraordinary && 'Außergewöhnlich'
-										]
-											.filter(Boolean)
-											.join(', ') || 'Normal'}
-									</div>
-								{/if}
+									{#each expense.transactions.filter((t) => t.statement) as transaction, i (i)}
+										<div class="py-2">
+											{@render fieldLabel(
+												expense.transactions.filter((t) => t.statement).length > 1
+													? `Transaktionstext · ${formatAccount(transaction.account, $basicStore.data?.users.me.name)}`
+													: 'Transaktionstext'
+											)}
+											<!-- the bank's own text, kept as it came: the line breaks in it separate
+											     one key from the next and are the only structure it has -->
+											<dd
+												class="mt-1 font-mono text-xs whitespace-pre-wrap text-gray-600 dark:text-gray-300"
+											>
+												{transaction.statement}
+											</dd>
+										</div>
+									{/each}
+								</dl>
 
-								{#if expense.categories.length > 1}
+								<div class="space-y-6">
 									<div>
-										<b>Kategorien:</b>
-										<ul class="ml-6 list-disc">
-											{#each expense.categories as category (category.category.id)}
+										{@render sectionLabel('Transaktionen')}
+										<table
+											class="w-full border border-gray-200 bg-white text-left text-sm dark:border-gray-700 dark:bg-gray-900"
+										>
+											<thead>
+												<tr class="bg-gray-50 dark:bg-gray-800">
+													<th class="px-3 py-2" scope="col">Konto</th>
+													<th class="px-3 py-2 text-right" scope="col">Betrag</th>
+													<th class="px-3 py-2" scope="col">Grund</th>
+												</tr>
+											</thead>
+											<tbody class="divide-y">
+												{#each expense.transactions.toSorted((a, b) => Math.abs(b.effectiveAmount) - Math.abs(a.effectiveAmount)) as transaction, i (i)}
+													{@const amount = transaction.fraction
+														? transaction.fraction * (expense.referenceAmount ?? 0)
+														: (transaction.amount ?? 0)}
+													<tr>
+														<td
+															class="px-3 py-2"
+															style={makeAccountColor([transaction], expense.referenceAmount)}
+														>
+															{formatAccount(transaction.account, $basicStore.data?.users.me.name)}
+														</td>
+														<td
+															class={'px-3 py-2 text-right whitespace-nowrap ' + amountTint(amount)}
+														>
+															{(amount / 100).toFixed(2)}€
+														</td>
+														<td class="px-3 py-2 text-gray-500 dark:text-gray-400">
+															{#if transaction.fraction}
+																Anteilig · {(transaction.fraction * 100).toFixed(0)}% von {(
+																	(expense.referenceAmount ?? 0) / 100
+																).toFixed(2)}€
+															{:else}
+																Direkt
+															{/if}
+															<!-- only when it is news: a transaction booked inside its own accrual
+															     period tells you nothing you did not already read above -->
+															{#if transaction.date.toISOString() !== expense.accrualStart.toISOString() || transaction.date.toISOString() !== expense.accrualEnd.toISOString()}
+																<span class="block text-xs">
+																	gebucht {transaction.date.toLocaleString('de-DE', {
+																		year: 'numeric',
+																		month: '2-digit',
+																		day: '2-digit',
+																		hour: '2-digit',
+																		minute: '2-digit'
+																	})}
+																</span>
+															{/if}
+														</td>
+													</tr>
+												{/each}
+											</tbody>
+										</table>
+									</div>
+
+									{#if expense.categories.length > 0}
+										<div>
+											{@render sectionLabel('Kategorien')}
+											<table
+												class="w-full border border-gray-200 bg-white text-left text-sm dark:border-gray-700 dark:bg-gray-900"
+											>
+												<thead>
+													<tr class="bg-gray-50 dark:bg-gray-800">
+														<th class="px-3 py-2" scope="col">Kategorie</th>
+														<th class="px-3 py-2 text-right" scope="col">Gewicht</th>
+													</tr>
+												</thead>
+												<tbody class="divide-y">
+													{#each expense.categories as category (category.category.id)}
+														<tr>
+															<td class="px-3 py-2" style={makeCategoryColor([category])}>
+																{category.category.name}
+															</td>
+															<td class="px-3 py-2 text-right">{category.weight}</td>
+														</tr>
+													{/each}
+												</tbody>
+											</table>
+										</div>
+									{/if}
+
+									{#if expense.positions.length > 0}
+										<div>
+											{@render sectionLabel('Positionen')}
+											<table
+												class="w-full border border-gray-200 bg-white text-left text-sm dark:border-gray-700 dark:bg-gray-900"
+											>
+												<thead>
+													<tr class="bg-gray-50 dark:bg-gray-800">
+														<th class="px-3 py-2" scope="col">Position</th>
+														<th class="px-3 py-2 text-right" scope="col">Menge</th>
+														<th class="px-3 py-2 text-right" scope="col">Betrag</th>
+													</tr>
+												</thead>
+												<tbody class="divide-y">
+													{#each expense.positions as position, i (i)}
+														<tr>
+															<td class="px-3 py-2">
+																{position.title}
+																{#if position.comments}
+																	<span class="block text-xs text-gray-500 dark:text-gray-400"
+																		>{position.comments}</span
+																	>
+																{/if}
+															</td>
+															<td class="px-3 py-2 text-right whitespace-nowrap">
+																{position.quantity ?? ''}
+																{position.unit ?? ''}
+															</td>
+															<td class="px-3 py-2 text-right whitespace-nowrap">
+																{position.amount != null
+																	? (position.amount / 100).toFixed(2) + '€'
+																	: ''}
+															</td>
+														</tr>
+													{/each}
+												</tbody>
+											</table>
+										</div>
+									{/if}
+
+									{#if expense.receipts.length > 0}
+										<div>
+											{@render sectionLabel('Belege')}
+											<!-- eslint-disable svelte/no-navigation-without-resolve -- receipt uris point outside the app (dms, file store) -->
+											<ul class="space-y-1 text-sm">
+												{#each expense.receipts as receipt (receipt.uri)}
+													<li>
+														<a
+															class="text-primary-600 dark:text-primary-400 break-all hover:underline"
+															href={receipt.uri}
+															target="_blank">{receipt.uri}</a
+														>
+													</li>
+												{/each}
+											</ul>
+											<!-- eslint-enable svelte/no-navigation-without-resolve -->
+										</div>
+									{/if}
+
+									<div>
+										{@render sectionLabel('Changelog')}
+										<ul class="space-y-1 text-sm">
+											{#each expense.changelog.toReversed() as change (change.id)}
 												<li>
-													<span class="rounded-md px-1" style={makeCategoryColor([category])}>
-														{category.category.name}
+													<span class="text-gray-500 dark:text-gray-400">
+														{change.user!.name == $basicStore.data?.users.me.name
+															? 'Du'
+															: change.user!.firstName} am {change.date.toLocaleString('de-DE', {
+															year: 'numeric',
+															month: '2-digit',
+															day: '2-digit',
+															hour: '2-digit',
+															minute: '2-digit'
+														})}{change.tool ? ` via ${change.tool}` : ''}{change.automatic
+															? ' (automatisch)'
+															: ''}
 													</span>
-													(Gewicht: {category.weight})
-												</li>
-											{/each}
-										</ul>
-									</div>
-								{/if}
-
-								{#if expense.positions.length > 0}
-									<div>
-										<b>Positionen:</b>
-										<ul class="ml-6 list-disc">
-											{#each expense.positions as position, i (i)}
-												<li>
-													{#if position.quantity && position.quantity > 1}
-														{position.quantity}
-														{#if position.unit}
-															{position.unit}
-														{/if}
-													{/if}
-													{position.title}
-													{#if position.amount}
-														für {(position.amount / 100).toFixed(2)}€
-													{/if}
-													{#if position.comments}
-														<span class="text-xs italic">{position.comments}</span>
-													{/if}
-												</li>
-											{/each}
-										</ul>
-									</div>
-								{/if}
-
-								<div>
-									<b>Transaktionen:</b>
-									<ul class="ml-6 list-disc">
-										{#each expense.transactions.toSorted((a, b) => Math.abs(b.effectiveAmount) - Math.abs(a.effectiveAmount)) as transaction, i (i)}
-											<li>
-												<span
-													class="rounded-md px-1.5 py-0.5"
-													style={makeAccountColor([transaction], expense.referenceAmount)}
-												>
-													{#if transaction.account.owner.name != $basicStore.data?.users.me.name}
-														{transaction.account.owner.firstName} / {transaction.account.name}
+													{#if !change.oldState}
+														<span>— Ausgabe erstellt</span>
+													{:else if !change.diff}
+														<!-- An entry with no diff is one whose two states are the same, which is
+														     what an import writes: the export carries the expense as it is now and
+														     not as it was, so `import.rs` stores that same state on both sides and
+														     `json_diff` comes out empty. Something was changed and there is no way
+														     to say what, so the line says only that -- an empty string is falsy, so
+														     without this it stopped after the author's name. -->
+														<span class="text-gray-500 dark:text-gray-400">— geändert</span>
 													{:else}
-														{transaction.account.name}
+														<pre
+															class="mt-1 overflow-x-auto rounded bg-gray-50 p-2 text-xs dark:bg-gray-800">{change.diff}</pre>
 													{/if}
-												</span>
-												{#if transaction.fraction}
-													{((transaction.fraction! * expense.referenceAmount!) / 100).toFixed(2)}€ ({transaction.fraction! *
-														100}% von {(expense.referenceAmount! / 100).toFixed(2)}€)
-												{:else}
-													{(transaction.amount! / 100).toFixed(2)}€
-												{/if}
-												{#if transaction.date.toISOString() != expense.accrualStart.toISOString() || transaction.date.toISOString() != expense.accrualEnd.toISOString()}
-													am {transaction.date.toLocaleDateString('de-DE', {
-														year: 'numeric',
-														month: '2-digit',
-														day: '2-digit',
-														hour: '2-digit',
-														minute: '2-digit'
-													})}
-												{/if}
-												{#if transaction.statement}
-													<pre class="text-xs">{transaction.statement}</pre>
-												{/if}
-											</li>
-										{/each}
-									</ul>
-								</div>
-
-								{#if expense.receipts.length > 0}
-									<div>
-										<b>Belege:</b>
-										<ul class="ml-6 list-disc">
-											{#each expense.receipts as receipt (receipt.uri)}
-												<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- receipt uris point outside the app (dms, file store) -->
-												<li><a href={receipt.uri} target="_blank">{receipt.uri}</a></li>
+												</li>
 											{/each}
 										</ul>
 									</div>
-								{/if}
-
-								<div>
-									<b>Changelog:</b>
-									<ul class="ml-6 list-disc">
-										{#each expense.changelog.toReversed() as change (change.id)}
-											<li>
-												{change.user!.name == $basicStore.data?.users.me.name
-													? 'Du'
-													: change.user!.firstName} am {change.date.toLocaleDateString('de-DE', {
-													year: 'numeric',
-													month: '2-digit',
-													day: '2-digit',
-													hour: '2-digit',
-													minute: '2-digit'
-												})}
-												{#if change.tool}
-													via {change.tool}
-												{/if}
-												{#if change.automatic}
-													(automatische Änderung)
-												{/if}
-												{#if !change.oldState}
-													<p>Ausgabe erstellt</p>
-												{:else if change.diff}
-													<pre class="text-xs">{change.diff}</pre>
-												{/if}
-											</li>
-										{/each}
-									</ul>
 								</div>
+							</div>
 
-								<div class="flex gap-2">
-									<Button
-										color="yellow"
-										size="xs"
-										onclick={() => {
-											expenseIdToEdit = expense.id.toString();
-											showEditExpenseModal = true;
-										}}
-									>
-										<EditOutline class="mr-2 h-3.5 w-3.5" />
-										Bearbeiten
-									</Button>
-									<Button
-										color="red"
-										size="xs"
-										onclick={() => {
-											expenseIdToDelete = expense.id.toString();
-											showDeleteExpenseModal = true;
-										}}
-									>
-										<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
-										Löschen
-									</Button>
-								</div>
+							<div class="mt-6 flex gap-2">
+								<Button
+									color="yellow"
+									size="xs"
+									onclick={() => {
+										expenseIdToEdit = expense.id.toString();
+										showEditExpenseModal = true;
+									}}
+								>
+									<EditOutline class="mr-2 h-3.5 w-3.5" />
+									Bearbeiten
+								</Button>
+								<Button
+									color="red"
+									size="xs"
+									onclick={() => {
+										expenseIdToDelete = expense.id.toString();
+										showDeleteExpenseModal = true;
+									}}
+								>
+									<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
+									Löschen
+								</Button>
 							</div>
 						</td>
 					</tr>
