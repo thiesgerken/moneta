@@ -1154,7 +1154,13 @@
 													</span>
 													{#if !change.oldState}
 														<span>— Ausgabe erstellt</span>
-													{:else if change.diff}
+													{:else if !change.diff}
+														<!-- a write whose two states are the same is an empty diff rather than a
+														     missing one: `diff` normalises `updated_at` away first, so re-saving
+														     an expense unchanged records the visit and nothing else. Saying so
+														     beats a line that stops after the name. -->
+														<span class="text-gray-500 dark:text-gray-400">— nichts geändert</span>
+													{:else}
 														<pre
 															class="mt-1 overflow-x-auto rounded bg-gray-50 p-2 text-xs dark:bg-gray-800">{change.diff}</pre>
 													{/if}
