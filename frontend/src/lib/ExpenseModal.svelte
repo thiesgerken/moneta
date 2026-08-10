@@ -11,6 +11,7 @@
 	} from 'flowbite-svelte';
 
 	import { graphql } from '$houdini';
+	import ActionButton from './ActionButton.svelte';
 	import type { ExpenseInput } from '$houdini/graphql/inputs';
 	import { formatAccount, tint } from './expense_utils';
 	import {
@@ -420,7 +421,7 @@
 	<!-- Solid, because grey is what disabled looks like: a transparent or white button reads as
 	     one you cannot press, and next to its own 50%-opacity version there was nothing to tell
 	     the two apart. -->
-	<Button
+	<ActionButton
 		color="red"
 		size="xs"
 		class="p-1.5"
@@ -431,7 +432,7 @@
 		}}
 	>
 		<CircleMinusOutline class="h-4 w-4" />
-	</Button>
+	</ActionButton>
 {/snippet}
 
 {#snippet hint(text: string)}
@@ -799,7 +800,7 @@
 		     scrolled past everything to save, and there was no way out but the X. -->
 		<div class="flex w-full justify-end gap-2">
 			<Button color="alternative" onclick={() => (open = false)}>Abbrechen</Button>
-			<Button type="submit" form="expense-form" disabled={formHasErrors}>
+			<ActionButton type="submit" form="expense-form" disabled={formHasErrors}>
 				{#if isEdit}
 					<EditOutline class="mr-1 h-4 w-4" />
 					Aktualisieren
@@ -807,7 +808,7 @@
 					<PlusOutline class="mr-1 h-4 w-4" />
 					Erstellen
 				{/if}
-			</Button>
+			</ActionButton>
 		</div>
 	{/snippet}
 </Modal>

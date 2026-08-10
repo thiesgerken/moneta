@@ -44,6 +44,7 @@
 		makeCategoryColor,
 		tint
 	} from './expense_utils';
+	import ActionButton from './ActionButton.svelte';
 	import ExpenseModal from './ExpenseModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
 	import { page } from '$app/state';
@@ -557,7 +558,9 @@
 </script>
 
 {#snippet newExpenseButton(cls: string)}
-	<Button class={cls} onclick={() => (showNewExpenseModal = true)}>
+	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls back
+	     to `alternative` rather than to primary, which left Neu white in the middle of the row. -->
+	<Button color="primary" class={cls} onclick={() => (showNewExpenseModal = true)}>
 		<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
 	</Button>
 {/snippet}
@@ -791,21 +794,22 @@
 					{@render newExpenseButton('grow md:hidden')}
 					<ButtonGroup class="hidden md:inline-flex">
 						{@render newExpenseButton('')}
-						<Button
+						<ActionButton
 							color="teal"
 							disabled={!selectedExpenseId}
 							onclick={() => openEditModal(selectedExpenseId!, true)}
 						>
 							<FileCopyAltOutline class="mr-2 h-3.5 w-3.5" />Duplizieren
-						</Button>
-						<Button
-							color="blue"
+						</ActionButton>
+						<ActionButton
+							color="yellow"
+							class="text-gray-900"
 							disabled={!selectedExpenseId}
 							onclick={() => openEditModal(selectedExpenseId!)}
 						>
 							<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
-						</Button>
-						<Button
+						</ActionButton>
+						<ActionButton
 							color="red"
 							disabled={!selectedExpenseId}
 							onclick={() => {
@@ -814,8 +818,8 @@
 							}}
 						>
 							<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
-						</Button>
-						<Button
+						</ActionButton>
+						<ActionButton
 							color="gray"
 							disabled={!selectedExpenseId}
 							onclick={() => {
@@ -825,7 +829,7 @@
 							}}
 						>
 							<ArchiveArrowDownOutline class="mr-2 h-3.5 w-3.5" />Einsortieren
-						</Button>
+						</ActionButton>
 					</ButtonGroup>
 					<!-- Stacked, the filters filled a phone screen before a single expense appeared,
 					     so on small screens they fold behind this. -->
@@ -865,9 +869,14 @@
 							locale="de-DE"
 							firstDayOfWeek={1}
 						/>
-						<Button size="xs" color="light" disabled={!dateRangeLabel} onclick={clearDateRange}>
+						<ActionButton
+							size="xs"
+							color="light"
+							disabled={!dateRangeLabel}
+							onclick={clearDateRange}
+						>
 							Zeitraum zurücksetzen
-						</Button>
+						</ActionButton>
 					</Dropdown>
 					{@render optionFilter(
 						'Kategorien',
@@ -1310,7 +1319,11 @@
 										<FileCopyAltOutline class="mr-2 h-3.5 w-3.5" />
 										Duplizieren
 									</Button>
-									<Button color="blue" onclick={() => openEditModal(expense.id.toString())}>
+									<Button
+										color="yellow"
+										class="text-gray-900"
+										onclick={() => openEditModal(expense.id.toString())}
+									>
 										<EditOutline class="mr-2 h-3.5 w-3.5" />
 										Bearbeiten
 									</Button>
@@ -1362,35 +1375,35 @@
 				     into three. There the two arrows are the whole control: which page of how many
 				     is what the "Einträge 31-45 von 700" beside them already says. -->
 				<ButtonGroup>
-					<Button onclick={() => currentPage--} disabled={currentPage <= 1}>
+					<ActionButton onclick={() => currentPage--} disabled={currentPage <= 1}>
 						<ChevronLeftOutline size="xs" class="m-1.5" />
-					</Button>
+					</ActionButton>
 					{#if currentPage > 3}
-						<Button
+						<ActionButton
 							class="hidden md:inline-flex"
 							disabled={currentPage === 1}
-							onclick={() => (currentPage = 1)}>1</Button
+							onclick={() => (currentPage = 1)}>1</ActionButton
 						>
 						<Button class="hidden md:inline-flex" disabled>...</Button>
 					{/if}
 					{#each [currentPage - 2, currentPage - 1, currentPage, currentPage + 1, currentPage + 2].filter((page) => page > 0 && page <= totalPages) as pageNumber (pageNumber)}
-						<Button
+						<ActionButton
 							class="hidden md:inline-flex"
 							disabled={currentPage === pageNumber}
-							onclick={() => (currentPage = pageNumber)}>{pageNumber}</Button
+							onclick={() => (currentPage = pageNumber)}>{pageNumber}</ActionButton
 						>
 					{/each}
 					{#if currentPage < totalPages - 2}
 						<Button class="hidden md:inline-flex" disabled>...</Button>
-						<Button
+						<ActionButton
 							class="hidden md:inline-flex"
 							disabled={currentPage === totalPages}
-							onclick={() => (currentPage = totalPages)}>{totalPages}</Button
+							onclick={() => (currentPage = totalPages)}>{totalPages}</ActionButton
 						>
 					{/if}
-					<Button onclick={() => currentPage++} disabled={currentPage >= totalPages}>
+					<ActionButton onclick={() => currentPage++} disabled={currentPage >= totalPages}>
 						<ChevronRightOutline size="xs" class="m-1.5" />
-					</Button>
+					</ActionButton>
 				</ButtonGroup>
 			</div>
 		{/snippet}
