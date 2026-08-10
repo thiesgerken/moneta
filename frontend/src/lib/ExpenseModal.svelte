@@ -107,6 +107,11 @@
 		expense?.accrualEnd ? new Date(expense.accrualEnd) : undefined
 	);
 
+	// Nearly every expense happens on one day, and one entered that way comes back with both
+	// ends filled in and equal -- so changing its date meant changing it twice, in two fields
+	// that looked like they could disagree. One field until an expense gives a reason for two.
+	let isRange = $state(false);
+
 	// The four editable collections are $state rather than $derived, and are filled from the
 	// expense by an effect. A $derived array is not deeply reactive: its rows are plain objects,
 	// so `tx.isRelative = true` changed nothing on screen and the € / % switch below would have
@@ -144,6 +149,7 @@
 	let receipts: { uri: string; ocr: string | null }[] = $state([]);
 
 	$effect(() => {
+		isRange = !!expense && expense.accrualStart.getTime() !== expense.accrualEnd.getTime();
 		expenseCategories = expense?.categories.map((cat) => ({
 			categoryId: cat.category.id,
 			weight: cat.weight.toString()
@@ -229,7 +235,7 @@
 	});
 	const accrualStartError = $derived(!accrualStart);
 	const accrualEndError = $derived.by(() => {
-		if (accrualStart && accrualEnd && accrualEnd < accrualStart) return true;
+		if (isRange && accrualStart && accrualEnd && accrualEnd < accrualStart) return true;
 		return false;
 	});
 
@@ -316,7 +322,7 @@
 		event.preventDefault();
 		if (formHasErrors) return;
 
-		const endDate = accrualEnd || accrualStart;
+		const endDate = isRange ? accrualEnd || accrualStart : accrualStart;
 
 		const input: ExpenseInput = {
 			title,
@@ -380,6 +386,16 @@
 	</Button>
 {/snippet}
 
+{#snippet textButton(label: string, onclick: () => void)}
+	<button
+		type="button"
+		{onclick}
+		class="text-primary-600 dark:text-primary-400 cursor-pointer text-xs hover:underline"
+	>
+		{label}
+	</button>
+{/snippet}
+
 {#snippet add(label: string, onclick: () => void)}
 	<Button
 		color="alternative"
@@ -430,21 +446,34 @@
 			/>
 		</div>
 		<div>
-			<Label class="mb-2 block">Leistung von</Label>
+			<div class="mb-2 flex items-baseline justify-between gap-2">
+				<Label class="block">{isRange ? 'Leistung von' : 'Leistung'}</Label>
+				{#if !isRange}
+					{@render textButton('Zeitraum', () => (isRange = true))}
+				{/if}
+			</div>
 			<Datepicker
 				bind:value={accrualStart}
-				placeholder="Startdatum"
+				placeholder="Datum"
 				inputClass={accrualStartError ? 'border-red-600 bg-red-100 text-red-400' : ''}
 			/>
 		</div>
-		<div>
-			<Label class="mb-2 block">Leistung bis</Label>
-			<Datepicker
-				bind:value={accrualEnd}
-				placeholder="optionales Enddatum"
-				inputClass={accrualEndError ? 'border-red-600 bg-red-100 text-red-400' : ''}
-			/>
-		</div>
+		{#if isRange}
+			<div>
+				<div class="mb-2 flex items-baseline justify-between gap-2">
+					<Label class="block">Leistung bis</Label>
+					{@render textButton('Einzeltag', () => {
+						isRange = false;
+						accrualEnd = undefined;
+					})}
+				</div>
+				<Datepicker
+					bind:value={accrualEnd}
+					placeholder="Enddatum"
+					inputClass={accrualEndError ? 'border-red-600 bg-red-100 text-red-400' : ''}
+				/>
+			</div>
+		{/if}
 
 		<!-- field-sizing-content instead of guessing a row count: a textarea's default width is
 		     `cols=20`, which is where the 20-character Beschreibung box came from, and its default
