@@ -27,6 +27,7 @@
 		ChevronLeftOutline,
 		ChevronDownOutline,
 		ArchiveArrowDownOutline,
+		FileCopyAltOutline,
 		EditOutline,
 		TrashBinOutline,
 		ExclamationCircleOutline,
@@ -68,6 +69,15 @@
 	let expenseIdToEdit: string | undefined = $state(undefined);
 	let expenseIdToDelete: string | undefined = $state(undefined);
 	let expenseIdToResort: string | undefined = $state(undefined);
+	/// The edit modal, filled from an expense but creating a second one. One instance rather
+	/// than two: the form is the same form, and only where it submits changes.
+	let duplicating = $state(false);
+
+	function openEditModal(id: string, asCopy = false) {
+		expenseIdToEdit = id;
+		duplicating = asCopy;
+		showEditExpenseModal = true;
+	}
 
 	let filteredAccounts = $state<string[]>([]);
 	let filteredCategories = $state<string[]>([]);
@@ -702,6 +712,7 @@
 	onsubmit={handleExpenseModalSubmit}
 	userName={$basicStore.data?.users.me?.name}
 	expense={expenseToEdit}
+	duplicate={duplicating}
 	accounts={$basicStore.data?.accounts.list.map((a) => ({
 		id: a.id.toString(),
 		name: a.name,
@@ -777,12 +788,17 @@
 						color="alternative"
 						class="hidden md:inline-flex"
 						disabled={!selectedExpenseId}
-						onclick={() => {
-							expenseIdToEdit = selectedExpenseId;
-							showEditExpenseModal = true;
-						}}
+						onclick={() => openEditModal(selectedExpenseId!)}
 					>
 						<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
+					</Button>
+					<Button
+						color="alternative"
+						class="hidden md:inline-flex"
+						disabled={!selectedExpenseId}
+						onclick={() => openEditModal(selectedExpenseId!, true)}
+					>
+						<FileCopyAltOutline class="mr-2 h-3.5 w-3.5" />Duplizieren
 					</Button>
 					<Button
 						color="red"
@@ -1286,17 +1302,34 @@
 								</div>
 							</div>
 
-							<div class="mt-6 flex gap-2">
+							<div class="mt-6 flex flex-wrap gap-2">
 								<Button
 									color="yellow"
 									size="xs"
-									onclick={() => {
-										expenseIdToEdit = expense.id.toString();
-										showEditExpenseModal = true;
-									}}
+									onclick={() => openEditModal(expense.id.toString())}
 								>
 									<EditOutline class="mr-2 h-3.5 w-3.5" />
 									Bearbeiten
+								</Button>
+								<Button
+									color="alternative"
+									size="xs"
+									onclick={() => openEditModal(expense.id.toString(), true)}
+								>
+									<FileCopyAltOutline class="mr-2 h-3.5 w-3.5" />
+									Duplizieren
+								</Button>
+								<Button
+									color="alternative"
+									size="xs"
+									onclick={() => {
+										expenseIdToResort = expense.id.toString();
+										resortError = undefined;
+										showResortExpenseModal = true;
+									}}
+								>
+									<ArchiveArrowDownOutline class="mr-2 h-3.5 w-3.5" />
+									Einsortieren
 								</Button>
 								<Button
 									color="red"

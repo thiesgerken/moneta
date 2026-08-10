@@ -23,6 +23,8 @@
 	interface Props {
 		open?: boolean;
 		onsubmit?: () => Promise<void>; // used to signal that the form has been successfully submitted, need to invalidate cached stuff
+		/// fill the form from `expense` but create a second expense from it rather than updating it
+		duplicate?: boolean;
 		userName: string | undefined;
 		accounts: {
 			readonly id: string;
@@ -86,8 +88,13 @@
 		categories,
 		userName: user_name,
 		expense,
+		duplicate = false,
 		onsubmit
 	}: Props = $props();
+
+	/// Duplicating fills the form from an expense and then creates a second one, so `expense`
+	/// being set is no longer the same question as "this is an edit".
+	const isEdit = $derived(!!expense && !duplicate);
 
 	let title = $derived(expense?.title || '');
 	let store = $derived(expense?.store || '');
@@ -159,10 +166,13 @@
 		})) || [{ categoryId: '', weight: '1' }];
 		transactions = expense?.transactions.map((tx) => ({
 			date: tx.date ? new Date(tx.date) : undefined,
-			bookingDate: tx.bookingDate ? new Date(tx.bookingDate) : undefined,
+			// A bank line belongs to the one payment it describes. Carried into a copy it would
+			// claim the same one twice, which is wrong in the list, in the changelog and in
+			// anything that sorts by what a rule matched.
+			bookingDate: duplicate || !tx.bookingDate ? undefined : new Date(tx.bookingDate),
 			accountId: tx.account.id.toString(),
 			amount: tx.amount ? (tx.amount / 100).toFixed(2) : '',
-			statement: tx.statement || '',
+			statement: duplicate ? '' : tx.statement || '',
 			isRelative: tx.fraction !== null,
 			percentage: tx.fraction ? (100 * tx.fraction).toString() : ''
 		})) || [emptyTransaction()];
@@ -398,7 +408,7 @@
 			}))
 		};
 
-		if (expense) await UpdateExpense.mutate({ id: expense.id, input });
+		if (isEdit) await UpdateExpense.mutate({ id: expense!.id, input });
 		else await CreateExpense.mutate({ input });
 
 		if (onsubmit) await onsubmit();
@@ -451,7 +461,11 @@
 
 <!-- xl rather than lg: the form is two tables and a dozen fields, and at 896px they were stacked
      down a column with the right half of the dialog empty. -->
-<Modal title={expense ? 'Ausgabe bearbeiten' : 'Neue Ausgabe'} bind:open size="xl">
+<Modal
+	title={isEdit ? 'Ausgabe bearbeiten' : duplicate ? 'Ausgabe duplizieren' : 'Neue Ausgabe'}
+	bind:open
+	size="xl"
+>
 	<!-- *:min-w-0: a grid item is min-content wide by default, and the transaction and category
 	     tables inside this one are wider than a phone. Without it the whole form grew to their
 	     width and every field ran off the right of the screen; with it they scroll inside their
@@ -783,7 +797,7 @@
 		<div class="flex w-full justify-end gap-2">
 			<Button color="alternative" onclick={() => (open = false)}>Abbrechen</Button>
 			<Button type="submit" form="expense-form" disabled={formHasErrors}>
-				{#if expense}
+				{#if isEdit}
 					<EditOutline class="mr-1 h-4 w-4" />
 					Aktualisieren
 				{:else}
