@@ -435,10 +435,6 @@
 	</ActionButton>
 {/snippet}
 
-{#snippet hint(text: string)}
-	<span class="block text-xs font-normal text-gray-500 dark:text-gray-400">{text}</span>
-{/snippet}
-
 {#snippet textButton(label: string, onclick: () => void)}
 	<button
 		type="button"
@@ -570,7 +566,7 @@
 			</div>
 		</div>
 
-		<div class="col-span-full lg:col-span-4">
+		<div class="col-span-full">
 			<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
 				<Label class="block">Transaktionen</Label>
 				<!-- Only a relative transaction has anything to be relative to, which is also the
@@ -600,16 +596,12 @@
 				<table data-form class="w-full text-left text-sm">
 					<thead class="bg-gray-50 dark:bg-gray-700">
 						<tr>
-							<!-- Two dates that are a day or two apart and neither of them labelled is a
-							     column nobody can fill in with confidence, so each says what it is. -->
-							<th class="w-32 px-2" scope="col">
-								Wertstellung
-								{@render hint('als das Geld floss')}
-							</th>
-							<th class="w-32 px-2" scope="col">
-								Buchung
-								{@render hint('wie die Bank sie führt')}
-							</th>
+							<!-- Two dates a day or two apart and neither of them labelled is a column
+							     nobody can fill in with confidence. The `title` and nothing else: an
+							     explanation that takes a line of the header is bigger than the thing it
+							     explains, and a dotted underline to advertise it would be bigger still. -->
+							<th class="w-32 px-2" scope="col" title="als das Geld floss">Wertstellung</th>
+							<th class="w-32 px-2" scope="col" title="wie die Bank sie gebucht hat"> Buchung </th>
 							<th class="w-36 px-2" scope="col">Konto</th>
 							<th class="w-28 px-2" scope="col">Betrag</th>
 							<th class="px-2" scope="col">Transaktionstext</th>
@@ -720,7 +712,10 @@
 			{@render add('Transaktion', addTransaction)}
 		</div>
 
-		<div class="col-span-full lg:col-span-2">
+		<!-- Under the transactions rather than beside them: the statement text is the widest
+		     thing in the dialog and a category is two short fields, so the pair spent the row on
+		     the wrong one. Capped, because a select saying "Haushalt" does not need 1200px. -->
+		<div class="col-span-full max-w-2xl">
 			<Label class="mb-2 block">Kategorien</Label>
 			<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
 				<table data-form class="w-full text-left text-sm">
