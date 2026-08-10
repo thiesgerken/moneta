@@ -592,7 +592,13 @@
 					</div>
 				{/if}
 			</div>
-			<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+			<!-- `lg:overflow-visible`: a scroll container clips what hangs out of it, and what hangs
+			     out of this one is the calendar, which was showing as a two-line sliver under the
+			     field. The table fits without scrolling at this width anyway; below it the phone
+			     needs the scroll more than it needs a calendar that escapes. -->
+			<div
+				class="relative z-20 overflow-x-auto rounded-lg border border-gray-200 lg:overflow-visible dark:border-gray-700"
+			>
 				<table data-form class="w-full text-left text-sm">
 					<thead class="bg-gray-50 dark:bg-gray-700">
 						<tr>
@@ -603,7 +609,7 @@
 							<th class="w-32 px-2" scope="col" title="als das Geld floss">Wertstellung</th>
 							<th class="w-32 px-2" scope="col" title="wie die Bank sie gebucht hat"> Buchung </th>
 							<th class="w-36 px-2" scope="col">Konto</th>
-							<th class="w-28 px-2" scope="col">Betrag</th>
+							<th class="w-36 px-2" scope="col">Betrag</th>
 							<th class="px-2" scope="col">Transaktionstext</th>
 							<th class="w-10 px-2" scope="col"><span class="sr-only">Entfernen</span></th>
 						</tr>
@@ -621,14 +627,27 @@
 									/>
 								</td>
 								<td class="px-2">
-									<!-- Only a line that came from a bank has one, and there is no way to
-									     clear a Datepicker once it holds a date -- hence the link. -->
-									{#if tx.bookingDate}
-										<Datepicker bind:value={tx.bookingDate} />
-										{@render textButton('entfernen', () => (tx.bookingDate = undefined))}
-									{:else}
-										{@render textButton('setzen', () => (tx.bookingDate = tx.date ?? accrualStart))}
-									{/if}
+									<!-- Clearing it lives in the calendar rather than under the field: a link
+									     that appears only once a date is set makes the row taller the moment
+									     you pick one, and every other row jumps. flowbite's own action
+									     buttons say Today/Clear/Apply in English, so this is the one it
+									     offers a slot for. -->
+									<Datepicker bind:value={tx.bookingDate} placeholder="—">
+										{#snippet actionSlot({ handleClear, close })}
+											<div class="flex justify-end px-3 pb-3">
+												<Button
+													size="xs"
+													color="light"
+													onclick={() => {
+														handleClear();
+														close();
+													}}
+												>
+													Datum entfernen
+												</Button>
+											</div>
+										{/snippet}
+									</Datepicker>
 								</td>
 								<td class="px-2">
 									<Select
@@ -714,8 +733,8 @@
 
 		<!-- Under the transactions rather than beside them: the statement text is the widest
 		     thing in the dialog and a category is two short fields, so the pair spent the row on
-		     the wrong one. Capped, because a select saying "Haushalt" does not need 1200px. -->
-		<div class="col-span-full max-w-2xl">
+		     the wrong one. Half a row is all a category needs; the rest of it is below. -->
+		<div class="col-span-full lg:col-span-4">
 			<Label class="mb-2 block">Kategorien</Label>
 			<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
 				<table data-form class="w-full text-left text-sm">
@@ -769,23 +788,27 @@
 		</div>
 
 		<!-- Positionen and Belege are empty on almost every expense and cost a heading and a
-		     button each when they were. What is left is what they would have said. -->
-		<div class="col-span-full flex flex-wrap gap-2">
-			<Button color="alternative" size="sm" onclick={() => (showPositions = true)}>
-				<EditOutline class="mr-2 h-4 w-4" />
-				Positionen · {positions.length === 0
-					? 'keine'
-					: `${positions.length}${positionsTotal ? ` (${positionsTotal.toFixed(2)} €)` : ''}`}
-			</Button>
-			<Button color="alternative" size="sm" onclick={() => (showReceipts = true)}>
-				<EditOutline class="mr-2 h-4 w-4" />
-				Belege · {receipts.length === 0 ? 'keine' : receipts.length}
-			</Button>
-			{#if hasPositionErrors}
-				<span class="self-center text-sm text-red-600 dark:text-red-400">
-					Eine Position ist unvollständig
-				</span>
-			{/if}
+		     button each when they were. What is left is what they would have said -- beside the
+		     categories, which is the space the transactions gave up. -->
+		<div class="col-span-full lg:col-span-2">
+			<Label class="mb-2 block">Weiteres</Label>
+			<div class="flex flex-wrap gap-2">
+				<Button color="alternative" size="sm" onclick={() => (showPositions = true)}>
+					<EditOutline class="mr-2 h-4 w-4" />
+					Positionen · {positions.length === 0
+						? 'keine'
+						: `${positions.length}${positionsTotal ? ` (${positionsTotal.toFixed(2)} €)` : ''}`}
+				</Button>
+				<Button color="alternative" size="sm" onclick={() => (showReceipts = true)}>
+					<EditOutline class="mr-2 h-4 w-4" />
+					Belege · {receipts.length === 0 ? 'keine' : receipts.length}
+				</Button>
+				{#if hasPositionErrors}
+					<span class="self-center text-sm text-red-600 dark:text-red-400">
+						Eine Position ist unvollständig
+					</span>
+				{/if}
+			</div>
 		</div>
 	</form>
 
