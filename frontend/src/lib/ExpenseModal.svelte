@@ -18,7 +18,12 @@
 		CircleMinusOutline,
 		CirclePlusOutline,
 		EditOutline,
-		PlusOutline
+		ExclamationCircleOutline,
+		FileCloneOutline,
+		LandmarkOutline,
+		PlusOutline,
+		QuestionCircleOutline,
+		StarOutline
 	} from 'flowbite-svelte-icons';
 
 	interface Props {
@@ -564,12 +569,25 @@
 		     the "Flags" label and read as belonging to nothing. -->
 		<div class="col-span-full">
 			<Label class="mb-2 block">Flags</Label>
+			<!-- One icon per state, and the same one wherever that state is named: here, in the
+			     list's badges, and in the toolbar's Zustand filter. Five words of the same length
+			     in the same weight are read one after another; five shapes are recognised. -->
 			<div class="flex flex-wrap gap-x-6 gap-y-2">
-				<Checkbox bind:checked={isTemplate}>Vorlage</Checkbox>
-				<Checkbox bind:checked={isUnchecked}>Unbestätigt</Checkbox>
-				<Checkbox bind:checked={isIncomplete}>Unvollständig</Checkbox>
-				<Checkbox bind:checked={isExtraordinary}>Außergewöhnlich</Checkbox>
-				<Checkbox bind:checked={isTaxRelevant}>Steuerrelevant</Checkbox>
+				<Checkbox bind:checked={isTemplate}>
+					<FileCloneOutline class="me-1.5 h-4 w-4 shrink-0" />Vorlage
+				</Checkbox>
+				<Checkbox bind:checked={isUnchecked}>
+					<QuestionCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Unbestätigt
+				</Checkbox>
+				<Checkbox bind:checked={isIncomplete}>
+					<ExclamationCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Unvollständig
+				</Checkbox>
+				<Checkbox bind:checked={isExtraordinary}>
+					<StarOutline class="me-1.5 h-4 w-4 shrink-0" />Außergewöhnlich
+				</Checkbox>
+				<Checkbox bind:checked={isTaxRelevant}>
+					<LandmarkOutline class="me-1.5 h-4 w-4 shrink-0" />Steuerrelevant
+				</Checkbox>
 			</div>
 		</div>
 
@@ -708,7 +726,7 @@
 											title={tx.isRelative
 												? 'Anteil am Referenzbetrag — klicken für festen Betrag'
 												: 'Fester Betrag — klicken für Anteil am Referenzbetrag'}
-											class="absolute top-1/2 right-1 -translate-y-1/2 cursor-pointer rounded px-1.5 py-0.5 text-gray-500 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-600"
+											class="absolute top-1/2 right-1 -translate-y-1/2 cursor-pointer rounded bg-gray-200 px-1.5 py-0.5 text-gray-600 hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500"
 										>
 											{tx.isRelative ? '%' : '€'}
 										</button>

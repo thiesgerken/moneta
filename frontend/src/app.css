@@ -159,6 +159,20 @@ table tbody tr[data-expanded] {
 	background-color: var(--color-gray-700);
 }
 
+/* flowbite gives a field a placeholder colour in dark mode only (`dark:placeholder-gray-400`),
+   so in light mode the placeholder inherited the text colour: "Beschreibung" in an empty field
+   was drawn exactly like "Beschreibung" typed into it, and there was no way to tell an expense
+   with no description from one that says its own field name. */
+input::placeholder,
+textarea::placeholder {
+	color: var(--color-gray-400);
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+	color: var(--color-gray-500);
+}
+
 /* Tailwind's preflight leaves a `<button>` with the arrow cursor the browser gives it, and
    flowbite only ever adds a cursor of its own -- `cursor-not-allowed` -- to a button that is
    disabled. So the only buttons in a row that said anything about the pointer were the ones

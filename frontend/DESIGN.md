@@ -166,6 +166,17 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   Bearbeiten `blue`, Löschen `red`, Einsortieren `gray`, and the same colours again on the
   expanded row. `alternative` is for the controls that are never disabled — the filter and
   dropdown triggers, and Abbrechen next to a solid Speichern.
+- **Every state has an icon, and it is the same icon everywhere that state is named** — in the
+  list's badges, in the edit dialog's flags, and in the toolbar's Zustand filter. Six words of
+  similar length in one weight are read one after another; six shapes are recognised.
+  `CheckCircle` Normal · `QuestionCircle` Unbestätigt · `ExclamationCircle` Unvollständig ·
+  `Star` Außergewöhnlich · `Landmark` Steuerrelevant · `FileClone` Vorlage.
+- **A placeholder must not look like an entry.** flowbite sets a placeholder colour in dark mode
+  only, so an empty Beschreibung field said "Beschreibung" in the same ink as a real one; both
+  modes are set in `app.css` now.
+- A control that does something on click has to say so at rest, not on hover: the € / % switch
+  inside the amount field sits on its own grey chip, because a bare glyph at the end of an input
+  reads as a unit label and nobody clicks a unit label.
 - Enabled buttons get a **pointer cursor** from a rule in `app.css`, and disabled ones get
   `pointer-events: none`. Neither is a default: tailwind's preflight leaves a `<button>` with
   the arrow cursor, and flowbite's `hover:` background applies just as happily to a button that

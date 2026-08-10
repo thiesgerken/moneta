@@ -29,7 +29,12 @@
 		EditOutline,
 		TrashBinOutline,
 		ExclamationCircleOutline,
-		CalendarMonthOutline
+		CalendarMonthOutline,
+		CheckCircleOutline,
+		FileCloneOutline,
+		LandmarkOutline,
+		QuestionCircleOutline,
+		StarOutline
 	} from 'flowbite-svelte-icons';
 	import {
 		accountSorter,
@@ -634,19 +639,29 @@
 	isExtraordinary: boolean;
 })}
 	{#if expense.isTaxRelevant}
-		<span class="rounded-md bg-green-100 px-2 py-1 text-green-700">Steuerrelevant</span>
+		<span class="inline-flex items-center gap-1 rounded-md bg-green-100 px-2 py-1 text-green-700">
+			<LandmarkOutline class="h-3.5 w-3.5 shrink-0" />Steuerrelevant
+		</span>
 	{/if}
 	{#if expense.isTemplate}
-		<span class="rounded-md bg-blue-100 px-2 py-1 text-blue-700">Vorlage</span>
+		<span class="inline-flex items-center gap-1 rounded-md bg-blue-100 px-2 py-1 text-blue-700">
+			<FileCloneOutline class="h-3.5 w-3.5 shrink-0" />Vorlage
+		</span>
 	{/if}
 	{#if expense.isUnchecked}
-		<span class="rounded-md bg-red-100 px-2 py-1 text-yellow-700">Unbestätigt</span>
+		<span class="inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-1 text-yellow-700">
+			<QuestionCircleOutline class="h-3.5 w-3.5 shrink-0" />Unbestätigt
+		</span>
 	{/if}
 	{#if expense.isIncomplete}
-		<span class="rounded-md bg-red-100 px-2 py-1 text-red-700">Unvollständig</span>
+		<span class="inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-1 text-red-700">
+			<ExclamationCircleOutline class="h-3.5 w-3.5 shrink-0" />Unvollständig
+		</span>
 	{/if}
 	{#if expense.isExtraordinary}
-		<span class="rounded-md bg-purple-100 px-2 py-1 text-purple-700">Außergewöhnlich</span>
+		<span class="inline-flex items-center gap-1 rounded-md bg-purple-100 px-2 py-1 text-purple-700">
+			<StarOutline class="h-3.5 w-3.5 shrink-0" />Außergewöhnlich
+		</span>
 	{/if}
 {/snippet}
 
@@ -923,13 +938,28 @@
 						<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 					</Button>
 					<Dropdown class="max-h-80 w-64 divide-y-0 overflow-y-auto p-3 text-sm">
+						<!-- The same icon per state as the badges below and the flags in the edit
+						     dialog: six words of similar length in one weight are read one after
+						     another, six shapes are recognised. -->
 						<div class="space-y-2">
-							<Checkbox bind:checked={showNormal}>Normal</Checkbox>
-							<Checkbox bind:checked={showUnchecked}>Unbestätigt</Checkbox>
-							<Checkbox bind:checked={showIncomplete}>Unvollständig</Checkbox>
-							<Checkbox bind:checked={showExtraordinary}>Außergewöhnlich</Checkbox>
-							<Checkbox bind:checked={showTaxRelevant}>Steuerrelevant</Checkbox>
-							<Checkbox bind:checked={showTemplates}>Vorlage</Checkbox>
+							<Checkbox bind:checked={showNormal}>
+								<CheckCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Normal
+							</Checkbox>
+							<Checkbox bind:checked={showUnchecked}>
+								<QuestionCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Unbestätigt
+							</Checkbox>
+							<Checkbox bind:checked={showIncomplete}>
+								<ExclamationCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Unvollständig
+							</Checkbox>
+							<Checkbox bind:checked={showExtraordinary}>
+								<StarOutline class="me-1.5 h-4 w-4 shrink-0" />Außergewöhnlich
+							</Checkbox>
+							<Checkbox bind:checked={showTaxRelevant}>
+								<LandmarkOutline class="me-1.5 h-4 w-4 shrink-0" />Steuerrelevant
+							</Checkbox>
+							<Checkbox bind:checked={showTemplates}>
+								<FileCloneOutline class="me-1.5 h-4 w-4 shrink-0" />Vorlage
+							</Checkbox>
 						</div>
 					</Dropdown>
 				</div>
