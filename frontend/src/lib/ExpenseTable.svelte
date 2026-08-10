@@ -792,14 +792,14 @@
 					<ButtonGroup class="hidden md:inline-flex">
 						{@render newExpenseButton('')}
 						<Button
-							color="light"
+							color="teal"
 							disabled={!selectedExpenseId}
 							onclick={() => openEditModal(selectedExpenseId!, true)}
 						>
 							<FileCopyAltOutline class="mr-2 h-3.5 w-3.5" />Duplizieren
 						</Button>
 						<Button
-							color="light"
+							color="blue"
 							disabled={!selectedExpenseId}
 							onclick={() => openEditModal(selectedExpenseId!)}
 						>
@@ -816,7 +816,7 @@
 							<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
 						</Button>
 						<Button
-							color="light"
+							color="gray"
 							disabled={!selectedExpenseId}
 							onclick={() => {
 								expenseIdToResort = selectedExpenseId;
@@ -1302,16 +1302,12 @@
 							</div>
 
 							<div class="mt-6 flex flex-wrap gap-2">
-								<Button
-									color="yellow"
-									size="xs"
-									onclick={() => openEditModal(expense.id.toString())}
-								>
+								<Button color="blue" size="xs" onclick={() => openEditModal(expense.id.toString())}>
 									<EditOutline class="mr-2 h-3.5 w-3.5" />
 									Bearbeiten
 								</Button>
 								<Button
-									color="alternative"
+									color="teal"
 									size="xs"
 									onclick={() => openEditModal(expense.id.toString(), true)}
 								>
@@ -1319,7 +1315,7 @@
 									Duplizieren
 								</Button>
 								<Button
-									color="alternative"
+									color="gray"
 									size="xs"
 									onclick={() => {
 										expenseIdToResort = expense.id.toString();

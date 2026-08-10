@@ -158,10 +158,14 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   what is in it (`Positionen · 3 (42,17 €)`). A section heading plus an add-button for something
   almost never present is worth more than the thing itself.
 - Only the button that completes the form is `primary`; five orange buttons in a form leave
-  nothing to say which one submits it. **A button that is ever disabled is `light`**, not
-  `alternative` — an alternative button is transparent with a hairline border, which is exactly
-  what a disabled button looks like, so the two states were the same button twice. `alternative`
-  is for the controls that are never disabled: the filter and dropdown triggers.
+  nothing to say which one submits it.
+- **A button that can be disabled is a solid colour.** `alternative` and `light` are transparent
+  or white with grey text, which is exactly what a disabled button looks like — so an enabled
+  one and its own 50%-opacity twin were the same button twice. Grey means disabled and nothing
+  else. The expense list's actions are the reference: Neu `primary`, Duplizieren `teal`,
+  Bearbeiten `blue`, Löschen `red`, Einsortieren `gray`, and the same colours again on the
+  expanded row. `alternative` is for the controls that are never disabled — the filter and
+  dropdown triggers, and Abbrechen next to a solid Speichern.
 - Enabled buttons get a **pointer cursor** from a rule in `app.css`, and disabled ones get
   `pointer-events: none`. Neither is a default: tailwind's preflight leaves a `<button>` with
   the arrow cursor, and flowbite's `hover:` background applies just as happily to a button that

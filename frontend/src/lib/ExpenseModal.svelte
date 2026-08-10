@@ -417,11 +417,11 @@
 </script>
 
 {#snippet minus(onclick: () => void, disabled = false)}
-	<!-- `light` rather than `alternative`: an alternative button is transparent with a hairline
-	     border, which is what a disabled button looks like, so the one row you cannot remove and
-	     the four you can were the same button twice. -->
+	<!-- Solid, because grey is what disabled looks like: a transparent or white button reads as
+	     one you cannot press, and next to its own 50%-opacity version there was nothing to tell
+	     the two apart. -->
 	<Button
-		color="light"
+		color="red"
 		size="xs"
 		class="p-1.5"
 		{disabled}
