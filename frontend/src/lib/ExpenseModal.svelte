@@ -237,6 +237,13 @@
 				if (fixed.length === 1) referenceAmount = fixed[0].amount;
 			}
 
+			// Failing that, this transaction's own amount is the only figure in the dialog that
+			// the share could be a share of, and switching the one transaction there is to % is
+			// how a split starts as often as not. It comes out at 100%, which is what it is.
+			if (!Number(referenceAmount) && Number(tx.amount)) {
+				referenceAmount = tx.amount;
+			}
+
 			const reference = Number(referenceAmount);
 			if (reference && Number(tx.amount)) {
 				tx.percentage = String(Math.round((Number(tx.amount) / reference) * 10000) / 100);
@@ -445,11 +452,11 @@
 	</button>
 {/snippet}
 
-{#snippet add(label: string, onclick: () => void)}
+{#snippet add(label: string, onclick: () => void, cls = 'mt-2')}
 	<Button
 		color="alternative"
 		size="xs"
-		class="mt-2"
+		class={cls}
 		onclick={(e: MouseEvent) => {
 			e.stopPropagation();
 			onclick();
@@ -568,7 +575,10 @@
 
 		<div class="col-span-full">
 			<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-				<Label class="block">Transaktionen</Label>
+				<div class="flex items-center gap-2">
+					<Label class="block">Transaktionen</Label>
+					{@render add('Transaktion', addTransaction, '')}
+				</div>
 				<!-- Only a relative transaction has anything to be relative to, which is also the
 				     only reason this field exists -- so it lives with them rather than in the form
 				     above, where it appeared and disappeared and moved every field after it. -->
@@ -728,14 +738,16 @@
 					</tbody>
 				</table>
 			</div>
-			{@render add('Transaktion', addTransaction)}
 		</div>
 
 		<!-- Under the transactions rather than beside them: the statement text is the widest
 		     thing in the dialog and a category is two short fields, so the pair spent the row on
 		     the wrong one. Half a row is all a category needs; the rest of it is below. -->
 		<div class="col-span-full lg:col-span-4">
-			<Label class="mb-2 block">Kategorien</Label>
+			<div class="mb-2 flex items-center gap-2">
+				<Label class="block">Kategorien</Label>
+				{@render add('Kategorie', addCategory, '')}
+			</div>
 			<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
 				<table data-form class="w-full text-left text-sm">
 					<thead class="bg-gray-50 dark:bg-gray-700">
@@ -784,7 +796,6 @@
 					</tbody>
 				</table>
 			</div>
-			{@render add('Kategorie', addCategory)}
 		</div>
 
 		<!-- Positionen and Belege are empty on almost every expense and cost a heading and a
