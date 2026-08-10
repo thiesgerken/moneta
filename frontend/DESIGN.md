@@ -137,6 +137,29 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   like the whole list, only shorter.
 - Amounts are right-aligned and tabular; identifying text truncates rather than wraps.
 
+## Forms and modals
+
+- A modal is as wide as its content needs: `xl` for a form with tables in it, `lg` for a list,
+  `xs` for a confirmation. `lg` on the expense form stacked a dozen fields down a column with
+  the right half of the dialog empty.
+- **The buttons live in the modal's footer**, which does not scroll — `Abbrechen` on the left of
+  `Speichern`. A submit button in the footer sits outside the `<form>` in the body, which is
+  what the `form="…"` attribute is for. A submit bar at the end of the body means scrolling past
+  everything to save.
+- A textarea's defaults are `cols=20` and `rows=2`, and both are wrong every time: **`w-full`
+  and `field-sizing-content`**, with a `max-h-*` so a long statement cannot take the screen.
+  Guessing a row count from whether the field is empty is what this replaces.
+- **A table of form controls carries `data-form`**, which drops the row padding (the inputs
+  bring their own height) and the hover shading. Everything else about it — the grid, the
+  header, the widths — is the same as a table you read.
+- The unit is the switch where a value can be one of two: the €/% button inside the amount field
+  replaced a `Relativ` checkbox column that cost more width than the number it qualified.
+- **What is empty on most records goes in a modal of its own**, reached from a line that says
+  what is in it (`Positionen · 3 (42,17 €)`). A section heading plus an add-button for something
+  almost never present is worth more than the thing itself.
+- Only the button that completes the form is `primary`. Add- and remove-row buttons are
+  `alternative`; five orange buttons in a form leave nothing to say which one submits it.
+
 ## Charts
 
 apexcharts, wrapped in `Chart.svelte`, which owns the create-or-update decision — never

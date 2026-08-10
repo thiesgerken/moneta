@@ -107,60 +107,73 @@
 		expense?.accrualEnd ? new Date(expense.accrualEnd) : undefined
 	);
 
-	// Categories and transactions state
-	let expenseCategories = $derived(
-		expense?.categories.map((cat) => ({
-			categoryId: cat.category.id,
-			weight: cat.weight.toString()
-		})) || [{ categoryId: '', weight: '1' }]
-	);
-	let transactions: {
+	// The four editable collections are $state rather than $derived, and are filled from the
+	// expense by an effect. A $derived array is not deeply reactive: its rows are plain objects,
+	// so `tx.isRelative = true` changed nothing on screen and the € / % switch below would have
+	// been dead. An assignment into $state is proxied and reaches the template.
+	interface TransactionRow {
 		date: Date | undefined;
 		accountId: string;
 		amount: string;
 		statement: string;
 		isRelative: boolean;
 		percentage: string;
-	}[] = $derived(
-		expense?.transactions.map((tx) => ({
+	}
+	interface PositionRow {
+		title: string;
+		totalAmount: string;
+		quantity: string;
+		unit: string;
+		comments: string;
+	}
+
+	const emptyTransaction = (): TransactionRow => ({
+		date: undefined,
+		accountId: '',
+		amount: '',
+		statement: '',
+		isRelative: false,
+		percentage: ''
+	});
+
+	let expenseCategories: { categoryId: string; weight: string }[] = $state([]);
+	let transactions: TransactionRow[] = $state([]);
+	let positions: PositionRow[] = $state([]);
+	// ocr is machine-produced and not editable here, but it has to round-trip: the mutation
+	// replaces the whole receipt list
+	let receipts: { uri: string; ocr: string | null }[] = $state([]);
+
+	$effect(() => {
+		expenseCategories = expense?.categories.map((cat) => ({
+			categoryId: cat.category.id,
+			weight: cat.weight.toString()
+		})) || [{ categoryId: '', weight: '1' }];
+		transactions = expense?.transactions.map((tx) => ({
 			date: tx.date ? new Date(tx.date) : undefined,
 			accountId: tx.account.id.toString(),
 			amount: tx.amount ? (tx.amount / 100).toFixed(2) : '',
 			statement: tx.statement || '',
 			isRelative: tx.fraction !== null,
 			percentage: tx.fraction ? (100 * tx.fraction).toString() : ''
-		})) || [
-			{
-				date: undefined,
-				accountId: '',
-				amount: '',
-				statement: '',
-				isRelative: false,
-				percentage: ''
-			}
-		]
-	);
+		})) || [emptyTransaction()];
+		positions =
+			expense?.positions.map((pos) => ({
+				title: pos.title,
+				totalAmount: pos.amount ? (pos.amount / 100).toString() : '',
+				quantity: pos.quantity?.toString() || '',
+				unit: pos.unit || '',
+				comments: pos.comments || ''
+			})) || [];
+		receipts = expense?.receipts.map((r) => ({ uri: r.uri, ocr: r.ocr })) || [];
+	});
 
-	let positions: {
-		title: string;
-		totalAmount: string;
-		quantity: string;
-		unit: string;
-		comments: string;
-	}[] = $derived(
-		expense?.positions.map((pos) => ({
-			title: pos.title,
-			totalAmount: pos.amount ? (pos.amount / 100).toString() : '',
-			quantity: pos.quantity?.toString() || '',
-			unit: pos.unit || '',
-			comments: pos.comments || ''
-		})) || []
-	);
+	// The two rarely-used lists live in modals of their own, so that an expense without them
+	// costs one line in the form rather than a section header and a button.
+	let showPositions = $state(false);
+	let showReceipts = $state(false);
 
-	// ocr is machine-produced and not editable here, but it has to round-trip: the mutation
-	// replaces the whole receipt list
-	let receipts: { uri: string; ocr: string | null }[] = $derived(
-		expense?.receipts.map((r) => ({ uri: r.uri, ocr: r.ocr })) || []
+	const positionsTotal = $derived(
+		positions.reduce((sum, pos) => sum + (Number(pos.totalAmount) || 0), 0)
 	);
 
 	function addReceipt() {
@@ -179,17 +192,7 @@
 		}
 	}
 	function addTransaction() {
-		transactions = [
-			...transactions,
-			{
-				date: undefined,
-				accountId: '',
-				amount: '',
-				statement: '',
-				isRelative: false,
-				percentage: ''
-			}
-		];
+		transactions = [...transactions, emptyTransaction()];
 	}
 	function removeTransaction(i: number) {
 		if (transactions.length > 1) {
@@ -354,9 +357,6 @@
 			}))
 		};
 
-		console.log('expense', expense);
-		console.log('update', input);
-
 		if (expense) await UpdateExpense.mutate({ id: expense.id, input });
 		else await CreateExpense.mutate({ input });
 
@@ -365,498 +365,460 @@
 	};
 </script>
 
-<Modal title={expense ? 'Ausgabe bearbeiten' : 'Neue Ausgabe'} bind:open size="lg">
-	<form onsubmit={handleSubmit}>
-		<!-- *:min-w-0: a grid item is min-content wide by default, and the transaction and
-		     category tables inside this one are wider than a phone. Without it the whole form
-		     grew to their width and every field ran off the right of the screen; with it they
-		     scroll inside their own `overflow-x-auto` the way they were meant to. -->
-		<div class="mb-4 grid min-w-0 gap-4 *:min-w-0 sm:grid-cols-2">
-			<div>
-				<Label for="title" class="mb-2">Titel</Label>
-				<Input
-					type="text"
-					clearable
-					id="title"
-					placeholder="Titel"
-					bind:value={title}
-					required
-					color={titleError ? 'red' : undefined}
-				/>
-			</div>
-			<div>
-				<Label for="store" class="mb-2">Geschäft</Label>
-				<Input
-					type="text"
-					clearable
-					id="store"
-					placeholder="Geschäft"
-					bind:value={store}
-					color={storeError ? 'red' : undefined}
-				/>
-			</div>
+{#snippet minus(onclick: () => void, disabled = false)}
+	<Button
+		color="alternative"
+		size="xs"
+		class="p-1.5"
+		{disabled}
+		onclick={(e: MouseEvent) => {
+			e.stopPropagation();
+			onclick();
+		}}
+	>
+		<CircleMinusOutline class="h-4 w-4" />
+	</Button>
+{/snippet}
 
-			<div class="sm:col-span-2">
-				<Label for="description" class="mb-2">Beschreibung</Label>
-				<Textarea
-					id="description"
-					clearable
-					placeholder="Beschreibung"
-					rows={description ? 5 : 1}
-					class="mb-2"
-					bind:value={description}
-					color={descriptionError ? 'red' : undefined}
-				/>
-			</div>
-			<div class="sm:col-span-2">
-				<Label for="comments" class="mb-2">Kommentare</Label>
-				<Textarea
-					id="comments"
-					clearable
-					placeholder="Kommentare"
-					rows={comments ? 5 : 1}
-					bind:value={comments}
-				/>
-			</div>
-			<div>
-				<Label class="mb-2 block">Leistung von</Label>
-				<Datepicker
-					bind:value={accrualStart}
-					placeholder="Startdatum"
-					inputClass={accrualStartError ? 'border-red-600 bg-red-100 text-red-400' : ''}
-				/>
-			</div>
-			<div>
-				<Label class="mb-2 block">Leistung bis</Label>
-				<Datepicker
-					bind:value={accrualEnd}
-					placeholder="optionales Enddatum"
-					inputClass={accrualEndError ? 'border-red-600 bg-red-100 text-red-400' : ''}
-				/>
-			</div>
-			<div>
-				<Label class="mb-2 block">Flags</Label>
+{#snippet add(label: string, onclick: () => void)}
+	<Button
+		color="alternative"
+		size="xs"
+		class="mt-2"
+		onclick={(e: MouseEvent) => {
+			e.stopPropagation();
+			onclick();
+		}}
+	>
+		<CirclePlusOutline class="mr-1 h-4 w-4" />{label}
+	</Button>
+{/snippet}
+
+<!-- xl rather than lg: the form is two tables and a dozen fields, and at 896px they were stacked
+     down a column with the right half of the dialog empty. -->
+<Modal title={expense ? 'Ausgabe bearbeiten' : 'Neue Ausgabe'} bind:open size="xl">
+	<!-- *:min-w-0: a grid item is min-content wide by default, and the transaction and category
+	     tables inside this one are wider than a phone. Without it the whole form grew to their
+	     width and every field ran off the right of the screen; with it they scroll inside their
+	     own `overflow-x-auto` the way they were meant to. -->
+	<form
+		id="expense-form"
+		onsubmit={handleSubmit}
+		class="grid min-w-0 gap-4 *:min-w-0 sm:grid-cols-2 lg:grid-cols-6"
+	>
+		<div class="sm:col-span-2 lg:col-span-3">
+			<Label for="title" class="mb-2">Titel</Label>
+			<Input
+				type="text"
+				clearable
+				id="title"
+				placeholder="Titel"
+				bind:value={title}
+				required
+				color={titleError ? 'red' : undefined}
+			/>
+		</div>
+		<div class="sm:col-span-2 lg:col-span-1">
+			<Label for="store" class="mb-2">Geschäft</Label>
+			<Input
+				type="text"
+				clearable
+				id="store"
+				placeholder="Geschäft"
+				bind:value={store}
+				color={storeError ? 'red' : undefined}
+			/>
+		</div>
+		<div>
+			<Label class="mb-2 block">Leistung von</Label>
+			<Datepicker
+				bind:value={accrualStart}
+				placeholder="Startdatum"
+				inputClass={accrualStartError ? 'border-red-600 bg-red-100 text-red-400' : ''}
+			/>
+		</div>
+		<div>
+			<Label class="mb-2 block">Leistung bis</Label>
+			<Datepicker
+				bind:value={accrualEnd}
+				placeholder="optionales Enddatum"
+				inputClass={accrualEndError ? 'border-red-600 bg-red-100 text-red-400' : ''}
+			/>
+		</div>
+
+		<!-- field-sizing-content instead of guessing a row count: a textarea's default width is
+		     `cols=20`, which is where the 20-character Beschreibung box came from, and its default
+		     height is as wrong. It now starts one line high and grows with what is in it. -->
+		<div class="sm:col-span-2 lg:col-span-4">
+			<Label for="description" class="mb-2">Beschreibung</Label>
+			<Textarea
+				id="description"
+				placeholder="Beschreibung"
+				rows={1}
+				class="field-sizing-content max-h-48 w-full"
+				bind:value={description}
+				color={descriptionError ? 'red' : undefined}
+			/>
+		</div>
+		<div class="sm:col-span-2 lg:col-span-2">
+			<Label for="comments" class="mb-2">Kommentare</Label>
+			<Textarea
+				id="comments"
+				placeholder="Kommentare"
+				rows={1}
+				class="field-sizing-content max-h-48 w-full"
+				bind:value={comments}
+			/>
+		</div>
+
+		<!-- One row. Split over two grid cells, the three on the right sat under the empty half of
+		     the "Flags" label and read as belonging to nothing. -->
+		<div class="col-span-full">
+			<Label class="mb-2 block">Flags</Label>
+			<div class="flex flex-wrap gap-x-6 gap-y-2">
 				<Checkbox bind:checked={isTemplate}>Vorlage</Checkbox>
 				<Checkbox bind:checked={isUnchecked}>Unbestätigt</Checkbox>
-			</div>
-			<div>
 				<Checkbox bind:checked={isIncomplete}>Unvollständig</Checkbox>
 				<Checkbox bind:checked={isExtraordinary}>Außergewöhnlich</Checkbox>
 				<Checkbox bind:checked={isTaxRelevant}>Steuerrelevant</Checkbox>
 			</div>
-			<div class="sm:col-span-2">
-				<Label class="mb-2 block">Belege</Label>
-				{#each receipts as receipt, i (i)}
-					<div class="mb-2 flex items-center gap-2">
-						<Input
-							type="text"
-							placeholder="URI (Datei, DMS-Dokument, …)"
-							bind:value={receipt.uri}
-							class="w-full"
-						/>
-						{#if receipt.ocr}
-							<span class="text-xs whitespace-nowrap text-gray-500" title={receipt.ocr}>OCR</span>
-						{/if}
-						<Button
-							onclick={(e: MouseEvent) => {
-								e.stopPropagation();
-								removeReceipt(i);
-							}}
-							color="red"
-							size="xs"
-						>
-							<CircleMinusOutline class="h-4 w-4" />
-						</Button>
-					</div>
-				{/each}
-				<div class="mt-2 text-center">
-					<Button
-						onclick={(e: MouseEvent) => {
-							e.stopPropagation();
-							addReceipt();
-						}}
-						size="xs"
-					>
-						<CirclePlusOutline class="mr-1 h-4 w-4" />Beleg hinzufügen
-					</Button>
-				</div>
-			</div>
+		</div>
 
-			{#if transactions.filter((tx) => tx.isRelative).length > 0}
-				<div>
-					<Label for="referenceAmount" class="mb-2">Referenzbetrag</Label>
-					<div class="relative">
-						<Input
-							id="referenceAmount"
-							placeholder="0"
-							bind:value={referenceAmount}
-							step="0.01"
-							class="no-spinner pr-6"
-							color={referenceAmountError ? 'red' : undefined}
-						/>
-						<span
-							class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
-							>€</span
-						>
-					</div>
-				</div>
-			{/if}
-
-			<div class="mb-4 sm:col-span-2">
-				<Label class="mb-2 block">Transaktionen</Label>
-				<div class="overflow-x-auto">
-					<table class="w-full border-collapse border border-gray-300">
-						<thead>
-							<tr class="bg-gray-50">
-								<th
-									class="w-1/6 border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>Datum</th
-								>
-								<th
-									class="w-1/6 border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>Konto</th
-								>
-								<th
-									class="w-1/12 border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>Relativ</th
-								>
-								<th
-									class="w-1/6 border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>Betrag</th
-								>
-								<th
-									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>Transaktionstext</th
-								>
-								<th
-									class="w-1/12 border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>&nbsp;</th
-								>
-							</tr>
-						</thead>
-						<tbody>
-							{#each transactions as tx, i (i)}
-								<tr>
-									<td class="border border-gray-300 px-3 py-2">
-										<Datepicker
-											bind:value={tx.date}
-											placeholder="Datum"
-											inputClass={transactionErrors[i]?.date
-												? 'border-red-600 bg-red-100 text-red-400'
-												: ''}
-										/>
-									</td>
-									<td class="border border-gray-300 px-3 py-2">
-										<Select
-											items={accounts.map((a) => ({
-												value: a.id,
-												name: formatAccount(
-													{
-														name: a.name,
-														owner: { name: a.owner.name, firstName: a.owner.firstName }
-													},
-													user_name
-												)
-											}))}
-											bind:value={tx.accountId}
-											style={tint(accounts.find((a) => a.id === tx.accountId)?.color)}
-											selectClass={transactionErrors[i]?.accountId
-												? 'text-red-700 border-red-700 bg-red-100'
-												: undefined}
-											placeholder="Konto"
-										/>
-									</td>
-									<td class="border border-gray-300 px-3 py-2">
-										<Checkbox bind:checked={tx.isRelative} class="ml-1"></Checkbox>
-									</td>
-									<td class="border border-gray-300 px-3 py-2">
-										<div class="flex items-center gap-2">
-											{#if !tx.isRelative}
-												<div class="relative flex-1">
-													<Input
-														placeholder=""
-														bind:value={tx.amount}
-														class="no-spinner pr-6"
-														color={transactionErrors[i]?.amount ? 'red' : undefined}
-													/>
-													<span
-														class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
-														>€</span
-													>
-												</div>
-											{:else}
-												<div class="relative flex-1">
-													<Input
-														placeholder=""
-														bind:value={tx.percentage}
-														class="no-spinner pr-6"
-														color={transactionErrors[i]?.percentage ? 'red' : undefined}
-														min="0"
-														max="100"
-														step="0.01"
-													/>
-													<span
-														class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
-														>%</span
-													>
-												</div>
-											{/if}
-										</div>
-										{#if tx.isRelative && referenceAmount && tx.percentage && Number(referenceAmount)}
-											<div class="mt-1 text-xs text-gray-600">
-												= {((Number(tx.percentage) / 100) * Number(referenceAmount)).toFixed(2)} €
-											</div>
-										{/if}
-									</td>
-									<td class="border border-gray-300 px-3 py-2">
-										<Textarea
-											placeholder=""
-											clearable
-											bind:value={tx.statement}
-											class="w-full font-mono"
-											rows={tx.statement ? 5 : 1}
-										/>
-									</td>
-									<td class="border border-gray-300 px-3 py-2">
-										<Button
-											onclick={(e: MouseEvent) => {
-												e.stopPropagation();
-												removeTransaction(i);
-											}}
-											color={transactions.length === 1 ? 'gray' : 'red'}
-											disabled={transactions.length === 1}
-											size="xs"
-										>
-											<CircleMinusOutline class="h-4 w-4" />
-										</Button>
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-				<div class="mt-2 text-center">
-					<Button
-						onclick={(e: MouseEvent) => {
-							e.stopPropagation();
-							addTransaction();
-						}}
-						size="xs"
-					>
-						<CirclePlusOutline class="mr-1 h-4 w-4" />
-						Transaktion hinzufügen
-					</Button>
-				</div>
-			</div>
-
-			<div class="mb-4 sm:col-span-2">
-				<Label class="mb-2 block">Kategorien</Label>
-				<div class="overflow-x-auto">
-					<table class="w-full border-collapse border border-gray-300">
-						<thead>
-							<tr class="bg-gray-50">
-								<th
-									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>Kategorie</th
-								>
-								<th
-									class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>Gewicht</th
-								>
-								<th
-									class="w-1/12 border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-									>&nbsp;</th
-								>
-							</tr>
-						</thead>
-						<tbody>
-							{#each expenseCategories as cat, i (i)}
-								<tr>
-									<td class="border border-gray-300 px-3 py-2">
-										<Select
-											items={categories
-												.map((c) => ({ value: c.id, name: c.name }))
-												.filter(
-													(c) =>
-														!expenseCategories.some(
-															(ec, idx) => idx !== i && ec.categoryId === c.value
-														)
-												)}
-											bind:value={cat.categoryId}
-											placeholder="Kategorie"
-											style={tint(categories.find((c) => c.id === cat.categoryId)?.color)}
-											selectClass={categoryErrors[i]?.categoryId
-												? 'text-red-700 border-red-700 bg-red-100'
-												: undefined}
-										/>
-									</td>
-									<td class="border border-gray-300 px-3 py-2">
-										<Input
-											type="number"
-											min="1"
-											class="no-spinner w-full"
-											bind:value={cat.weight}
-											placeholder="Gewicht"
-											color={categoryErrors[i]?.weight ? 'red' : undefined}
-										/>
-									</td>
-									<td class="border border-gray-300 px-3 py-2">
-										<Button
-											onclick={(e: MouseEvent) => {
-												e.stopPropagation();
-												removeCategory(i);
-											}}
-											color={expenseCategories.length === 1 ? 'gray' : 'red'}
-											disabled={expenseCategories.length === 1}
-											size="xs"
-										>
-											<CircleMinusOutline class="h-4 w-4" />
-										</Button>
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-				<div class="mt-2 text-center">
-					<Button
-						onclick={(e: MouseEvent) => {
-							e.stopPropagation();
-							addCategory();
-						}}
-						size="xs"
-					>
-						<CirclePlusOutline class="mr-1 h-4 w-4" />
-						Kategorie hinzufügen
-					</Button>
-				</div>
-			</div>
-
-			<div class="mb-4 sm:col-span-2">
-				<Label class="mb-2 block">Positionen</Label>
-				{#if positions.length > 0}
-					<div class="overflow-x-auto">
-						<table class="w-full border-collapse border border-gray-300">
-							<thead>
-								<tr class="bg-gray-50">
-									<th
-										class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-										>Titel</th
-									>
-									<th
-										class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-										>Gesamtbetrag (€)</th
-									>
-									<th
-										class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-										>Menge</th
-									>
-									<th
-										class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-										>Einheit</th
-									>
-									<th
-										class="border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-										>Kommentare</th
-									>
-									<th
-										class="w-1/12 border border-gray-300 px-3 py-2 text-left text-sm font-medium text-gray-700"
-										>&nbsp;</th
-									>
-								</tr>
-							</thead>
-							<tbody>
-								{#each positions as pos, i (i)}
-									<tr>
-										<td class="border border-gray-300 px-3 py-2">
-											<Input
-												type="text"
-												placeholder="Titel"
-												bind:value={pos.title}
-												class="w-full"
-												color={positionErrors[i]?.title ? 'red' : undefined}
-											/>
-										</td>
-										<td class="border border-gray-300 px-3 py-2">
-											<div class="relative">
-												<Input
-													placeholder=""
-													bind:value={pos.totalAmount}
-													class="no-spinner w-full pr-6"
-													step="0.01"
-													color={positionErrors[i]?.totalAmount ? 'red' : undefined}
-												/>
-												<span
-													class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
-													>€</span
-												>
-											</div>
-										</td>
-										<td class="border border-gray-300 px-3 py-2">
-											<Input
-												placeholder=""
-												bind:value={pos.quantity}
-												class="no-spinner w-full"
-												step="0.01"
-												color={positionErrors[i]?.quantity ? 'red' : undefined}
-											/>
-										</td>
-										<td class="border border-gray-300 px-3 py-2">
-											<Input type="text" placeholder="" bind:value={pos.unit} class="w-full" />
-										</td>
-										<td class="border border-gray-300 px-3 py-2">
-											<Textarea
-												placeholder="Kommentare"
-												bind:value={pos.comments}
-												class="w-full"
-												rows={pos.comments ? 3 : 1}
-											/>
-										</td>
-										<td class="border border-gray-300 px-3 py-2">
-											<Button
-												onclick={(e: MouseEvent) => {
-													e.stopPropagation();
-													removePosition(i);
-												}}
-												color={positions.length === 1 ? 'gray' : 'red'}
-												size="xs"
-											>
-												<CircleMinusOutline class="h-4 w-4" />
-											</Button>
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
+		<div class="col-span-full lg:col-span-4">
+			<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+				<Label class="block">Transaktionen</Label>
+				<!-- Only a relative transaction has anything to be relative to, which is also the
+				     only reason this field exists -- so it lives with them rather than in the form
+				     above, where it appeared and disappeared and moved every field after it. -->
+				{#if transactions.some((tx) => tx.isRelative)}
+					<div class="flex items-center gap-2">
+						<Label for="referenceAmount" class="whitespace-nowrap">Referenzbetrag</Label>
+						<div class="relative">
+							<Input
+								id="referenceAmount"
+								placeholder="0"
+								bind:value={referenceAmount}
+								step="0.01"
+								class="no-spinner w-28 pr-6"
+								color={referenceAmountError ? 'red' : undefined}
+							/>
+							<span
+								class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
+								>€</span
+							>
+						</div>
 					</div>
 				{/if}
-				<div class="mt-2 text-center">
-					<Button
-						onclick={(e: MouseEvent) => {
-							e.stopPropagation();
-							addPosition();
-						}}
-						size="xs"
-					>
-						<CirclePlusOutline class="mr-1 h-4 w-4" />
-						Position hinzufügen
-					</Button>
-				</div>
 			</div>
+			<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+				<table data-form class="w-full text-left text-sm">
+					<thead class="bg-gray-50 dark:bg-gray-700">
+						<tr>
+							<th class="w-36 px-2" scope="col">Datum</th>
+							<th class="w-40 px-2" scope="col">Konto</th>
+							<th class="w-28 px-2" scope="col">Betrag</th>
+							<th class="px-2" scope="col">Transaktionstext</th>
+							<th class="w-10 px-2" scope="col"><span class="sr-only">Entfernen</span></th>
+						</tr>
+					</thead>
+					<tbody class="divide-y">
+						{#each transactions as tx, i (i)}
+							<tr>
+								<td class="px-2">
+									<Datepicker
+										bind:value={tx.date}
+										placeholder="Datum"
+										inputClass={transactionErrors[i]?.date
+											? 'border-red-600 bg-red-100 text-red-400'
+											: ''}
+									/>
+								</td>
+								<td class="px-2">
+									<Select
+										items={accounts.map((a) => ({
+											value: a.id,
+											name: formatAccount(
+												{
+													name: a.name,
+													owner: { name: a.owner.name, firstName: a.owner.firstName }
+												},
+												user_name
+											)
+										}))}
+										bind:value={tx.accountId}
+										style={tint(accounts.find((a) => a.id === tx.accountId)?.color)}
+										selectClass={transactionErrors[i]?.accountId
+											? 'text-red-700 border-red-700 bg-red-100'
+											: undefined}
+										placeholder="Konto"
+									/>
+								</td>
+								<td class="px-2">
+									<!-- The unit is the switch. A column of its own for a checkbox called
+									     "Relativ" cost more width than the amount it qualified, and said
+									     nothing about what the number in the next cell then meant. -->
+									<div class="relative">
+										{#if tx.isRelative}
+											<Input
+												placeholder=""
+												bind:value={tx.percentage}
+												class="no-spinner pr-8"
+												color={transactionErrors[i]?.percentage ? 'red' : undefined}
+												min="0"
+												max="100"
+												step="0.01"
+											/>
+										{:else}
+											<Input
+												placeholder=""
+												bind:value={tx.amount}
+												class="no-spinner pr-8"
+												color={transactionErrors[i]?.amount ? 'red' : undefined}
+											/>
+										{/if}
+										<button
+											type="button"
+											onclick={() => (tx.isRelative = !tx.isRelative)}
+											title={tx.isRelative
+												? 'Anteil am Referenzbetrag — klicken für festen Betrag'
+												: 'Fester Betrag — klicken für Anteil am Referenzbetrag'}
+											class="absolute top-1/2 right-1 -translate-y-1/2 cursor-pointer rounded px-1.5 py-0.5 text-gray-500 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-600"
+										>
+											{tx.isRelative ? '%' : '€'}
+										</button>
+									</div>
+									{#if tx.isRelative && referenceAmount && tx.percentage && Number(referenceAmount)}
+										<div class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+											= {((Number(tx.percentage) / 100) * Number(referenceAmount)).toFixed(2)} €
+										</div>
+									{/if}
+								</td>
+								<td class="px-2">
+									<!-- The bank's own text, and the tallest thing in the dialog when it was
+									     given five rows by default. It is machine-written and hardly ever
+									     edited, so it starts as one line and grows if you go into it. -->
+									<Textarea
+										placeholder=""
+										bind:value={tx.statement}
+										class="field-sizing-content max-h-32 w-full font-mono text-xs"
+										rows={1}
+									/>
+								</td>
+								<td class="px-2">
+									{@render minus(() => removeTransaction(i), transactions.length === 1)}
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+			{@render add('Transaktion', addTransaction)}
+		</div>
 
-			<div class="justify-center sm:col-span-2">
-				<Button type="submit" class="w-full" disabled={formHasErrors}>
-					{#if expense}
-						<EditOutline class="mr-1 h-4 w-4" />
-						Aktualisieren
-					{:else}
-						<PlusOutline class="mr-1 h-4 w-4" />
-						Erstellen
-					{/if}
-				</Button>
+		<div class="col-span-full lg:col-span-2">
+			<Label class="mb-2 block">Kategorien</Label>
+			<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+				<table data-form class="w-full text-left text-sm">
+					<thead class="bg-gray-50 dark:bg-gray-700">
+						<tr>
+							<th class="px-2" scope="col">Kategorie</th>
+							<th class="w-24 px-2" scope="col">Gewicht</th>
+							<th class="w-10 px-2" scope="col"><span class="sr-only">Entfernen</span></th>
+						</tr>
+					</thead>
+					<tbody class="divide-y">
+						{#each expenseCategories as cat, i (i)}
+							<tr>
+								<td class="px-2">
+									<Select
+										items={categories
+											.map((c) => ({ value: c.id, name: c.name }))
+											.filter(
+												(c) =>
+													!expenseCategories.some(
+														(ec, idx) => idx !== i && ec.categoryId === c.value
+													)
+											)}
+										bind:value={cat.categoryId}
+										placeholder="Kategorie"
+										style={tint(categories.find((c) => c.id === cat.categoryId)?.color)}
+										selectClass={categoryErrors[i]?.categoryId
+											? 'text-red-700 border-red-700 bg-red-100'
+											: undefined}
+									/>
+								</td>
+								<td class="px-2">
+									<Input
+										type="number"
+										min="1"
+										class="no-spinner w-full"
+										bind:value={cat.weight}
+										placeholder="Gewicht"
+										color={categoryErrors[i]?.weight ? 'red' : undefined}
+									/>
+								</td>
+								<td class="px-2">
+									{@render minus(() => removeCategory(i), expenseCategories.length === 1)}
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
 			</div>
+			{@render add('Kategorie', addCategory)}
+		</div>
+
+		<!-- Positionen and Belege are empty on almost every expense and cost a heading and a
+		     button each when they were. What is left is what they would have said. -->
+		<div class="col-span-full flex flex-wrap gap-2">
+			<Button color="alternative" size="sm" onclick={() => (showPositions = true)}>
+				<EditOutline class="mr-2 h-4 w-4" />
+				Positionen · {positions.length === 0
+					? 'keine'
+					: `${positions.length}${positionsTotal ? ` (${positionsTotal.toFixed(2)} €)` : ''}`}
+			</Button>
+			<Button color="alternative" size="sm" onclick={() => (showReceipts = true)}>
+				<EditOutline class="mr-2 h-4 w-4" />
+				Belege · {receipts.length === 0 ? 'keine' : receipts.length}
+			</Button>
+			{#if hasPositionErrors}
+				<span class="self-center text-sm text-red-600 dark:text-red-400">
+					Eine Position ist unvollständig
+				</span>
+			{/if}
 		</div>
 	</form>
+
+	{#snippet footer()}
+		<!-- The submit button sits outside the form it submits, which is what `form=` is for. It
+		     was a full-width bar at the bottom of the scroll before, so on a long expense you
+		     scrolled past everything to save, and there was no way out but the X. -->
+		<div class="flex w-full justify-end gap-2">
+			<Button color="alternative" onclick={() => (open = false)}>Abbrechen</Button>
+			<Button type="submit" form="expense-form" disabled={formHasErrors}>
+				{#if expense}
+					<EditOutline class="mr-1 h-4 w-4" />
+					Aktualisieren
+				{:else}
+					<PlusOutline class="mr-1 h-4 w-4" />
+					Erstellen
+				{/if}
+			</Button>
+		</div>
+	{/snippet}
+</Modal>
+
+<!-- Outside the modal above rather than inside it: a dialog nested in the form would have its
+     buttons submit that form, and `showModal()` stacks these over the parent either way. -->
+<Modal title="Positionen" bind:open={showPositions} size="lg">
+	{#if positions.length > 0}
+		<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+			<table data-form class="w-full text-left text-sm">
+				<thead class="bg-gray-50 dark:bg-gray-700">
+					<tr>
+						<th class="px-2" scope="col">Titel</th>
+						<th class="w-28 px-2" scope="col">Betrag</th>
+						<th class="w-24 px-2" scope="col">Menge</th>
+						<th class="w-24 px-2" scope="col">Einheit</th>
+						<th class="px-2" scope="col">Kommentare</th>
+						<th class="w-10 px-2" scope="col"><span class="sr-only">Entfernen</span></th>
+					</tr>
+				</thead>
+				<tbody class="divide-y">
+					{#each positions as pos, i (i)}
+						<tr>
+							<td class="px-2">
+								<Input
+									type="text"
+									placeholder="Titel"
+									bind:value={pos.title}
+									class="w-full"
+									color={positionErrors[i]?.title ? 'red' : undefined}
+								/>
+							</td>
+							<td class="px-2">
+								<div class="relative">
+									<Input
+										placeholder=""
+										bind:value={pos.totalAmount}
+										class="no-spinner w-full pr-6"
+										step="0.01"
+										color={positionErrors[i]?.totalAmount ? 'red' : undefined}
+									/>
+									<span
+										class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
+										>€</span
+									>
+								</div>
+							</td>
+							<td class="px-2">
+								<Input
+									placeholder=""
+									bind:value={pos.quantity}
+									class="no-spinner w-full"
+									step="0.01"
+									color={positionErrors[i]?.quantity ? 'red' : undefined}
+								/>
+							</td>
+							<td class="px-2">
+								<Input type="text" placeholder="" bind:value={pos.unit} class="w-full" />
+							</td>
+							<td class="px-2">
+								<Textarea
+									placeholder="Kommentare"
+									bind:value={pos.comments}
+									class="field-sizing-content max-h-32 w-full"
+									rows={1}
+								/>
+							</td>
+							<td class="px-2">
+								{@render minus(() => removePosition(i))}
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	{:else}
+		<p class="text-sm text-gray-500 dark:text-gray-400">
+			Positionen sind die einzelnen Zeilen eines Belegs. Diese Ausgabe hat keine.
+		</p>
+	{/if}
+	{@render add('Position', addPosition)}
+
+	{#snippet footer()}
+		<div class="flex w-full justify-end">
+			<Button color="alternative" onclick={() => (showPositions = false)}>Fertig</Button>
+		</div>
+	{/snippet}
+</Modal>
+
+<Modal title="Belege" bind:open={showReceipts} size="lg">
+	{#each receipts as receipt, i (i)}
+		<div class="flex items-center gap-2">
+			<Input
+				type="text"
+				placeholder="URI (Datei, DMS-Dokument, …)"
+				bind:value={receipt.uri}
+				class="w-full"
+			/>
+			{#if receipt.ocr}
+				<span class="text-xs whitespace-nowrap text-gray-500" title={receipt.ocr}>OCR</span>
+			{/if}
+			{@render minus(() => removeReceipt(i))}
+		</div>
+	{:else}
+		<p class="text-sm text-gray-500 dark:text-gray-400">
+			Ein Beleg ist ein Verweis auf eine Datei oder ein DMS-Dokument. Diese Ausgabe hat keinen.
+		</p>
+	{/each}
+	{@render add('Beleg', addReceipt)}
+
+	{#snippet footer()}
+		<div class="flex w-full justify-end">
+			<Button color="alternative" onclick={() => (showReceipts = false)}>Fertig</Button>
+		</div>
+	{/snippet}
 </Modal>
 
 <style>

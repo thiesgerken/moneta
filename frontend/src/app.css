@@ -158,3 +158,17 @@ table tbody tr[data-expanded] {
 .dark table tbody tr[data-expanded] {
 	background-color: var(--color-gray-700);
 }
+
+/* A table of form controls is not a list to scan, and the two rules above are both wrong for it:
+   the inputs bring their own height, so the row padding that makes a 40px data row makes a 64px
+   one here, and shading whichever row the pointer is over says something about a table you read
+   rather than one you fill in. */
+table[data-form] thead th,
+table[data-form] tbody td {
+	padding-top: 0.375rem;
+	padding-bottom: 0.375rem;
+}
+
+table[data-form] tbody tr:hover {
+	background-color: transparent;
+}
