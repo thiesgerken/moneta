@@ -1155,11 +1155,13 @@
 													{#if !change.oldState}
 														<span>— Ausgabe erstellt</span>
 													{:else if !change.diff}
-														<!-- a write whose two states are the same is an empty diff rather than a
-														     missing one: `diff` normalises `updated_at` away first, so re-saving
-														     an expense unchanged records the visit and nothing else. Saying so
-														     beats a line that stops after the name. -->
-														<span class="text-gray-500 dark:text-gray-400">— nichts geändert</span>
+														<!-- An entry with no diff is one whose two states are the same, which is
+														     what an import writes: the export carries the expense as it is now and
+														     not as it was, so `import.rs` stores that same state on both sides and
+														     `json_diff` comes out empty. Something was changed and there is no way
+														     to say what, so the line says only that -- an empty string is falsy, so
+														     without this it stopped after the author's name. -->
+														<span class="text-gray-500 dark:text-gray-400">— geändert</span>
 													{:else}
 														<pre
 															class="mt-1 overflow-x-auto rounded bg-gray-50 p-2 text-xs dark:bg-gray-800">{change.diff}</pre>
