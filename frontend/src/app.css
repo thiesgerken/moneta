@@ -79,21 +79,82 @@ table thead th {
 	line-height: 1.25rem;
 	text-transform: none;
 	letter-spacing: 0;
+	font-weight: 600;
 }
 
 table tbody td {
 	font-weight: 400;
 }
 
+/* The rows are what the reader came for, and flowbite has the contrast the wrong way round: it
+   sets the row's text to gray-500, and `divide-y` in tailwind 4 defaults to `currentColor`, so
+   the rules between rows were drawn in that same gray-500 while the rules between columns are
+   gray-200. A loud grid around quiet content. Both are set here rather than per table.
+
+   On the row and not on the cell, on purpose: an inherited colour loses to any declaration on
+   the cell itself, so the red and green amounts and the tinted account and category cells keep
+   theirs. */
+table tbody tr {
+	color: var(--color-gray-900);
+	border-color: var(--color-gray-200);
+}
+
+.dark table tbody tr {
+	color: var(--color-gray-100);
+	border-color: var(--color-gray-700);
+}
+
+/* 12px above and below a 20px line is a 44px row, and these are lists to scan rather than
+   paragraphs to read. 10px is a 40px row, which is where moneydb sat; 8px was tighter than
+   either and read as cramped. Only the vertical half is set here: the horizontal padding is
+   what the phone layout narrows, and it has to keep doing that. */
+table thead th,
+table tbody td {
+	padding-top: 0.625rem;
+	padding-bottom: 0.625rem;
+}
+
 /* Rows are already separated by `divide-y`, so this only has to draw the columns. Without them
    the expense list runs three coloured cells together -- accounts, categories, amount -- and
-   the colours read as one band rather than as three answers. */
+   the colours read as one band rather than as three answers. The header keeps a rule under it:
+   `divide-y` starts between the first two body rows, which left the labels floating over the
+   list with nothing closing the top of the grid. */
 table thead th:not(:last-child),
 table tbody td:not(:last-child) {
 	border-right: 1px solid var(--color-gray-200);
 }
 
+table thead th {
+	border-bottom: 1px solid var(--color-gray-200);
+}
+
 .dark table thead th:not(:last-child),
 .dark table tbody td:not(:last-child) {
 	border-right-color: var(--color-gray-700);
+}
+
+.dark table thead th {
+	border-bottom-color: var(--color-gray-700);
+}
+
+/* A fixed layout gives a column the width the header asked for and nothing stops the content
+   from being wider -- the date ran twenty pixels past the rule into the title beside it. Sizing
+   the columns for their content is the fix; this is what keeps the next thing that outgrows one
+   from crossing a line, since a clipped cell is wrong in a way you can see. */
+table.table-fixed th,
+table.table-fixed td {
+	overflow: hidden;
+}
+
+/* Which row the pointer is on, and which one is open. Zebra striping did neither: flowbite
+   paints the even rows in gray-50 and hovers in gray-50 as well, so half the table did not
+   react to the pointer at all. One shade, two states, and the stripes go. */
+table tbody tr:hover,
+table tbody tr[data-expanded] {
+	background-color: var(--color-gray-100);
+}
+
+.dark table tbody tr:hover,
+.dark table tbody tr[data-expanded] {
+	background-color: var(--color-gray-700);
 }

@@ -51,7 +51,11 @@
 	let itemsPerPage = $derived(15);
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
-	let sortBy: { field: string; direction: number } = $state({ field: 'status', direction: -1 });
+	/// Unbestätigt and unvollständig first, which is the list somebody opens this page to work
+	/// through. A third click on a header comes back here.
+	const DEFAULT_SORT = { field: 'status', direction: -1 };
+
+	let sortBy: { field: string; direction: number } = $state({ ...DEFAULT_SORT });
 
 	/// only consulted below `md`, where the filters are collapsed
 	let filtersOpen = $state(false);
@@ -411,13 +415,27 @@
 	let expenseToEdit = $derived(expenses.find((e) => e.id === expenseIdToEdit) || undefined);
 	let expenseToDelete = $derived(expenses.find((e) => e.id === expenseIdToDelete) || undefined);
 
+	/// The bank's own text for an expense, which is several strings when it is split over more
+	/// than one transaction. Newlines collapse: the cell is one line and the full text is in the
+	/// expanded row.
+	const transactionText = (transactions: { statement: string | null }[]) =>
+		transactions
+			.map((t) => t.statement?.replace(/\s+/g, ' ').trim())
+			.filter(Boolean)
+			.join(' · ');
+
 	function toggleRow(id: string) {
 		if (expandedRows.includes(id)) expandedRows = expandedRows.filter((rowId) => rowId !== id);
 		else expandedRows = [...expandedRows, id];
 	}
 
+	/// Descending, ascending, off. The third state is what there was no way back to: sorting
+	/// lives in the component rather than in the url, so a header clicked by accident could only
+	/// be undone by reloading the page.
 	function sortByField(field: string) {
-		sortBy = { field, direction: sortBy.field === field ? -sortBy.direction : -1 };
+		if (sortBy.field !== field) sortBy = { field, direction: -1 };
+		else if (sortBy.direction === -1) sortBy = { field, direction: 1 };
+		else sortBy = { ...DEFAULT_SORT };
 	}
 
 	function isSortedBy(field: string) {
@@ -617,9 +635,8 @@
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
-		striped={true}
 		bind:inputValue={searchTerm}
-		class={tableSearchTableClass}
+		class="{tableSearchTableClass} table-fixed"
 		classes={tableSearchClasses}
 	>
 		{#snippet header()}
@@ -722,8 +739,10 @@
 		     line, since "braucht Prüfung" is what somebody opens this list on a phone for. Eight
 		     columns on a 390px screen meant scrolling sideways past the date to reach the amount. -->
 		<TableHead>
+			<!-- pl to clear the chevron: it hangs in the column's left margin, and without this the
+			     label started 24px to the left of every date under it. -->
 			<TableHeadCell
-				class="px-2 py-3 whitespace-nowrap md:px-4"
+				class="w-28 py-3 pr-2 pl-7 whitespace-nowrap md:w-36 md:pr-4 md:pl-10"
 				scope="col"
 				onclick={() => sortByField('accrualStart')}
 			>
@@ -735,7 +754,7 @@
 				{@render sortIcon('title')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
 				onclick={() => sortByField('accounts')}
 			>
@@ -743,7 +762,7 @@
 				{@render sortIcon('accounts')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
 				onclick={() => sortByField('categories')}
 			>
@@ -751,7 +770,7 @@
 				{@render sortIcon('categories')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="px-2 py-3 text-right md:px-4"
+				class="w-28 px-2 py-3 text-right md:w-32 md:px-4"
 				scope="col"
 				onclick={() => sortByField('effectiveAmount')}
 			>
@@ -759,7 +778,7 @@
 				{@render sortIcon('effectiveAmount')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-32"
 				scope="col"
 				onclick={() => sortByField('store')}
 			>
@@ -767,15 +786,22 @@
 				{@render sortIcon('store')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-56"
 				scope="col"
 				onclick={() => sortByField('description')}
 			>
 				Beschreibung
 				{@render sortIcon('description')}
 			</TableHeadCell>
+			<!-- What the bank wrote. No sort arrow: the backend names its sortable columns and this
+			     is not one of them. From 2xl only, and it shares what the fixed columns leave with
+			     the title: at 1280 the nine columns together are wider than the window, and both of
+			     them end up too narrow to read. Below that the expanded row still has it in full. -->
+			<TableHeadCell class="hidden px-4 py-3 2xl:table-cell" scope="col">
+				Transaktionstext
+			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
 				onclick={() => sortByField('status')}
 			>
@@ -786,13 +812,16 @@
 		<TableBody class="divide-y">
 			{#if slow}
 				<tr>
-					<td colspan="8" class="px-4 py-16 text-center">
+					<td colspan="9" class="px-4 py-16 text-center">
 						<Spinner size="8" />
 					</td>
 				</tr>
 			{/if}
 			{#each rows as expense (expense.id)}
-				<TableBodyRow onclick={() => toggleRow(expense.id)}>
+				<TableBodyRow
+					onclick={() => toggleRow(expense.id)}
+					data-expanded={expandedRows.includes(expense.id) ? '' : undefined}
+				>
 					<!-- text-xs on a phone: a date is what the row is filed under rather than what it
 					     says, and the ten characters it takes are ten the title does not get -->
 					<TableBodyCell class="px-2 py-3 text-xs whitespace-nowrap md:px-4 md:text-sm">
@@ -810,7 +839,7 @@
 					     itself is gone now that the cell holds two lines rather than one string. Zero
 					     max-width plus full width leaves it exactly the space the other columns did
 					     not take. -->
-					<TableBodyCell class="w-full max-w-0 px-2 py-3 whitespace-normal md:px-4">
+					<TableBodyCell class="px-2 py-3 whitespace-normal md:px-4">
 						<!-- wraps rather than truncates on a phone: with five columns gone the title is
 						     most of what identifies the row, and there is no second place to read it -->
 						<!-- wrap-anywhere, not break-words: only `overflow-wrap: anywhere` counts towards
@@ -841,12 +870,16 @@
 								? 'bg-red-100 text-red-700'
 								: expense.effectiveAmount > 0
 									? 'bg-green-100 text-green-700'
-									: '')}>{(expense.effectiveAmount / 100).toFixed(2)}€</TableBodyCell
+									: // zero is not "no colour": it is an expense that moved money between two of
+										// your own accounts and came out even, which is a third thing rather than a
+										// missing one. Blue, since it is neither a loss nor a gain.
+										'bg-blue-100 text-blue-700')}
+						>{(expense.effectiveAmount / 100).toFixed(2)}€</TableBodyCell
 					>
 					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
 						>{expense.store}</TableBodyCell
 					>
-					<TableBodyCell class="hidden max-w-96 truncate px-4 py-3 md:table-cell"
+					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
 						>{expense.description}
 						{expense.positions
 							.map(
@@ -855,13 +888,21 @@
 							)
 							.join(', ')}
 					</TableBodyCell>
+					<!-- monospace because it is machine output: the reference numbers and IBANs in it
+					     are read character by character, and a proportional font makes that work -->
+					<TableBodyCell
+						class="hidden truncate px-4 py-3 font-mono text-xs 2xl:table-cell"
+						title={transactionText(expense.transactions)}
+					>
+						{transactionText(expense.transactions)}
+					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{@render statusBadges(expense)}
 					</TableBodyCell>
 				</TableBodyRow>
 				{#if expandedRows.includes(expense.id)}
-					<tr>
-						<td colspan="8" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
+					<tr data-expanded>
+						<td colspan="9" class="border-b px-4 py-3">
 							<div class="flex flex-col gap-2">
 								<div>
 									<b>Leistungszeitraum:</b>

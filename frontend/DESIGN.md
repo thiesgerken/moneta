@@ -42,7 +42,9 @@ Colour carries meaning here; it is not decoration.
   nothing else. It is also the Stichtag marker, which is why the wealth curve is _not_ orange.
 - **Money direction**: green for what came in, red for what went out — `text-green-700
 dark:text-green-400` and `text-red-600 dark:text-red-400`. `deltaColor()` in
-  `analysis/overviews.ts` picks the badge colour by sign.
+  `analysis/overviews.ts` picks the badge colour by sign. **Zero is blue**, not blank: an expense
+  that nets to nothing moved money between two of your own accounts, which is a third thing
+  rather than a missing one.
 - **Wealth** is `WEALTH_COLOR` (`#059669`, emerald) in `analysis/cards.ts`. A curve of what you
   own reads as a warning in orange.
 - **Categories and accounts** carry their own colour from the database. `categoryColor()` falls
@@ -51,7 +53,8 @@ dark:text-green-400` and `text-red-600 dark:text-red-400`. `deltaColor()` in
 - **Text on one of those colours is never a fixed colour.** The picker allows anything,
   near-black included, so anything tinted takes its text from `readableTextOn()` in
   `expense_utils.ts` — through `tint()` where there is one colour, and through
-  `makeStripedBackground()` where a cell carries several, which follows the widest stripe.
+  `makeStripedBackground()` where a cell carries several, which has to be readable on the
+  darkest and the lightest of them at once.
   `text-black` beside a background that came from the database is the bug those two exist to
   prevent.
 - **Availability** has no colour of its own, so it gets a warm-to-cool ramp along the liquidity
@@ -98,12 +101,30 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
 
 ## Tables
 
-- One shared look through `table_styles.ts`; the body is `text-sm`.
-- **Rules in both directions.** Rows come from `divide-y`, columns from a global rule in
-  `app.css`. The expense list puts three coloured cells next to each other — accounts,
-  categories, amount — and horizontal rules alone let them read as one band.
+- One shared look through `table_styles.ts`; the body is `text-sm` over a 10 px vertical cell
+  padding, which is a 40 px row. These are lists to scan, not paragraphs to read — but 8 px was
+  past scanning and into cramped.
+- **Dark text, faint grid.** The rows are what the reader came for and the ruling is
+  scaffolding, so rows are `gray-900` and every rule is `gray-200`. flowbite has it the other
+  way round — it sets the row text to `gray-500`, and `divide-y` in tailwind 4 defaults to
+  `currentColor`, so the rules between rows came out in that same `gray-500`. Both are fixed in
+  `app.css`, on the `tr`, so that a cell with a colour of its own — an amount, a tinted account
+  — still wins.
+- **Rules in both directions.** Rows come from `divide-y`, columns and the rule under the header
+  from a global rule in `app.css`. The expense list puts three coloured cells next to each other
+  — accounts, categories, amount — and horizontal rules alone let them read as one band.
+- **Hover and open are the same shade**, `gray-100`, set in `app.css`. There is no zebra
+  striping: flowbite painted the even rows in `gray-50` and hovered in `gray-50` too, so half
+  the table did not react to the pointer.
+- The bank's own text is **monospace** wherever it is shown in full — reference numbers and
+  IBANs are read character by character. It is a column of its own from `lg`.
 - Sorting and filtering are **server-side**, through typed arguments. The header cell that
-  sorts carries the arrow.
+  sorts carries the arrow, and clicking it a third time drops back to the list's default sort —
+  sorting lives in the component rather than in the url, so without that there was no way back
+  to it but a reload. One column at a time; the API takes one `sortBy`.
+- **Column widths are fixed**, not derived from the page being shown. `table-fixed` with a width
+  on every header cell but the one or two that take what is left. Auto layout re-measured on
+  every page turn, so the same list moved its columns as you paged through it.
 - A filtered list says so: `ExpenseTable` renders a "Gefiltert nach …" line with one removable
   chip per active filter. A list that arrives pre-filtered from somewhere else must never look
   like the whole list, only shorter.
