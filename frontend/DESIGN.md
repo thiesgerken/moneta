@@ -157,8 +157,15 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
 - **What is empty on most records goes in a modal of its own**, reached from a line that says
   what is in it (`Positionen · 3 (42,17 €)`). A section heading plus an add-button for something
   almost never present is worth more than the thing itself.
-- Only the button that completes the form is `primary`. Add- and remove-row buttons are
-  `alternative`; five orange buttons in a form leave nothing to say which one submits it.
+- Only the button that completes the form is `primary`; five orange buttons in a form leave
+  nothing to say which one submits it. **A button that is ever disabled is `light`**, not
+  `alternative` — an alternative button is transparent with a hairline border, which is exactly
+  what a disabled button looks like, so the two states were the same button twice. `alternative`
+  is for the controls that are never disabled: the filter and dropdown triggers.
+- Enabled buttons get a **pointer cursor** from a rule in `app.css`, and disabled ones get
+  `pointer-events: none`. Neither is a default: tailwind's preflight leaves a `<button>` with
+  the arrow cursor, and flowbite's `hover:` background applies just as happily to a button that
+  cannot be pressed.
 
 ## Charts
 

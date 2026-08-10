@@ -556,6 +556,12 @@
 	}
 </script>
 
+{#snippet newExpenseButton(cls: string)}
+	<Button class={cls} onclick={() => (showNewExpenseModal = true)}>
+		<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
+	</Button>
+{/snippet}
+
 <!-- Accounts and categories carry a colour, and that colour is how a reader recognises them --
      it is what the cells in the table below are tinted with. flowbite's MultiSelect prints its
      options as bare text and offers no hook to change that, so the filters are a checkbox list
@@ -779,50 +785,48 @@
 				class="flex w-full flex-shrink-0 flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
 			>
 				<div class="flex items-center gap-2">
-					<Button class="grow md:grow-0" onclick={() => (showNewExpenseModal = true)}>
-						<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
-					</Button>
-					<!-- What these two act on is whichever row is open, so they are no use on a phone,
-					     where the row you opened fills the screen and carries the same two buttons. -->
-					<Button
-						color="alternative"
-						class="hidden md:inline-flex"
-						disabled={!selectedExpenseId}
-						onclick={() => openEditModal(selectedExpenseId!)}
-					>
-						<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
-					</Button>
-					<Button
-						color="alternative"
-						class="hidden md:inline-flex"
-						disabled={!selectedExpenseId}
-						onclick={() => openEditModal(selectedExpenseId!, true)}
-					>
-						<FileCopyAltOutline class="mr-2 h-3.5 w-3.5" />Duplizieren
-					</Button>
-					<Button
-						color="red"
-						class="hidden md:inline-flex"
-						disabled={!selectedExpenseId}
-						onclick={() => {
-							expenseIdToDelete = selectedExpenseId;
-							showDeleteExpenseModal = true;
-						}}
-					>
-						<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
-					</Button>
-					<Button
-						color="alternative"
-						class="hidden md:inline-flex"
-						disabled={!selectedExpenseId}
-						onclick={() => {
-							expenseIdToResort = selectedExpenseId;
-							resortError = undefined;
-							showResortExpenseModal = true;
-						}}
-					>
-						<ArchiveArrowDownOutline class="mr-2 h-3.5 w-3.5" />Einsortieren
-					</Button>
+					<!-- One group, in moneydb's order. Everything but Neu acts on whichever row is open,
+					     so on a phone the group goes and Neu stands on its own: the row you opened fills
+					     the screen there and carries the same four buttons itself. -->
+					{@render newExpenseButton('grow md:hidden')}
+					<ButtonGroup class="hidden md:inline-flex">
+						{@render newExpenseButton('')}
+						<Button
+							color="light"
+							disabled={!selectedExpenseId}
+							onclick={() => openEditModal(selectedExpenseId!, true)}
+						>
+							<FileCopyAltOutline class="mr-2 h-3.5 w-3.5" />Duplizieren
+						</Button>
+						<Button
+							color="light"
+							disabled={!selectedExpenseId}
+							onclick={() => openEditModal(selectedExpenseId!)}
+						>
+							<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
+						</Button>
+						<Button
+							color="red"
+							disabled={!selectedExpenseId}
+							onclick={() => {
+								expenseIdToDelete = selectedExpenseId;
+								showDeleteExpenseModal = true;
+							}}
+						>
+							<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
+						</Button>
+						<Button
+							color="light"
+							disabled={!selectedExpenseId}
+							onclick={() => {
+								expenseIdToResort = selectedExpenseId;
+								resortError = undefined;
+								showResortExpenseModal = true;
+							}}
+						>
+							<ArchiveArrowDownOutline class="mr-2 h-3.5 w-3.5" />Einsortieren
+						</Button>
+					</ButtonGroup>
 					<!-- Stacked, the filters filled a phone screen before a single expense appeared,
 					     so on small screens they fold behind this. -->
 					<Button
@@ -861,12 +865,7 @@
 							locale="de-DE"
 							firstDayOfWeek={1}
 						/>
-						<Button
-							size="xs"
-							color="alternative"
-							disabled={!dateRangeLabel}
-							onclick={clearDateRange}
-						>
+						<Button size="xs" color="light" disabled={!dateRangeLabel} onclick={clearDateRange}>
 							Zeitraum zurücksetzen
 						</Button>
 					</Dropdown>

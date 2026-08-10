@@ -159,6 +159,25 @@ table tbody tr[data-expanded] {
 	background-color: var(--color-gray-700);
 }
 
+/* Tailwind's preflight leaves a `<button>` with the arrow cursor the browser gives it, and
+   flowbite only ever adds a cursor of its own -- `cursor-not-allowed` -- to a button that is
+   disabled. So the only buttons in a row that said anything about the pointer were the ones
+   that could not be pressed, and every live button felt as dead as they did.
+
+   `:not(:disabled)` rather than a blanket rule: these declarations are outside every layer and
+   would otherwise outrank the utility that draws the disabled cursor. */
+button:not(:disabled),
+[role='button']:not(:disabled) {
+	cursor: pointer;
+}
+
+/* And a disabled button stops reacting to the pointer altogether. flowbite's hover background
+   is a plain `hover:` utility, which applies just as happily to a button that cannot be
+   pressed -- a disabled button lighting up under the mouse is most of what made one look live. */
+button:disabled {
+	pointer-events: none;
+}
+
 /* A table of form controls is not a list to scan, and the two rules above are both wrong for it:
    the inputs bring their own height, so the row padding that makes a 40px data row makes a 64px
    one here, and shading whichever row the pointer is over says something about a table you read

@@ -850,9 +850,10 @@ impl ExpenseMutation {
             .load(conn)
             .await?;
 
-        let rule = rules::best_match(&all_rules, &delivery).ok_or_else(|| -> juniper::FieldError {
-            "Keine Automatisierungsregel trifft auf diese Ausgabe zu.".into()
-        })?;
+        let rule =
+            rules::best_match(&all_rules, &delivery).ok_or_else(|| -> juniper::FieldError {
+                "Keine Automatisierungsregel trifft auf diese Ausgabe zu.".into()
+            })?;
 
         let template = queries::load_expense(conn, rule.template_id)
             .await?
