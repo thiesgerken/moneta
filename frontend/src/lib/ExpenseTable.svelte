@@ -1301,42 +1301,41 @@
 								</div>
 							</div>
 
-							<div class="mt-6 flex flex-wrap gap-2">
-								<Button color="blue" size="xs" onclick={() => openEditModal(expense.id.toString())}>
-									<EditOutline class="mr-2 h-3.5 w-3.5" />
-									Bearbeiten
-								</Button>
-								<Button
-									color="teal"
-									size="xs"
-									onclick={() => openEditModal(expense.id.toString(), true)}
-								>
-									<FileCopyAltOutline class="mr-2 h-3.5 w-3.5" />
-									Duplizieren
-								</Button>
-								<Button
-									color="gray"
-									size="xs"
-									onclick={() => {
-										expenseIdToResort = expense.id.toString();
-										resortError = undefined;
-										showResortExpenseModal = true;
-									}}
-								>
-									<ArchiveArrowDownOutline class="mr-2 h-3.5 w-3.5" />
-									Einsortieren
-								</Button>
-								<Button
-									color="red"
-									size="xs"
-									onclick={() => {
-										expenseIdToDelete = expense.id.toString();
-										showDeleteExpenseModal = true;
-									}}
-								>
-									<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
-									Löschen
-								</Button>
+							<!-- The toolbar's group again, in the same order and minus Neu, which is the one
+							     button up there that is not about a particular expense. A ButtonGroup sizes
+							     its children itself, so there is no `size` to set here. -->
+							<div class="mt-6">
+								<ButtonGroup>
+									<Button color="teal" onclick={() => openEditModal(expense.id.toString(), true)}>
+										<FileCopyAltOutline class="mr-2 h-3.5 w-3.5" />
+										Duplizieren
+									</Button>
+									<Button color="blue" onclick={() => openEditModal(expense.id.toString())}>
+										<EditOutline class="mr-2 h-3.5 w-3.5" />
+										Bearbeiten
+									</Button>
+									<Button
+										color="red"
+										onclick={() => {
+											expenseIdToDelete = expense.id.toString();
+											showDeleteExpenseModal = true;
+										}}
+									>
+										<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
+										Löschen
+									</Button>
+									<Button
+										color="gray"
+										onclick={() => {
+											expenseIdToResort = expense.id.toString();
+											resortError = undefined;
+											showResortExpenseModal = true;
+										}}
+									>
+										<ArchiveArrowDownOutline class="mr-2 h-3.5 w-3.5" />
+										Einsortieren
+									</Button>
+								</ButtonGroup>
 							</div>
 						</td>
 					</tr>
