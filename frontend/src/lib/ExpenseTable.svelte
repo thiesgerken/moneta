@@ -639,28 +639,28 @@
 	isExtraordinary: boolean;
 })}
 	{#if expense.isTaxRelevant}
-		<span class="inline-flex items-center gap-1 rounded-md bg-green-100 px-2 py-1 text-green-700">
-			<LandmarkOutline class="h-3.5 w-3.5 shrink-0" />Steuerrelevant
+		<span class="rounded-md bg-green-100 px-2 py-1 text-green-700">
+			<LandmarkOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Steuerrelevant
 		</span>
 	{/if}
 	{#if expense.isTemplate}
-		<span class="inline-flex items-center gap-1 rounded-md bg-blue-100 px-2 py-1 text-blue-700">
-			<FileCloneOutline class="h-3.5 w-3.5 shrink-0" />Vorlage
+		<span class="rounded-md bg-blue-100 px-2 py-1 text-blue-700">
+			<FileCloneOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Vorlage
 		</span>
 	{/if}
 	{#if expense.isUnchecked}
-		<span class="inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-1 text-yellow-700">
-			<QuestionCircleOutline class="h-3.5 w-3.5 shrink-0" />Unbestätigt
+		<span class="rounded-md bg-red-100 px-2 py-1 text-yellow-700">
+			<QuestionCircleOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Unbestätigt
 		</span>
 	{/if}
 	{#if expense.isIncomplete}
-		<span class="inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-1 text-red-700">
-			<ExclamationCircleOutline class="h-3.5 w-3.5 shrink-0" />Unvollständig
+		<span class="rounded-md bg-red-100 px-2 py-1 text-red-700">
+			<ExclamationCircleOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Unvollständig
 		</span>
 	{/if}
 	{#if expense.isExtraordinary}
-		<span class="inline-flex items-center gap-1 rounded-md bg-purple-100 px-2 py-1 text-purple-700">
-			<StarOutline class="h-3.5 w-3.5 shrink-0" />Außergewöhnlich
+		<span class="rounded-md bg-purple-100 px-2 py-1 text-purple-700">
+			<StarOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Außergewöhnlich
 		</span>
 	{/if}
 {/snippet}

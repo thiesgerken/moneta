@@ -592,7 +592,10 @@
 		</div>
 
 		<div class="col-span-full">
-			<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+			<!-- min-h: the Referenzbetrag appears the moment a transaction is switched to %, and a
+			     header that grows by the height of an input moves everything under it down as you
+			     click. The row is as tall as its tallest state from the start. -->
+			<div class="mb-2 flex min-h-[38px] flex-wrap items-center justify-between gap-2">
 				<div class="flex items-center gap-2">
 					<Label class="block">Transaktionen</Label>
 					{@render add('Transaktion', addTransaction, '')}
@@ -606,6 +609,7 @@
 						<div class="relative">
 							<Input
 								id="referenceAmount"
+								size="sm"
 								placeholder="0"
 								bind:value={referenceAmount}
 								step="0.01"
