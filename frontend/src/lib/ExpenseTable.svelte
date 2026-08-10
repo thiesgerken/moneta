@@ -13,8 +13,6 @@
 		Dropdown,
 		Checkbox,
 		ButtonGroup,
-		List,
-		Li,
 		Datepicker,
 		Modal,
 		Spinner
@@ -165,14 +163,7 @@
 
 		// one chip for the lot: which of the six is off matters less than the fact that the
 		// list is no longer showing everything
-		if (
-			showTemplates ||
-			!showTaxRelevant ||
-			!showExtraordinary ||
-			!showUnchecked ||
-			!showIncomplete ||
-			!showNormal
-		) {
+		if (!flagsAreDefault) {
 			out.push({ label: 'Zustand', clear: resetFlags });
 		}
 
@@ -188,6 +179,32 @@
 	function clearDateRange() {
 		filterDateRange = { from: undefined, to: undefined };
 	}
+
+	/// Whether the six state checkboxes are where `resetFlags` leaves them. Not "all six on":
+	/// templates are hidden by default, so an untouched list would otherwise report itself as
+	/// filtered. This is what both the chip and the button's count hang off.
+	const flagsAreDefault = $derived(
+		!showTemplates &&
+			showTaxRelevant &&
+			showExtraordinary &&
+			showUnchecked &&
+			showIncomplete &&
+			showNormal
+	);
+
+	/// How many states are being shown, but only once that is worth saying.
+	const activeFlagCount = $derived(
+		flagsAreDefault
+			? 0
+			: [
+					showNormal,
+					showUnchecked,
+					showIncomplete,
+					showExtraordinary,
+					showTaxRelevant,
+					showTemplates
+				].filter(Boolean).length
+	);
 
 	function resetFlags() {
 		showTemplates = false;
@@ -575,7 +592,7 @@
 	selected: string[],
 	toggle: (id: string) => void
 )}
-	<Button color="alternative" class="justify-between md:w-48">
+	<Button color="alternative" size="sm" class="justify-between md:w-40">
 		{selected.length ? `${label} (${selected.length})` : label}
 		<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 	</Button>
@@ -776,16 +793,22 @@
 		</div>
 	{/if}
 
+	<!-- The search takes what is left rather than a fixed 256px: at a fixed width the row came to
+	     1656px against 1654px of card and wrapped the search onto a line of its own. It gives way
+	     now instead, down to 176px before anything wraps. -->
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
 		bind:inputValue={searchTerm}
 		class="{tableSearchTableClass} table-fixed"
-		classes={{ ...tableSearchClasses, search: 'relative w-full md:order-last md:w-64' }}
+		classes={{
+			...tableSearchClasses,
+			search: 'relative w-full md:order-last md:w-56'
+		}}
 	>
 		{#snippet header()}
 			<div
-				class="flex w-full flex-shrink-0 flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
+				class="flex w-full flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
 			>
 				<div class="flex items-center gap-2">
 					<!-- One group, in moneydb's order. Everything but Neu acts on whichever row is open,
@@ -835,6 +858,7 @@
 					     so on small screens they fold behind this. -->
 					<Button
 						color="alternative"
+						size="sm"
 						class="md:hidden"
 						aria-label="Filter"
 						aria-expanded={filtersOpen}
@@ -853,7 +877,7 @@
 					     range mode it prints a bare " - " instead of its placeholder when nothing is
 					     chosen -- which left the control that decides what the table shows unreadable
 					     in both states, and with nowhere to undo it. -->
-					<Button color="alternative" class="justify-between whitespace-nowrap md:w-64">
+					<Button color="alternative" size="sm" class="justify-between whitespace-nowrap md:w-52">
 						{dateRangeLabel ?? 'Zeitraum'}
 						<CalendarMonthOutline class="ml-2 h-4 w-4 shrink-0" />
 					</Button>
@@ -890,29 +914,23 @@
 						filteredAccounts,
 						(id) => (filteredAccounts = toggleOption(filteredAccounts, id))
 					)}
-					<Button color="alternative">Filter<FilterSolid class="ml-2 h-3 w-3 " /></Button>
-					<Dropdown class="w-48 space-y-2 p-3 text-sm">
-						<h6 class="mb-3 text-sm font-medium text-gray-900 dark:text-white">Zustand</h6>
-						<List tag="dl">
-							<Li>
-								<Checkbox bind:checked={showTaxRelevant}>Steuerrelevant</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showTemplates}>Vorlage</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showExtraordinary}>Außergewöhnlich</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showUnchecked}>Unbestätigt</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showIncomplete}>Unvollständig</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showNormal}>Normal</Checkbox>
-							</Li>
-						</List>
+					<!-- The third of three filters, and it has to look like the other two: same trigger,
+					     same panel. It said "Filter" over a flowbite List, which drew a rule under a
+					     heading repeating the word next to it and spaced six checkboxes like a table
+					     of contents. It filters on Zustand, which is also what its chip says. -->
+					<Button color="alternative" size="sm" class="justify-between md:w-40">
+						{activeFlagCount ? `Zustand (${activeFlagCount})` : 'Zustand'}
+						<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
+					</Button>
+					<Dropdown class="max-h-80 w-64 divide-y-0 overflow-y-auto p-3 text-sm">
+						<div class="space-y-2">
+							<Checkbox bind:checked={showNormal}>Normal</Checkbox>
+							<Checkbox bind:checked={showUnchecked}>Unbestätigt</Checkbox>
+							<Checkbox bind:checked={showIncomplete}>Unvollständig</Checkbox>
+							<Checkbox bind:checked={showExtraordinary}>Außergewöhnlich</Checkbox>
+							<Checkbox bind:checked={showTaxRelevant}>Steuerrelevant</Checkbox>
+							<Checkbox bind:checked={showTemplates}>Vorlage</Checkbox>
+						</div>
 					</Dropdown>
 				</div>
 			</div>

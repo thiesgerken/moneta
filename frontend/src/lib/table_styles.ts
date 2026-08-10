@@ -16,7 +16,11 @@ export const tableSearchClasses = {
 	// which after a reorder is the one on the left
 	inner:
 		'flex flex-col md:flex-row md:flex-wrap items-center justify-between gap-y-2 space-y-2 md:space-y-0 md:gap-x-4 p-2 sm:p-3',
-	search: 'w-full md:w-2/5 relative'
+	search: 'w-full md:w-2/5 relative',
+	// flowbite sizes the input itself at a fixed `w-80`, which ignores whatever width the
+	// wrapper around it was given and hangs 25px out of the card on the expense list. And
+	// `p-2.5` makes it 42px tall next to 36px buttons, so the row reads as two rows.
+	input: 'w-full p-2 ps-10'
 };
 
 export const tableSearchTableClass = 'w-full text-left text-sm';
