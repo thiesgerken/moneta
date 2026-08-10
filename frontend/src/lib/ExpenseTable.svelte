@@ -446,14 +446,15 @@
 		};
 	});
 
-	/// The red/green/blue an amount is written in. Zero is its own answer rather than the absence
-	/// of one: an expense that nets out moved money between two of your own accounts.
+	/// The colour an amount is written in. Zero is its own answer rather than the absence of one:
+	/// an expense that nets out moved money between two of your own accounts. `gray-200` rather
+	/// than the `-100` the other two use, since `-100` is the shade a hovered row is.
 	const amountTint = (amount: number) =>
 		amount < 0
 			? 'bg-red-100 text-red-700'
 			: amount > 0
 				? 'bg-green-100 text-green-700'
-				: 'bg-blue-100 text-blue-700';
+				: 'bg-gray-200 text-gray-600';
 
 	function toggleRow(id: string) {
 		if (expandedRows.includes(id)) expandedRows = expandedRows.filter((rowId) => rowId !== id);

@@ -42,9 +42,10 @@ Colour carries meaning here; it is not decoration.
   nothing else. It is also the Stichtag marker, which is why the wealth curve is _not_ orange.
 - **Money direction**: green for what came in, red for what went out — `text-green-700
 dark:text-green-400` and `text-red-600 dark:text-red-400`. `deltaColor()` in
-  `analysis/overviews.ts` picks the badge colour by sign. **Zero is blue**, not blank: an expense
+  `analysis/overviews.ts` picks the badge colour by sign. **Zero is grey**, not blank: an expense
   that nets to nothing moved money between two of your own accounts, which is a third thing
-  rather than a missing one.
+  rather than a missing one. `gray-200` rather than the `-100` the other two use, since `-100`
+  is the shade a hovered row is and the cell would have vanished into it.
 - **Wealth** is `WEALTH_COLOR` (`#059669`, emerald) in `analysis/cards.ts`. A curve of what you
   own reads as a warning in orange.
 - **Categories and accounts** carry their own colour from the database. `categoryColor()` falls
