@@ -11,8 +11,11 @@ export const tableSearchClasses = {
 	// together took a fifth of the screen before anything was in it
 	// flex-wrap and a narrower search: the filter row is a fixed 600px of buttons, and at a 1280px
 	// window the search claiming half the width pushed the last of them 14px past the card
+	// gap rather than space-x: the expense list reorders its search box to the right with
+	// `order-last`, and `space-x` puts its margin on whichever child is second in the markup,
+	// which after a reorder is the one on the left
 	inner:
-		'flex flex-col md:flex-row md:flex-wrap items-center justify-between gap-y-2 space-y-2 md:space-y-0 md:space-x-4 p-2 sm:p-3',
+		'flex flex-col md:flex-row md:flex-wrap items-center justify-between gap-y-2 space-y-2 md:space-y-0 md:gap-x-4 p-2 sm:p-3',
 	search: 'w-full md:w-2/5 relative'
 };
 

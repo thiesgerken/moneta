@@ -462,6 +462,11 @@
 		else expandedRows = [...expandedRows, id];
 	}
 
+	/// What the toolbar's Bearbeiten and Löschen act on. An open row is this list's idea of "the
+	/// one you mean", and several open rows are no answer at all rather than a reason to pick the
+	/// first -- deleting the wrong expense is not something to be clever about.
+	const selectedExpenseId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
+
 	/// Descending, ascending, off. The third state is what there was no way back to: sorting
 	/// lives in the component rather than in the url, so a header clicked by accident could only
 	/// be undone by reloading the page.
@@ -685,15 +690,39 @@
 		hoverable={true}
 		bind:inputValue={searchTerm}
 		class="{tableSearchTableClass} table-fixed"
-		classes={tableSearchClasses}
+		classes={{ ...tableSearchClasses, search: 'relative w-full md:order-last md:w-64' }}
 	>
 		{#snippet header()}
 			<div
-				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
+				class="flex w-full flex-shrink-0 flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
 			>
 				<div class="flex items-center gap-2">
 					<Button class="grow md:grow-0" onclick={() => (showNewExpenseModal = true)}>
 						<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
+					</Button>
+					<!-- What these two act on is whichever row is open, so they are no use on a phone,
+					     where the row you opened fills the screen and carries the same two buttons. -->
+					<Button
+						color="alternative"
+						class="hidden md:inline-flex"
+						disabled={!selectedExpenseId}
+						onclick={() => {
+							expenseIdToEdit = selectedExpenseId;
+							showEditExpenseModal = true;
+						}}
+					>
+						<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
+					</Button>
+					<Button
+						color="red"
+						class="hidden md:inline-flex"
+						disabled={!selectedExpenseId}
+						onclick={() => {
+							expenseIdToDelete = selectedExpenseId;
+							showDeleteExpenseModal = true;
+						}}
+					>
+						<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
 					</Button>
 					<!-- Stacked, the filters filled a phone screen before a single expense appeared,
 					     so on small screens they fold behind this. -->
@@ -743,16 +772,16 @@
 						</Button>
 					</Dropdown>
 					{@render optionFilter(
-						'Konten',
-						filterableAccounts ?? [],
-						filteredAccounts,
-						(id) => (filteredAccounts = toggleOption(filteredAccounts, id))
-					)}
-					{@render optionFilter(
 						'Kategorien',
 						filterableCategories ?? [],
 						filteredCategories,
 						(id) => (filteredCategories = toggleOption(filteredCategories, id))
+					)}
+					{@render optionFilter(
+						'Konten',
+						filterableAccounts ?? [],
+						filteredAccounts,
+						(id) => (filteredAccounts = toggleOption(filteredAccounts, id))
 					)}
 					<Button color="alternative">Filter<FilterSolid class="ml-2 h-3 w-3 " /></Button>
 					<Dropdown class="w-48 space-y-2 p-3 text-sm">
