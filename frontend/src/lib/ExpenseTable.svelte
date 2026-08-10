@@ -1049,7 +1049,7 @@
 										</table>
 									</div>
 
-									{#if expense.categories.length > 1}
+									{#if expense.categories.length > 0}
 										<div>
 											{@render sectionLabel('Kategorien')}
 											<table
