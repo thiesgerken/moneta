@@ -272,6 +272,15 @@
 		}
 	}
 
+	/// dd.mm.yyyy and a week that starts on Monday, like `shortDate` and the range picker in the
+	/// toolbar. flowbite's own default is `numeric`, which gives 5.8.2026 -- the day, the month
+	/// and the year each start somewhere different from one field to the next.
+	const DATE_FORMAT: Intl.DateTimeFormatOptions = {
+		day: '2-digit',
+		month: '2-digit',
+		year: 'numeric'
+	};
+
 	/// The ring a field wears when what is in it is not usable.
 	///
 	/// It goes on a wrapper rather than through flowbite's own `color="red"`, because
@@ -521,7 +530,13 @@
 				{/if}
 			</div>
 			<div class={ring(accrualStartError)}>
-				<Datepicker bind:value={accrualStart} placeholder="Datum" />
+				<Datepicker
+					bind:value={accrualStart}
+					placeholder="Datum"
+					locale="de-DE"
+					firstDayOfWeek={1}
+					dateFormat={DATE_FORMAT}
+				/>
 			</div>
 		</div>
 		{#if isRange}
@@ -534,7 +549,13 @@
 					})}
 				</div>
 				<div class={ring(accrualEndError)}>
-					<Datepicker bind:value={accrualEnd} placeholder="Enddatum" />
+					<Datepicker
+						bind:value={accrualEnd}
+						placeholder="Enddatum"
+						locale="de-DE"
+						firstDayOfWeek={1}
+						dateFormat={DATE_FORMAT}
+					/>
 				</div>
 			</div>
 		{/if}
@@ -664,7 +685,13 @@
 						{#each transactions as tx, i (i)}
 							<tr>
 								<td class="px-2">
-									<Datepicker bind:value={tx.date} placeholder="wie Leistung" />
+									<Datepicker
+										bind:value={tx.date}
+										placeholder="wie Leistung"
+										locale="de-DE"
+										firstDayOfWeek={1}
+										dateFormat={DATE_FORMAT}
+									/>
 								</td>
 								<td class="px-2">
 									<!-- Clearing it lives in the calendar rather than under the field: a link
@@ -672,7 +699,13 @@
 									     you pick one, and every other row jumps. flowbite's own action
 									     buttons say Today/Clear/Apply in English, so this is the one it
 									     offers a slot for. -->
-									<Datepicker bind:value={tx.bookingDate} placeholder="—">
+									<Datepicker
+										bind:value={tx.bookingDate}
+										placeholder="—"
+										locale="de-DE"
+										firstDayOfWeek={1}
+										dateFormat={DATE_FORMAT}
+									>
 										{#snippet actionSlot({ handleClear, close })}
 											<div class="flex justify-end px-3 pb-3">
 												<Button

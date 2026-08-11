@@ -914,7 +914,13 @@
 					     range mode it prints a bare " - " instead of its placeholder when nothing is
 					     chosen -- which left the control that decides what the table shows unreadable
 					     in both states, and with nowhere to undo it. -->
-					<Button color="alternative" size="sm" class="justify-between whitespace-nowrap md:w-52">
+					<!-- min-w rather than w: a chosen range is "05.08.2026 – 14.08.2026", which is wider than
+					     the other triggers and was running out of the button. Empty it still matches them. -->
+					<Button
+						color="alternative"
+						size="sm"
+						class="justify-between whitespace-nowrap md:min-w-52"
+					>
 						<span class="flex items-center gap-2">
 							<CalendarMonthOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
 							{dateRangeLabel ?? 'Zeitraum'}
