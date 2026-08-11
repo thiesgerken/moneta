@@ -5,7 +5,7 @@
 	import { graphql } from '$houdini';
 	import ActionButton from './ActionButton.svelte';
 	import type { ExpenseInput } from '$houdini/graphql/inputs';
-	import { accountSorter, categorySorter, formatAccount } from './expense_utils';
+	import { accountSorter, byUsageThen, categorySorter, formatAccount } from './expense_utils';
 	import ColorSelect from './ColorSelect.svelte';
 	import {
 		CircleMinusOutline,
@@ -283,27 +283,6 @@
 		if (positions.length > 0) {
 			positions = positions.slice(0, i).concat(positions.slice(i + 1));
 		}
-	}
-
-	/// How many entries the picker puts up top before it goes alphabetical.
-	///
-	/// Five, because five is what the tail looks like here: 600, 450, 400, 250 and 50 uses in a
-	/// year, and then a cliff to twelve. Sorting the whole list by frequency instead would put
-	/// the four accounts you touch twice a year in an order nobody can predict; alphabetical is
-	/// faster once you already know the name you are looking for.
-	const FREQUENT = 5;
-
-	/// The frequently-used few first, everything else in its usual order.
-	function byUsageThen<T extends { usageCount: number }>(
-		options: T[],
-		rest: (a: T, b: T) => number
-	) {
-		const frequent = options
-			.filter((option) => option.usageCount > 0)
-			.toSorted((a, b) => b.usageCount - a.usageCount)
-			.slice(0, FREQUENT);
-
-		return [...frequent, ...options.filter((option) => !frequent.includes(option)).toSorted(rest)];
 	}
 
 	/// What the account picker offers: the closed ones left out, the five you actually use up

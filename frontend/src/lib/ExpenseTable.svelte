@@ -46,6 +46,7 @@
 	} from 'flowbite-svelte-icons';
 	import {
 		accountSorter,
+		byUsageThen,
 		categorySorter,
 		formatAccount,
 		formatTransactionAccounts,
@@ -406,8 +407,11 @@
 		}
 	`);
 
+	// Same order as the pickers in the edit dialog: what you use, then alphabetical. A filter is
+	// reached for by name more often than a picker is, which is why only the top few jump the
+	// queue rather than the whole list being ranked.
 	const filterableCategories = $derived(
-		$basicStore.data?.categories.list.sort(categorySorter).map((category) => ({
+		byUsageThen($basicStore.data?.categories.list ?? [], categorySorter).map((category) => ({
 			name: category.name,
 			value: category.id,
 			color: category.color
@@ -415,16 +419,16 @@
 	);
 
 	const filterableAccounts = $derived(
-		$basicStore.data?.accounts.list
-			.sort((a, b) => accountSorter(a, b, $basicStore.data?.users.me.name || ''))
-			.map((account) => ({
-				name:
-					account.owner.name == $basicStore.data?.users.me.name
-						? account.name
-						: `${account.owner.firstName} / ${account.name}`,
-				value: account.id,
-				color: account.color
-			}))
+		byUsageThen($basicStore.data?.accounts.list ?? [], (a, b) =>
+			accountSorter(a, b, $basicStore.data?.users.me.name || '')
+		).map((account) => ({
+			name:
+				account.owner.name == $basicStore.data?.users.me.name
+					? account.name
+					: `${account.owner.firstName} / ${account.name}`,
+			value: account.id,
+			color: account.color
+		}))
 	);
 
 	const totalCount = $derived($expenseStore.data?.expenses.list.totalCount || 0);
