@@ -570,7 +570,7 @@
 		<div class="col-span-full">
 			<Label class="mb-2 block">Flags</Label>
 			<!-- One icon per state, and the same one wherever that state is named: here, in the
-			     list's badges, and in the toolbar's Zustand filter. Five words of the same length
+			     list's badges, and in the toolbar's Status filter. Five words of the same length
 			     in the same weight are read one after another; five shapes are recognised. -->
 			<div class="flex flex-wrap gap-x-6 gap-y-2">
 				<Checkbox bind:checked={isTemplate}>

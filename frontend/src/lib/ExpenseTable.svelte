@@ -177,7 +177,7 @@
 		// one chip for the lot: which of the six is off matters less than the fact that the
 		// list is no longer showing everything
 		if (!flagsAreDefault) {
-			out.push({ label: 'Zustand', clear: resetFlags });
+			out.push({ label: 'Status', clear: resetFlags });
 		}
 
 		return out;
@@ -598,7 +598,7 @@
 <!-- Accounts and categories carry a colour, and that colour is how a reader recognises them --
      it is what the cells in the table below are tinted with. flowbite's MultiSelect prints its
      options as bare text and offers no hook to change that, so the filters are a checkbox list
-     with the swatch in front of each name, like the Zustand filter beside them. -->
+     with the swatch in front of each name, like the Status filter beside them. -->
 {#snippet optionFilter(
 	label: string,
 	options: { name: string; value: string; color?: string | null }[],
@@ -606,7 +606,14 @@
 	toggle: (id: string) => void
 )}
 	<Button color="alternative" size="sm" class="justify-between md:w-40">
-		{selected.length ? `${label} (${selected.length})` : label}
+		<span class="flex items-center gap-2">
+			{#if label === 'Konten'}
+				<WalletOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+			{:else}
+				<TagOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+			{/if}
+			{selected.length ? `${label} (${selected.length})` : label}
+		</span>
 		<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 	</Button>
 	<Dropdown class="max-h-80 w-64 divide-y-0 overflow-y-auto p-3 text-sm">
@@ -901,8 +908,11 @@
 					     chosen -- which left the control that decides what the table shows unreadable
 					     in both states, and with nowhere to undo it. -->
 					<Button color="alternative" size="sm" class="justify-between whitespace-nowrap md:w-52">
-						{dateRangeLabel ?? 'Zeitraum'}
-						<CalendarMonthOutline class="ml-2 h-4 w-4 shrink-0" />
+						<span class="flex items-center gap-2">
+							<CalendarMonthOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+							{dateRangeLabel ?? 'Zeitraum'}
+						</span>
+						<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 					</Button>
 					<Dropdown class="flex w-fit flex-col gap-2 divide-y-0 p-2">
 						<!-- the inline calendar draws its own white, shadowed, padded card, which inside
@@ -940,9 +950,12 @@
 					<!-- The third of three filters, and it has to look like the other two: same trigger,
 					     same panel. It said "Filter" over a flowbite List, which drew a rule under a
 					     heading repeating the word next to it and spaced six checkboxes like a table
-					     of contents. It filters on Zustand, which is also what its chip says. -->
+					     of contents. It filters the Status column and is named after it. -->
 					<Button color="alternative" size="sm" class="justify-between md:w-40">
-						{activeFlagCount ? `Zustand (${activeFlagCount})` : 'Zustand'}
+						<span class="flex items-center gap-2">
+							<FlagOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+							{activeFlagCount ? `Status (${activeFlagCount})` : 'Status'}
+						</span>
 						<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 					</Button>
 					<Dropdown class="max-h-80 w-64 divide-y-0 overflow-y-auto p-3 text-sm">

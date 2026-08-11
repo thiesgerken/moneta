@@ -171,7 +171,7 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   `gray-400`, at `h-4` and `h-5` respectively, so that they identify the column without competing
   with the sort arrow beside them.
 - **Every state has an icon, and it is the same icon everywhere that state is named** — in the
-  list's badges, in the edit dialog's flags, and in the toolbar's Zustand filter. Six words of
+  list's badges, in the edit dialog's flags, and in the toolbar's Status filter. Six words of
   similar length in one weight are read one after another; six shapes are recognised.
   `CheckCircle` Normal · `QuestionCircle` Unbestätigt · `ExclamationCircle` Unvollständig ·
   `Star` Außergewöhnlich · `Landmark` Steuerrelevant · `FileClone` Vorlage.
