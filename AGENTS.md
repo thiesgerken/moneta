@@ -174,6 +174,16 @@ recurring contract the month each payment buys. The last of those runs over the 
 two — keep it that way, and keep its gates strict. A regular cadence on its own also describes a
 fortnightly beer and a yearly pair of jeans, and widening those invents a period nobody recorded.
 
+**The imported 0,00 € balances are load-bearing — do not tidy them away.** 35 of the imported
+accounts open with one, dated the day moneydb was set up, and it looks like bookkeeping moneydb
+demanded rather than a reading anyone took. It is not: it is the statement that the account was
+empty when it started, and it is the only thing pinning the left end of that account's history.
+Remove it and the nearest anchor becomes the next recorded balance, which back-integrates every
+transaction in between — Krösus's `Bargeld` then holds 263,26 € in 2013 against a seed of 0,00 €
+and 812 transactions, and `Depot` holds 487,30 € three years before it was opened. The empty
+anchor `simulate_balances` offers at `-infinity` does not save you here: it is by construction
+the furthest away, so a recorded balance always wins.
+
 **`GRAPHQL_API_URL` is vestigial.** It fed the server-side houdini client, which no longer
 exists — the request url now comes from `houdini.config.js` and is relative. It is still set
 in `docker-compose.yaml` and read by the frontend `dev` script; neither has any effect.
