@@ -10,9 +10,13 @@ import { shortDate } from './analysis/dates';
 
 export type Change = { path: string; old: string | null; new: string | null };
 
-/// One line for a reader: what moved, and what it was and became. A side is null where the
-/// field was not there at all, which is what an added or removed list element looks like.
-export type Described = { label: string; old: string | null; new: string | null };
+/// Where there is nothing on one side of an arrow. A field that was empty, a field that was
+/// null and a list element that did not exist yet all read the same to somebody looking at a
+/// changelog — they say the thing was not there — so they are not told apart.
+export const ABSENT = '—';
+
+/// One line for a reader: what moved, and what it was and became.
+export type Described = { label: string; old: string; new: string };
 
 /// The keys worth naming. Anything not in here is a field a reader would not recognise under
 /// its own name either, so it goes out as the key itself rather than as a guess.
@@ -77,7 +81,7 @@ function pathLabel(path: string): string {
 const pathKey = (path: string) => path.split('/').at(-1)!;
 
 function value(key: string, raw: unknown, names: (id: string) => string): string {
-	if (raw === null || raw === undefined) return '—';
+	if (raw === null || raw === undefined) return ABSENT;
 
 	if (typeof raw === 'object') return summarize(raw as Record<string, unknown>, names);
 	if (typeof raw === 'boolean') return raw ? 'ja' : 'nein';
@@ -92,7 +96,7 @@ function value(key: string, raw: unknown, names: (id: string) => string): string
 	if (typeof raw === 'string') {
 		if (IDS.has(key)) return names(raw);
 		if (DATES.has(key)) return shortDate(new Date(raw));
-		return raw === '' ? '—' : `„${raw}“`;
+		return raw === '' ? ABSENT : `„${raw}“`;
 	}
 
 	return String(raw);
@@ -108,7 +112,7 @@ function summarize(object: Record<string, unknown>, names: (id: string) => strin
 		Object.entries(object)
 			.filter(([key, raw]) => !IGNORED.has(key) && raw !== null && raw !== '')
 			.map(([key, raw]) => `${label(key)}: ${value(key, raw, names)}`)
-			.join(' · ') || '—'
+			.join(' · ') || ABSENT
 	);
 }
 
@@ -125,7 +129,7 @@ export function describeChanges(
 		.map((change) => {
 			const key = pathKey(change.path);
 			const side = (raw: string | null) =>
-				raw === null ? null : value(key, JSON.parse(raw), name);
+				raw === null ? ABSENT : value(key, JSON.parse(raw), name);
 
 			return { label: pathLabel(change.path), old: side(change.old), new: side(change.new) };
 		});

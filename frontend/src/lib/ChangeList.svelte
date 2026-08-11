@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { ArrowRightOutline } from 'flowbite-svelte-icons';
-	import { describeChanges, type Change } from './changelog';
+	import { ABSENT, describeChanges, type Change } from './changelog';
 
 	let {
 		changes,
@@ -23,24 +23,26 @@
 	This used to be the unified diff the backend produced, printed as it came. It was exact and
 	nobody read it: one changed number arrived as a dozen lines of JSON context, with the number
 	itself in cents. A field per row says the same thing in the words the rest of the app uses.
+
+	Not a monospace font, which is the other way to line up a column of figures: it would make
+	this the one place in the app that looks like a terminal, and the labels beside the numbers
+	are prose. `tabular-nums` buys the alignment on its own.
 -->
-<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs {klass}">
+{#snippet side(text: string, color: string)}
+	<span class={text === ABSENT ? 'text-gray-400 dark:text-gray-500' : color}>{text}</span>
+{/snippet}
+
+<!-- A floor under the label column rather than `max-content` alone: each entry is its own
+     grid, and without one a list of two entries has its arrows in two different places. -->
+<dl
+	class="grid grid-cols-[minmax(9rem,max-content)_1fr] items-baseline gap-x-3 gap-y-1 text-xs {klass}"
+>
 	{#each rows as row, i (i)}
 		<dt class="text-gray-500 dark:text-gray-400">{row.label}</dt>
-		<dd class="min-w-0">
-			<!-- Red and green as everywhere else a before and an after sit next to each other,
-			     and no strikethrough: the arrow already says which of the two is current. -->
-			{#if row.old !== null && row.new !== null}
-				<span class="text-red-700 dark:text-red-400">{row.old}</span>
-				<ArrowRightOutline class="mx-0.5 inline h-3 w-3 shrink-0 text-gray-400" />
-				<span class="text-green-700 dark:text-green-400">{row.new}</span>
-			{:else if row.new !== null}
-				<span class="text-green-700 dark:text-green-400">{row.new}</span>
-				<span class="text-gray-400 dark:text-gray-500">(neu)</span>
-			{:else}
-				<span class="text-red-700 line-through dark:text-red-400">{row.old}</span>
-				<span class="text-gray-400 dark:text-gray-500">(entfernt)</span>
-			{/if}
+		<dd class="min-w-0 tabular-nums">
+			{@render side(row.old, 'text-red-700 dark:text-red-400')}
+			<ArrowRightOutline class="mx-1 inline h-3 w-3 shrink-0 text-gray-400 dark:text-gray-500" />
+			{@render side(row.new, 'text-green-700 dark:text-green-400')}
 		</dd>
 	{/each}
 </dl>

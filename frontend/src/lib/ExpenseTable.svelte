@@ -1406,40 +1406,48 @@
 
 									<div>
 										{@render sectionLabel('Changelog')}
-										<ul class="space-y-1 text-sm">
-											{#each expense.changelog.toReversed() as change (change.id)}
-												<li>
-													<span class="text-gray-500 dark:text-gray-400">
+										<!-- Newest first, which is the order the resolver returns and the order the
+									     activity feed shows: what an expense last had done to it is the thing
+									     somebody opening it wants, and its creation is the least of it. -->
+										<ol class="ml-1 space-y-2.5 text-sm">
+											{#each expense.changelog as change (change.id)}
+												<li class="relative border-l border-gray-300 pl-4 dark:border-gray-600">
+													<!-- A dot on the rule, which is all a timeline is at this size. flowbite's
+							     Timeline draws the same thing around a `text-lg` heading and 40px of
+							     margin per entry -- four entries would be taller than the row they sit
+							     in, and overriding that away leaves nothing of the component. -->
+													<span
+														class="absolute top-1.5 -left-[4.5px] h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-600"
+													></span>
+													<div class="text-xs text-gray-500 dark:text-gray-400">
 														{change.user!.name == $basicStore.data?.users.me.name
 															? 'Du'
-															: change.user!.firstName} am {change.date.toLocaleString('de-DE', {
+															: change.user!.firstName} · {change.date.toLocaleString('de-DE', {
 															year: 'numeric',
 															month: '2-digit',
 															day: '2-digit',
 															hour: '2-digit',
 															minute: '2-digit'
-														})}{change.tool ? ` via ${change.tool}` : ''}{change.automatic
-															? ' (automatisch)'
+														})}{change.tool ? ` · ${change.tool}` : ''}{change.automatic
+															? ' · automatisch'
 															: ''}
-													</span>
+													</div>
 													{#if !change.oldState}
-														<span>— Ausgabe erstellt</span>
+														<div class="text-xs text-gray-700 dark:text-gray-300">
+															Ausgabe erstellt
+														</div>
 													{:else if change.changes.length === 0}
-														<!-- An entry with nothing to report is one whose two states are the same, which
-												     is what an import writes: the export carries the expense as it is now and not
-												     as it was, so `import.rs` stores that same state on both sides. Something was
-												     changed and there is no way to say what. -->
-														<span>— geändert</span>
+														<!-- An entry with nothing to report is one whose two states are the same,
+													     which is what an import writes: the export carries the expense as it is
+													     now and not as it was, so `import.rs` stores that same state on both
+													     sides. Something was changed and there is no way to say what. -->
+														<div class="text-xs text-gray-700 dark:text-gray-300">Geändert</div>
 													{:else}
-														<ChangeList
-															changes={change.changes}
-															names={changeNames}
-															class="mt-1 rounded bg-gray-50 p-2 dark:bg-gray-800"
-														/>
+														<ChangeList changes={change.changes} names={changeNames} class="mt-1" />
 													{/if}
 												</li>
 											{/each}
-										</ul>
+										</ol>
 									</div>
 								</div>
 							</div>
