@@ -280,9 +280,18 @@
 		}
 	}
 
+	/// The ring a field wears when what is in it is not usable.
+	///
+	/// It goes on a wrapper rather than through flowbite's own `color="red"`, because
+	/// flowbite-svelte 1.33.1 works out a control's class exactly once -- see ActionButton for
+	/// the same bug on a Button. This dialog is mounted with no expense, so every amount started
+	/// empty, every empty amount is an error, and every field stayed red for the rest of its life
+	/// however valid what you then typed into it was. Keying the control would fix the class and
+	/// lose the caret on every keystroke, so the state lives outside the control instead.
+	const ring = (error: boolean | undefined) =>
+		error ? 'rounded-lg ring-2 ring-red-500 dark:ring-red-500' : '';
+
 	const titleError = $derived(!title);
-	const storeError = $derived(false);
-	const descriptionError = $derived(false);
 	const referenceAmountError = $derived.by(() => {
 		const hasRelativeTransactions = transactions.some((tx) => tx.isRelative);
 		if (!hasRelativeTransactions) return false;
@@ -345,8 +354,6 @@
 	const formHasErrors = $derived(
 		!!(
 			titleError ||
-			storeError ||
-			descriptionError ||
 			referenceAmountError ||
 			accrualStartError ||
 			accrualEndError ||
@@ -489,26 +496,13 @@
 	>
 		<div class="sm:col-span-2 lg:col-span-3">
 			<Label for="title" class="mb-2">Titel</Label>
-			<Input
-				type="text"
-				clearable
-				id="title"
-				placeholder="Titel"
-				bind:value={title}
-				required
-				color={titleError ? 'red' : undefined}
-			/>
+			<div class={ring(titleError)}>
+				<Input type="text" clearable id="title" placeholder="Titel" bind:value={title} required />
+			</div>
 		</div>
 		<div class="sm:col-span-2 lg:col-span-1">
 			<Label for="store" class="mb-2">Geschäft</Label>
-			<Input
-				type="text"
-				clearable
-				id="store"
-				placeholder="Geschäft"
-				bind:value={store}
-				color={storeError ? 'red' : undefined}
-			/>
+			<Input type="text" clearable id="store" placeholder="Geschäft" bind:value={store} />
 		</div>
 		<div>
 			<div class="mb-2 flex items-baseline justify-between gap-2">
@@ -517,11 +511,9 @@
 					{@render textButton('Zeitraum', () => (isRange = true))}
 				{/if}
 			</div>
-			<Datepicker
-				bind:value={accrualStart}
-				placeholder="Datum"
-				inputClass={accrualStartError ? 'border-red-600 bg-red-100 text-red-400' : ''}
-			/>
+			<div class={ring(accrualStartError)}>
+				<Datepicker bind:value={accrualStart} placeholder="Datum" />
+			</div>
 		</div>
 		{#if isRange}
 			<div>
@@ -532,11 +524,9 @@
 						accrualEnd = undefined;
 					})}
 				</div>
-				<Datepicker
-					bind:value={accrualEnd}
-					placeholder="Enddatum"
-					inputClass={accrualEndError ? 'border-red-600 bg-red-100 text-red-400' : ''}
-				/>
+				<div class={ring(accrualEndError)}>
+					<Datepicker bind:value={accrualEnd} placeholder="Enddatum" />
+				</div>
 			</div>
 		{/if}
 
@@ -551,7 +541,6 @@
 				rows={1}
 				class="field-sizing-content max-h-48 w-full"
 				bind:value={description}
-				color={descriptionError ? 'red' : undefined}
 			/>
 		</div>
 		<div class="sm:col-span-2 lg:col-span-2">
@@ -606,7 +595,7 @@
 				{#if transactions.some((tx) => tx.isRelative)}
 					<div class="flex items-center gap-2">
 						<Label for="referenceAmount" class="whitespace-nowrap">Referenzbetrag</Label>
-						<div class="relative">
+						<div class="relative {ring(referenceAmountError)}">
 							<Input
 								id="referenceAmount"
 								size="sm"
@@ -614,7 +603,6 @@
 								bind:value={referenceAmount}
 								step="0.01"
 								class="no-spinner w-28 pr-6"
-								color={referenceAmountError ? 'red' : undefined}
 							/>
 							<span
 								class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
@@ -650,13 +638,7 @@
 						{#each transactions as tx, i (i)}
 							<tr>
 								<td class="px-2">
-									<Datepicker
-										bind:value={tx.date}
-										placeholder="wie Leistung"
-										inputClass={transactionErrors[i]?.date
-											? 'border-red-600 bg-red-100 text-red-400'
-											: ''}
-									/>
+									<Datepicker bind:value={tx.date} placeholder="wie Leistung" />
 								</td>
 								<td class="px-2">
 									<!-- Clearing it lives in the calendar rather than under the field: a link
@@ -682,47 +664,46 @@
 									</Datepicker>
 								</td>
 								<td class="px-2">
-									<Select
-										items={accounts.map((a) => ({
-											value: a.id,
-											name: formatAccount(
-												{
-													name: a.name,
-													owner: { name: a.owner.name, firstName: a.owner.firstName }
-												},
-												user_name
-											)
-										}))}
-										bind:value={tx.accountId}
-										style={tint(accounts.find((a) => a.id === tx.accountId)?.color)}
-										selectClass={transactionErrors[i]?.accountId
-											? 'text-red-700 border-red-700 bg-red-100'
-											: undefined}
-										placeholder="Konto"
-									/>
+									<div class={ring(transactionErrors[i]?.accountId)}>
+										<Select
+											items={accounts.map((a) => ({
+												value: a.id,
+												name: formatAccount(
+													{
+														name: a.name,
+														owner: { name: a.owner.name, firstName: a.owner.firstName }
+													},
+													user_name
+												)
+											}))}
+											bind:value={tx.accountId}
+											style={tint(accounts.find((a) => a.id === tx.accountId)?.color)}
+											placeholder="Konto"
+										/>
+									</div>
 								</td>
 								<td class="px-2">
 									<!-- The unit is the switch. A column of its own for a checkbox called
 									     "Relativ" cost more width than the amount it qualified, and said
 									     nothing about what the number in the next cell then meant. -->
-									<div class="relative">
+									<div
+										class="relative {ring(
+											tx.isRelative
+												? transactionErrors[i]?.percentage
+												: transactionErrors[i]?.amount
+										)}"
+									>
 										{#if tx.isRelative}
 											<Input
 												placeholder=""
 												bind:value={tx.percentage}
 												class="no-spinner pr-8"
-												color={transactionErrors[i]?.percentage ? 'red' : undefined}
 												min="0"
 												max="100"
 												step="0.01"
 											/>
 										{:else}
-											<Input
-												placeholder=""
-												bind:value={tx.amount}
-												class="no-spinner pr-8"
-												color={transactionErrors[i]?.amount ? 'red' : undefined}
-											/>
+											<Input placeholder="" bind:value={tx.amount} class="no-spinner pr-8" />
 										{/if}
 										<button
 											type="button"
@@ -783,32 +764,32 @@
 						{#each expenseCategories as cat, i (i)}
 							<tr>
 								<td class="px-2">
-									<Select
-										items={categories
-											.map((c) => ({ value: c.id, name: c.name }))
-											.filter(
-												(c) =>
-													!expenseCategories.some(
-														(ec, idx) => idx !== i && ec.categoryId === c.value
-													)
-											)}
-										bind:value={cat.categoryId}
-										placeholder="Kategorie"
-										style={tint(categories.find((c) => c.id === cat.categoryId)?.color)}
-										selectClass={categoryErrors[i]?.categoryId
-											? 'text-red-700 border-red-700 bg-red-100'
-											: undefined}
-									/>
+									<div class={ring(categoryErrors[i]?.categoryId)}>
+										<Select
+											items={categories
+												.map((c) => ({ value: c.id, name: c.name }))
+												.filter(
+													(c) =>
+														!expenseCategories.some(
+															(ec, idx) => idx !== i && ec.categoryId === c.value
+														)
+												)}
+											bind:value={cat.categoryId}
+											placeholder="Kategorie"
+											style={tint(categories.find((c) => c.id === cat.categoryId)?.color)}
+										/>
+									</div>
 								</td>
 								<td class="px-2">
-									<Input
-										type="number"
-										min="1"
-										class="no-spinner w-full"
-										bind:value={cat.weight}
-										placeholder="Gewicht"
-										color={categoryErrors[i]?.weight ? 'red' : undefined}
-									/>
+									<div class={ring(categoryErrors[i]?.weight)}>
+										<Input
+											type="number"
+											min="1"
+											class="no-spinner w-full"
+											bind:value={cat.weight}
+											placeholder="Gewicht"
+										/>
+									</div>
 								</td>
 								<td class="px-2">
 									{@render minus(() => removeCategory(i), expenseCategories.length === 1)}
@@ -884,22 +865,17 @@
 					{#each positions as pos, i (i)}
 						<tr>
 							<td class="px-2">
-								<Input
-									type="text"
-									placeholder="Titel"
-									bind:value={pos.title}
-									class="w-full"
-									color={positionErrors[i]?.title ? 'red' : undefined}
-								/>
+								<div class={ring(positionErrors[i]?.title)}>
+									<Input type="text" placeholder="Titel" bind:value={pos.title} class="w-full" />
+								</div>
 							</td>
 							<td class="px-2">
-								<div class="relative">
+								<div class="relative {ring(positionErrors[i]?.totalAmount)}">
 									<Input
 										placeholder=""
 										bind:value={pos.totalAmount}
 										class="no-spinner w-full pr-6"
 										step="0.01"
-										color={positionErrors[i]?.totalAmount ? 'red' : undefined}
 									/>
 									<span
 										class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
@@ -908,13 +884,14 @@
 								</div>
 							</td>
 							<td class="px-2">
-								<Input
-									placeholder=""
-									bind:value={pos.quantity}
-									class="no-spinner w-full"
-									step="0.01"
-									color={positionErrors[i]?.quantity ? 'red' : undefined}
-								/>
+								<div class={ring(positionErrors[i]?.quantity)}>
+									<Input
+										placeholder=""
+										bind:value={pos.quantity}
+										class="no-spinner w-full"
+										step="0.01"
+									/>
+								</div>
 							</td>
 							<td class="px-2">
 								<Input type="text" placeholder="" bind:value={pos.unit} class="w-full" />
