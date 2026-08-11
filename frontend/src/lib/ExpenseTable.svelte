@@ -57,6 +57,7 @@
 		tint
 	} from './expense_utils';
 	import ActionButton from './ActionButton.svelte';
+	import ChangeList from './ChangeList.svelte';
 	import ExpenseModal from './ExpenseModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
 	import { page } from '$app/state';
@@ -365,7 +366,11 @@
 								oldState {
 									id
 								}
-								diff
+								changes {
+									path
+									old
+									new
+								}
 							}
 							positions {
 								title
@@ -429,6 +434,18 @@
 			value: account.id,
 			color: account.color
 		}))
+	);
+
+	/// Account and category ids to what they are called, for the changelog: a stored state
+	/// carries ids and nothing else, so a changed account would otherwise read as a uuid.
+	const changeNames = $derived(
+		Object.fromEntries([
+			...($basicStore.data?.categories.list ?? []).map((c) => [c.id.toString(), c.name]),
+			...($basicStore.data?.accounts.list ?? []).map((a) => [
+				a.id.toString(),
+				formatAccount(a, $basicStore.data?.users.me.name)
+			])
+		])
 	);
 
 	const totalCount = $derived($expenseStore.data?.expenses.list.totalCount || 0);
@@ -1407,17 +1424,18 @@
 													</span>
 													{#if !change.oldState}
 														<span>— Ausgabe erstellt</span>
-													{:else if !change.diff}
-														<!-- An entry with no diff is one whose two states are the same, which is
-														     what an import writes: the export carries the expense as it is now and
-														     not as it was, so `import.rs` stores that same state on both sides and
-														     `json_diff` comes out empty. Something was changed and there is no way
-														     to say what, so the line says only that -- an empty string is falsy, so
-														     without this it stopped after the author's name. -->
+													{:else if change.changes.length === 0}
+														<!-- An entry with nothing to report is one whose two states are the same, which
+												     is what an import writes: the export carries the expense as it is now and not
+												     as it was, so `import.rs` stores that same state on both sides. Something was
+												     changed and there is no way to say what. -->
 														<span>— geändert</span>
 													{:else}
-														<pre
-															class="mt-1 overflow-x-auto rounded bg-gray-50 p-2 text-xs dark:bg-gray-800">{change.diff}</pre>
+														<ChangeList
+															changes={change.changes}
+															names={changeNames}
+															class="mt-1 rounded bg-gray-50 p-2 dark:bg-gray-800"
+														/>
 													{/if}
 												</li>
 											{/each}

@@ -566,6 +566,26 @@ type ExpenseCategorization {
   weight: Float!
 }
 
+"""
+  One field a changelog entry changed.
+
+  The values travel as JSON rather than as text the server wrote, because only the reader can
+  say what they mean: the same `-17900` is money on a transaction, a weight on a
+  categorization and an id on an account, and it is the browser that holds the locale, the
+  account names and the formatting the rest of the app uses.
+"""
+type ExpenseChange {
+  "`transactions/0/amount`"
+  path: String!
+  """
+    Null where the field is absent on that side, which is how an added or removed list
+    element arrives: one change carrying the whole element. A field that is present and
+    null arrives as the JSON string `null`.
+  """
+  old: String
+  new: String
+}
+
 type ExpenseChangelogConnection {
   """
     how many entries match, which for a caller that only wants the number is the whole
@@ -590,7 +610,12 @@ type ExpenseChangelogEntry {
   confidence: Float!
   oldState: ExpenseState
   newState: ExpenseState
-  diff: String
+  """
+    What this entry changed, field by field. Empty for a creation, and for the entries an
+    import writes: the export carries the expense as it is now rather than as it was, so
+    `import.rs` stores the same state on both sides.
+  """
+  changes: [ExpenseChange!]!
   user: User
 }
 

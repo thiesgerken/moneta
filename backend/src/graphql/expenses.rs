@@ -243,6 +243,24 @@ pub struct ExpenseNode {
     pub node: GraphQLExpense,
 }
 
+/// One field a changelog entry changed.
+///
+/// The values travel as JSON rather than as text the server wrote, because only the reader can
+/// say what they mean: the same `-17900` is money on a transaction, a weight on a
+/// categorization and an id on an account, and it is the browser that holds the locale, the
+/// account names and the formatting the rest of the app uses.
+#[derive(GraphQLObject)]
+#[graphql(context=Context)]
+pub struct ExpenseChange {
+    /// `transactions/0/amount`
+    pub path: String,
+    /// Null where the field is absent on that side, which is how an added or removed list
+    /// element arrives: one change carrying the whole element. A field that is present and
+    /// null arrives as the JSON string `null`.
+    pub old: Option<String>,
+    pub new: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct GraphQLExpenseChangelogEntry {
     data: ExpenseChangelogEntry,
@@ -288,12 +306,35 @@ impl GraphQLExpenseChangelogEntry {
     fn new_state(&self) -> Option<Expense> {
         self.data.new_state.clone().map(|state| state.0)
     }
-    fn diff(&self) -> Option<String> {
-        let mut old_state = self.data.old_state.clone()?.0;
-        let new_state = &self.data.new_state.as_ref()?.0;
+    /// What this entry changed, field by field. Empty for a creation, and for the entries an
+    /// import writes: the export carries the expense as it is now rather than as it was, so
+    /// `import.rs` stores the same state on both sides.
+    fn changes(&self) -> Vec<ExpenseChange> {
+        let (Some(old_state), Some(new_state)) =
+            (self.data.old_state.clone(), self.data.new_state.as_ref())
+        else {
+            return vec![];
+        };
 
-        old_state.updated_at = new_state.updated_at;
-        util::json_diff(&old_state, new_state).ok()
+        let mut old_state = old_state.0;
+        // moves on every save and says nothing about what the save did
+        old_state.updated_at = new_state.0.updated_at;
+
+        let (Ok(old), Ok(new)) = (
+            serde_json::to_value(&old_state),
+            serde_json::to_value(&new_state.0),
+        ) else {
+            return vec![];
+        };
+
+        util::json_changes(&old, &new)
+            .into_iter()
+            .map(|change| ExpenseChange {
+                path: change.path,
+                old: change.old.map(|v| v.to_string()),
+                new: change.new.map(|v| v.to_string()),
+            })
+            .collect()
     }
     async fn user(&self, context: &Context) -> FieldResult<Option<GraphQLUserInfo>> {
         let Some(user_id) = self.data.user_id else {
