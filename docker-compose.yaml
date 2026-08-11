@@ -48,6 +48,13 @@ services:
     restart: unless-stopped
     expose:
       - 80
+    ports:
+      # Alongside traefik on 8485 rather than instead of it: this one reaches the container
+      # directly, which is what you want when the question is whether the frontend or the proxy
+      # in front of it is at fault. 8180 to sit next to the backend's 8181.
+      #
+      # It is a fixed host port, so `replicas` above has to stay at 1.
+      - "127.0.0.1:8180:80"
     environment:
       - GRAPHQL_API_URL=http://backend:80/graphql
     labels:

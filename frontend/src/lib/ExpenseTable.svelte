@@ -13,8 +13,6 @@
 		Dropdown,
 		Checkbox,
 		ButtonGroup,
-		List,
-		Li,
 		Datepicker,
 		Modal,
 		Spinner
@@ -26,14 +24,31 @@
 		ChevronRightOutline,
 		ChevronLeftOutline,
 		ChevronDownOutline,
+		ArchiveArrowDownOutline,
+		FileCopyAltOutline,
 		EditOutline,
 		TrashBinOutline,
 		ExclamationCircleOutline,
-		CalendarMonthOutline
+		CalendarMonthOutline,
+		AlignLeftOutline,
+		EuroOutline,
+		FlagOutline,
+		TextSizeOutline,
+		ReceiptOutline,
+		StoreOutline,
+		TagOutline,
+		WalletOutline,
+		CheckCircleOutline,
+		FileCloneOutline,
+		LandmarkOutline,
+		QuestionCircleOutline,
+		StarOutline
 	} from 'flowbite-svelte-icons';
 	import {
 		accountSorter,
+		byUsageThen,
 		categorySorter,
+		formatAccount,
 		formatTransactionAccounts,
 		formatAccrualPeriod,
 		formatCategories,
@@ -41,17 +56,24 @@
 		makeCategoryColor,
 		tint
 	} from './expense_utils';
+	import ActionButton from './ActionButton.svelte';
+	import ChangeList from './ChangeList.svelte';
 	import ExpenseModal from './ExpenseModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
 	import { page } from '$app/state';
 	import { shortDate } from './analysis/dates';
+	import { signedEuro } from './money';
 	import QueryError from './QueryError.svelte';
 
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
-	let sortBy: { field: string; direction: number } = $state({ field: 'status', direction: -1 });
+	/// Unbestätigt and unvollständig first, which is the list somebody opens this page to work
+	/// through. A third click on a header comes back here.
+	const DEFAULT_SORT = { field: 'status', direction: -1 };
+
+	let sortBy: { field: string; direction: number } = $state({ ...DEFAULT_SORT });
 
 	/// only consulted below `md`, where the filters are collapsed
 	let filtersOpen = $state(false);
@@ -61,6 +83,16 @@
 	let showDeleteExpenseModal = $state(false);
 	let expenseIdToEdit: string | undefined = $state(undefined);
 	let expenseIdToDelete: string | undefined = $state(undefined);
+	let expenseIdToResort: string | undefined = $state(undefined);
+	/// The edit modal, filled from an expense but creating a second one. One instance rather
+	/// than two: the form is the same form, and only where it submits changes.
+	let duplicating = $state(false);
+
+	function openEditModal(id: string, asCopy = false) {
+		expenseIdToEdit = id;
+		duplicating = asCopy;
+		showEditExpenseModal = true;
+	}
 
 	let filteredAccounts = $state<string[]>([]);
 	let filteredCategories = $state<string[]>([]);
@@ -147,15 +179,8 @@
 
 		// one chip for the lot: which of the six is off matters less than the fact that the
 		// list is no longer showing everything
-		if (
-			showTemplates ||
-			!showTaxRelevant ||
-			!showExtraordinary ||
-			!showUnchecked ||
-			!showIncomplete ||
-			!showNormal
-		) {
-			out.push({ label: 'Zustand', clear: resetFlags });
+		if (!flagsAreDefault) {
+			out.push({ label: 'Status', clear: resetFlags });
 		}
 
 		return out;
@@ -170,6 +195,32 @@
 	function clearDateRange() {
 		filterDateRange = { from: undefined, to: undefined };
 	}
+
+	/// Whether the six state checkboxes are where `resetFlags` leaves them. Not "all six on":
+	/// templates are hidden by default, so an untouched list would otherwise report itself as
+	/// filtered. This is what both the chip and the button's count hang off.
+	const flagsAreDefault = $derived(
+		!showTemplates &&
+			showTaxRelevant &&
+			showExtraordinary &&
+			showUnchecked &&
+			showIncomplete &&
+			showNormal
+	);
+
+	/// How many states are being shown, but only once that is worth saying.
+	const activeFlagCount = $derived(
+		flagsAreDefault
+			? 0
+			: [
+					showNormal,
+					showUnchecked,
+					showIncomplete,
+					showExtraordinary,
+					showTaxRelevant,
+					showTemplates
+				].filter(Boolean).length
+	);
 
 	function resetFlags() {
 		showTemplates = false;
@@ -240,6 +291,7 @@
 					}
 					color
 					closed
+					usageCount
 				}
 			}
 			categories {
@@ -250,6 +302,7 @@
 						id
 					}
 					color
+					usageCount
 				}
 			}
 		}
@@ -313,7 +366,11 @@
 								oldState {
 									id
 								}
-								diff
+								changes {
+									path
+									old
+									new
+								}
 							}
 							positions {
 								title
@@ -336,6 +393,7 @@
 								effectiveAmount
 								amount
 								date
+								bookingDate
 								statement
 								account {
 									id
@@ -354,8 +412,11 @@
 		}
 	`);
 
+	// Same order as the pickers in the edit dialog: what you use, then alphabetical. A filter is
+	// reached for by name more often than a picker is, which is why only the top few jump the
+	// queue rather than the whole list being ranked.
 	const filterableCategories = $derived(
-		$basicStore.data?.categories.list.sort(categorySorter).map((category) => ({
+		byUsageThen($basicStore.data?.categories.list ?? [], categorySorter).map((category) => ({
 			name: category.name,
 			value: category.id,
 			color: category.color
@@ -363,16 +424,28 @@
 	);
 
 	const filterableAccounts = $derived(
-		$basicStore.data?.accounts.list
-			.sort((a, b) => accountSorter(a, b, $basicStore.data?.users.me.name || ''))
-			.map((account) => ({
-				name:
-					account.owner.name == $basicStore.data?.users.me.name
-						? account.name
-						: `${account.owner.firstName} / ${account.name}`,
-				value: account.id,
-				color: account.color
-			}))
+		byUsageThen($basicStore.data?.accounts.list ?? [], (a, b) =>
+			accountSorter(a, b, $basicStore.data?.users.me.name || '')
+		).map((account) => ({
+			name:
+				account.owner.name == $basicStore.data?.users.me.name
+					? account.name
+					: `${account.owner.firstName} / ${account.name}`,
+			value: account.id,
+			color: account.color
+		}))
+	);
+
+	/// Account and category ids to what they are called, for the changelog: a stored state
+	/// carries ids and nothing else, so a changed account would otherwise read as a uuid.
+	const changeNames = $derived(
+		Object.fromEntries([
+			...($basicStore.data?.categories.list ?? []).map((c) => [c.id.toString(), c.name]),
+			...($basicStore.data?.accounts.list ?? []).map((a) => [
+				a.id.toString(),
+				formatAccount(a, $basicStore.data?.users.me.name)
+			])
+		])
 	);
 
 	const totalCount = $derived($expenseStore.data?.expenses.list.totalCount || 0);
@@ -410,14 +483,71 @@
 
 	let expenseToEdit = $derived(expenses.find((e) => e.id === expenseIdToEdit) || undefined);
 	let expenseToDelete = $derived(expenses.find((e) => e.id === expenseIdToDelete) || undefined);
+	let expenseToResort = $derived(expenses.find((e) => e.id === expenseIdToResort) || undefined);
+
+	/// The bank's own text for an expense, which is several strings when it is split over more
+	/// than one transaction. Newlines collapse: the cell is one line and the full text is in the
+	/// expanded row.
+	const transactionText = (transactions: { statement: string | null }[]) =>
+		transactions
+			.map((t) => t.statement?.replace(/\s+/g, ' ').trim())
+			.filter(Boolean)
+			.join(' · ');
+
+	/// How many columns the header is showing, which is what the detail row has to span.
+	///
+	/// A fixed layout lays out as many columns as the widest row declares, so `colspan="9"` over
+	/// the three columns a phone shows invents six empty ones and shares the width between all
+	/// nine -- the title ended up a character wide. Auto layout collapsed them to nothing, which
+	/// is why this only became a problem with `table-fixed`.
+	let columns = $state(9);
+	$effect(() => {
+		const wide = window.matchMedia('(min-width: 768px)');
+		const widest = window.matchMedia('(min-width: 1536px)');
+		const update = () => (columns = wide.matches ? (widest.matches ? 9 : 8) : 3);
+
+		update();
+		wide.addEventListener('change', update);
+		widest.addEventListener('change', update);
+		return () => {
+			wide.removeEventListener('change', update);
+			widest.removeEventListener('change', update);
+		};
+	});
+
+	/// The colour an amount is written in. Zero is its own answer rather than the absence of one:
+	/// an expense that nets out moved money between two of your own accounts. `gray-200` rather
+	/// than the `-100` the other two use, since `-100` is the shade a hovered row is.
+	const amountTint = (amount: number) =>
+		amount < 0
+			? 'bg-red-100 text-red-700'
+			: amount > 0
+				? 'bg-green-100 text-green-700'
+				: 'bg-gray-200 text-gray-600';
+
+	/// A title that names no expense: the automation rules give one this when their template has
+	/// no title of its own, and it then says the same thing on every row it produced. Tinting it
+	/// is the only thing in the list that says "this one still needs a human".
+	const PLACEHOLDER_TITLE = 'Automatisch Generiert';
+	const titleIsPlaceholder = (title: string) => !title.trim() || title.trim() === PLACEHOLDER_TITLE;
 
 	function toggleRow(id: string) {
 		if (expandedRows.includes(id)) expandedRows = expandedRows.filter((rowId) => rowId !== id);
 		else expandedRows = [...expandedRows, id];
 	}
 
+	/// What the toolbar's Bearbeiten and Löschen act on. An open row is this list's idea of "the
+	/// one you mean", and several open rows are no answer at all rather than a reason to pick the
+	/// first -- deleting the wrong expense is not something to be clever about.
+	const selectedExpenseId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
+
+	/// Descending, ascending, off. The third state is what there was no way back to: sorting
+	/// lives in the component rather than in the url, so a header clicked by accident could only
+	/// be undone by reloading the page.
 	function sortByField(field: string) {
-		sortBy = { field, direction: sortBy.field === field ? -sortBy.direction : -1 };
+		if (sortBy.field !== field) sortBy = { field, direction: -1 };
+		else if (sortBy.direction === -1) sortBy = { field, direction: 1 };
+		else sortBy = { ...DEFAULT_SORT };
 	}
 
 	function isSortedBy(field: string) {
@@ -441,6 +571,40 @@
 		expandedRows = [];
 	}
 
+	const ResortExpense = graphql(`
+		mutation ResortExpense($id: UUID!) {
+			expenses {
+				resort(id: $id) {
+					id
+				}
+			}
+		}
+	`);
+
+	let showResortExpenseModal = $state(false);
+	let resortError: string | undefined = $state(undefined);
+
+	async function handleResortExpense() {
+		if (!expenseToResort) return;
+		resortError = undefined;
+
+		const result = await ResortExpense.mutate({ id: expenseToResort.id });
+		// The two things that go wrong here are the reader's to fix -- no rule matches, or the
+		// expense never came from a bank -- so the modal says so and stays open rather than
+		// closing on a sentence nobody read.
+		if (result.errors?.length) {
+			resortError = result.errors.map((e) => e.message).join(' ');
+			return;
+		}
+
+		showResortExpenseModal = false;
+		expenseIdToResort = undefined;
+
+		cache.markStale('Expense');
+		await expenseStore.fetch({ variables: expenseVariables() });
+		expandedRows = [];
+	}
+
 	async function handleDeleteExpense() {
 		if (!expenseToDelete) return;
 		await DeleteExpense.mutate({ id: expenseToDelete.id });
@@ -453,18 +617,33 @@
 	}
 </script>
 
+{#snippet newExpenseButton(cls: string)}
+	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls back
+	     to `alternative` rather than to primary, which left Neu white in the middle of the row. -->
+	<Button color="primary" class={cls} onclick={() => (showNewExpenseModal = true)}>
+		<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
+	</Button>
+{/snippet}
+
 <!-- Accounts and categories carry a colour, and that colour is how a reader recognises them --
      it is what the cells in the table below are tinted with. flowbite's MultiSelect prints its
      options as bare text and offers no hook to change that, so the filters are a checkbox list
-     with the swatch in front of each name, like the Zustand filter beside them. -->
+     with the swatch in front of each name, like the Status filter beside them. -->
 {#snippet optionFilter(
 	label: string,
 	options: { name: string; value: string; color?: string | null }[],
 	selected: string[],
 	toggle: (id: string) => void
 )}
-	<Button color="alternative" class="justify-between md:w-48">
-		{selected.length ? `${label} (${selected.length})` : label}
+	<Button color="alternative" size="sm" class="justify-between md:w-40">
+		<span class="flex items-center gap-2">
+			{#if label === 'Konten'}
+				<WalletOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+			{:else}
+				<TagOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+			{/if}
+			{selected.length ? `${label} (${selected.length})` : label}
+		</span>
 		<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 	</Button>
 	<Dropdown class="max-h-80 w-64 divide-y-0 overflow-y-auto p-3 text-sm">
@@ -482,6 +661,21 @@
 	</Dropdown>
 {/snippet}
 
+{#snippet fieldLabel(text: string)}
+	<dt class="text-xs font-semibold text-gray-500 dark:text-gray-400">{text}</dt>
+{/snippet}
+
+{#snippet field(label: string, value: string)}
+	<div class="py-2">
+		{@render fieldLabel(label)}
+		<dd class="mt-0.5 wrap-anywhere">{value}</dd>
+	</div>
+{/snippet}
+
+{#snippet sectionLabel(text: string)}
+	<h4 class="mb-1 text-xs font-semibold text-gray-500 dark:text-gray-400">{text}</h4>
+{/snippet}
+
 {#snippet statusBadges(expense: {
 	isTaxRelevant: boolean;
 	isTemplate: boolean;
@@ -490,19 +684,29 @@
 	isExtraordinary: boolean;
 })}
 	{#if expense.isTaxRelevant}
-		<span class="rounded-md bg-green-100 px-2 py-1 text-green-700">Steuerrelevant</span>
+		<span class="rounded-md bg-green-100 px-2 py-1 text-green-700">
+			<LandmarkOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Steuerrelevant
+		</span>
 	{/if}
 	{#if expense.isTemplate}
-		<span class="rounded-md bg-blue-100 px-2 py-1 text-blue-700">Vorlage</span>
+		<span class="rounded-md bg-blue-100 px-2 py-1 text-blue-700">
+			<FileCloneOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Vorlage
+		</span>
 	{/if}
 	{#if expense.isUnchecked}
-		<span class="rounded-md bg-red-100 px-2 py-1 text-yellow-700">Unbestätigt</span>
+		<span class="rounded-md bg-yellow-100 px-2 py-1 text-yellow-700">
+			<QuestionCircleOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Unbestätigt
+		</span>
 	{/if}
 	{#if expense.isIncomplete}
-		<span class="rounded-md bg-red-100 px-2 py-1 text-red-700">Unvollständig</span>
+		<span class="rounded-md bg-red-100 px-2 py-1 text-red-700">
+			<ExclamationCircleOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Unvollständig
+		</span>
 	{/if}
 	{#if expense.isExtraordinary}
-		<span class="rounded-md bg-purple-100 px-2 py-1 text-purple-700">Außergewöhnlich</span>
+		<span class="rounded-md bg-purple-100 px-2 py-1 text-purple-700">
+			<StarOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Außergewöhnlich
+		</span>
 	{/if}
 {/snippet}
 
@@ -513,6 +717,40 @@
 		▼
 	{/if}
 {/snippet}
+
+<Modal bind:open={showResortExpenseModal} size="sm">
+	<div class="text-center">
+		<ExclamationCircleOutline class="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-200" />
+		<h3 class="mb-3 text-lg font-normal text-gray-500 dark:text-gray-400">
+			Soll <b>{expenseToResort?.title}</b> neu einsortiert werden?
+		</h3>
+		<!-- Said plainly because it cannot be undone from here: what the rule decides replaces
+		     what is there, including anything corrected by hand since. -->
+		<p class="mb-5 text-sm text-gray-500 dark:text-gray-400">
+			Die Automatisierungsregeln laufen erneut über die Ausgabe, als wäre ihre Bankzeile gerade erst
+			geliefert worden. Titel, Kategorien, Konten und Merkmale werden von der passenden Regel
+			überschrieben; Betrag, Datum und Transaktionstext bleiben.
+		</p>
+		{#if resortError}
+			<p class="mb-5 text-sm text-red-600 dark:text-red-400">{resortError}</p>
+		{/if}
+		<div class="space-x-2">
+			<Button type="submit" value="resort" onclick={handleResortExpense}>Einsortieren</Button>
+			<Button
+				type="submit"
+				value="cancel"
+				color="alternative"
+				onclick={() => {
+					showResortExpenseModal = false;
+					expenseIdToResort = undefined;
+					resortError = undefined;
+				}}
+			>
+				Abbrechen
+			</Button>
+		</div>
+	</div>
+</Modal>
 
 <Modal bind:open={showDeleteExpenseModal} size="xs">
 	<div class="text-center">
@@ -546,12 +784,15 @@
 		id: a.id.toString(),
 		name: a.name,
 		owner: { name: a.owner.name, firstName: a.owner.firstName },
-		color: a.color
+		color: a.color,
+		closed: a.closed,
+		usageCount: a.usageCount
 	})) || []}
 	categories={$basicStore.data?.categories.list.map((c) => ({
 		id: c.id.toString(),
 		name: c.name,
-		color: c.color
+		color: c.color,
+		usageCount: c.usageCount
 	})) || []}
 />
 
@@ -560,16 +801,20 @@
 	onsubmit={handleExpenseModalSubmit}
 	userName={$basicStore.data?.users.me?.name}
 	expense={expenseToEdit}
+	duplicate={duplicating}
 	accounts={$basicStore.data?.accounts.list.map((a) => ({
 		id: a.id.toString(),
 		name: a.name,
 		owner: { name: a.owner.name, firstName: a.owner.firstName },
-		color: a.color
+		color: a.color,
+		closed: a.closed,
+		usageCount: a.usageCount
 	})) || []}
 	categories={$basicStore.data?.categories.list.map((c) => ({
 		id: c.id.toString(),
 		name: c.name,
-		color: c.color
+		color: c.color,
+		usageCount: c.usageCount
 	})) || []}
 />
 
@@ -614,26 +859,72 @@
 		</div>
 	{/if}
 
+	<!-- The search takes what is left rather than a fixed 256px: at a fixed width the row came to
+	     1656px against 1654px of card and wrapped the search onto a line of its own. It gives way
+	     now instead, down to 176px before anything wraps. -->
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
-		striped={true}
 		bind:inputValue={searchTerm}
-		class={tableSearchTableClass}
-		classes={tableSearchClasses}
+		class="{tableSearchTableClass} table-fixed"
+		classes={{
+			...tableSearchClasses,
+			search: 'relative w-full md:order-last md:w-56'
+		}}
 	>
 		{#snippet header()}
 			<div
-				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
+				class="flex w-full flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
 			>
 				<div class="flex items-center gap-2">
-					<Button class="grow md:grow-0" onclick={() => (showNewExpenseModal = true)}>
-						<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
-					</Button>
+					<!-- One group, in moneydb's order. Everything but Neu acts on whichever row is open,
+					     so on a phone the group goes and Neu stands on its own: the row you opened fills
+					     the screen there and carries the same four buttons itself. -->
+					{@render newExpenseButton('grow md:hidden')}
+					<ButtonGroup class="hidden md:inline-flex">
+						{@render newExpenseButton('')}
+						<ActionButton
+							color="teal"
+							disabled={!selectedExpenseId}
+							onclick={() => openEditModal(selectedExpenseId!, true)}
+						>
+							<FileCopyAltOutline class="mr-2 h-3.5 w-3.5" />Duplizieren
+						</ActionButton>
+						<ActionButton
+							color="yellow"
+							class="text-gray-900"
+							disabled={!selectedExpenseId}
+							onclick={() => openEditModal(selectedExpenseId!)}
+						>
+							<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
+						</ActionButton>
+						<ActionButton
+							color="red"
+							disabled={!selectedExpenseId}
+							onclick={() => {
+								expenseIdToDelete = selectedExpenseId;
+								showDeleteExpenseModal = true;
+							}}
+						>
+							<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
+						</ActionButton>
+						<ActionButton
+							color="gray"
+							disabled={!selectedExpenseId}
+							onclick={() => {
+								expenseIdToResort = selectedExpenseId;
+								resortError = undefined;
+								showResortExpenseModal = true;
+							}}
+						>
+							<ArchiveArrowDownOutline class="mr-2 h-3.5 w-3.5" />Einsortieren
+						</ActionButton>
+					</ButtonGroup>
 					<!-- Stacked, the filters filled a phone screen before a single expense appeared,
 					     so on small screens they fold behind this. -->
 					<Button
 						color="alternative"
+						size="sm"
 						class="md:hidden"
 						aria-label="Filter"
 						aria-expanded={filtersOpen}
@@ -652,9 +943,18 @@
 					     range mode it prints a bare " - " instead of its placeholder when nothing is
 					     chosen -- which left the control that decides what the table shows unreadable
 					     in both states, and with nowhere to undo it. -->
-					<Button color="alternative" class="justify-between whitespace-nowrap md:w-64">
-						{dateRangeLabel ?? 'Zeitraum'}
-						<CalendarMonthOutline class="ml-2 h-4 w-4 shrink-0" />
+					<!-- min-w rather than w: a chosen range is "05.08.2026 – 14.08.2026", which is wider than
+					     the other triggers and was running out of the button. Empty it still matches them. -->
+					<Button
+						color="alternative"
+						size="sm"
+						class="justify-between whitespace-nowrap md:min-w-52"
+					>
+						<span class="flex items-center gap-2">
+							<CalendarMonthOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+							{dateRangeLabel ?? 'Zeitraum'}
+						</span>
+						<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 					</Button>
 					<Dropdown class="flex w-fit flex-col gap-2 divide-y-0 p-2">
 						<!-- the inline calendar draws its own white, shadowed, padded card, which inside
@@ -668,50 +968,62 @@
 							locale="de-DE"
 							firstDayOfWeek={1}
 						/>
-						<Button
+						<ActionButton
 							size="xs"
-							color="alternative"
+							color="light"
 							disabled={!dateRangeLabel}
 							onclick={clearDateRange}
 						>
 							Zeitraum zurücksetzen
-						</Button>
+						</ActionButton>
 					</Dropdown>
-					{@render optionFilter(
-						'Konten',
-						filterableAccounts ?? [],
-						filteredAccounts,
-						(id) => (filteredAccounts = toggleOption(filteredAccounts, id))
-					)}
 					{@render optionFilter(
 						'Kategorien',
 						filterableCategories ?? [],
 						filteredCategories,
 						(id) => (filteredCategories = toggleOption(filteredCategories, id))
 					)}
-					<Button color="alternative">Filter<FilterSolid class="ml-2 h-3 w-3 " /></Button>
-					<Dropdown class="w-48 space-y-2 p-3 text-sm">
-						<h6 class="mb-3 text-sm font-medium text-gray-900 dark:text-white">Zustand</h6>
-						<List tag="dl">
-							<Li>
-								<Checkbox bind:checked={showTaxRelevant}>Steuerrelevant</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showTemplates}>Vorlage</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showExtraordinary}>Außergewöhnlich</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showUnchecked}>Unbestätigt</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showIncomplete}>Unvollständig</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showNormal}>Normal</Checkbox>
-							</Li>
-						</List>
+					{@render optionFilter(
+						'Konten',
+						filterableAccounts ?? [],
+						filteredAccounts,
+						(id) => (filteredAccounts = toggleOption(filteredAccounts, id))
+					)}
+					<!-- The third of three filters, and it has to look like the other two: same trigger,
+					     same panel. It said "Filter" over a flowbite List, which drew a rule under a
+					     heading repeating the word next to it and spaced six checkboxes like a table
+					     of contents. It filters the Status column and is named after it. -->
+					<Button color="alternative" size="sm" class="justify-between md:w-40">
+						<span class="flex items-center gap-2">
+							<FlagOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+							{activeFlagCount ? `Status (${activeFlagCount})` : 'Status'}
+						</span>
+						<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
+					</Button>
+					<Dropdown class="max-h-80 w-64 divide-y-0 overflow-y-auto p-3 text-sm">
+						<!-- The same icon per state as the badges below and the flags in the edit
+						     dialog: six words of similar length in one weight are read one after
+						     another, six shapes are recognised. -->
+						<div class="space-y-2">
+							<Checkbox bind:checked={showNormal}>
+								<CheckCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Normal
+							</Checkbox>
+							<Checkbox bind:checked={showUnchecked}>
+								<QuestionCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Unbestätigt
+							</Checkbox>
+							<Checkbox bind:checked={showIncomplete}>
+								<ExclamationCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Unvollständig
+							</Checkbox>
+							<Checkbox bind:checked={showExtraordinary}>
+								<StarOutline class="me-1.5 h-4 w-4 shrink-0" />Außergewöhnlich
+							</Checkbox>
+							<Checkbox bind:checked={showTaxRelevant}>
+								<LandmarkOutline class="me-1.5 h-4 w-4 shrink-0" />Steuerrelevant
+							</Checkbox>
+							<Checkbox bind:checked={showTemplates}>
+								<FileCloneOutline class="me-1.5 h-4 w-4 shrink-0" />Vorlage
+							</Checkbox>
+						</div>
 					</Dropdown>
 				</div>
 			</div>
@@ -722,77 +1034,107 @@
 		     line, since "braucht Prüfung" is what somebody opens this list on a phone for. Eight
 		     columns on a 390px screen meant scrolling sideways past the date to reach the amount. -->
 		<TableHead>
+			<!-- pl to clear the chevron: it hangs in the column's left margin, and without this the
+			     label started 24px to the left of every date under it. -->
 			<TableHeadCell
-				class="px-2 py-3 whitespace-nowrap md:px-4"
+				class="w-28 py-3 pr-2 pl-7 whitespace-nowrap md:w-36 md:pr-4 md:pl-10"
 				scope="col"
 				onclick={() => sortByField('accrualStart')}
 			>
-				Datum
+				<CalendarMonthOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Datum
 				{@render sortIcon('accrualStart')}
 			</TableHeadCell>
 			<TableHeadCell class="px-2 py-3 md:px-4" scope="col" onclick={() => sortByField('title')}>
-				Titel
+				<TextSizeOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Titel
 				{@render sortIcon('title')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
 				onclick={() => sortByField('accounts')}
 			>
-				Konten
+				<WalletOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Konten
 				{@render sortIcon('accounts')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
 				onclick={() => sortByField('categories')}
 			>
-				Kategorien
+				<TagOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Kategorien
 				{@render sortIcon('categories')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="px-2 py-3 text-right md:px-4"
+				class="w-28 px-2 py-3 text-right md:w-32 md:px-4"
 				scope="col"
 				onclick={() => sortByField('effectiveAmount')}
 			>
-				Betrag
+				<EuroOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Betrag
 				{@render sortIcon('effectiveAmount')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-32"
 				scope="col"
 				onclick={() => sortByField('store')}
 			>
-				Geschäft
+				<StoreOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Geschäft
 				{@render sortIcon('store')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-56"
 				scope="col"
 				onclick={() => sortByField('description')}
 			>
-				Beschreibung
+				<AlignLeftOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Beschreibung
 				{@render sortIcon('description')}
 			</TableHeadCell>
+			<!-- What the bank wrote. No sort arrow: the backend names its sortable columns and this
+			     is not one of them. From 2xl only, and it shares what the fixed columns leave with
+			     the title: at 1280 the nine columns together are wider than the window, and both of
+			     them end up too narrow to read. Below that the expanded row still has it in full. -->
+			<TableHeadCell class="hidden px-4 py-3 2xl:table-cell" scope="col">
+				<ReceiptOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Transaktionstext
+			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
 				onclick={() => sortByField('status')}
 			>
-				Status
+				<FlagOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Status
 				{@render sortIcon('status')}
 			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#if slow}
 				<tr>
-					<td colspan="8" class="px-4 py-16 text-center">
+					<td colspan={columns} class="px-4 py-16 text-center">
 						<Spinner size="8" />
 					</td>
 				</tr>
 			{/if}
 			{#each rows as expense (expense.id)}
-				<TableBodyRow onclick={() => toggleRow(expense.id)}>
+				<TableBodyRow
+					onclick={() => toggleRow(expense.id)}
+					data-expanded={expandedRows.includes(expense.id) ? '' : undefined}
+				>
 					<!-- text-xs on a phone: a date is what the row is filed under rather than what it
 					     says, and the ten characters it takes are ten the title does not get -->
 					<TableBodyCell class="px-2 py-3 text-xs whitespace-nowrap md:px-4 md:text-sm">
@@ -810,7 +1152,11 @@
 					     itself is gone now that the cell holds two lines rather than one string. Zero
 					     max-width plus full width leaves it exactly the space the other columns did
 					     not take. -->
-					<TableBodyCell class="w-full max-w-0 px-2 py-3 whitespace-normal md:px-4">
+					<TableBodyCell
+						class="px-2 py-3 whitespace-normal md:px-4 {titleIsPlaceholder(expense.title)
+							? 'bg-red-50 dark:bg-red-950/40'
+							: ''}"
+					>
 						<!-- wraps rather than truncates on a phone: with five columns gone the title is
 						     most of what identifies the row, and there is no second place to read it -->
 						<!-- wrap-anywhere, not break-words: only `overflow-wrap: anywhere` counts towards
@@ -837,16 +1183,13 @@
 					>
 					<TableBodyCell
 						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' +
-							(expense.effectiveAmount < 0
-								? 'bg-red-100 text-red-700'
-								: expense.effectiveAmount > 0
-									? 'bg-green-100 text-green-700'
-									: '')}>{(expense.effectiveAmount / 100).toFixed(2)}€</TableBodyCell
+							amountTint(expense.effectiveAmount)}
+						>{signedEuro(expense.effectiveAmount)}</TableBodyCell
 					>
 					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
 						>{expense.store}</TableBodyCell
 					>
-					<TableBodyCell class="hidden max-w-96 truncate px-4 py-3 md:table-cell"
+					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
 						>{expense.description}
 						{expense.positions
 							.map(
@@ -855,187 +1198,279 @@
 							)
 							.join(', ')}
 					</TableBodyCell>
+					<!-- monospace because it is machine output: the reference numbers and IBANs in it
+					     are read character by character, and a proportional font makes that work -->
+					<TableBodyCell
+						class="hidden truncate px-4 py-3 font-mono text-xs 2xl:table-cell"
+						title={transactionText(expense.transactions)}
+					>
+						{transactionText(expense.transactions)}
+					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{@render statusBadges(expense)}
 					</TableBodyCell>
 				</TableBodyRow>
 				{#if expandedRows.includes(expense.id)}
-					<tr>
-						<td colspan="8" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
-							<div class="flex flex-col gap-2">
-								<div>
-									<b>Leistungszeitraum:</b>
-									{formatAccrualPeriod(expense.accrualStart, expense.accrualEnd, true)}
-								</div>
-								{#if expense.description}
-									<div>
-										<b>Beschreibung:</b>
-										{expense.description}
+					<tr data-expanded>
+						<td colspan={columns} class="border-b px-4 py-4">
+							<!-- Two columns from lg. Everything here used to be one narrow stack down the
+							     left of a table two thousand pixels wide, so a statement of a dozen lines
+							     pushed the buttons under it off the screen while most of the row stayed
+							     empty. What is prose goes left, what is a table goes right. -->
+							<div class="grid gap-x-8 gap-y-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+								<dl class="divide-y divide-gray-200 dark:divide-gray-700">
+									{@render field('Titel', expense.title || 'Ohne Titel')}
+									{@render field(
+										'Leistungszeitraum',
+										formatAccrualPeriod(expense.accrualStart, expense.accrualEnd, true)
+									)}
+									{#if expense.description}
+										{@render field('Beschreibung', expense.description)}
+									{/if}
+									{#if expense.store}
+										{@render field('Geschäft', expense.store)}
+									{/if}
+									{#if expense.comments}
+										{@render field('Kommentare', expense.comments)}
+									{/if}
+									<div class="py-2">
+										{@render fieldLabel('Status')}
+										<dd class="mt-1 flex flex-wrap gap-1 text-xs">
+											{#if expense.isTaxRelevant || expense.isTemplate || expense.isUnchecked || expense.isIncomplete || expense.isExtraordinary}
+												{@render statusBadges(expense)}
+											{:else}
+												<span class="text-sm text-gray-500 dark:text-gray-400">Normal</span>
+											{/if}
+										</dd>
 									</div>
-								{/if}
-								{#if expense.store}
-									<div>
-										<b>Geschäft:</b>
-										{expense.store}
-									</div>
-								{/if}
-								{#if expense.comments}
-									<div>
-										<b>Kommentare:</b>
-										{expense.comments}
-									</div>
-								{/if}
-								{#if expense.isTaxRelevant || expense.isTemplate || expense.isUnchecked || expense.isIncomplete || expense.isExtraordinary}
-									<div>
-										<b>Status:</b>
-										{[
-											expense.isTaxRelevant && 'Steuerrelevant',
-											expense.isTemplate && 'Vorlage',
-											expense.isUnchecked && 'Unbestätigt',
-											expense.isIncomplete && 'Unvollständig',
-											expense.isExtraordinary && 'Außergewöhnlich'
-										]
-											.filter(Boolean)
-											.join(', ') || 'Normal'}
-									</div>
-								{/if}
+									{#each expense.transactions.filter((t) => t.statement) as transaction, i (i)}
+										<div class="py-2">
+											{@render fieldLabel(
+												expense.transactions.filter((t) => t.statement).length > 1
+													? `Transaktionstext · ${formatAccount(transaction.account, $basicStore.data?.users.me.name)}`
+													: 'Transaktionstext'
+											)}
+											<!-- the bank's own text, kept as it came: the line breaks in it separate
+											     one key from the next and are the only structure it has -->
+											<dd
+												class="mt-1 font-mono text-xs whitespace-pre-wrap text-gray-600 dark:text-gray-300"
+											>
+												{transaction.statement}
+											</dd>
+										</div>
+									{/each}
+								</dl>
 
-								{#if expense.categories.length > 1}
+								<div class="space-y-6">
 									<div>
-										<b>Kategorien:</b>
-										<ul class="ml-6 list-disc">
-											{#each expense.categories as category (category.category.id)}
-												<li>
-													<span class="rounded-md px-1" style={makeCategoryColor([category])}>
-														{category.category.name}
-													</span>
-													(Gewicht: {category.weight})
-												</li>
-											{/each}
-										</ul>
+										{@render sectionLabel('Transaktionen')}
+										<table
+											class="w-full border border-gray-200 bg-white text-left text-sm dark:border-gray-700 dark:bg-gray-900"
+										>
+											<thead>
+												<tr class="bg-gray-50 dark:bg-gray-800">
+													<th class="px-3 py-2" scope="col">Konto</th>
+													<th class="px-3 py-2 text-right" scope="col">Betrag</th>
+													<th class="px-3 py-2" scope="col">Grund</th>
+												</tr>
+											</thead>
+											<tbody class="divide-y">
+												{#each expense.transactions.toSorted((a, b) => Math.abs(b.effectiveAmount) - Math.abs(a.effectiveAmount)) as transaction, i (i)}
+													{@const amount = transaction.fraction
+														? transaction.fraction * (expense.referenceAmount ?? 0)
+														: (transaction.amount ?? 0)}
+													<tr>
+														<td
+															class="px-3 py-2"
+															style={makeAccountColor([transaction], expense.referenceAmount)}
+														>
+															{formatAccount(transaction.account, $basicStore.data?.users.me.name)}
+														</td>
+														<td
+															class={'px-3 py-2 text-right whitespace-nowrap ' + amountTint(amount)}
+														>
+															{signedEuro(amount)}
+														</td>
+														<td class="px-3 py-2 text-gray-500 dark:text-gray-400">
+															{#if transaction.fraction}
+																Anteilig · {(transaction.fraction * 100).toFixed(0)}% von {(
+																	(expense.referenceAmount ?? 0) / 100
+																).toFixed(2)}€
+															{:else}
+																Direkt
+															{/if}
+															<!-- only when it is news: a transaction booked inside its own accrual
+															     period tells you nothing you did not already read above -->
+															{#if transaction.date.toISOString() !== expense.accrualStart.toISOString() || transaction.date.toISOString() !== expense.accrualEnd.toISOString()}
+																<span class="block text-xs">
+																	gebucht {transaction.date.toLocaleString('de-DE', {
+																		year: 'numeric',
+																		month: '2-digit',
+																		day: '2-digit',
+																		hour: '2-digit',
+																		minute: '2-digit'
+																	})}
+																</span>
+															{/if}
+														</td>
+													</tr>
+												{/each}
+											</tbody>
+										</table>
 									</div>
-								{/if}
 
-								{#if expense.positions.length > 0}
+									{#if expense.categories.length > 0}
+										<div>
+											{@render sectionLabel('Kategorien')}
+											<table
+												class="w-full border border-gray-200 bg-white text-left text-sm dark:border-gray-700 dark:bg-gray-900"
+											>
+												<thead>
+													<tr class="bg-gray-50 dark:bg-gray-800">
+														<th class="px-3 py-2" scope="col">Kategorie</th>
+														<th class="px-3 py-2 text-right" scope="col">Gewicht</th>
+													</tr>
+												</thead>
+												<tbody class="divide-y">
+													{#each expense.categories as category (category.category.id)}
+														<tr>
+															<td class="px-3 py-2" style={makeCategoryColor([category])}>
+																{category.category.name}
+															</td>
+															<td class="px-3 py-2 text-right">{category.weight}</td>
+														</tr>
+													{/each}
+												</tbody>
+											</table>
+										</div>
+									{/if}
+
+									{#if expense.positions.length > 0}
+										<div>
+											{@render sectionLabel('Positionen')}
+											<table
+												class="w-full border border-gray-200 bg-white text-left text-sm dark:border-gray-700 dark:bg-gray-900"
+											>
+												<thead>
+													<tr class="bg-gray-50 dark:bg-gray-800">
+														<th class="px-3 py-2" scope="col">Position</th>
+														<th class="px-3 py-2 text-right" scope="col">Menge</th>
+														<th class="px-3 py-2 text-right" scope="col">Betrag</th>
+													</tr>
+												</thead>
+												<tbody class="divide-y">
+													{#each expense.positions as position, i (i)}
+														<tr>
+															<td class="px-3 py-2">
+																{position.title}
+																{#if position.comments}
+																	<span class="block text-xs text-gray-500 dark:text-gray-400"
+																		>{position.comments}</span
+																	>
+																{/if}
+															</td>
+															<td class="px-3 py-2 text-right whitespace-nowrap">
+																{position.quantity ?? ''}
+																{position.unit ?? ''}
+															</td>
+															<td class="px-3 py-2 text-right whitespace-nowrap">
+																{position.amount != null
+																	? (position.amount / 100).toFixed(2) + '€'
+																	: ''}
+															</td>
+														</tr>
+													{/each}
+												</tbody>
+											</table>
+										</div>
+									{/if}
+
+									{#if expense.receipts.length > 0}
+										<div>
+											{@render sectionLabel('Belege')}
+											<!-- eslint-disable svelte/no-navigation-without-resolve -- receipt uris point outside the app (dms, file store) -->
+											<ul class="space-y-1 text-sm">
+												{#each expense.receipts as receipt (receipt.uri)}
+													<li>
+														<a
+															class="text-primary-600 dark:text-primary-400 break-all hover:underline"
+															href={receipt.uri}
+															target="_blank">{receipt.uri}</a
+														>
+													</li>
+												{/each}
+											</ul>
+											<!-- eslint-enable svelte/no-navigation-without-resolve -->
+										</div>
+									{/if}
+
 									<div>
-										<b>Positionen:</b>
-										<ul class="ml-6 list-disc">
-											{#each expense.positions as position, i (i)}
-												<li>
-													{#if position.quantity && position.quantity > 1}
-														{position.quantity}
-														{#if position.unit}
-															{position.unit}
-														{/if}
-													{/if}
-													{position.title}
-													{#if position.amount}
-														für {(position.amount / 100).toFixed(2)}€
-													{/if}
-													{#if position.comments}
-														<span class="text-xs italic">{position.comments}</span>
-													{/if}
-												</li>
-											{/each}
-										</ul>
-									</div>
-								{/if}
-
-								<div>
-									<b>Transaktionen:</b>
-									<ul class="ml-6 list-disc">
-										{#each expense.transactions.toSorted((a, b) => Math.abs(b.effectiveAmount) - Math.abs(a.effectiveAmount)) as transaction, i (i)}
-											<li>
-												<span
-													class="rounded-md px-1.5 py-0.5"
-													style={makeAccountColor([transaction], expense.referenceAmount)}
-												>
-													{#if transaction.account.owner.name != $basicStore.data?.users.me.name}
-														{transaction.account.owner.firstName} / {transaction.account.name}
+										{@render sectionLabel('Changelog')}
+										<!-- Newest first, which is the order the resolver returns and the order the
+									     activity feed shows: what an expense last had done to it is the thing
+									     somebody opening it wants, and its creation is the least of it. -->
+										<ol class="ml-1 space-y-2.5 text-sm">
+											{#each expense.changelog as change (change.id)}
+												<li class="relative border-l border-gray-300 pl-4 dark:border-gray-600">
+													<!-- A dot on the rule, which is all a timeline is at this size. flowbite's
+							     Timeline draws the same thing around a `text-lg` heading and 40px of
+							     margin per entry -- four entries would be taller than the row they sit
+							     in, and overriding that away leaves nothing of the component. -->
+													<span
+														class="absolute top-1.5 -left-[4.5px] h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-600"
+													></span>
+													<div class="text-xs text-gray-500 dark:text-gray-400">
+														{change.user!.name == $basicStore.data?.users.me.name
+															? 'Du'
+															: change.user!.firstName} · {change.date.toLocaleString('de-DE', {
+															year: 'numeric',
+															month: '2-digit',
+															day: '2-digit',
+															hour: '2-digit',
+															minute: '2-digit'
+														})}{change.tool ? ` · ${change.tool}` : ''}{change.automatic
+															? ' · automatisch'
+															: ''}
+													</div>
+													{#if !change.oldState}
+														<div class="text-xs text-gray-500 dark:text-gray-400">
+															Ausgabe erstellt
+														</div>
+													{:else if change.changes.length === 0}
+														<!-- An entry with nothing to report is one whose two states are the same,
+													     which is what an import writes: the export carries the expense as it is
+													     now and not as it was, so `import.rs` stores that same state on both
+													     sides. Something was changed and there is no way to say what. -->
+														<div class="text-xs text-gray-500 dark:text-gray-400">Geändert</div>
 													{:else}
-														{transaction.account.name}
+														<ChangeList changes={change.changes} names={changeNames} class="mt-1" />
 													{/if}
-												</span>
-												{#if transaction.fraction}
-													{((transaction.fraction! * expense.referenceAmount!) / 100).toFixed(2)}€ ({transaction.fraction! *
-														100}% von {(expense.referenceAmount! / 100).toFixed(2)}€)
-												{:else}
-													{(transaction.amount! / 100).toFixed(2)}€
-												{/if}
-												{#if transaction.date.toISOString() != expense.accrualStart.toISOString() || transaction.date.toISOString() != expense.accrualEnd.toISOString()}
-													am {transaction.date.toLocaleDateString('de-DE', {
-														year: 'numeric',
-														month: '2-digit',
-														day: '2-digit',
-														hour: '2-digit',
-														minute: '2-digit'
-													})}
-												{/if}
-												{#if transaction.statement}
-													<pre class="text-xs">{transaction.statement}</pre>
-												{/if}
-											</li>
-										{/each}
-									</ul>
-								</div>
-
-								{#if expense.receipts.length > 0}
-									<div>
-										<b>Belege:</b>
-										<ul class="ml-6 list-disc">
-											{#each expense.receipts as receipt (receipt.uri)}
-												<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- receipt uris point outside the app (dms, file store) -->
-												<li><a href={receipt.uri} target="_blank">{receipt.uri}</a></li>
+												</li>
 											{/each}
-										</ul>
+										</ol>
 									</div>
-								{/if}
-
-								<div>
-									<b>Changelog:</b>
-									<ul class="ml-6 list-disc">
-										{#each expense.changelog.toReversed() as change (change.id)}
-											<li>
-												{change.user!.name == $basicStore.data?.users.me.name
-													? 'Du'
-													: change.user!.firstName} am {change.date.toLocaleDateString('de-DE', {
-													year: 'numeric',
-													month: '2-digit',
-													day: '2-digit',
-													hour: '2-digit',
-													minute: '2-digit'
-												})}
-												{#if change.tool}
-													via {change.tool}
-												{/if}
-												{#if change.automatic}
-													(automatische Änderung)
-												{/if}
-												{#if !change.oldState}
-													<p>Ausgabe erstellt</p>
-												{:else if change.diff}
-													<pre class="text-xs">{change.diff}</pre>
-												{/if}
-											</li>
-										{/each}
-									</ul>
 								</div>
+							</div>
 
-								<div class="flex gap-2">
+							<!-- The toolbar's group again, in the same order and minus Neu, which is the one
+							     button up there that is not about a particular expense. A ButtonGroup sizes
+							     its children itself, so there is no `size` to set here. -->
+							<div class="mt-6">
+								<ButtonGroup>
+									<Button color="teal" onclick={() => openEditModal(expense.id.toString(), true)}>
+										<FileCopyAltOutline class="mr-2 h-3.5 w-3.5" />
+										Duplizieren
+									</Button>
 									<Button
 										color="yellow"
-										size="xs"
-										onclick={() => {
-											expenseIdToEdit = expense.id.toString();
-											showEditExpenseModal = true;
-										}}
+										class="text-gray-900"
+										onclick={() => openEditModal(expense.id.toString())}
 									>
 										<EditOutline class="mr-2 h-3.5 w-3.5" />
 										Bearbeiten
 									</Button>
 									<Button
 										color="red"
-										size="xs"
 										onclick={() => {
 											expenseIdToDelete = expense.id.toString();
 											showDeleteExpenseModal = true;
@@ -1044,7 +1479,18 @@
 										<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
 										Löschen
 									</Button>
-								</div>
+									<Button
+										color="gray"
+										onclick={() => {
+											expenseIdToResort = expense.id.toString();
+											resortError = undefined;
+											showResortExpenseModal = true;
+										}}
+									>
+										<ArchiveArrowDownOutline class="mr-2 h-3.5 w-3.5" />
+										Einsortieren
+									</Button>
+								</ButtonGroup>
 							</div>
 						</td>
 					</tr>
@@ -1071,35 +1517,35 @@
 				     into three. There the two arrows are the whole control: which page of how many
 				     is what the "Einträge 31-45 von 700" beside them already says. -->
 				<ButtonGroup>
-					<Button onclick={() => currentPage--} disabled={currentPage <= 1}>
+					<ActionButton onclick={() => currentPage--} disabled={currentPage <= 1}>
 						<ChevronLeftOutline size="xs" class="m-1.5" />
-					</Button>
+					</ActionButton>
 					{#if currentPage > 3}
-						<Button
+						<ActionButton
 							class="hidden md:inline-flex"
 							disabled={currentPage === 1}
-							onclick={() => (currentPage = 1)}>1</Button
+							onclick={() => (currentPage = 1)}>1</ActionButton
 						>
 						<Button class="hidden md:inline-flex" disabled>...</Button>
 					{/if}
 					{#each [currentPage - 2, currentPage - 1, currentPage, currentPage + 1, currentPage + 2].filter((page) => page > 0 && page <= totalPages) as pageNumber (pageNumber)}
-						<Button
+						<ActionButton
 							class="hidden md:inline-flex"
 							disabled={currentPage === pageNumber}
-							onclick={() => (currentPage = pageNumber)}>{pageNumber}</Button
+							onclick={() => (currentPage = pageNumber)}>{pageNumber}</ActionButton
 						>
 					{/each}
 					{#if currentPage < totalPages - 2}
 						<Button class="hidden md:inline-flex" disabled>...</Button>
-						<Button
+						<ActionButton
 							class="hidden md:inline-flex"
 							disabled={currentPage === totalPages}
-							onclick={() => (currentPage = totalPages)}>{totalPages}</Button
+							onclick={() => (currentPage = totalPages)}>{totalPages}</ActionButton
 						>
 					{/if}
-					<Button onclick={() => currentPage++} disabled={currentPage >= totalPages}>
+					<ActionButton onclick={() => currentPage++} disabled={currentPage >= totalPages}>
 						<ChevronRightOutline size="xs" class="m-1.5" />
-					</Button>
+					</ActionButton>
 				</ButtonGroup>
 			</div>
 		{/snippet}

@@ -27,7 +27,7 @@
 		ExclamationCircleOutline,
 		FilterSolid
 	} from 'flowbite-svelte-icons';
-	import { accountSorter, tint } from './expense_utils';
+	import { accountSorter, byUsageThen, tint } from './expense_utils';
 	import BalanceModal from './BalanceModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
 	import QueryError from './QueryError.svelte';
@@ -90,6 +90,7 @@
 					}
 					color
 					closed
+					usageCount
 				}
 			}
 		}
@@ -140,17 +141,18 @@
 		}
 	`);
 
+	// what you use first, then the usual order -- the same as the expense list's filters
 	const filterableAccounts = $derived(
-		$basicStore.data?.accounts.list
-			.sort((a, b) => accountSorter(a, b, $basicStore.data?.users.me.name || ''))
-			.map((account) => ({
-				name:
-					account.owner.name == $basicStore.data?.users.me.name
-						? account.name
-						: `${account.owner.firstName} / ${account.name}`,
-				value: account.id,
-				color: account.color
-			}))
+		byUsageThen($basicStore.data?.accounts.list ?? [], (a, b) =>
+			accountSorter(a, b, $basicStore.data?.users.me.name || '')
+		).map((account) => ({
+			name:
+				account.owner.name == $basicStore.data?.users.me.name
+					? account.name
+					: `${account.owner.firstName} / ${account.name}`,
+			value: account.id,
+			color: account.color
+		}))
 	);
 
 	const totalCount = $derived($balanceStore.data?.balances.list.totalCount || 0);
@@ -277,7 +279,6 @@
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
-		striped={true}
 		bind:inputValue={searchTerm}
 		class={tableSearchTableClass}
 		classes={tableSearchClasses}

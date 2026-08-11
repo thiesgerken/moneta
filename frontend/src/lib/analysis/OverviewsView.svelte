@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ChartOutline, TableColumnOutline } from 'flowbite-svelte-icons';
 	import {
 		Card,
 		Table,
@@ -28,9 +29,7 @@
 	import { overviewsState } from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
 	import QueryError from '$lib/QueryError.svelte';
-
-	const euro = (cents: number) =>
-		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+	import { euro, signedEuro } from '$lib/money';
 
 	// Kept here rather than read off the store so the chart never sees an empty intermediate
 	// state: houdini clears `data` while a fetch is in flight, which drew the chart once
@@ -95,12 +94,20 @@
 		/>
 	{:else}
 		<Card class={ANALYSIS_CARD}>
-			<h3 class="mb-2 text-lg font-semibold">Einnahmen und Ausgaben je Monat</h3>
+			<h3 class="mb-2 text-lg font-semibold">
+				<ChartOutline
+					class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
+				/>Einnahmen und Ausgaben je Monat
+			</h3>
 			<Chart options={chartOptions} />
 		</Card>
 
 		<Card class={ANALYSIS_CARD}>
-			<h3 class="mb-2 text-lg font-semibold">Monatliche Übersichten</h3>
+			<h3 class="mb-2 text-lg font-semibold">
+				<TableColumnOutline
+					class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
+				/>Monatliche Übersichten
+			</h3>
 			<div class="overflow-x-auto">
 				<Table hoverable striped class="w-full text-left text-sm">
 					<!-- What the month did comes before what it left behind: delta, then the two
@@ -148,7 +155,7 @@
 										color={deltaColor(o.endTotal - o.startTotal)}
 										class="text-sm font-semibold"
 									>
-										{euro(o.endTotal - o.startTotal)}
+										{signedEuro(o.endTotal - o.startTotal)}
 									</Badge>
 								</TableBodyCell>
 								<TableBodyCell class="px-4 py-3 text-green-700 dark:text-green-400"
@@ -167,7 +174,7 @@
 								<TableBodyCell
 									class="hidden px-4 py-3 sm:table-cell {errorClass(integrationError(o))}"
 								>
-									{euro(integrationError(o))}
+									{signedEuro(integrationError(o))}
 								</TableBodyCell>
 							</TableBodyRow>
 						{/each}

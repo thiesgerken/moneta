@@ -2,12 +2,25 @@
 // *Class props in favour of a single `classes` object; `table` is not read from it, so the
 // table's own classes go through `class=` instead.
 export const tableSearchClasses = {
-	root: 'bg-white dark:bg-gray-800 relative shadow-md sm:rounded-lg overflow-x-auto',
+	// A hairline rather than a drop shadow: the table is the page here, not a card floating on
+	// it, and the shadow was the widest of the several frames between the window and the data.
+	// shadow-none because flowbite merges its own `shadow-md` in rather than being replaced, and
+	// a hairline under a drop shadow is two frames doing one frame's job
+	root: 'bg-white dark:bg-gray-800 relative border border-gray-200 dark:border-gray-700 shadow-none sm:rounded-lg overflow-x-auto',
 	// p-2 on a phone: the page, the section and this bar each used to add their own gutter, which
 	// together took a fifth of the screen before anything was in it
+	// flex-wrap and a narrower search: the filter row is a fixed 600px of buttons, and at a 1280px
+	// window the search claiming half the width pushed the last of them 14px past the card
+	// gap rather than space-x: the expense list reorders its search box to the right with
+	// `order-last`, and `space-x` puts its margin on whichever child is second in the markup,
+	// which after a reorder is the one on the left
 	inner:
-		'flex flex-col md:flex-row items-center justify-between space-y-3 md:space-y-0 md:space-x-4 p-2 sm:p-4',
-	search: 'w-full md:w-1/2 relative'
+		'flex flex-col md:flex-row md:flex-wrap items-center justify-between gap-y-2 space-y-2 md:space-y-0 md:gap-x-4 p-2 sm:p-3',
+	search: 'w-full md:w-2/5 relative',
+	// flowbite sizes the input itself at a fixed `w-80`, which ignores whatever width the
+	// wrapper around it was given and hangs 25px out of the card on the expense list. And
+	// `p-2.5` makes it 42px tall next to 36px buttons, so the row reads as two rows.
+	input: 'w-full p-2 ps-10'
 };
 
 export const tableSearchTableClass = 'w-full text-left text-sm';

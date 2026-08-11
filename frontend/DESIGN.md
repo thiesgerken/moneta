@@ -42,7 +42,10 @@ Colour carries meaning here; it is not decoration.
   nothing else. It is also the Stichtag marker, which is why the wealth curve is _not_ orange.
 - **Money direction**: green for what came in, red for what went out — `text-green-700
 dark:text-green-400` and `text-red-600 dark:text-red-400`. `deltaColor()` in
-  `analysis/overviews.ts` picks the badge colour by sign.
+  `analysis/overviews.ts` picks the badge colour by sign. **Zero is grey**, not blank: an expense
+  that nets to nothing moved money between two of your own accounts, which is a third thing
+  rather than a missing one. `gray-200` rather than the `-100` the other two use, since `-100`
+  is the shade a hovered row is and the cell would have vanished into it.
 - **Wealth** is `WEALTH_COLOR` (`#059669`, emerald) in `analysis/cards.ts`. A curve of what you
   own reads as a warning in orange.
 - **Categories and accounts** carry their own colour from the database. `categoryColor()` falls
@@ -51,7 +54,8 @@ dark:text-green-400` and `text-red-600 dark:text-red-400`. `deltaColor()` in
 - **Text on one of those colours is never a fixed colour.** The picker allows anything,
   near-black included, so anything tinted takes its text from `readableTextOn()` in
   `expense_utils.ts` — through `tint()` where there is one colour, and through
-  `makeStripedBackground()` where a cell carries several, which follows the widest stripe.
+  `makeStripedBackground()` where a cell carries several, which has to be readable on the
+  darkest and the lightest of them at once.
   `text-black` beside a background that came from the database is the bug those two exist to
   prevent.
 - **Availability** has no colour of its own, so it gets a warm-to-cool ramp along the liquidity
@@ -98,16 +102,89 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
 
 ## Tables
 
-- One shared look through `table_styles.ts`; the body is `text-sm`.
-- **Rules in both directions.** Rows come from `divide-y`, columns from a global rule in
-  `app.css`. The expense list puts three coloured cells next to each other — accounts,
-  categories, amount — and horizontal rules alone let them read as one band.
+- One shared look through `table_styles.ts`; the body is `text-sm` over a 10 px vertical cell
+  padding, which is a 40 px row. These are lists to scan, not paragraphs to read — but 8 px was
+  past scanning and into cramped.
+- **Dark text, faint grid.** The rows are what the reader came for and the ruling is
+  scaffolding, so rows are `gray-900` and every rule is `gray-200`. flowbite has it the other
+  way round — it sets the row text to `gray-500`, and `divide-y` in tailwind 4 defaults to
+  `currentColor`, so the rules between rows came out in that same `gray-500`. Both are fixed in
+  `app.css`, on the `tr`, so that a cell with a colour of its own — an amount, a tinted account
+  — still wins.
+- **Rules in both directions.** Rows come from `divide-y`, columns and the rule under the header
+  from a global rule in `app.css`. The expense list puts three coloured cells next to each other
+  — accounts, categories, amount — and horizontal rules alone let them read as one band.
+- **Hover and open are the same shade**, `gray-100`, set in `app.css`. There is no zebra
+  striping: flowbite painted the even rows in `gray-50` and hovered in `gray-50` too, so half
+  the table did not react to the pointer.
+- The bank's own text is **monospace** wherever it is shown in full — reference numbers and
+  IBANs are read character by character. It is a column of its own from `lg`.
 - Sorting and filtering are **server-side**, through typed arguments. The header cell that
-  sorts carries the arrow.
+  sorts carries the arrow, and clicking it a third time drops back to the list's default sort —
+  sorting lives in the component rather than in the url, so without that there was no way back
+  to it but a reload. One column at a time; the API takes one `sortBy`.
+- **Column widths are fixed**, not derived from the page being shown. `table-fixed` with a width
+  on every header cell but the one or two that take what is left. Auto layout re-measured on
+  every page turn, so the same list moved its columns as you paged through it. A fixed table
+  also lays out as many columns as the _widest row_ declares, so a detail row's `colspan` has to
+  match the number of columns the breakpoint is actually showing — nine over three invents six
+  empty ones and shares the width between all nine.
+- **A detail row is two columns from `lg`**: what is prose on the left as a `dl`, what is a table
+  on the right. A row of the expense list is two thousand pixels wide and its detail used to be
+  one narrow stack down the left of it.
 - A filtered list says so: `ExpenseTable` renders a "Gefiltert nach …" line with one removable
   chip per active filter. A list that arrives pre-filtered from somewhere else must never look
   like the whole list, only shorter.
 - Amounts are right-aligned and tabular; identifying text truncates rather than wraps.
+
+## Forms and modals
+
+- A modal is as wide as its content needs: `xl` for a form with tables in it, `lg` for a list,
+  `xs` for a confirmation. `lg` on the expense form stacked a dozen fields down a column with
+  the right half of the dialog empty.
+- **The buttons live in the modal's footer**, which does not scroll — `Abbrechen` on the left of
+  `Speichern`. A submit button in the footer sits outside the `<form>` in the body, which is
+  what the `form="…"` attribute is for. A submit bar at the end of the body means scrolling past
+  everything to save.
+- A textarea's defaults are `cols=20` and `rows=2`, and both are wrong every time: **`w-full`
+  and `field-sizing-content`**, with a `max-h-*` so a long statement cannot take the screen.
+  Guessing a row count from whether the field is empty is what this replaces.
+- **A table of form controls carries `data-form`**, which drops the row padding (the inputs
+  bring their own height) and the hover shading. Everything else about it — the grid, the
+  header, the widths — is the same as a table you read.
+- The unit is the switch where a value can be one of two: the €/% button inside the amount field
+  replaced a `Relativ` checkbox column that cost more width than the number it qualified.
+- **What is empty on most records goes in a modal of its own**, reached from a line that says
+  what is in it (`Positionen · 3 (42,17 €)`). A section heading plus an add-button for something
+  almost never present is worth more than the thing itself.
+- Only the button that completes the form is `primary`; five orange buttons in a form leave
+  nothing to say which one submits it.
+- **A button that can be disabled is a solid colour.** `alternative` and `light` are transparent
+  or white with grey text, which is exactly what a disabled button looks like — so an enabled
+  one and its own 50%-opacity twin were the same button twice. Grey means disabled and nothing
+  else. The expense list's actions are the reference: Neu `primary`, Duplizieren `teal`,
+  Bearbeiten `blue`, Löschen `red`, Einsortieren `gray`, and the same colours again on the
+  expanded row. `alternative` is for the controls that are never disabled — the filter and
+  dropdown triggers, and Abbrechen next to a solid Speichern.
+- Icons carry a **column, a card or a state** — never a button that already says what it does in
+  words, and never decoration. Table headers and analysis card titles take one each, in
+  `gray-400`, at `h-4` and `h-5` respectively, so that they identify the column without competing
+  with the sort arrow beside them.
+- **Every state has an icon, and it is the same icon everywhere that state is named** — in the
+  list's badges, in the edit dialog's flags, and in the toolbar's Status filter. Six words of
+  similar length in one weight are read one after another; six shapes are recognised.
+  `CheckCircle` Normal · `QuestionCircle` Unbestätigt · `ExclamationCircle` Unvollständig ·
+  `Star` Außergewöhnlich · `Landmark` Steuerrelevant · `FileClone` Vorlage.
+- **A placeholder must not look like an entry.** flowbite sets a placeholder colour in dark mode
+  only, so an empty Beschreibung field said "Beschreibung" in the same ink as a real one; both
+  modes are set in `app.css` now.
+- A control that does something on click has to say so at rest, not on hover: the € / % switch
+  inside the amount field sits on its own grey chip, because a bare glyph at the end of an input
+  reads as a unit label and nobody clicks a unit label.
+- Enabled buttons get a **pointer cursor** from a rule in `app.css`, and disabled ones get
+  `pointer-events: none`. Neither is a default: tailwind's preflight leaves a `<button>` with
+  the arrow cursor, and flowbite's `hover:` background applies just as happily to a button that
+  cannot be pressed.
 
 ## Charts
 

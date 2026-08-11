@@ -1,5 +1,5 @@
 use juniper::GraphQLEnum;
-use similar::TextDiff;
+use serde_json::Value;
 
 /// Which way a list is ordered.
 ///
@@ -54,15 +54,65 @@ pub fn ilike_pattern(term: &str) -> String {
     format!("%{escaped}%")
 }
 
-pub fn json_diff<T: serde::Serialize>(
-    left: &T,
-    right: &T,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let left_json = serde_json::to_string_pretty(left)? + "\n";
-    let right_json = serde_json::to_string_pretty(right)? + "\n";
+/// One place where two serialised states differ.
+pub struct JsonChange {
+    /// Slash-joined, so a reader can name both the list element and the field inside it:
+    /// `transactions/0/amount`.
+    pub path: String,
+    /// `None` where the field is not on that side at all, which is how an added or removed
+    /// list element arrives -- one change carrying the whole element rather than one per
+    /// field inside it. A field that is present and JSON `null` is `Some(Value::Null)`.
+    pub old: Option<Value>,
+    pub new: Option<Value>,
+}
 
-    let diff = TextDiff::from_lines(&left_json, &right_json);
-    Ok(diff.unified_diff().context_radius(3).to_string())
+/// Every leaf that differs between two states.
+///
+/// A text diff of the two renderings is exact and unreadable: a changed amount arrives as a
+/// dozen lines of context around one number, and nothing downstream can tell that the number
+/// is cents and belongs on a transaction. Walking the two values instead gives the reader a
+/// field it can name and a value it can format.
+pub fn json_changes(left: &Value, right: &Value) -> Vec<JsonChange> {
+    let mut out = Vec::new();
+    walk(&mut Vec::new(), Some(left), Some(right), &mut out);
+    out
+}
+
+fn walk(
+    path: &mut Vec<String>,
+    left: Option<&Value>,
+    right: Option<&Value>,
+    out: &mut Vec<JsonChange>,
+) {
+    match (left, right) {
+        (Some(Value::Object(l)), Some(Value::Object(r))) => {
+            // left's order first, since that is the order the struct declares its fields in
+            // and the reader shows them in the order they arrive
+            let keys = l.keys().chain(r.keys().filter(|k| !l.contains_key(*k)));
+            for key in keys.cloned().collect::<Vec<_>>() {
+                path.push(key.clone());
+                walk(path, l.get(&key), r.get(&key), out);
+                path.pop();
+            }
+        }
+        // ponytail: paired up by position, so inserting a transaction ahead of another reports
+        // both as changed rather than one as added. Lists here hold a handful of elements and
+        // things are appended to them; matching by identity is only worth it if that stops
+        // being true.
+        (Some(Value::Array(l)), Some(Value::Array(r))) => {
+            for i in 0..l.len().max(r.len()) {
+                path.push(i.to_string());
+                walk(path, l.get(i), r.get(i), out);
+                path.pop();
+            }
+        }
+        _ if left == right => {}
+        _ => out.push(JsonChange {
+            path: path.join("/"),
+            old: left.cloned(),
+            new: right.cloned(),
+        }),
+    }
 }
 
 #[cfg(test)]
@@ -86,13 +136,69 @@ mod tests {
         assert_eq!(page(Some(-5), Some(-5)), (0, 0));
     }
 
-    #[test]
-    fn json_diff_reports_only_what_changed() {
-        let a = serde_json::json!({"title": "Rewe", "amount": -1000});
-        let b = serde_json::json!({"title": "Rewe", "amount": -1200});
-        let d = json_diff(&a, &b).unwrap();
+    fn changed(left: Value, right: Value) -> Vec<(String, String, String)> {
+        json_changes(&left, &right)
+            .into_iter()
+            .map(|c| {
+                let side = |v: Option<Value>| v.map(|v| v.to_string()).unwrap_or("-".into());
+                (c.path, side(c.old), side(c.new))
+            })
+            .collect()
+    }
 
-        assert!(d.contains("-1000"), "{d}");
-        assert!(d.contains("-1200"), "{d}");
+    #[test]
+    fn only_the_leaf_that_moved_is_reported() {
+        assert_eq!(
+            changed(
+                serde_json::json!({"title": "Rewe", "amount": -1000}),
+                serde_json::json!({"title": "Rewe", "amount": -1200}),
+            ),
+            vec![("amount".into(), "-1000".into(), "-1200".into())]
+        );
+    }
+
+    #[test]
+    fn a_nested_field_carries_its_path() {
+        assert_eq!(
+            changed(
+                serde_json::json!({"transactions": [{"amount": -1000, "fraction": null}]}),
+                serde_json::json!({"transactions": [{"amount": null, "fraction": 1.0}]}),
+            ),
+            vec![
+                (
+                    "transactions/0/amount".into(),
+                    "-1000".into(),
+                    "null".into()
+                ),
+                (
+                    "transactions/0/fraction".into(),
+                    "null".into(),
+                    "1.0".into()
+                ),
+            ]
+        );
+    }
+
+    /// The case the whole thing exists for: splitting an expense appends a transaction, and
+    /// that has to read as one addition rather than as seven fields appearing out of nowhere.
+    #[test]
+    fn an_added_element_arrives_whole() {
+        assert_eq!(
+            changed(
+                serde_json::json!({"transactions": [{"amount": -1000}]}),
+                serde_json::json!({"transactions": [{"amount": -1000}, {"fraction": -0.5}]}),
+            ),
+            vec![(
+                "transactions/1".into(),
+                "-".into(),
+                "{\"fraction\":-0.5}".into()
+            )]
+        );
+    }
+
+    #[test]
+    fn an_unchanged_state_has_nothing_to_report() {
+        let state = serde_json::json!({"title": "Rewe", "transactions": [{"amount": -1000}]});
+        assert!(json_changes(&state, &state).is_empty());
     }
 }

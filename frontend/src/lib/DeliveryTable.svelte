@@ -67,7 +67,6 @@
 	<TableSearch
 		placeholder="Verwendungszweck durchsuchen"
 		hoverable={true}
-		striped={true}
 		bind:inputValue={searchTerm}
 		class={tableSearchTableClass}
 		classes={tableSearchClasses}
