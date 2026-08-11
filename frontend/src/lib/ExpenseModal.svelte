@@ -7,6 +7,7 @@
 	import type { ExpenseInput } from '$houdini/graphql/inputs';
 	import { accountSorter, byUsageThen, categorySorter, formatAccount } from './expense_utils';
 	import ColorSelect from './ColorSelect.svelte';
+	import { signedEuro } from './money';
 	import {
 		CircleMinusOutline,
 		ArrowsRepeatOutline,
@@ -237,6 +238,21 @@
 			)
 			.toSorted((a, b) => b.usageCount - a.usageCount)[0]
 	);
+
+	/// What colour the computed share under a percentage is drawn in.
+	///
+	/// Green and red mean money in and money out, which is only true of an account of mine: on
+	/// "Krösus / Commerzbank Girokonto" the same figure is her direction, not mine, and colouring it
+	/// would state the opposite of what happened to me. Those stay grey, as does a share of
+	/// nothing and a row with no account picked yet.
+	function shareColor(accountId: string, value: number) {
+		const account = accounts.find((a) => a.id === accountId);
+		if (!account || account.owner.name !== user_name || value === 0) {
+			return 'text-gray-600 dark:text-gray-400';
+		}
+
+		return value < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400';
+	}
 
 	/// The two things that happen to an expense often enough to be worth a button: half of it is
 	/// somebody else's, or the money only moved to another account of yours.
@@ -888,8 +904,9 @@
 										</button>
 									</div>
 									{#if tx.isRelative && referenceAmount && tx.percentage && Number(referenceAmount)}
-										<div class="mt-1 text-xs text-gray-600 dark:text-gray-400">
-											= {((Number(tx.percentage) / 100) * Number(referenceAmount)).toFixed(2)} €
+										{@const share = Math.round(Number(tx.percentage) * Number(referenceAmount))}
+										<div class="mt-1 text-xs {shareColor(tx.accountId, share)}">
+											= {signedEuro(share)}
 										</div>
 									{/if}
 								</td>
