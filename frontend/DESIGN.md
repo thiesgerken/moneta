@@ -166,6 +166,10 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   Bearbeiten `blue`, Löschen `red`, Einsortieren `gray`, and the same colours again on the
   expanded row. `alternative` is for the controls that are never disabled — the filter and
   dropdown triggers, and Abbrechen next to a solid Speichern.
+- Icons carry a **column, a card or a state** — never a button that already says what it does in
+  words, and never decoration. Table headers and analysis card titles take one each, in
+  `gray-400`, at `h-4` and `h-5` respectively, so that they identify the column without competing
+  with the sort arrow beside them.
 - **Every state has an icon, and it is the same icon everywhere that state is named** — in the
   list's badges, in the edit dialog's flags, and in the toolbar's Zustand filter. Six words of
   similar length in one weight are read one after another; six shapes are recognised.

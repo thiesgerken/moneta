@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { HourglassOutline, ExclamationCircleOutline } from 'flowbite-svelte-icons';
 	import {
 		Card,
 		Input,
@@ -144,7 +145,11 @@
 	</div>
 
 	<Card class={ANALYSIS_CARD}>
-		<h3 class="text-lg font-semibold">Vorauszahlungen</h3>
+		<h3 class="text-lg font-semibold">
+			<HourglassOutline
+				class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
+			/>Vorauszahlungen
+		</h3>
 		<p class="mb-2 text-sm text-gray-500 dark:text-gray-400">
 			Ausgaben, deren Wert sich über einen Leistungszeitraum verteilt und an diesem Stichtag noch
 			nicht aufgebraucht ist. Der Verbrauch läuft linear über den Zeitraum.
@@ -212,7 +217,11 @@
 	</Card>
 
 	<Card class={ANALYSIS_CARD}>
-		<h3 class="text-lg font-semibold">Unvollständige Ausgaben</h3>
+		<h3 class="text-lg font-semibold">
+			<ExclamationCircleOutline
+				class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
+			/>Unvollständige Ausgaben
+		</h3>
 		<p class="mb-2 text-sm text-gray-500 dark:text-gray-400">
 			Hier fehlen noch Transaktionen, deren Höhe unbekannt ist – anders als bei Vorauszahlungen gibt
 			es keinen Restbetrag zu berechnen.

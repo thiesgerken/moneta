@@ -30,6 +30,14 @@
 		TrashBinOutline,
 		ExclamationCircleOutline,
 		CalendarMonthOutline,
+		AlignLeftOutline,
+		EuroOutline,
+		FlagOutline,
+		TextSizeOutline,
+		ReceiptOutline,
+		StoreOutline,
+		TagOutline,
+		WalletOutline,
 		CheckCircleOutline,
 		FileCloneOutline,
 		LandmarkOutline,
@@ -978,11 +986,15 @@
 				scope="col"
 				onclick={() => sortByField('accrualStart')}
 			>
-				Datum
+				<CalendarMonthOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Datum
 				{@render sortIcon('accrualStart')}
 			</TableHeadCell>
 			<TableHeadCell class="px-2 py-3 md:px-4" scope="col" onclick={() => sortByField('title')}>
-				Titel
+				<TextSizeOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Titel
 				{@render sortIcon('title')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -990,7 +1002,9 @@
 				scope="col"
 				onclick={() => sortByField('accounts')}
 			>
-				Konten
+				<WalletOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Konten
 				{@render sortIcon('accounts')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -998,7 +1012,9 @@
 				scope="col"
 				onclick={() => sortByField('categories')}
 			>
-				Kategorien
+				<TagOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Kategorien
 				{@render sortIcon('categories')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -1006,7 +1022,9 @@
 				scope="col"
 				onclick={() => sortByField('effectiveAmount')}
 			>
-				Betrag
+				<EuroOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Betrag
 				{@render sortIcon('effectiveAmount')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -1014,7 +1032,9 @@
 				scope="col"
 				onclick={() => sortByField('store')}
 			>
-				Geschäft
+				<StoreOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Geschäft
 				{@render sortIcon('store')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -1022,7 +1042,9 @@
 				scope="col"
 				onclick={() => sortByField('description')}
 			>
-				Beschreibung
+				<AlignLeftOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Beschreibung
 				{@render sortIcon('description')}
 			</TableHeadCell>
 			<!-- What the bank wrote. No sort arrow: the backend names its sortable columns and this
@@ -1030,14 +1052,18 @@
 			     the title: at 1280 the nine columns together are wider than the window, and both of
 			     them end up too narrow to read. Below that the expanded row still has it in full. -->
 			<TableHeadCell class="hidden px-4 py-3 2xl:table-cell" scope="col">
-				Transaktionstext
+				<ReceiptOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Transaktionstext
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
 				onclick={() => sortByField('status')}
 			>
-				Status
+				<FlagOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Status
 				{@render sortIcon('status')}
 			</TableHeadCell>
 		</TableHead>
@@ -1346,7 +1372,7 @@
 														     `json_diff` comes out empty. Something was changed and there is no way
 														     to say what, so the line says only that -- an empty string is falsy, so
 														     without this it stopped after the author's name. -->
-														<span class="text-gray-500 dark:text-gray-400">— geändert</span>
+														<span>— geändert</span>
 													{:else}
 														<pre
 															class="mt-1 overflow-x-auto rounded bg-gray-50 p-2 text-xs dark:bg-gray-800">{change.diff}</pre>

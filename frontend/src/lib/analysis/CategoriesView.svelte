@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ChartMixedOutline, ChartPieOutline } from 'flowbite-svelte-icons';
 	import { Card, Spinner } from 'flowbite-svelte';
 	import type { ApexOptions } from 'apexcharts';
 	import Chart from '$lib/Chart.svelte';
@@ -208,7 +209,11 @@
 	{:else}
 		<Card class={ANALYSIS_CARD}>
 			<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-				<h3 class="text-lg font-semibold">Nach Kategorie je Monat</h3>
+				<h3 class="text-lg font-semibold">
+					<ChartMixedOutline
+						class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
+					/>Nach Kategorie je Monat
+				</h3>
 				<SeriesToggle names={barNames} bind:hidden={categoriesState.hiddenSeries} />
 			</div>
 			<Chart options={barOptions} />
@@ -218,7 +223,11 @@
 			<!-- the same list of hidden categories as the bars above, so the tab filters as one
 			     rather than asking twice which categories are of interest -->
 			<div class="flex flex-wrap items-center justify-between gap-2">
-				<h3 class="text-lg font-semibold">Gesamter Zeitraum</h3>
+				<h3 class="text-lg font-semibold">
+					<ChartPieOutline
+						class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
+					/>Gesamter Zeitraum
+				</h3>
 				<SeriesToggle names={barNames} bind:hidden={categoriesState.hiddenSeries} />
 			</div>
 			<p class="mb-2 text-sm text-gray-500 dark:text-gray-400">
