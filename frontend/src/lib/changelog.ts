@@ -1,57 +1,150 @@
-/// Reading a unified diff of two serialised expenses.
+/// Reading the field-by-field changes a changelog entry carries.
 ///
-/// The backend diffs the JSON of the two states, which is exact but unreadable — a changed
-/// amount arrives as a dozen lines of context around one number. What a feed wants is the
-/// short version: which fields moved.
+/// The backend walks the two stored states and reports the leaves that differ: a path like
+/// `transactions/0/amount` and the JSON on either side. Naming the field and formatting the
+/// value is this file's job — only the browser knows that cents are money, that an id is an
+/// account somebody keeps, and how a date is written here.
 
-/// The keys worth naming. Anything not in here is a field a reader would not recognise either,
-/// so it is counted but not named.
-const FIELD_LABELS: Record<string, string> = {
+import { euro } from './money';
+import { shortDate } from './analysis/dates';
+
+export type Change = { path: string; old: string | null; new: string | null };
+
+/// Where there is nothing on one side of an arrow. A field that was empty, a field that was
+/// null and a list element that did not exist yet all read the same to somebody looking at a
+/// changelog — they say the thing was not there — so they are not told apart.
+export const ABSENT = '—';
+
+/// One line for a reader: what moved, and what it was and became.
+export type Described = { label: string; old: string; new: string };
+
+/// The keys worth naming. Anything not in here is a field a reader would not recognise under
+/// its own name either, so it goes out as the key itself rather than as a guess.
+const LABELS: Record<string, string> = {
 	title: 'Titel',
 	store: 'Geschäft',
 	description: 'Beschreibung',
 	comments: 'Kommentar',
-	reference_amount: 'Betrag',
+	referenceAmount: 'Referenzbetrag',
 	amount: 'Betrag',
 	fraction: 'Anteil',
-	accrual_start: 'Leistungszeitraum',
-	accrual_end: 'Leistungszeitraum',
+	accrualStart: 'Leistung ab',
+	accrualEnd: 'Leistung bis',
 	date: 'Datum',
-	account_id: 'Konto',
-	category_id: 'Kategorie',
+	bookingDate: 'Buchungsdatum',
+	accountId: 'Konto',
+	categoryId: 'Kategorie',
 	weight: 'Gewichtung',
-	categories: 'Kategorien',
-	transactions: 'Transaktionen',
-	positions: 'Positionen',
-	receipts: 'Belege',
 	statement: 'Verwendungszweck',
-	is_template: 'Vorlage',
-	is_tax_relevant: 'Steuerrelevanz',
-	is_unchecked: 'Prüfstatus',
-	is_incomplete: 'Vollständigkeit',
-	is_extraordinary: 'Außerordentlich',
+	isTemplate: 'Vorlage',
+	isTaxRelevant: 'Steuerrelevant',
+	isUnchecked: 'Ungeprüft',
+	isIncomplete: 'Unvollständig',
+	isExtraordinary: 'Außerordentlich',
 	quantity: 'Menge',
+	unit: 'Einheit',
 	name: 'Bezeichnung',
-	uri: 'Beleg'
+	uri: 'Beleg',
+	ocr: 'Texterkennung'
 };
 
-/// Bookkeeping a reader did not change: `updated_at` moves on every save, and ids only show up
-/// as context around what did change.
-const IGNORED = new Set(['updated_at', 'id', 'expense_id']);
+/// The lists, singular: an element of them is numbered rather than named.
+const ELEMENTS: Record<string, string> = {
+	transactions: 'Transaktion',
+	categories: 'Kategorie',
+	positions: 'Position',
+	receipts: 'Beleg'
+};
 
-/// The fields a diff touches, in the order they first appear, named where we have a name.
-export function changedFields(diff: string): string[] {
+/// Bookkeeping a reader did not change. `updatedAt` is already normalised away by the backend;
+/// the rest never moves and would only be noise if it did.
+const IGNORED = new Set(['id', 'createdAt', 'updatedAt']);
+
+/// Cents on the way in, money on the way out.
+const MONEY = new Set(['amount', 'referenceAmount']);
+const DATES = new Set(['date', 'bookingDate', 'accrualStart', 'accrualEnd']);
+const IDS = new Set(['accountId', 'categoryId']);
+
+const label = (key: string) => LABELS[key] ?? key;
+
+/// "Betrag", "2. Transaktion", "2. Transaktion: Anteil".
+function pathLabel(path: string): string {
+	const [head, index, field] = path.split('/');
+	if (!(head in ELEMENTS) || index === undefined) return label(head);
+
+	const element = `${Number(index) + 1}. ${ELEMENTS[head]}`;
+	return field ? `${element}: ${label(field)}` : element;
+}
+
+/// Which field a value belongs to, which is what decides how it is written. For a whole list
+/// element it is the list itself, so the object is summarised rather than printed.
+const pathKey = (path: string) => path.split('/').at(-1)!;
+
+function value(key: string, raw: unknown, names: (id: string) => string): string {
+	if (raw === null || raw === undefined) return ABSENT;
+
+	if (typeof raw === 'object') return summarize(raw as Record<string, unknown>, names);
+	if (typeof raw === 'boolean') return raw ? 'ja' : 'nein';
+
+	if (typeof raw === 'number') {
+		if (MONEY.has(key)) return euro(raw);
+		// a fraction is a share of the reference amount, and 0.5 is how nobody says "half"
+		if (key === 'fraction') return `${(raw * 100).toLocaleString('de-DE')} %`;
+		return raw.toLocaleString('de-DE');
+	}
+
+	if (typeof raw === 'string') {
+		if (IDS.has(key)) return names(raw);
+		if (DATES.has(key)) return shortDate(new Date(raw));
+		return raw === '' ? ABSENT : `„${raw}“`;
+	}
+
+	return String(raw);
+}
+
+/// A whole list element, in one line: "Konto: Schulden Krösus · Anteil: -50 %".
+///
+/// Field by field rather than a shape per list, since the only thing that makes a transaction
+/// read differently from a position is which fields it happens to carry. Empty ones are left
+/// out — half of what an expense stores is the empty string.
+function summarize(object: Record<string, unknown>, names: (id: string) => string): string {
+	return (
+		Object.entries(object)
+			.filter(([key, raw]) => !IGNORED.has(key) && raw !== null && raw !== '')
+			.map(([key, raw]) => `${label(key)}: ${value(key, raw, names)}`)
+			.join(' · ') || ABSENT
+	);
+}
+
+/// `names` turns an account or category id into what that thing is called; anything it does
+/// not know keeps its id, which is still better than dropping the line.
+export function describeChanges(
+	changes: readonly Change[],
+	names: Record<string, string> = {}
+): Described[] {
+	const name = (id: string) => names[id] ?? id;
+
+	return changes
+		.filter((change) => !IGNORED.has(pathKey(change.path)))
+		.map((change) => {
+			const key = pathKey(change.path);
+			const side = (raw: string | null) =>
+				raw === null ? ABSENT : value(key, JSON.parse(raw), name);
+
+			return { label: pathLabel(change.path), old: side(change.old), new: side(change.new) };
+		});
+}
+
+/// The fields an entry touched, named and deduplicated, for the one line a feed row has.
+/// The leaf rather than the list it sits in: "Betrag geändert" says more than
+/// "Transaktionen geändert", and which transaction it was is what opening the entry is for.
+export function changedFields(changes: readonly Change[]): string[] {
 	const seen = new Set<string>();
 
-	for (const line of diff.split('\n')) {
-		if (!/^[+-]/.test(line) || /^(\+\+\+|---)/.test(line)) continue;
-
-		// `  "title": "Rewe",` — array elements and closing braces carry no key, and a
-		// changed array element is reported field by field anyway
-		const key = /^[+-]\s*"([^"]+)":/.exec(line)?.[1];
-		if (!key || IGNORED.has(key)) continue;
-
-		seen.add(FIELD_LABELS[key] ?? key);
+	for (const change of changes) {
+		const key = pathKey(change.path);
+		if (IGNORED.has(key)) continue;
+		seen.add(key in ELEMENTS ? ELEMENTS[key] : label(key));
 	}
 
 	return [...seen];

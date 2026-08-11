@@ -37,18 +37,22 @@
 
 <!-- fluid, and the same gutter the pages use: the bar centred itself in a fixed container while
      every page under it runs full width, which left the brand adrift from the tab strip below -->
-<Navbar fluid class="px-4 sm:px-8">
+<!-- py-1.5 and a smaller wordmark: 92px of bar stood between the window and the first row of
+     every list in the app, and none of it was information. -->
+<Navbar fluid class="px-4 py-1.5 sm:px-8">
 	<NavBrand href="/">
-		<img src="/logo.svg" class="me-2.5 h-7 sm:h-8" alt="" />
+		<img src="/logo.svg" class="me-2.5 h-7" alt="" />
 		<!-- the wordmark is the one place the display face is the point rather than a heading -->
-		<span class="font-display self-center text-2xl font-semibold whitespace-nowrap dark:text-white">
+		<span class="font-display self-center text-xl font-semibold whitespace-nowrap dark:text-white">
 			Moneta
 		</span>
 	</NavBrand>
 	<!-- The open state is ours rather than flowbite's: its hamburger and its list talk to each
 	     other through a context the two never share here, so the menu stayed shut on phones. -->
 	<NavHamburger onclick={() => (open = !open)} />
-	<NavUl class={open ? 'block' : ''} classes={{ ul: 'md:gap-6' }}>
+	<!-- md:p-0 is what the bar's height came from: flowbite's own `p-4` is there for the stacked
+	     phone menu and it kept padding the row on a desktop too, where the list is one line -->
+	<NavUl class={open ? 'block' : ''} classes={{ ul: 'md:gap-6 md:p-0' }}>
 		{#if $basicStore.data?.users.me}
 			{#each NAV as { href, label } (href)}
 				<!-- a tap navigates without a page load, which would otherwise leave the menu
@@ -56,7 +60,7 @@
 				<NavLi {href} onclick={() => (open = false)}>{label}</NavLi>
 			{/each}
 			<!-- <NavLi onclick={logout} href="/">Logout</NavLi> -->
-			<Avatar class="mr-0 ml-5" onclick={logout} href="/"
+			<Avatar size="sm" class="mr-0 ml-5" onclick={logout} href="/"
 				>{$basicStore.data?.users.me?.firstName?.[0]}{$basicStore.data?.users.me
 					?.lastName?.[0]}</Avatar
 			>

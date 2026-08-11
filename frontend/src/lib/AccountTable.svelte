@@ -363,7 +363,6 @@
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
-		striped={true}
 		bind:inputValue={searchTerm}
 		class={tableSearchTableClass}
 		classes={tableSearchClasses}

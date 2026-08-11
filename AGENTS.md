@@ -167,6 +167,13 @@ re-checking against the export after touching this. And a periodic rule whose te
 the monthly drawdowns is dropped rather than kept: the mechanism it fed is gone, and left in place
 it would generate a copy of the whole merged expense every month.
 
+**Three things set an accrual period, in this order.** A chain derives it from its drawdowns, a
+statement can name it outright (`statement_period`), and `widen_recurring` gives the rest of a
+recurring contract the month each payment buys. The last of those runs over the finished
+`Vec<Expense>` and only touches what still sits on a single day, so it cannot argue with the other
+two — keep it that way, and keep its gates strict. A regular cadence on its own also describes a
+fortnightly beer and a yearly pair of jeans, and widening those invents a period nobody recorded.
+
 **`GRAPHQL_API_URL` is vestigial.** It fed the server-side houdini client, which no longer
 exists — the request url now comes from `houdini.config.js` and is relative. It is still set
 in `docker-compose.yaml` and read by the frontend `dev` script; neither has any effect.

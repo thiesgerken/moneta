@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use chrono::Utc;
+use diesel::dsl::count_star;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
@@ -8,7 +10,7 @@ use crate::graphql::root::{Context, require_user};
 use crate::graphql::util::{self, SortDirection};
 use crate::models::{Category, CategoryCreateInput, CategoryUpdateInput};
 use crate::order_by;
-use crate::schema::{categories, expense_categorizations};
+use crate::schema::{categories, expense_categorizations, expenses};
 
 use dataloader::BatchFn;
 use dataloader::cached::Loader;
@@ -29,6 +31,12 @@ impl GraphQLCategory {
 impl GraphQLCategory {
     fn id(&self) -> Uuid {
         self.data.id
+    }
+
+    /// How often this category has been used in the last year, templates left out -- the same
+    /// window and the same purpose as an account's.
+    async fn usage_count(&self, context: &Context) -> FieldResult<i32> {
+        Ok(context.category_usage_loader.try_load(self.data.id).await?)
     }
 
     fn name(&self) -> &str {
@@ -218,4 +226,40 @@ pub type CategoryLoader = Loader<Uuid, Category, CategoryBatcher>;
 
 pub fn get_category_loader(pool: crate::Pool) -> CategoryLoader {
     Loader::new(CategoryBatcher { pool })
+}
+
+pub struct CategoryUsageBatcher {
+    pool: crate::Pool,
+}
+
+impl BatchFn<Uuid, i32> for CategoryUsageBatcher {
+    async fn load(&mut self, keys: &[Uuid]) -> HashMap<Uuid, i32> {
+        debug!("Counting recent use of {} categories", keys.len());
+
+        let Ok(mut conn) = self.pool.get().await else {
+            return HashMap::new();
+        };
+
+        let counted: HashMap<Uuid, i32> = expense_categorizations::table
+            .inner_join(expenses::table)
+            .filter(expense_categorizations::category_id.eq_any(keys))
+            .filter(expenses::accrual_start.gt(Utc::now() - super::accounts::USAGE_WINDOW))
+            .filter(expenses::is_template.eq(false))
+            .group_by(expense_categorizations::category_id)
+            .select((expense_categorizations::category_id, count_star()))
+            .load::<(Uuid, i64)>(&mut conn)
+            .await
+            .map(|rows| rows.into_iter().map(|(id, n)| (id, n as i32)).collect())
+            .unwrap_or_default();
+
+        keys.iter()
+            .map(|id| (*id, counted.get(id).copied().unwrap_or(0)))
+            .collect()
+    }
+}
+
+pub type CategoryUsageLoader = Loader<Uuid, i32, CategoryUsageBatcher>;
+
+pub fn get_category_usage_loader(pool: crate::Pool) -> CategoryUsageLoader {
+    Loader::new(CategoryUsageBatcher { pool })
 }
