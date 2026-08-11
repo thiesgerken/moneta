@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { Modal, Label, Input, Textarea, Button, Datepicker, Select } from 'flowbite-svelte';
+	import { Modal, Label, Input, Textarea, Button, Datepicker } from 'flowbite-svelte';
 
 	import type { Component } from 'svelte';
 	import { graphql } from '$houdini';
 	import ActionButton from './ActionButton.svelte';
 	import type { ExpenseInput } from '$houdini/graphql/inputs';
-	import { formatAccount, tint } from './expense_utils';
+	import { accountSorter, categorySorter, formatAccount } from './expense_utils';
+	import ColorSelect from './ColorSelect.svelte';
 	import {
 		CircleMinusOutline,
 		CirclePlusOutline,
@@ -28,6 +29,7 @@
 			readonly id: string;
 			readonly name: string;
 			readonly color: string | null;
+			readonly closed: Date | null;
 			readonly owner: { readonly name: string; readonly firstName: string | null };
 		}[];
 		categories: {
@@ -229,9 +231,18 @@
 			// share beside it, so the amount on that one is what the shares are shares of. Only
 			// when it is unambiguous: one other transaction, with an amount, and nothing to
 			// overwrite.
+			//
+			// That one becomes a share as well, of 100%, which is the same money it was already
+			// booking. It is what makes the reference amount worth having: left as a fixed
+			// -179, it would sit there unchanged while every share beside it moved, and the
+			// expense would stop adding up the moment the reference was corrected.
 			if (!Number(referenceAmount)) {
 				const fixed = transactions.filter((t, j) => j !== i && !t.isRelative && Number(t.amount));
-				if (fixed.length === 1) referenceAmount = fixed[0].amount;
+				if (fixed.length === 1) {
+					referenceAmount = fixed[0].amount;
+					fixed[0].percentage = '100';
+					fixed[0].isRelative = true;
+				}
 			}
 
 			// Failing that, this transaction's own amount is the only figure in the dialog that
@@ -271,6 +282,30 @@
 			positions = positions.slice(0, i).concat(positions.slice(i + 1));
 		}
 	}
+
+	/// What the account picker offers: the closed ones left out, mine before anyone else's,
+	/// alphabetical inside that -- `accountSorter`, the same order the toolbar's filters use.
+	/// Many of the accounts here are closed, and a list you scroll past is a list
+	/// you stop reading.
+	///
+	/// A closed account stays in the list if this expense books against it. Dropping it would
+	/// quietly take the account off the expense the moment somebody opened it to fix a typo.
+	const accountOptions = $derived(
+		accounts
+			.filter((account) => !account.closed || transactions.some((t) => t.accountId === account.id))
+			.toSorted((a, b) => accountSorter(a, b, user_name ?? ''))
+			.map((account) => ({
+				value: account.id,
+				name: formatAccount(account, user_name),
+				color: account.color
+			}))
+	);
+
+	const categoryOptions = $derived(
+		categories
+			.toSorted(categorySorter)
+			.map((category) => ({ value: category.id, name: category.name, color: category.color }))
+	);
 
 	/// dd.mm.yyyy and a week that starts on Monday, like `shortDate` and the range picker in the
 	/// toolbar. flowbite's own default is `numeric`, which gives 5.8.2026 -- the day, the month
@@ -724,20 +759,11 @@
 								</td>
 								<td class="px-2">
 									<div class={ring(transactionErrors[i]?.accountId)}>
-										<Select
-											items={accounts.map((a) => ({
-												value: a.id,
-												name: formatAccount(
-													{
-														name: a.name,
-														owner: { name: a.owner.name, firstName: a.owner.firstName }
-													},
-													user_name
-												)
-											}))}
+										<ColorSelect
+											options={accountOptions}
 											bind:value={tx.accountId}
-											style={tint(accounts.find((a) => a.id === tx.accountId)?.color)}
 											placeholder="Konto"
+											empty="Keine offenen Konten"
 										/>
 									</div>
 								</td>
@@ -826,18 +852,16 @@
 							<tr>
 								<td class="px-2">
 									<div class={ring(categoryErrors[i]?.categoryId)}>
-										<Select
-											items={categories
-												.map((c) => ({ value: c.id, name: c.name }))
-												.filter(
-													(c) =>
-														!expenseCategories.some(
-															(ec, idx) => idx !== i && ec.categoryId === c.value
-														)
-												)}
+										<!-- a category another row already uses is not offered again, but the one
+										     this row holds stays in its own list -->
+										<ColorSelect
+											options={categoryOptions.filter(
+												(option) =>
+													option.value === cat.categoryId ||
+													!expenseCategories.some((other) => other.categoryId === option.value)
+											)}
 											bind:value={cat.categoryId}
 											placeholder="Kategorie"
-											style={tint(categories.find((c) => c.id === cat.categoryId)?.color)}
 										/>
 									</div>
 								</td>

@@ -80,6 +80,7 @@
 					id
 					name
 					color
+					closed
 					# whose account it is: two people can both keep a "Bargeld"
 					owner {
 						name
@@ -520,7 +521,8 @@
 			id: a.id.toString(),
 			name: a.name,
 			owner: { name: a.owner.name, firstName: a.owner.firstName },
-			color: a.color
+			color: a.color,
+			closed: a.closed
 		}))}
 		categories={(feed?.categories.list ?? []).map((c) => ({
 			id: c.id.toString(),

@@ -30,6 +30,7 @@
 						firstName
 					}
 					color
+					closed
 				}
 			}
 			categories {
@@ -126,7 +127,8 @@
 			id: a.id.toString(),
 			name: a.name,
 			owner: { name: a.owner.name, firstName: a.owner.firstName },
-			color: a.color
+			color: a.color,
+			closed: a.closed
 		})) || []}
 		categories={$basicStore.data?.categories.list.map((c) => ({
 			id: c.id.toString(),
