@@ -501,6 +501,12 @@
 				? 'bg-green-100 text-green-700'
 				: 'bg-gray-200 text-gray-600';
 
+	/// A title that names no expense: the automation rules give one this when their template has
+	/// no title of its own, and it then says the same thing on every row it produced. Tinting it
+	/// is the only thing in the list that says "this one still needs a human".
+	const PLACEHOLDER_TITLE = 'Automatisch Generiert';
+	const titleIsPlaceholder = (title: string) => !title.trim() || title.trim() === PLACEHOLDER_TITLE;
+
 	function toggleRow(id: string) {
 		if (expandedRows.includes(id)) expandedRows = expandedRows.filter((rowId) => rowId !== id);
 		else expandedRows = [...expandedRows, id];
@@ -1110,7 +1116,11 @@
 					     itself is gone now that the cell holds two lines rather than one string. Zero
 					     max-width plus full width leaves it exactly the space the other columns did
 					     not take. -->
-					<TableBodyCell class="px-2 py-3 whitespace-normal md:px-4">
+					<TableBodyCell
+						class="px-2 py-3 whitespace-normal md:px-4 {titleIsPlaceholder(expense.title)
+							? 'bg-red-50 dark:bg-red-950/40'
+							: ''}"
+					>
 						<!-- wraps rather than truncates on a phone: with five columns gone the title is
 						     most of what identifies the row, and there is no second place to read it -->
 						<!-- wrap-anywhere, not break-words: only `overflow-wrap: anywhere` counts towards
