@@ -747,7 +747,9 @@
 		     thing in the dialog and a category is two short fields, so the pair spent the row on
 		     the wrong one. Half a row is all a category needs; the rest of it is below. -->
 		<div class="col-span-full lg:col-span-4">
-			<div class="mb-2 flex items-center gap-2">
+			<!-- min-h on both this and Weiteres beside it: one carries an add button and the other
+			     does not, so the two tables under them started 14px apart. -->
+			<div class="mb-2 flex min-h-[34px] items-center gap-2">
 				<Label class="block">Kategorien</Label>
 				{@render add('Kategorie', addCategory, '')}
 			</div>
@@ -805,7 +807,9 @@
 		     button each when they were. What is left is what they would have said -- beside the
 		     categories, which is the space the transactions gave up. -->
 		<div class="col-span-full lg:col-span-2">
-			<Label class="mb-2 block">Weiteres</Label>
+			<div class="mb-2 flex min-h-[34px] items-center gap-2">
+				<Label class="block">Weiteres</Label>
+			</div>
 			<div class="flex flex-wrap gap-2">
 				<Button color="alternative" size="sm" onclick={() => (showPositions = true)}>
 					<EditOutline class="mr-2 h-4 w-4" />
