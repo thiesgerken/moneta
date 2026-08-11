@@ -15,6 +15,7 @@
 	import ToggleGroup from './ToggleGroup.svelte';
 	import ExpenseModal from './ExpenseModal.svelte';
 	import { changedFields, summarizeFields, stateAmount } from './changelog';
+	import ChangeList from './ChangeList.svelte';
 	import { formatAccount } from './expense_utils';
 	import { categoryColor } from './analysis/overviews';
 	import { feedState } from './analysis/state.svelte';
@@ -108,7 +109,11 @@
 							date
 							tool
 							automatic
-							diff
+							changes {
+								path
+								old
+								new
+							}
 							user {
 								name
 								firstName
@@ -272,13 +277,13 @@
 	const actor = (entry: Entry) =>
 		entry.user?.name === me ? 'dir' : (entry.user?.firstName ?? entry.user?.name ?? 'jemandem');
 
-	/// What the entry did, in one phrase. The diff says which fields moved, which beats
-	/// "geändert" on every single row. Capitalized because it opens the line, and the field
-	/// names it is built from are nouns anyway.
+	/// What the entry did, in one phrase. Naming the fields that moved beats "geändert" on
+	/// every single row. Capitalized because it opens the line, and the field names it is
+	/// built from are nouns anyway.
 	function action(entry: Entry): string {
 		if (!entry.oldState) return 'Angelegt';
 
-		const fields = summarizeFields(entry.diff ? changedFields(entry.diff) : []);
+		const fields = summarizeFields(changedFields(entry.changes));
 		return fields ? `${fields} geändert` : 'Geändert';
 	}
 
@@ -296,6 +301,10 @@
 			color: categoryColor(a)
 		}))
 	]);
+
+	/// The same names the chips carry, for the change list: a changed account is an id in the
+	/// stored state and a name everywhere a reader looks.
+	const changeNames = $derived(Object.fromEntries(named.map((e) => [e.id, e.name])));
 
 	/// One chip per category and account the expense touches. Deduplicated, since an expense
 	/// split over two cards names the same account twice, and the second chip adds nothing.
@@ -327,14 +336,6 @@
 		(expandedDiffs = expandedDiffs.includes(id)
 			? expandedDiffs.filter((other) => other !== id)
 			: [...expandedDiffs, id]);
-
-	/// A unified diff is unreadable in one colour; the marker column is the whole signal.
-	const diffLineClass = (line: string) => {
-		if (line.startsWith('+')) return 'text-green-700 dark:text-green-400';
-		if (line.startsWith('-')) return 'text-red-700 dark:text-red-400';
-		if (line.startsWith('@@')) return 'text-gray-400 dark:text-gray-500';
-		return 'text-gray-500 dark:text-gray-400';
-	};
 </script>
 
 <div class={controls ? 'mx-auto max-w-3xl' : ''}>
@@ -484,7 +485,7 @@
 								{#if entry.automatic}
 									<Badge color="gray" class="px-1.5 py-0">automatisch</Badge>
 								{/if}
-								{#if entry.diff && !created}
+								{#if entry.changes.length > 0 && !created}
 									<button
 										class="ml-auto flex items-center gap-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
 										onclick={() => toggleDiff(entry.id.toString())}
@@ -499,11 +500,12 @@
 								{/if}
 							</div>
 
-							{#if entry.diff && expandedDiffs.includes(entry.id.toString())}
-								<pre
-									class="mt-2 overflow-x-auto rounded-md bg-gray-50 p-2 font-mono text-xs dark:bg-gray-800/60">{#each entry.diff.split('\n') as line, i (i)}<span
-											class="block {diffLineClass(line)}">{line || ' '}</span
-										>{/each}</pre>
+							{#if entry.changes.length > 0 && expandedDiffs.includes(entry.id.toString())}
+								<ChangeList
+									changes={entry.changes}
+									names={changeNames}
+									class="mt-2 rounded-md bg-gray-50 p-2 dark:bg-gray-800/60"
+								/>
 							{/if}
 						</div>
 					</li>

@@ -57,6 +57,7 @@
 		tint
 	} from './expense_utils';
 	import ActionButton from './ActionButton.svelte';
+	import ChangeList from './ChangeList.svelte';
 	import ExpenseModal from './ExpenseModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
 	import { page } from '$app/state';
@@ -365,7 +366,11 @@
 								oldState {
 									id
 								}
-								diff
+								changes {
+									path
+									old
+									new
+								}
 							}
 							positions {
 								title
@@ -429,6 +434,18 @@
 			value: account.id,
 			color: account.color
 		}))
+	);
+
+	/// Account and category ids to what they are called, for the changelog: a stored state
+	/// carries ids and nothing else, so a changed account would otherwise read as a uuid.
+	const changeNames = $derived(
+		Object.fromEntries([
+			...($basicStore.data?.categories.list ?? []).map((c) => [c.id.toString(), c.name]),
+			...($basicStore.data?.accounts.list ?? []).map((a) => [
+				a.id.toString(),
+				formatAccount(a, $basicStore.data?.users.me.name)
+			])
+		])
 	);
 
 	const totalCount = $derived($expenseStore.data?.expenses.list.totalCount || 0);
@@ -1389,39 +1406,48 @@
 
 									<div>
 										{@render sectionLabel('Changelog')}
-										<ul class="space-y-1 text-sm">
-											{#each expense.changelog.toReversed() as change (change.id)}
-												<li>
-													<span class="text-gray-500 dark:text-gray-400">
+										<!-- Newest first, which is the order the resolver returns and the order the
+									     activity feed shows: what an expense last had done to it is the thing
+									     somebody opening it wants, and its creation is the least of it. -->
+										<ol class="ml-1 space-y-2.5 text-sm">
+											{#each expense.changelog as change (change.id)}
+												<li class="relative border-l border-gray-300 pl-4 dark:border-gray-600">
+													<!-- A dot on the rule, which is all a timeline is at this size. flowbite's
+							     Timeline draws the same thing around a `text-lg` heading and 40px of
+							     margin per entry -- four entries would be taller than the row they sit
+							     in, and overriding that away leaves nothing of the component. -->
+													<span
+														class="absolute top-1.5 -left-[4.5px] h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-600"
+													></span>
+													<div class="text-xs text-gray-500 dark:text-gray-400">
 														{change.user!.name == $basicStore.data?.users.me.name
 															? 'Du'
-															: change.user!.firstName} am {change.date.toLocaleString('de-DE', {
+															: change.user!.firstName} · {change.date.toLocaleString('de-DE', {
 															year: 'numeric',
 															month: '2-digit',
 															day: '2-digit',
 															hour: '2-digit',
 															minute: '2-digit'
-														})}{change.tool ? ` via ${change.tool}` : ''}{change.automatic
-															? ' (automatisch)'
+														})}{change.tool ? ` · ${change.tool}` : ''}{change.automatic
+															? ' · automatisch'
 															: ''}
-													</span>
+													</div>
 													{#if !change.oldState}
-														<span>— Ausgabe erstellt</span>
-													{:else if !change.diff}
-														<!-- An entry with no diff is one whose two states are the same, which is
-														     what an import writes: the export carries the expense as it is now and
-														     not as it was, so `import.rs` stores that same state on both sides and
-														     `json_diff` comes out empty. Something was changed and there is no way
-														     to say what, so the line says only that -- an empty string is falsy, so
-														     without this it stopped after the author's name. -->
-														<span>— geändert</span>
+														<div class="text-xs text-gray-500 dark:text-gray-400">
+															Ausgabe erstellt
+														</div>
+													{:else if change.changes.length === 0}
+														<!-- An entry with nothing to report is one whose two states are the same,
+													     which is what an import writes: the export carries the expense as it is
+													     now and not as it was, so `import.rs` stores that same state on both
+													     sides. Something was changed and there is no way to say what. -->
+														<div class="text-xs text-gray-500 dark:text-gray-400">Geändert</div>
 													{:else}
-														<pre
-															class="mt-1 overflow-x-auto rounded bg-gray-50 p-2 text-xs dark:bg-gray-800">{change.diff}</pre>
+														<ChangeList changes={change.changes} names={changeNames} class="mt-1" />
 													{/if}
 												</li>
 											{/each}
-										</ul>
+										</ol>
 									</div>
 								</div>
 							</div>
