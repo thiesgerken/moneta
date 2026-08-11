@@ -317,7 +317,7 @@ type AccountOverview {
   startAmount: Float!
   endAmount: Float!
   "`startAmount` plus the month's transactions — see [`MonthOverview::integrated_end_total`]"
-  integratedEndAmount: Float!
+  integratedEndAmount: Float
   income: Float!
   expenses: Float!
   expenseCount: Int!
@@ -374,8 +374,12 @@ type AnalysisQuery {
     `effectiveAmount`. The totals have to reconcile with the balances, and those are
     account balances rather than ownership-weighted shares of them; mixing the two would
     make the integration error meaningless.
+    `accrued` files each cost in the months it was *for* rather than the month it was
+    paid, spread evenly over the days of its Leistungszeitraum. The balances stay where
+    they are either way -- they are money in an account, which an accrued share is not --
+    so `integratedEndTotal` comes back null and there is no integration error to report.
   """
-  overviews(from: DateTime!, to: DateTime!): Overviews!
+  overviews(from: DateTime!, to: DateTime!, accrued: Boolean): Overviews!
   """
     One account's ledger over a range, as a bank statement reads it.
 
@@ -769,8 +773,12 @@ type MonthOverview {
     The gap to `endTotal` is MoneyDB's *Integrationsfehler*. It does not mean the
     arithmetic drifted — it means an expense is missing, which is the whole point of
     showing it.
+
+    Null when the totals are read on the accrual axis: a sixth of a subscription is a cost
+    the month carried, not money that left an account, so there is nothing for the recorded
+    balances to disagree with.
   """
-  integratedEndTotal: Float!
+  integratedEndTotal: Float
   income: Float!
   expenses: Float!
   expenseCount: Int!

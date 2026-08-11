@@ -22,14 +22,12 @@
 
 ## would be nice
 
-- carry the date axis into the analysis views. The expense list picks one of the three dates for
-  its column, its sort and its period filter; the analysis pages are all still on the value date,
-  `analysis.prepayments` excepted. Switching them is not a different `GROUP BY`: an expense that
-  accrues over six months belongs to six of them, in proportion, so the monthly and category
-  totals need the linear-consumption model `analysis.prepayments` already computes, lifted into
-  SQL and shared. `simulate_balances` and `analysis_statement` stay on the value date whatever
-  the reader picks -- an accrued amount is not money in an account, and the *Fehler* column
-  reconciles against recorded balances. See [docs/analysis-dashboard.md](docs/analysis-dashboard.md).
+- carry the date axis into the views it does not reach yet. Monate and Kategorien offer it
+  (`analysis_movements` in the migrations does the spreading), and the expense list picks one of
+  the three dates for its column, sort and period filter. Still value-date only: the calendar,
+  which is about when money moves and probably should stay that way, and the dashboard on the
+  front page. `simulate_balances` and `analysis_statement` stay there on purpose -- an accrued
+  amount is not money in an account. See [docs/analysis-dashboard.md](docs/analysis-dashboard.md).
 - push notifications
 - ausgabe in transaktion umwandeln (zB Retoure mit original zusammenfassen, dann automatisch
   buchungszeitraum anpassen?). Der Import macht das inzwischen für die moneydb-Altlasten

@@ -14,7 +14,7 @@
 		categoryColor,
 		type OverviewsData
 	} from './overviews';
-	import { categoriesState } from './state.svelte';
+	import { DATE_AXES, accrued, axisState, categoriesState } from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
 	import { isoDate } from './dates';
 	import { goto } from '$app/navigation';
@@ -32,7 +32,7 @@
 
 		const request = ++latestRequest;
 		void overviewsStore
-			.fetch({ variables: { from: new Date(from), to: new Date(to) } })
+			.fetch({ variables: { from: new Date(from), to: new Date(to), accrued: accrued() } })
 			.then((result) => {
 				if (request !== latestRequest) return;
 				overviews = result.data?.analysis.overviews ?? null;
@@ -194,6 +194,7 @@
 				{ value: 'income', label: 'Einnahmen' }
 			]}
 		/>
+		<ToggleGroup bind:value={axisState.axis} options={DATE_AXES} />
 		{#if $overviewsStore.fetching}
 			<Spinner size="5" />
 		{/if}
