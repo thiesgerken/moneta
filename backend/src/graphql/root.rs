@@ -20,9 +20,11 @@ use crate::graphql::{
 };
 
 use super::{
-    accounts::{AccountLoader, get_account_loader},
+    accounts::{AccountLoader, AccountUsageLoader, get_account_loader, get_account_usage_loader},
     cache::AnalysisCache,
-    categories::{CategoryLoader, get_category_loader},
+    categories::{
+        CategoryLoader, CategoryUsageLoader, get_category_loader, get_category_usage_loader,
+    },
     users::{UserLoader, get_user_loader},
 };
 
@@ -38,6 +40,11 @@ pub struct Context {
 
     pub account_loader: AccountLoader,
     pub category_loader: CategoryLoader,
+    /// How often each account and category has been used lately, which is what the pickers
+    /// sort on. Separate loaders rather than a field on the row: it is a count over other
+    /// tables, and only the two dialogs that offer a choice ever ask for it.
+    pub account_usage_loader: AccountUsageLoader,
+    pub category_usage_loader: CategoryUsageLoader,
     pub user_loader: UserLoader,
 }
 
@@ -119,6 +126,8 @@ pub async fn graphql_handler(
         wrote: AtomicBool::new(false),
         account_loader: get_account_loader((*pool).clone()),
         category_loader: get_category_loader((*pool).clone()),
+        account_usage_loader: get_account_usage_loader((*pool).clone()),
+        category_usage_loader: get_category_usage_loader((*pool).clone()),
         user_loader: get_user_loader((*pool).clone()),
     };
 
@@ -261,6 +270,8 @@ mod tests {
             wrote: AtomicBool::new(false),
             account_loader: get_account_loader(pool.clone()),
             category_loader: get_category_loader(pool.clone()),
+            account_usage_loader: get_account_usage_loader(pool.clone()),
+            category_usage_loader: get_category_usage_loader(pool.clone()),
             user_loader: get_user_loader(pool),
         };
 

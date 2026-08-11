@@ -81,6 +81,7 @@
 					name
 					color
 					closed
+					usageCount
 					# whose account it is: two people can both keep a "Bargeld"
 					owner {
 						name
@@ -94,6 +95,7 @@
 					id
 					name
 					color
+					usageCount
 				}
 			}
 
@@ -522,12 +524,14 @@
 			name: a.name,
 			owner: { name: a.owner.name, firstName: a.owner.firstName },
 			color: a.color,
-			closed: a.closed
+			closed: a.closed,
+			usageCount: a.usageCount
 		}))}
 		categories={(feed?.categories.list ?? []).map((c) => ({
 			id: c.id.toString(),
 			name: c.name,
-			color: c.color
+			color: c.color,
+			usageCount: c.usageCount
 		}))}
 	/>
 {/if}

@@ -289,6 +289,7 @@
 					}
 					color
 					closed
+					usageCount
 				}
 			}
 			categories {
@@ -299,6 +300,7 @@
 						id
 					}
 					color
+					usageCount
 				}
 			}
 		}
@@ -762,12 +764,14 @@
 		name: a.name,
 		owner: { name: a.owner.name, firstName: a.owner.firstName },
 		color: a.color,
-		closed: a.closed
+		closed: a.closed,
+		usageCount: a.usageCount
 	})) || []}
 	categories={$basicStore.data?.categories.list.map((c) => ({
 		id: c.id.toString(),
 		name: c.name,
-		color: c.color
+		color: c.color,
+		usageCount: c.usageCount
 	})) || []}
 />
 
@@ -782,12 +786,14 @@
 		name: a.name,
 		owner: { name: a.owner.name, firstName: a.owner.firstName },
 		color: a.color,
-		closed: a.closed
+		closed: a.closed,
+		usageCount: a.usageCount
 	})) || []}
 	categories={$basicStore.data?.categories.list.map((c) => ({
 		id: c.id.toString(),
 		name: c.name,
-		color: c.color
+		color: c.color,
+		usageCount: c.usageCount
 	})) || []}
 />
 

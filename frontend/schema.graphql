@@ -284,6 +284,12 @@ scalar UUID
 type Account {
   id: UUID!
   owner: User!
+  """
+    How many transactions have been booked against this account in the last year, templates
+    left out. What the pickers sort on: the five accounts you actually use are five of
+    dozens, and alphabetical order buries them.
+  """
+  usageCount: Int!
   name: String!
   description: String!
   color: String
@@ -451,6 +457,11 @@ type BalanceQuery {
 
 type Category {
   id: UUID!
+  """
+    How often this category has been used in the last year, templates left out -- the same
+    window and the same purpose as an account's.
+  """
+  usageCount: Int!
   name: String!
   description: String!
   color: String

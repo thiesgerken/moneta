@@ -30,12 +30,14 @@
 			readonly name: string;
 			readonly color: string | null;
 			readonly closed: Date | null;
+			readonly usageCount: number;
 			readonly owner: { readonly name: string; readonly firstName: string | null };
 		}[];
 		categories: {
 			readonly id: string;
 			readonly name: string;
 			readonly color: string | null;
+			readonly usageCount: number;
 		}[];
 		expense?: {
 			readonly id: string;
@@ -283,28 +285,52 @@
 		}
 	}
 
-	/// What the account picker offers: the closed ones left out, mine before anyone else's,
-	/// alphabetical inside that -- `accountSorter`, the same order the toolbar's filters use.
-	/// Many of the accounts here are closed, and a list you scroll past is a list
-	/// you stop reading.
+	/// How many entries the picker puts up top before it goes alphabetical.
+	///
+	/// Five, because five is what the tail looks like here: 600, 450, 400, 250 and 50 uses in a
+	/// year, and then a cliff to twelve. Sorting the whole list by frequency instead would put
+	/// the four accounts you touch twice a year in an order nobody can predict; alphabetical is
+	/// faster once you already know the name you are looking for.
+	const FREQUENT = 5;
+
+	/// The frequently-used few first, everything else in its usual order.
+	function byUsageThen<T extends { usageCount: number }>(
+		options: T[],
+		rest: (a: T, b: T) => number
+	) {
+		const frequent = options
+			.filter((option) => option.usageCount > 0)
+			.toSorted((a, b) => b.usageCount - a.usageCount)
+			.slice(0, FREQUENT);
+
+		return [...frequent, ...options.filter((option) => !frequent.includes(option)).toSorted(rest)];
+	}
+
+	/// What the account picker offers: the closed ones left out, the five you actually use up
+	/// top, and `accountSorter` for the rest -- mine before anyone else's, alphabetical inside
+	/// that, the same order the toolbar's filters use.
 	///
 	/// A closed account stays in the list if this expense books against it. Dropping it would
 	/// quietly take the account off the expense the moment somebody opened it to fix a typo.
 	const accountOptions = $derived(
-		accounts
-			.filter((account) => !account.closed || transactions.some((t) => t.accountId === account.id))
-			.toSorted((a, b) => accountSorter(a, b, user_name ?? ''))
-			.map((account) => ({
-				value: account.id,
-				name: formatAccount(account, user_name),
-				color: account.color
-			}))
+		byUsageThen(
+			accounts.filter(
+				(account) => !account.closed || transactions.some((t) => t.accountId === account.id)
+			),
+			(a, b) => accountSorter(a, b, user_name ?? '')
+		).map((account) => ({
+			value: account.id,
+			name: formatAccount(account, user_name),
+			color: account.color
+		}))
 	);
 
 	const categoryOptions = $derived(
-		categories
-			.toSorted(categorySorter)
-			.map((category) => ({ value: category.id, name: category.name, color: category.color }))
+		byUsageThen(categories, categorySorter).map((category) => ({
+			value: category.id,
+			name: category.name,
+			color: category.color
+		}))
 	);
 
 	/// dd.mm.yyyy and a week that starts on Monday, like `shortDate` and the range picker in the
