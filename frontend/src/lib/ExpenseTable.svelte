@@ -1433,7 +1433,7 @@
 															: ''}
 													</div>
 													{#if !change.oldState}
-														<div class="text-xs text-gray-700 dark:text-gray-300">
+														<div class="text-xs text-gray-500 dark:text-gray-400">
 															Ausgabe erstellt
 														</div>
 													{:else if change.changes.length === 0}
@@ -1441,7 +1441,7 @@
 													     which is what an import writes: the export carries the expense as it is
 													     now and not as it was, so `import.rs` stores that same state on both
 													     sides. Something was changed and there is no way to say what. -->
-														<div class="text-xs text-gray-700 dark:text-gray-300">Geändert</div>
+														<div class="text-xs text-gray-500 dark:text-gray-400">Geändert</div>
 													{:else}
 														<ChangeList changes={change.changes} names={changeNames} class="mt-1" />
 													{/if}
