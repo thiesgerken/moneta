@@ -720,12 +720,18 @@
 						{#each transactions as tx, i (i)}
 							<tr>
 								<td class="px-2">
+									<!-- No calendar button in here: it is positioned over the right of the input
+										     rather than beside it, so in a 128px column it sat on top of the year
+										     and "05.08.2026" read as "05.08.202". The field still opens on click.
+										     The pickers with room for it keep theirs. -->
 									<Datepicker
 										bind:value={tx.date}
 										placeholder="wie Leistung"
 										locale="de-DE"
 										firstDayOfWeek={1}
 										dateFormat={DATE_FORMAT}
+										btnClass="hidden"
+										inputClass="px-2"
 									/>
 								</td>
 								<td class="px-2">
@@ -740,6 +746,8 @@
 										locale="de-DE"
 										firstDayOfWeek={1}
 										dateFormat={DATE_FORMAT}
+										btnClass="hidden"
+										inputClass="px-2"
 									>
 										{#snippet actionSlot({ handleClear, close })}
 											<div class="flex justify-end px-3 pb-3">
