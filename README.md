@@ -45,6 +45,14 @@ month's share back out again, and a refund left the money sitting there until it
 Moneta says both with a single expense, so the import folds those chains up — see
 [The three dates](#the-three-dates) below and `Chain` in `backend/src/import.rs`.
 
+Where no chain says what an expense was for, two other things do. The bank often prints the
+period on the line (`01.08.2026 -31.08.2026`, `Rundfunk 07.2026 - 09.2026`, `GRUNDST 4VJ.24`),
+and a contract paid month after month buys the month that follows each payment — read off the
+cadence of the series rather than any one entry, and only where the spacing and the amount are
+steady enough to be a contract rather than a habit (`widen_recurring`). moneydb also recorded
+neither when an account was opened nor when it was closed, so both come from the first and last
+thing ever booked on it.
+
 ### Configuration
 
 Settings come from environment variables prefixed `MONETA__`, nested with `__`
