@@ -9,6 +9,7 @@
 	import ColorSelect from './ColorSelect.svelte';
 	import {
 		CircleMinusOutline,
+		ArrowsRepeatOutline,
 		CirclePlusOutline,
 		EditOutline,
 		ExclamationCircleOutline,
@@ -16,7 +17,8 @@
 		LandmarkOutline,
 		PlusOutline,
 		QuestionCircleOutline,
-		StarOutline
+		StarOutline,
+		UsersGroupOutline
 	} from 'flowbite-svelte-icons';
 
 	interface Props {
@@ -215,6 +217,49 @@
 	}
 	function addTransaction() {
 		transactions = [...transactions, emptyTransaction()];
+	}
+
+	/// Where the other half of a shared expense goes: the debt account you use most, unless this
+	/// expense already books against it.
+	///
+	/// Only my own -- "Krösus / Schulden Thies" is the same debt seen from her side, and putting
+	/// this expense there would record it twice. Guessing at all is defensible here because
+	/// there is a name for what the guess means; for a Umbuchung there is no such word, so that
+	/// one asks.
+	const shareAccount = $derived(
+		accounts
+			.filter(
+				(account) =>
+					!account.closed &&
+					account.owner.name === user_name &&
+					/schulden/i.test(account.name) &&
+					!transactions.some((t) => t.accountId === account.id)
+			)
+			.toSorted((a, b) => b.usageCount - a.usageCount)[0]
+	);
+
+	/// The two things that happen to an expense often enough to be worth a button: half of it is
+	/// somebody else's, or the money only moved to another account of yours.
+	///
+	/// Both are the same shape -- the amount that is already there becomes the reference and a
+	/// share of it goes somewhere else -- and both are several steps by hand: switch the unit,
+	/// type 100, copy the amount into the reference field, add a row, switch its unit, type the
+	/// percentage. A negative share of a negative amount comes out positive, which is what makes
+	/// this the money coming back.
+	function addShare(percentage: string, accountId: string) {
+		if (!Number(referenceAmount)) {
+			const fixed = transactions.filter((t) => !t.isRelative && Number(t.amount));
+			if (fixed.length === 1) {
+				referenceAmount = fixed[0].amount;
+				fixed[0].percentage = '100';
+				fixed[0].isRelative = true;
+			}
+		}
+
+		transactions = [
+			...transactions,
+			{ ...emptyTransaction(), isRelative: true, percentage, accountId }
+		];
 	}
 	function removeTransaction(i: number) {
 		if (transactions.length > 1) {
@@ -522,6 +567,20 @@
 	</button>
 {/snippet}
 
+{#snippet shortcut(label: string, Icon: Component, title: string, onclick: () => void)}
+	<Button
+		color="alternative"
+		size="xs"
+		{title}
+		onclick={(e: MouseEvent) => {
+			e.stopPropagation();
+			onclick();
+		}}
+	>
+		<Icon class="mr-1 h-4 w-4" />{label}
+	</Button>
+{/snippet}
+
 {#snippet add(label: string, onclick: () => void, cls = 'mt-2')}
 	<Button
 		color="alternative"
@@ -675,6 +734,20 @@
 				<div class="flex items-center gap-2">
 					<Label class="block">Transaktionen</Label>
 					{@render add('Transaktion', addTransaction, '')}
+					{@render shortcut(
+						'Teilen',
+						UsersGroupOutline,
+						shareAccount
+							? `Die Hälfte geht an ${formatAccount(shareAccount, user_name)}`
+							: 'Die Hälfte geht an ein anderes Konto',
+						() => addShare('-50', shareAccount?.id ?? '')
+					)}
+					{@render shortcut(
+						'Umbuchung',
+						ArrowsRepeatOutline,
+						'Das Geld ist auf ein anderes Konto gegangen',
+						() => addShare('-100', '')
+					)}
 				</div>
 				<!-- Only a relative transaction has anything to be relative to, which is also the
 				     only reason this field exists -- so it lives with them rather than in the form
