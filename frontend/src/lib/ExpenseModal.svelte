@@ -501,7 +501,7 @@
 			isTaxRelevant,
 			isIncomplete,
 			referenceAmount: transactions.some((tx) => tx.isRelative)
-				? Number(referenceAmount) * 100
+				? Math.round(Number(referenceAmount) * 100)
 				: undefined,
 			accrualStart: accrualStart!,
 			accrualEnd: endDate!,
@@ -516,14 +516,14 @@
 				date: tx.date || accrualStart!,
 				bookingDate: tx.bookingDate,
 				accountId: tx.accountId,
-				amount: !tx.isRelative ? Number(tx.amount) * 100 : undefined,
+				amount: !tx.isRelative ? Math.round(Number(tx.amount) * 100) : undefined,
 				fraction: tx.isRelative ? Number(tx.percentage) / 100 : undefined,
 				statement: tx.statement,
 				comments: ''
 			})),
 			positions: positions.map((pos) => ({
 				title: pos.title,
-				amount: pos.totalAmount ? Number(pos.totalAmount) * 100 : undefined,
+				amount: pos.totalAmount ? Math.round(Number(pos.totalAmount) * 100) : undefined,
 				quantity: pos.quantity ? Number(pos.quantity) : undefined,
 				unit: pos.unit || undefined,
 				comments: pos.comments

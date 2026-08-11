@@ -74,7 +74,7 @@
 			description: description.trim(),
 			color: color.trim() || null,
 			parentId: parentId || null,
-			monthlyLimit: monthlyLimit ? Number(monthlyLimit) * 100 : null
+			monthlyLimit: monthlyLimit ? Math.round(Number(monthlyLimit) * 100) : null
 		};
 
 		console.log('category', category);
