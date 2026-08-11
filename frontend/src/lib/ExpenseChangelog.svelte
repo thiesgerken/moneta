@@ -20,6 +20,7 @@
 	import { feedState } from './analysis/state.svelte';
 	import { shortDate } from './analysis/dates';
 	import QueryError from './QueryError.svelte';
+	import { euro } from '$lib/money';
 
 	/// The dashboard shows the same feed in a column beside everything else, where the filters
 	/// belong to the tab that owns them and six entries are as many as fit.
@@ -79,6 +80,8 @@
 					id
 					name
 					color
+					closed
+					usageCount
 					# whose account it is: two people can both keep a "Bargeld"
 					owner {
 						name
@@ -92,6 +95,7 @@
 					id
 					name
 					color
+					usageCount
 				}
 			}
 
@@ -176,6 +180,7 @@
 						effectiveAmount
 						amount
 						date
+						bookingDate
 						statement
 						account {
 							id
@@ -221,9 +226,6 @@
 	}
 
 	const me = $derived(feed?.users.me?.name);
-
-	const euro = (cents: number) =>
-		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
 	const day = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
@@ -521,12 +523,15 @@
 			id: a.id.toString(),
 			name: a.name,
 			owner: { name: a.owner.name, firstName: a.owner.firstName },
-			color: a.color
+			color: a.color,
+			closed: a.closed,
+			usageCount: a.usageCount
 		}))}
 		categories={(feed?.categories.list ?? []).map((c) => ({
 			id: c.id.toString(),
 			name: c.name,
-			color: c.color
+			color: c.color,
+			usageCount: c.usageCount
 		}))}
 	/>
 {/if}

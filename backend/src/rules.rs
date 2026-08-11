@@ -193,6 +193,26 @@ pub fn impose(
     Ok(e)
 }
 
+/// The bank line an expense came from, put back together so the rules can be run over it
+/// again. `None` for anything typed in by hand, which has nothing for a rule to match on.
+///
+/// The transaction carrying a statement is the one the bank delivered; the others are the
+/// shares and counter-bookings the template added around it. Where an expense holds several --
+/// a split paid from two banks -- the first is taken, which is the one `impose` wrote.
+pub fn delivery_of(expense: &Expense) -> Option<ExpenseDelivery> {
+    expense
+        .transactions
+        .iter()
+        .find(|t| !t.statement.trim().is_empty() && t.amount.is_some())
+        .map(|t| ExpenseDelivery {
+            account_id: t.account_id,
+            date: t.date,
+            booking_date: t.booking_date,
+            amount: t.amount.expect("filtered on being Some just above"),
+            statement: t.statement.clone(),
+        })
+}
+
 /// How far apart two otherwise identical bank lines have to be to count as separate
 /// transactions. Statements carry no stable per-line id, so this is the only thing standing
 /// between a re-upload and a duplicated expense.
@@ -480,6 +500,32 @@ mod tests {
             comments: String::new(),
             statement: String::new(),
         }
+    }
+
+    #[test]
+    fn the_delivery_behind_an_expense_is_the_transaction_that_carries_a_statement() {
+        let bank = Uuid::now_v7();
+        let cash = Uuid::now_v7();
+
+        // a share of the expense, and no bank line of its own
+        let mut share = transaction(cash, None);
+        share.fraction = Some(0.5);
+
+        let mut delivered = transaction(bank, Some(-1849));
+        delivered.statement = "REWE SAGT HALLO".into();
+
+        let expense = template(vec![share, delivered]);
+        let found = delivery_of(&expense).expect("the bank line is in there");
+
+        assert_eq!(found.account_id, bank);
+        assert_eq!(found.amount, -1849);
+        assert_eq!(found.statement, "REWE SAGT HALLO");
+    }
+
+    #[test]
+    fn an_expense_typed_in_by_hand_has_no_delivery_to_sort_by() {
+        let expense = template(vec![transaction(Uuid::now_v7(), Some(-1849))]);
+        assert!(delivery_of(&expense).is_none());
     }
 
     fn periodic(period: PeriodicInterval, last_creation: DateTime<Utc>) -> PeriodicRule {

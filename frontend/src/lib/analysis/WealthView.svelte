@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ChartLineUpOutline, WalletOutline } from 'flowbite-svelte-icons';
 	import {
 		Card,
 		Table,
@@ -23,9 +24,7 @@
 	import { shortDate, todayIso } from './dates';
 	import { ANALYSIS_CARD, WEALTH_COLOR } from './cards';
 	import QueryError from '$lib/QueryError.svelte';
-
-	const euro = (cents: number) =>
-		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+	import { euro } from '$lib/money';
 
 	const DAY = 86400000;
 
@@ -403,7 +402,11 @@
 	<Card class={ANALYSIS_CARD}>
 		<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
 			<div class="flex flex-wrap items-center gap-3">
-				<h3 class="text-lg font-semibold">Vermögensverlauf</h3>
+				<h3 class="text-lg font-semibold">
+					<ChartLineUpOutline
+						class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
+					/>Vermögensverlauf
+				</h3>
 				{#if $historyStore.fetching}
 					<Spinner size="4" />
 				{/if}
@@ -453,7 +456,11 @@
 		     wrong is worse than a number that is missing. -->
 		{#if !$balanceStore.errors}
 			<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-				<h3 class="text-lg font-semibold">Berechnete Kontostände</h3>
+				<h3 class="text-lg font-semibold">
+					<WalletOutline
+						class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
+					/>Berechnete Kontostände
+				</h3>
 				<!-- A closed account keeps its last balance for ever, so it sits in this table at
 			     whatever it held on the day it was closed and never moves again. Open ones only
 			     by default; the total follows whichever is shown. -->

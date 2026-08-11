@@ -284,6 +284,12 @@ scalar UUID
 type Account {
   id: UUID!
   owner: User!
+  """
+    How many transactions have been booked against this account in the last year, templates
+    left out. What the pickers sort on: the five accounts you actually use are five of
+    dozens, and alphabetical order buries them.
+  """
+  usageCount: Int!
   name: String!
   description: String!
   color: String
@@ -451,6 +457,11 @@ type BalanceQuery {
 
 type Category {
   id: UUID!
+  """
+    How often this category has been used in the last year, templates left out -- the same
+    window and the same purpose as an account's.
+  """
+  usageCount: Int!
   name: String!
   description: String!
   color: String
@@ -604,6 +615,20 @@ type ExpenseMutation {
   delete(id: UUID!): Boolean!
   create(expense: ExpenseInput!): Expense!
   update(id: UUID!, expense: ExpenseInput!): Expense!
+  """
+    Runs the automation rules over an expense again, as though its bank line had only just
+    arrived, and replaces it with what the matching rule produces.
+
+    Everything the rule decides is overwritten -- title, categories, the other side of a
+    split, the flags. What the bank said stays: the amount, the date and the statement are
+    imposed back onto the template, exactly as they were on delivery. That is the whole
+    point of the button: a rule fixed after the fact should be able to reach the expenses
+    that were filed before it was.
+
+    Nothing is recorded in `seen_deliveries`: the line was delivered once already, and a
+    second record of it is what would make the next statement upload skip a real payment.
+  """
+  resort(id: UUID!): Expense!
 }
 
 type ExpenseNode {
@@ -687,7 +712,10 @@ type ExpenseStateTransaction {
 
 type ExpenseTransaction {
   account: Account!
+  "when the money moved (Wertstellung)"
   date: DateTime!
+  "when the bank posted the line; null for anything not delivered by one"
+  bookingDate: DateTime
   amount: Int
   fraction: Float
   comments: String!

@@ -137,6 +137,55 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   like the whole list, only shorter.
 - Amounts are right-aligned and tabular; identifying text truncates rather than wraps.
 
+## Forms and modals
+
+- A modal is as wide as its content needs: `xl` for a form with tables in it, `lg` for a list,
+  `xs` for a confirmation. `lg` on the expense form stacked a dozen fields down a column with
+  the right half of the dialog empty.
+- **The buttons live in the modal's footer**, which does not scroll — `Abbrechen` on the left of
+  `Speichern`. A submit button in the footer sits outside the `<form>` in the body, which is
+  what the `form="…"` attribute is for. A submit bar at the end of the body means scrolling past
+  everything to save.
+- A textarea's defaults are `cols=20` and `rows=2`, and both are wrong every time: **`w-full`
+  and `field-sizing-content`**, with a `max-h-*` so a long statement cannot take the screen.
+  Guessing a row count from whether the field is empty is what this replaces.
+- **A table of form controls carries `data-form`**, which drops the row padding (the inputs
+  bring their own height) and the hover shading. Everything else about it — the grid, the
+  header, the widths — is the same as a table you read.
+- The unit is the switch where a value can be one of two: the €/% button inside the amount field
+  replaced a `Relativ` checkbox column that cost more width than the number it qualified.
+- **What is empty on most records goes in a modal of its own**, reached from a line that says
+  what is in it (`Positionen · 3 (42,17 €)`). A section heading plus an add-button for something
+  almost never present is worth more than the thing itself.
+- Only the button that completes the form is `primary`; five orange buttons in a form leave
+  nothing to say which one submits it.
+- **A button that can be disabled is a solid colour.** `alternative` and `light` are transparent
+  or white with grey text, which is exactly what a disabled button looks like — so an enabled
+  one and its own 50%-opacity twin were the same button twice. Grey means disabled and nothing
+  else. The expense list's actions are the reference: Neu `primary`, Duplizieren `teal`,
+  Bearbeiten `blue`, Löschen `red`, Einsortieren `gray`, and the same colours again on the
+  expanded row. `alternative` is for the controls that are never disabled — the filter and
+  dropdown triggers, and Abbrechen next to a solid Speichern.
+- Icons carry a **column, a card or a state** — never a button that already says what it does in
+  words, and never decoration. Table headers and analysis card titles take one each, in
+  `gray-400`, at `h-4` and `h-5` respectively, so that they identify the column without competing
+  with the sort arrow beside them.
+- **Every state has an icon, and it is the same icon everywhere that state is named** — in the
+  list's badges, in the edit dialog's flags, and in the toolbar's Status filter. Six words of
+  similar length in one weight are read one after another; six shapes are recognised.
+  `CheckCircle` Normal · `QuestionCircle` Unbestätigt · `ExclamationCircle` Unvollständig ·
+  `Star` Außergewöhnlich · `Landmark` Steuerrelevant · `FileClone` Vorlage.
+- **A placeholder must not look like an entry.** flowbite sets a placeholder colour in dark mode
+  only, so an empty Beschreibung field said "Beschreibung" in the same ink as a real one; both
+  modes are set in `app.css` now.
+- A control that does something on click has to say so at rest, not on hover: the € / % switch
+  inside the amount field sits on its own grey chip, because a bare glyph at the end of an input
+  reads as a unit label and nobody clicks a unit label.
+- Enabled buttons get a **pointer cursor** from a rule in `app.css`, and disabled ones get
+  `pointer-events: none`. Neither is a default: tailwind's preflight leaves a `<button>` with
+  the arrow cursor, and flowbite's `hover:` background applies just as happily to a button that
+  cannot be pressed.
+
 ## Charts
 
 apexcharts, wrapped in `Chart.svelte`, which owns the create-or-update decision — never

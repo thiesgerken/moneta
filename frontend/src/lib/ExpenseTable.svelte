@@ -13,8 +13,6 @@
 		Dropdown,
 		Checkbox,
 		ButtonGroup,
-		List,
-		Li,
 		Datepicker,
 		Modal,
 		Spinner
@@ -26,13 +24,29 @@
 		ChevronRightOutline,
 		ChevronLeftOutline,
 		ChevronDownOutline,
+		ArchiveArrowDownOutline,
+		FileCopyAltOutline,
 		EditOutline,
 		TrashBinOutline,
 		ExclamationCircleOutline,
-		CalendarMonthOutline
+		CalendarMonthOutline,
+		AlignLeftOutline,
+		EuroOutline,
+		FlagOutline,
+		TextSizeOutline,
+		ReceiptOutline,
+		StoreOutline,
+		TagOutline,
+		WalletOutline,
+		CheckCircleOutline,
+		FileCloneOutline,
+		LandmarkOutline,
+		QuestionCircleOutline,
+		StarOutline
 	} from 'flowbite-svelte-icons';
 	import {
 		accountSorter,
+		byUsageThen,
 		categorySorter,
 		formatAccount,
 		formatTransactionAccounts,
@@ -42,10 +56,12 @@
 		makeCategoryColor,
 		tint
 	} from './expense_utils';
+	import ActionButton from './ActionButton.svelte';
 	import ExpenseModal from './ExpenseModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
 	import { page } from '$app/state';
 	import { shortDate } from './analysis/dates';
+	import { signedEuro } from './money';
 	import QueryError from './QueryError.svelte';
 
 	let currentPage = $state(1);
@@ -66,6 +82,16 @@
 	let showDeleteExpenseModal = $state(false);
 	let expenseIdToEdit: string | undefined = $state(undefined);
 	let expenseIdToDelete: string | undefined = $state(undefined);
+	let expenseIdToResort: string | undefined = $state(undefined);
+	/// The edit modal, filled from an expense but creating a second one. One instance rather
+	/// than two: the form is the same form, and only where it submits changes.
+	let duplicating = $state(false);
+
+	function openEditModal(id: string, asCopy = false) {
+		expenseIdToEdit = id;
+		duplicating = asCopy;
+		showEditExpenseModal = true;
+	}
 
 	let filteredAccounts = $state<string[]>([]);
 	let filteredCategories = $state<string[]>([]);
@@ -152,15 +178,8 @@
 
 		// one chip for the lot: which of the six is off matters less than the fact that the
 		// list is no longer showing everything
-		if (
-			showTemplates ||
-			!showTaxRelevant ||
-			!showExtraordinary ||
-			!showUnchecked ||
-			!showIncomplete ||
-			!showNormal
-		) {
-			out.push({ label: 'Zustand', clear: resetFlags });
+		if (!flagsAreDefault) {
+			out.push({ label: 'Status', clear: resetFlags });
 		}
 
 		return out;
@@ -175,6 +194,32 @@
 	function clearDateRange() {
 		filterDateRange = { from: undefined, to: undefined };
 	}
+
+	/// Whether the six state checkboxes are where `resetFlags` leaves them. Not "all six on":
+	/// templates are hidden by default, so an untouched list would otherwise report itself as
+	/// filtered. This is what both the chip and the button's count hang off.
+	const flagsAreDefault = $derived(
+		!showTemplates &&
+			showTaxRelevant &&
+			showExtraordinary &&
+			showUnchecked &&
+			showIncomplete &&
+			showNormal
+	);
+
+	/// How many states are being shown, but only once that is worth saying.
+	const activeFlagCount = $derived(
+		flagsAreDefault
+			? 0
+			: [
+					showNormal,
+					showUnchecked,
+					showIncomplete,
+					showExtraordinary,
+					showTaxRelevant,
+					showTemplates
+				].filter(Boolean).length
+	);
 
 	function resetFlags() {
 		showTemplates = false;
@@ -245,6 +290,7 @@
 					}
 					color
 					closed
+					usageCount
 				}
 			}
 			categories {
@@ -255,6 +301,7 @@
 						id
 					}
 					color
+					usageCount
 				}
 			}
 		}
@@ -341,6 +388,7 @@
 								effectiveAmount
 								amount
 								date
+								bookingDate
 								statement
 								account {
 									id
@@ -359,8 +407,11 @@
 		}
 	`);
 
+	// Same order as the pickers in the edit dialog: what you use, then alphabetical. A filter is
+	// reached for by name more often than a picker is, which is why only the top few jump the
+	// queue rather than the whole list being ranked.
 	const filterableCategories = $derived(
-		$basicStore.data?.categories.list.sort(categorySorter).map((category) => ({
+		byUsageThen($basicStore.data?.categories.list ?? [], categorySorter).map((category) => ({
 			name: category.name,
 			value: category.id,
 			color: category.color
@@ -368,16 +419,16 @@
 	);
 
 	const filterableAccounts = $derived(
-		$basicStore.data?.accounts.list
-			.sort((a, b) => accountSorter(a, b, $basicStore.data?.users.me.name || ''))
-			.map((account) => ({
-				name:
-					account.owner.name == $basicStore.data?.users.me.name
-						? account.name
-						: `${account.owner.firstName} / ${account.name}`,
-				value: account.id,
-				color: account.color
-			}))
+		byUsageThen($basicStore.data?.accounts.list ?? [], (a, b) =>
+			accountSorter(a, b, $basicStore.data?.users.me.name || '')
+		).map((account) => ({
+			name:
+				account.owner.name == $basicStore.data?.users.me.name
+					? account.name
+					: `${account.owner.firstName} / ${account.name}`,
+			value: account.id,
+			color: account.color
+		}))
 	);
 
 	const totalCount = $derived($expenseStore.data?.expenses.list.totalCount || 0);
@@ -415,6 +466,7 @@
 
 	let expenseToEdit = $derived(expenses.find((e) => e.id === expenseIdToEdit) || undefined);
 	let expenseToDelete = $derived(expenses.find((e) => e.id === expenseIdToDelete) || undefined);
+	let expenseToResort = $derived(expenses.find((e) => e.id === expenseIdToResort) || undefined);
 
 	/// The bank's own text for an expense, which is several strings when it is split over more
 	/// than one transaction. Newlines collapse: the cell is one line and the full text is in the
@@ -456,10 +508,21 @@
 				? 'bg-green-100 text-green-700'
 				: 'bg-gray-200 text-gray-600';
 
+	/// A title that names no expense: the automation rules give one this when their template has
+	/// no title of its own, and it then says the same thing on every row it produced. Tinting it
+	/// is the only thing in the list that says "this one still needs a human".
+	const PLACEHOLDER_TITLE = 'Automatisch Generiert';
+	const titleIsPlaceholder = (title: string) => !title.trim() || title.trim() === PLACEHOLDER_TITLE;
+
 	function toggleRow(id: string) {
 		if (expandedRows.includes(id)) expandedRows = expandedRows.filter((rowId) => rowId !== id);
 		else expandedRows = [...expandedRows, id];
 	}
+
+	/// What the toolbar's Bearbeiten and Löschen act on. An open row is this list's idea of "the
+	/// one you mean", and several open rows are no answer at all rather than a reason to pick the
+	/// first -- deleting the wrong expense is not something to be clever about.
+	const selectedExpenseId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
 
 	/// Descending, ascending, off. The third state is what there was no way back to: sorting
 	/// lives in the component rather than in the url, so a header clicked by accident could only
@@ -491,6 +554,40 @@
 		expandedRows = [];
 	}
 
+	const ResortExpense = graphql(`
+		mutation ResortExpense($id: UUID!) {
+			expenses {
+				resort(id: $id) {
+					id
+				}
+			}
+		}
+	`);
+
+	let showResortExpenseModal = $state(false);
+	let resortError: string | undefined = $state(undefined);
+
+	async function handleResortExpense() {
+		if (!expenseToResort) return;
+		resortError = undefined;
+
+		const result = await ResortExpense.mutate({ id: expenseToResort.id });
+		// The two things that go wrong here are the reader's to fix -- no rule matches, or the
+		// expense never came from a bank -- so the modal says so and stays open rather than
+		// closing on a sentence nobody read.
+		if (result.errors?.length) {
+			resortError = result.errors.map((e) => e.message).join(' ');
+			return;
+		}
+
+		showResortExpenseModal = false;
+		expenseIdToResort = undefined;
+
+		cache.markStale('Expense');
+		await expenseStore.fetch({ variables: expenseVariables() });
+		expandedRows = [];
+	}
+
 	async function handleDeleteExpense() {
 		if (!expenseToDelete) return;
 		await DeleteExpense.mutate({ id: expenseToDelete.id });
@@ -503,18 +600,33 @@
 	}
 </script>
 
+{#snippet newExpenseButton(cls: string)}
+	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls back
+	     to `alternative` rather than to primary, which left Neu white in the middle of the row. -->
+	<Button color="primary" class={cls} onclick={() => (showNewExpenseModal = true)}>
+		<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
+	</Button>
+{/snippet}
+
 <!-- Accounts and categories carry a colour, and that colour is how a reader recognises them --
      it is what the cells in the table below are tinted with. flowbite's MultiSelect prints its
      options as bare text and offers no hook to change that, so the filters are a checkbox list
-     with the swatch in front of each name, like the Zustand filter beside them. -->
+     with the swatch in front of each name, like the Status filter beside them. -->
 {#snippet optionFilter(
 	label: string,
 	options: { name: string; value: string; color?: string | null }[],
 	selected: string[],
 	toggle: (id: string) => void
 )}
-	<Button color="alternative" class="justify-between md:w-48">
-		{selected.length ? `${label} (${selected.length})` : label}
+	<Button color="alternative" size="sm" class="justify-between md:w-40">
+		<span class="flex items-center gap-2">
+			{#if label === 'Konten'}
+				<WalletOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+			{:else}
+				<TagOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+			{/if}
+			{selected.length ? `${label} (${selected.length})` : label}
+		</span>
 		<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 	</Button>
 	<Dropdown class="max-h-80 w-64 divide-y-0 overflow-y-auto p-3 text-sm">
@@ -555,19 +667,29 @@
 	isExtraordinary: boolean;
 })}
 	{#if expense.isTaxRelevant}
-		<span class="rounded-md bg-green-100 px-2 py-1 text-green-700">Steuerrelevant</span>
+		<span class="rounded-md bg-green-100 px-2 py-1 text-green-700">
+			<LandmarkOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Steuerrelevant
+		</span>
 	{/if}
 	{#if expense.isTemplate}
-		<span class="rounded-md bg-blue-100 px-2 py-1 text-blue-700">Vorlage</span>
+		<span class="rounded-md bg-blue-100 px-2 py-1 text-blue-700">
+			<FileCloneOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Vorlage
+		</span>
 	{/if}
 	{#if expense.isUnchecked}
-		<span class="rounded-md bg-red-100 px-2 py-1 text-yellow-700">Unbestätigt</span>
+		<span class="rounded-md bg-yellow-100 px-2 py-1 text-yellow-700">
+			<QuestionCircleOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Unbestätigt
+		</span>
 	{/if}
 	{#if expense.isIncomplete}
-		<span class="rounded-md bg-red-100 px-2 py-1 text-red-700">Unvollständig</span>
+		<span class="rounded-md bg-red-100 px-2 py-1 text-red-700">
+			<ExclamationCircleOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Unvollständig
+		</span>
 	{/if}
 	{#if expense.isExtraordinary}
-		<span class="rounded-md bg-purple-100 px-2 py-1 text-purple-700">Außergewöhnlich</span>
+		<span class="rounded-md bg-purple-100 px-2 py-1 text-purple-700">
+			<StarOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Außergewöhnlich
+		</span>
 	{/if}
 {/snippet}
 
@@ -578,6 +700,40 @@
 		▼
 	{/if}
 {/snippet}
+
+<Modal bind:open={showResortExpenseModal} size="sm">
+	<div class="text-center">
+		<ExclamationCircleOutline class="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-200" />
+		<h3 class="mb-3 text-lg font-normal text-gray-500 dark:text-gray-400">
+			Soll <b>{expenseToResort?.title}</b> neu einsortiert werden?
+		</h3>
+		<!-- Said plainly because it cannot be undone from here: what the rule decides replaces
+		     what is there, including anything corrected by hand since. -->
+		<p class="mb-5 text-sm text-gray-500 dark:text-gray-400">
+			Die Automatisierungsregeln laufen erneut über die Ausgabe, als wäre ihre Bankzeile gerade erst
+			geliefert worden. Titel, Kategorien, Konten und Merkmale werden von der passenden Regel
+			überschrieben; Betrag, Datum und Transaktionstext bleiben.
+		</p>
+		{#if resortError}
+			<p class="mb-5 text-sm text-red-600 dark:text-red-400">{resortError}</p>
+		{/if}
+		<div class="space-x-2">
+			<Button type="submit" value="resort" onclick={handleResortExpense}>Einsortieren</Button>
+			<Button
+				type="submit"
+				value="cancel"
+				color="alternative"
+				onclick={() => {
+					showResortExpenseModal = false;
+					expenseIdToResort = undefined;
+					resortError = undefined;
+				}}
+			>
+				Abbrechen
+			</Button>
+		</div>
+	</div>
+</Modal>
 
 <Modal bind:open={showDeleteExpenseModal} size="xs">
 	<div class="text-center">
@@ -611,12 +767,15 @@
 		id: a.id.toString(),
 		name: a.name,
 		owner: { name: a.owner.name, firstName: a.owner.firstName },
-		color: a.color
+		color: a.color,
+		closed: a.closed,
+		usageCount: a.usageCount
 	})) || []}
 	categories={$basicStore.data?.categories.list.map((c) => ({
 		id: c.id.toString(),
 		name: c.name,
-		color: c.color
+		color: c.color,
+		usageCount: c.usageCount
 	})) || []}
 />
 
@@ -625,16 +784,20 @@
 	onsubmit={handleExpenseModalSubmit}
 	userName={$basicStore.data?.users.me?.name}
 	expense={expenseToEdit}
+	duplicate={duplicating}
 	accounts={$basicStore.data?.accounts.list.map((a) => ({
 		id: a.id.toString(),
 		name: a.name,
 		owner: { name: a.owner.name, firstName: a.owner.firstName },
-		color: a.color
+		color: a.color,
+		closed: a.closed,
+		usageCount: a.usageCount
 	})) || []}
 	categories={$basicStore.data?.categories.list.map((c) => ({
 		id: c.id.toString(),
 		name: c.name,
-		color: c.color
+		color: c.color,
+		usageCount: c.usageCount
 	})) || []}
 />
 
@@ -679,25 +842,72 @@
 		</div>
 	{/if}
 
+	<!-- The search takes what is left rather than a fixed 256px: at a fixed width the row came to
+	     1656px against 1654px of card and wrapped the search onto a line of its own. It gives way
+	     now instead, down to 176px before anything wraps. -->
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
 		bind:inputValue={searchTerm}
 		class="{tableSearchTableClass} table-fixed"
-		classes={tableSearchClasses}
+		classes={{
+			...tableSearchClasses,
+			search: 'relative w-full md:order-last md:w-56'
+		}}
 	>
 		{#snippet header()}
 			<div
-				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
+				class="flex w-full flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
 			>
 				<div class="flex items-center gap-2">
-					<Button class="grow md:grow-0" onclick={() => (showNewExpenseModal = true)}>
-						<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
-					</Button>
+					<!-- One group, in moneydb's order. Everything but Neu acts on whichever row is open,
+					     so on a phone the group goes and Neu stands on its own: the row you opened fills
+					     the screen there and carries the same four buttons itself. -->
+					{@render newExpenseButton('grow md:hidden')}
+					<ButtonGroup class="hidden md:inline-flex">
+						{@render newExpenseButton('')}
+						<ActionButton
+							color="teal"
+							disabled={!selectedExpenseId}
+							onclick={() => openEditModal(selectedExpenseId!, true)}
+						>
+							<FileCopyAltOutline class="mr-2 h-3.5 w-3.5" />Duplizieren
+						</ActionButton>
+						<ActionButton
+							color="yellow"
+							class="text-gray-900"
+							disabled={!selectedExpenseId}
+							onclick={() => openEditModal(selectedExpenseId!)}
+						>
+							<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
+						</ActionButton>
+						<ActionButton
+							color="red"
+							disabled={!selectedExpenseId}
+							onclick={() => {
+								expenseIdToDelete = selectedExpenseId;
+								showDeleteExpenseModal = true;
+							}}
+						>
+							<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
+						</ActionButton>
+						<ActionButton
+							color="gray"
+							disabled={!selectedExpenseId}
+							onclick={() => {
+								expenseIdToResort = selectedExpenseId;
+								resortError = undefined;
+								showResortExpenseModal = true;
+							}}
+						>
+							<ArchiveArrowDownOutline class="mr-2 h-3.5 w-3.5" />Einsortieren
+						</ActionButton>
+					</ButtonGroup>
 					<!-- Stacked, the filters filled a phone screen before a single expense appeared,
 					     so on small screens they fold behind this. -->
 					<Button
 						color="alternative"
+						size="sm"
 						class="md:hidden"
 						aria-label="Filter"
 						aria-expanded={filtersOpen}
@@ -716,9 +926,18 @@
 					     range mode it prints a bare " - " instead of its placeholder when nothing is
 					     chosen -- which left the control that decides what the table shows unreadable
 					     in both states, and with nowhere to undo it. -->
-					<Button color="alternative" class="justify-between whitespace-nowrap md:w-64">
-						{dateRangeLabel ?? 'Zeitraum'}
-						<CalendarMonthOutline class="ml-2 h-4 w-4 shrink-0" />
+					<!-- min-w rather than w: a chosen range is "05.08.2026 – 14.08.2026", which is wider than
+					     the other triggers and was running out of the button. Empty it still matches them. -->
+					<Button
+						color="alternative"
+						size="sm"
+						class="justify-between whitespace-nowrap md:min-w-52"
+					>
+						<span class="flex items-center gap-2">
+							<CalendarMonthOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+							{dateRangeLabel ?? 'Zeitraum'}
+						</span>
+						<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 					</Button>
 					<Dropdown class="flex w-fit flex-col gap-2 divide-y-0 p-2">
 						<!-- the inline calendar draws its own white, shadowed, padded card, which inside
@@ -732,50 +951,62 @@
 							locale="de-DE"
 							firstDayOfWeek={1}
 						/>
-						<Button
+						<ActionButton
 							size="xs"
-							color="alternative"
+							color="light"
 							disabled={!dateRangeLabel}
 							onclick={clearDateRange}
 						>
 							Zeitraum zurücksetzen
-						</Button>
+						</ActionButton>
 					</Dropdown>
-					{@render optionFilter(
-						'Konten',
-						filterableAccounts ?? [],
-						filteredAccounts,
-						(id) => (filteredAccounts = toggleOption(filteredAccounts, id))
-					)}
 					{@render optionFilter(
 						'Kategorien',
 						filterableCategories ?? [],
 						filteredCategories,
 						(id) => (filteredCategories = toggleOption(filteredCategories, id))
 					)}
-					<Button color="alternative">Filter<FilterSolid class="ml-2 h-3 w-3 " /></Button>
-					<Dropdown class="w-48 space-y-2 p-3 text-sm">
-						<h6 class="mb-3 text-sm font-medium text-gray-900 dark:text-white">Zustand</h6>
-						<List tag="dl">
-							<Li>
-								<Checkbox bind:checked={showTaxRelevant}>Steuerrelevant</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showTemplates}>Vorlage</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showExtraordinary}>Außergewöhnlich</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showUnchecked}>Unbestätigt</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showIncomplete}>Unvollständig</Checkbox>
-							</Li>
-							<Li>
-								<Checkbox bind:checked={showNormal}>Normal</Checkbox>
-							</Li>
-						</List>
+					{@render optionFilter(
+						'Konten',
+						filterableAccounts ?? [],
+						filteredAccounts,
+						(id) => (filteredAccounts = toggleOption(filteredAccounts, id))
+					)}
+					<!-- The third of three filters, and it has to look like the other two: same trigger,
+					     same panel. It said "Filter" over a flowbite List, which drew a rule under a
+					     heading repeating the word next to it and spaced six checkboxes like a table
+					     of contents. It filters the Status column and is named after it. -->
+					<Button color="alternative" size="sm" class="justify-between md:w-40">
+						<span class="flex items-center gap-2">
+							<FlagOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+							{activeFlagCount ? `Status (${activeFlagCount})` : 'Status'}
+						</span>
+						<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
+					</Button>
+					<Dropdown class="max-h-80 w-64 divide-y-0 overflow-y-auto p-3 text-sm">
+						<!-- The same icon per state as the badges below and the flags in the edit
+						     dialog: six words of similar length in one weight are read one after
+						     another, six shapes are recognised. -->
+						<div class="space-y-2">
+							<Checkbox bind:checked={showNormal}>
+								<CheckCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Normal
+							</Checkbox>
+							<Checkbox bind:checked={showUnchecked}>
+								<QuestionCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Unbestätigt
+							</Checkbox>
+							<Checkbox bind:checked={showIncomplete}>
+								<ExclamationCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Unvollständig
+							</Checkbox>
+							<Checkbox bind:checked={showExtraordinary}>
+								<StarOutline class="me-1.5 h-4 w-4 shrink-0" />Außergewöhnlich
+							</Checkbox>
+							<Checkbox bind:checked={showTaxRelevant}>
+								<LandmarkOutline class="me-1.5 h-4 w-4 shrink-0" />Steuerrelevant
+							</Checkbox>
+							<Checkbox bind:checked={showTemplates}>
+								<FileCloneOutline class="me-1.5 h-4 w-4 shrink-0" />Vorlage
+							</Checkbox>
+						</div>
 					</Dropdown>
 				</div>
 			</div>
@@ -793,11 +1024,15 @@
 				scope="col"
 				onclick={() => sortByField('accrualStart')}
 			>
-				Datum
+				<CalendarMonthOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Datum
 				{@render sortIcon('accrualStart')}
 			</TableHeadCell>
 			<TableHeadCell class="px-2 py-3 md:px-4" scope="col" onclick={() => sortByField('title')}>
-				Titel
+				<TextSizeOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Titel
 				{@render sortIcon('title')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -805,7 +1040,9 @@
 				scope="col"
 				onclick={() => sortByField('accounts')}
 			>
-				Konten
+				<WalletOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Konten
 				{@render sortIcon('accounts')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -813,7 +1050,9 @@
 				scope="col"
 				onclick={() => sortByField('categories')}
 			>
-				Kategorien
+				<TagOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Kategorien
 				{@render sortIcon('categories')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -821,7 +1060,9 @@
 				scope="col"
 				onclick={() => sortByField('effectiveAmount')}
 			>
-				Betrag
+				<EuroOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Betrag
 				{@render sortIcon('effectiveAmount')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -829,7 +1070,9 @@
 				scope="col"
 				onclick={() => sortByField('store')}
 			>
-				Geschäft
+				<StoreOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Geschäft
 				{@render sortIcon('store')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -837,7 +1080,9 @@
 				scope="col"
 				onclick={() => sortByField('description')}
 			>
-				Beschreibung
+				<AlignLeftOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Beschreibung
 				{@render sortIcon('description')}
 			</TableHeadCell>
 			<!-- What the bank wrote. No sort arrow: the backend names its sortable columns and this
@@ -845,14 +1090,18 @@
 			     the title: at 1280 the nine columns together are wider than the window, and both of
 			     them end up too narrow to read. Below that the expanded row still has it in full. -->
 			<TableHeadCell class="hidden px-4 py-3 2xl:table-cell" scope="col">
-				Transaktionstext
+				<ReceiptOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Transaktionstext
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
 				onclick={() => sortByField('status')}
 			>
-				Status
+				<FlagOutline
+					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
+				/>Status
 				{@render sortIcon('status')}
 			</TableHeadCell>
 		</TableHead>
@@ -886,7 +1135,11 @@
 					     itself is gone now that the cell holds two lines rather than one string. Zero
 					     max-width plus full width leaves it exactly the space the other columns did
 					     not take. -->
-					<TableBodyCell class="px-2 py-3 whitespace-normal md:px-4">
+					<TableBodyCell
+						class="px-2 py-3 whitespace-normal md:px-4 {titleIsPlaceholder(expense.title)
+							? 'bg-red-50 dark:bg-red-950/40'
+							: ''}"
+					>
 						<!-- wraps rather than truncates on a phone: with five columns gone the title is
 						     most of what identifies the row, and there is no second place to read it -->
 						<!-- wrap-anywhere, not break-words: only `overflow-wrap: anywhere` counts towards
@@ -914,7 +1167,7 @@
 					<TableBodyCell
 						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' +
 							amountTint(expense.effectiveAmount)}
-						>{(expense.effectiveAmount / 100).toFixed(2)}€</TableBodyCell
+						>{signedEuro(expense.effectiveAmount)}</TableBodyCell
 					>
 					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
 						>{expense.store}</TableBodyCell
@@ -1019,7 +1272,7 @@
 														<td
 															class={'px-3 py-2 text-right whitespace-nowrap ' + amountTint(amount)}
 														>
-															{(amount / 100).toFixed(2)}€
+															{signedEuro(amount)}
 														</td>
 														<td class="px-3 py-2 text-gray-500 dark:text-gray-400">
 															{#if transaction.fraction}
@@ -1161,7 +1414,7 @@
 														     `json_diff` comes out empty. Something was changed and there is no way
 														     to say what, so the line says only that -- an empty string is falsy, so
 														     without this it stopped after the author's name. -->
-														<span class="text-gray-500 dark:text-gray-400">— geändert</span>
+														<span>— geändert</span>
 													{:else}
 														<pre
 															class="mt-1 overflow-x-auto rounded bg-gray-50 p-2 text-xs dark:bg-gray-800">{change.diff}</pre>
@@ -1173,29 +1426,45 @@
 								</div>
 							</div>
 
-							<div class="mt-6 flex gap-2">
-								<Button
-									color="yellow"
-									size="xs"
-									onclick={() => {
-										expenseIdToEdit = expense.id.toString();
-										showEditExpenseModal = true;
-									}}
-								>
-									<EditOutline class="mr-2 h-3.5 w-3.5" />
-									Bearbeiten
-								</Button>
-								<Button
-									color="red"
-									size="xs"
-									onclick={() => {
-										expenseIdToDelete = expense.id.toString();
-										showDeleteExpenseModal = true;
-									}}
-								>
-									<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
-									Löschen
-								</Button>
+							<!-- The toolbar's group again, in the same order and minus Neu, which is the one
+							     button up there that is not about a particular expense. A ButtonGroup sizes
+							     its children itself, so there is no `size` to set here. -->
+							<div class="mt-6">
+								<ButtonGroup>
+									<Button color="teal" onclick={() => openEditModal(expense.id.toString(), true)}>
+										<FileCopyAltOutline class="mr-2 h-3.5 w-3.5" />
+										Duplizieren
+									</Button>
+									<Button
+										color="yellow"
+										class="text-gray-900"
+										onclick={() => openEditModal(expense.id.toString())}
+									>
+										<EditOutline class="mr-2 h-3.5 w-3.5" />
+										Bearbeiten
+									</Button>
+									<Button
+										color="red"
+										onclick={() => {
+											expenseIdToDelete = expense.id.toString();
+											showDeleteExpenseModal = true;
+										}}
+									>
+										<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
+										Löschen
+									</Button>
+									<Button
+										color="gray"
+										onclick={() => {
+											expenseIdToResort = expense.id.toString();
+											resortError = undefined;
+											showResortExpenseModal = true;
+										}}
+									>
+										<ArchiveArrowDownOutline class="mr-2 h-3.5 w-3.5" />
+										Einsortieren
+									</Button>
+								</ButtonGroup>
 							</div>
 						</td>
 					</tr>
@@ -1222,35 +1491,35 @@
 				     into three. There the two arrows are the whole control: which page of how many
 				     is what the "Einträge 31-45 von 700" beside them already says. -->
 				<ButtonGroup>
-					<Button onclick={() => currentPage--} disabled={currentPage <= 1}>
+					<ActionButton onclick={() => currentPage--} disabled={currentPage <= 1}>
 						<ChevronLeftOutline size="xs" class="m-1.5" />
-					</Button>
+					</ActionButton>
 					{#if currentPage > 3}
-						<Button
+						<ActionButton
 							class="hidden md:inline-flex"
 							disabled={currentPage === 1}
-							onclick={() => (currentPage = 1)}>1</Button
+							onclick={() => (currentPage = 1)}>1</ActionButton
 						>
 						<Button class="hidden md:inline-flex" disabled>...</Button>
 					{/if}
 					{#each [currentPage - 2, currentPage - 1, currentPage, currentPage + 1, currentPage + 2].filter((page) => page > 0 && page <= totalPages) as pageNumber (pageNumber)}
-						<Button
+						<ActionButton
 							class="hidden md:inline-flex"
 							disabled={currentPage === pageNumber}
-							onclick={() => (currentPage = pageNumber)}>{pageNumber}</Button
+							onclick={() => (currentPage = pageNumber)}>{pageNumber}</ActionButton
 						>
 					{/each}
 					{#if currentPage < totalPages - 2}
 						<Button class="hidden md:inline-flex" disabled>...</Button>
-						<Button
+						<ActionButton
 							class="hidden md:inline-flex"
 							disabled={currentPage === totalPages}
-							onclick={() => (currentPage = totalPages)}>{totalPages}</Button
+							onclick={() => (currentPage = totalPages)}>{totalPages}</ActionButton
 						>
 					{/if}
-					<Button onclick={() => currentPage++} disabled={currentPage >= totalPages}>
+					<ActionButton onclick={() => currentPage++} disabled={currentPage >= totalPages}>
 						<ChevronRightOutline size="xs" class="m-1.5" />
-					</Button>
+					</ActionButton>
 				</ButtonGroup>
 			</div>
 		{/snippet}

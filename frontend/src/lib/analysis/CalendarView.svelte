@@ -8,9 +8,7 @@
 	import { shiftMonth } from './dates';
 	import { resolve } from '$app/paths';
 	import QueryError from '$lib/QueryError.svelte';
-
-	const euro = (cents: number) =>
-		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+	import { euro } from '$lib/money';
 
 	const month = $derived(new Date(calendarState.month));
 	const shift = (n: number) => {

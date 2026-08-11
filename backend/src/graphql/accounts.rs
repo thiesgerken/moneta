@@ -10,12 +10,14 @@ use crate::models::AccountRisk;
 use crate::models::AccountSynchronization;
 use crate::models::{Account, AccountCreateInput, AccountUpdateInput};
 use crate::order_by;
-use crate::schema::{accounts, balances, expense_transactions};
+use crate::schema::{accounts, balances, expense_transactions, expenses};
 
 use chrono::DateTime;
+use chrono::TimeDelta;
 use chrono::Utc;
 use dataloader::BatchFn;
 use dataloader::cached::Loader;
+use diesel::dsl::count_star;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use juniper::{FieldResult, GraphQLEnum, graphql_object};
@@ -64,6 +66,13 @@ impl GraphQLAccount {
         Ok(GraphQLUserInfo::new(
             context.user_loader.try_load(self.data.user_id).await?,
         ))
+    }
+
+    /// How many transactions have been booked against this account in the last year, templates
+    /// left out. What the pickers sort on: the five accounts you actually use are five of
+    /// dozens, and alphabetical order buries them.
+    async fn usage_count(&self, context: &Context) -> FieldResult<i32> {
+        Ok(context.account_usage_loader.try_load(self.data.id).await?)
     }
 
     fn name(&self) -> &str {
@@ -339,6 +348,54 @@ impl BatchFn<Uuid, Account> for AccountBatcher {
 }
 
 pub type AccountLoader = Loader<Uuid, Account, AccountBatcher>;
+
+/// How far back `usageCount` looks.
+///
+/// A year rather than all of it: an account is offered first because it is the one you are
+/// about to reach for, and what you reached for in 2014 says nothing about that. It also lets
+/// an account you have stopped using sink on its own, without anybody marking it closed.
+pub const USAGE_WINDOW: TimeDelta = TimeDelta::days(365);
+
+pub struct AccountUsageBatcher {
+    pool: crate::Pool,
+}
+
+impl BatchFn<Uuid, i32> for AccountUsageBatcher {
+    async fn load(&mut self, keys: &[Uuid]) -> HashMap<Uuid, i32> {
+        debug!("Counting recent use of {} accounts", keys.len());
+
+        let Ok(mut conn) = self.pool.get().await else {
+            return HashMap::new();
+        };
+
+        // Templates are excluded: a template is booked against an account once and stands for
+        // every expense a rule makes from it, so counting it would rank by what the rules were
+        // set up to do rather than by what you do.
+        let counted: HashMap<Uuid, i32> = expense_transactions::table
+            .inner_join(expenses::table)
+            .filter(expense_transactions::account_id.eq_any(keys))
+            .filter(expenses::accrual_start.gt(Utc::now() - USAGE_WINDOW))
+            .filter(expenses::is_template.eq(false))
+            .group_by(expense_transactions::account_id)
+            .select((expense_transactions::account_id, count_star()))
+            .load::<(Uuid, i64)>(&mut conn)
+            .await
+            .map(|rows| rows.into_iter().map(|(id, n)| (id, n as i32)).collect())
+            .unwrap_or_default();
+
+        // An account nobody used in a year is absent from that result, and a loader that
+        // returns nothing for a key panics rather than resolving to zero.
+        keys.iter()
+            .map(|id| (*id, counted.get(id).copied().unwrap_or(0)))
+            .collect()
+    }
+}
+
+pub type AccountUsageLoader = Loader<Uuid, i32, AccountUsageBatcher>;
+
+pub fn get_account_usage_loader(pool: crate::Pool) -> AccountUsageLoader {
+    Loader::new(AccountUsageBatcher { pool })
+}
 
 pub fn get_account_loader(pool: crate::Pool) -> AccountLoader {
     Loader::new(AccountBatcher { pool })

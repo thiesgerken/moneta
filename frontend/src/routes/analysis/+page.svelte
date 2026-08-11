@@ -1,5 +1,14 @@
 <script lang="ts">
 	import { Tabs, TabItem } from 'flowbite-svelte';
+	import {
+		CalendarMonthOutline,
+		ChartLineUpOutline,
+		ObjectsColumnOutline,
+		ClockArrowOutline,
+		FileLinesOutline,
+		HourglassOutline,
+		TagOutline
+	} from 'flowbite-svelte-icons';
 	import { page } from '$app/state';
 	import { replaceState } from '$app/navigation';
 	import ExpenseChangelog from '$lib/ExpenseChangelog.svelte';
@@ -13,15 +22,15 @@
 	/// The tabs, in the order they are shown. The slug is what `?tab=` carries and is English
 	/// like the rest of the code; only `title` is what a reader sees.
 	const TABS = [
-		{ slug: 'wealth', title: 'Vermögen' },
-		{ slug: 'months', title: 'Monate' },
-		{ slug: 'categories', title: 'Kategorien' },
-		{ slug: 'prepayments', title: 'Vorauszahlungen' },
-		{ slug: 'statement', title: 'Kontoauszug' },
-		{ slug: 'calendar', title: 'Kalender' },
+		{ slug: 'wealth', title: 'Vermögen', icon: ChartLineUpOutline },
+		{ slug: 'months', title: 'Monate', icon: ObjectsColumnOutline },
+		{ slug: 'categories', title: 'Kategorien', icon: TagOutline },
+		{ slug: 'prepayments', title: 'Vorauszahlungen', icon: HourglassOutline },
+		{ slug: 'statement', title: 'Kontoauszug', icon: FileLinesOutline },
+		{ slug: 'calendar', title: 'Kalender', icon: CalendarMonthOutline },
 		// Last, and no longer what the page opens on: the feed is a log, and the start page now
 		// carries the part of it worth arriving at.
-		{ slug: 'activity', title: 'Aktivität' }
+		{ slug: 'activity', title: 'Aktivität', icon: ClockArrowOutline }
 	];
 
 	/// Which tab a link may ask for. Read once: from here on the tabs own their own state, and
@@ -50,7 +59,11 @@
 		classes={{ content: 'mt-4 rounded-lg bg-gray-50 p-2 sm:p-4 dark:bg-gray-800' }}
 	>
 		{#each TABS as tab (tab.slug)}
-			<TabItem open={initial === tab.slug} onclick={() => remember(tab.slug)} title={tab.title}>
+			<TabItem open={initial === tab.slug} onclick={() => remember(tab.slug)}>
+				{#snippet titleSlot()}
+					{@const Icon = tab.icon}
+					<span class="flex items-center gap-2"><Icon class="h-4 w-4 shrink-0" />{tab.title}</span>
+				{/snippet}
 				{#if tab.slug === 'wealth'}
 					<WealthView />
 				{:else if tab.slug === 'months'}

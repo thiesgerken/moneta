@@ -20,9 +20,8 @@
 	import { ANALYSIS_CARD } from './cards';
 	import { shortDate } from './dates';
 	import QueryError from '$lib/QueryError.svelte';
+	import { euro } from '$lib/money';
 
-	const euro = (cents: number) =>
-		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 	const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 	const accountStore = graphql(`

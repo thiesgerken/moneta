@@ -30,6 +30,8 @@
 						firstName
 					}
 					color
+					closed
+					usageCount
 				}
 			}
 			categories {
@@ -37,6 +39,7 @@
 					id
 					name
 					color
+					usageCount
 				}
 			}
 		}
@@ -81,6 +84,7 @@
 						effectiveAmount
 						amount
 						date
+						bookingDate
 						statement
 						account {
 							id
@@ -125,12 +129,15 @@
 			id: a.id.toString(),
 			name: a.name,
 			owner: { name: a.owner.name, firstName: a.owner.firstName },
-			color: a.color
+			color: a.color,
+			closed: a.closed,
+			usageCount: a.usageCount
 		})) || []}
 		categories={$basicStore.data?.categories.list.map((c) => ({
 			id: c.id.toString(),
 			name: c.name,
-			color: c.color
+			color: c.color,
+			usageCount: c.usageCount
 		})) || []}
 	/>
 {/if}

@@ -223,3 +223,24 @@ export interface SortableCategory {
 export function categorySorter(a: SortableCategory, b: SortableCategory) {
 	return a.name.localeCompare(b.name);
 }
+
+/// How many entries a picker puts up top before it goes back to alphabetical.
+///
+/// Five, because five is what the tail looks like: the top accounts here were used 600, 450,
+/// 400, 250 and 50 times in a year, and then it falls off a cliff to twelve. Sorting a whole
+/// list by frequency instead would put the accounts you touch twice a year in an order nobody
+/// can predict, and alphabetical is faster once you already know the name you are looking for.
+export const FREQUENT = 5;
+
+/// The few things you actually use first, everything else in whatever order it had.
+export function byUsageThen<T extends { usageCount: number }>(
+	options: T[],
+	rest: (a: T, b: T) => number
+): T[] {
+	const frequent = options
+		.filter((option) => option.usageCount > 0)
+		.toSorted((a, b) => b.usageCount - a.usageCount)
+		.slice(0, FREQUENT);
+
+	return [...frequent, ...options.filter((option) => !frequent.includes(option)).toSorted(rest)];
+}

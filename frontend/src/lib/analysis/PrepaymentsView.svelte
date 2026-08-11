@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { HourglassOutline, ExclamationCircleOutline } from 'flowbite-svelte-icons';
 	import {
 		Card,
 		Input,
@@ -18,9 +19,7 @@
 	import { shortDate } from './dates';
 	import QueryError from '$lib/QueryError.svelte';
 	import ExpenseDetailModal from '$lib/ExpenseDetailModal.svelte';
-
-	const euro = (cents: number) =>
-		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+	import { euro } from '$lib/money';
 
 	// How much of a prepayment is laid out, used up or still to come is a quantity of it, not a
 	// movement on an account: 145 € were prepaid, not -145 €. Expense amounts stay signed the way
@@ -144,7 +143,11 @@
 	</div>
 
 	<Card class={ANALYSIS_CARD}>
-		<h3 class="text-lg font-semibold">Vorauszahlungen</h3>
+		<h3 class="text-lg font-semibold">
+			<HourglassOutline
+				class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
+			/>Vorauszahlungen
+		</h3>
 		<p class="mb-2 text-sm text-gray-500 dark:text-gray-400">
 			Ausgaben, deren Wert sich über einen Leistungszeitraum verteilt und an diesem Stichtag noch
 			nicht aufgebraucht ist. Der Verbrauch läuft linear über den Zeitraum.
@@ -212,7 +215,11 @@
 	</Card>
 
 	<Card class={ANALYSIS_CARD}>
-		<h3 class="text-lg font-semibold">Unvollständige Ausgaben</h3>
+		<h3 class="text-lg font-semibold">
+			<ExclamationCircleOutline
+				class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
+			/>Unvollständige Ausgaben
+		</h3>
 		<p class="mb-2 text-sm text-gray-500 dark:text-gray-400">
 			Hier fehlen noch Transaktionen, deren Höhe unbekannt ist – anders als bei Vorauszahlungen gibt
 			es keinen Restbetrag zu berechnen.
