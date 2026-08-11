@@ -60,6 +60,7 @@
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
 	import { page } from '$app/state';
 	import { shortDate } from './analysis/dates';
+	import { signedEuro } from './money';
 	import QueryError from './QueryError.svelte';
 
 	let currentPage = $state(1);
@@ -670,7 +671,7 @@
 		</span>
 	{/if}
 	{#if expense.isUnchecked}
-		<span class="rounded-md bg-red-100 px-2 py-1 text-yellow-700">
+		<span class="rounded-md bg-yellow-100 px-2 py-1 text-yellow-700">
 			<QuestionCircleOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Unbestätigt
 		</span>
 	{/if}
@@ -1148,7 +1149,7 @@
 					<TableBodyCell
 						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' +
 							amountTint(expense.effectiveAmount)}
-						>{(expense.effectiveAmount / 100).toFixed(2)}€</TableBodyCell
+						>{signedEuro(expense.effectiveAmount)}</TableBodyCell
 					>
 					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
 						>{expense.store}</TableBodyCell
@@ -1253,7 +1254,7 @@
 														<td
 															class={'px-3 py-2 text-right whitespace-nowrap ' + amountTint(amount)}
 														>
-															{(amount / 100).toFixed(2)}€
+															{signedEuro(amount)}
 														</td>
 														<td class="px-3 py-2 text-gray-500 dark:text-gray-400">
 															{#if transaction.fraction}

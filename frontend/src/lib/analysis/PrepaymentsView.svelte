@@ -19,9 +19,7 @@
 	import { shortDate } from './dates';
 	import QueryError from '$lib/QueryError.svelte';
 	import ExpenseDetailModal from '$lib/ExpenseDetailModal.svelte';
-
-	const euro = (cents: number) =>
-		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+	import { euro } from '$lib/money';
 
 	// How much of a prepayment is laid out, used up or still to come is a quantity of it, not a
 	// movement on an account: 145 € were prepaid, not -145 €. Expense amounts stay signed the way

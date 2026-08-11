@@ -20,6 +20,7 @@
 	import { feedState } from './analysis/state.svelte';
 	import { shortDate } from './analysis/dates';
 	import QueryError from './QueryError.svelte';
+	import { euro } from '$lib/money';
 
 	/// The dashboard shows the same feed in a column beside everything else, where the filters
 	/// belong to the tab that owns them and six entries are as many as fit.
@@ -222,9 +223,6 @@
 	}
 
 	const me = $derived(feed?.users.me?.name);
-
-	const euro = (cents: number) =>
-		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
 	const day = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 

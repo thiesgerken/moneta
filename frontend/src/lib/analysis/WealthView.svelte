@@ -24,9 +24,7 @@
 	import { shortDate, todayIso } from './dates';
 	import { ANALYSIS_CARD, WEALTH_COLOR } from './cards';
 	import QueryError from '$lib/QueryError.svelte';
-
-	const euro = (cents: number) =>
-		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+	import { euro } from '$lib/money';
 
 	const DAY = 86400000;
 

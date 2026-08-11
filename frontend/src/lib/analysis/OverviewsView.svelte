@@ -29,9 +29,7 @@
 	import { overviewsState } from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
 	import QueryError from '$lib/QueryError.svelte';
-
-	const euro = (cents: number) =>
-		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+	import { euro, signedEuro } from '$lib/money';
 
 	// Kept here rather than read off the store so the chart never sees an empty intermediate
 	// state: houdini clears `data` while a fetch is in flight, which drew the chart once
@@ -157,7 +155,7 @@
 										color={deltaColor(o.endTotal - o.startTotal)}
 										class="text-sm font-semibold"
 									>
-										{euro(o.endTotal - o.startTotal)}
+										{signedEuro(o.endTotal - o.startTotal)}
 									</Badge>
 								</TableBodyCell>
 								<TableBodyCell class="px-4 py-3 text-green-700 dark:text-green-400"
@@ -176,7 +174,7 @@
 								<TableBodyCell
 									class="hidden px-4 py-3 sm:table-cell {errorClass(integrationError(o))}"
 								>
-									{euro(integrationError(o))}
+									{signedEuro(integrationError(o))}
 								</TableBodyCell>
 							</TableBodyRow>
 						{/each}

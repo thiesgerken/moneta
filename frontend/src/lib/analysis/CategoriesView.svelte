@@ -20,9 +20,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import QueryError from '$lib/QueryError.svelte';
-
-	const euro = (cents: number) =>
-		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+	import { euro } from '$lib/money';
 
 	// see OverviewsView: the store is cleared mid-fetch, which flickers the charts
 	let latestRequest = 0;

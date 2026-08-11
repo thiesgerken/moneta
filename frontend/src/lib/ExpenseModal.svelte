@@ -1,15 +1,7 @@
 <script lang="ts">
-	import {
-		Modal,
-		Label,
-		Input,
-		Textarea,
-		Button,
-		Datepicker,
-		Checkbox,
-		Select
-	} from 'flowbite-svelte';
+	import { Modal, Label, Input, Textarea, Button, Datepicker, Select } from 'flowbite-svelte';
 
+	import type { Component } from 'svelte';
 	import { graphql } from '$houdini';
 	import ActionButton from './ActionButton.svelte';
 	import type { ExpenseInput } from '$houdini/graphql/inputs';
@@ -454,6 +446,23 @@
 	</ActionButton>
 {/snippet}
 
+{#snippet flagChip(label: string, Icon: Component, on: boolean, toggle: () => void, tone: string)}
+	<!-- A chip rather than a checkbox, and when it is on it is the badge the list draws for the
+	     same flag: what you switch on here is what you then look for in the row. Off is an
+	     outline rather than a grey fill -- grey is what a disabled control is, and there is one
+	     of those in this dialog already. -->
+	<button
+		type="button"
+		aria-pressed={on}
+		onclick={toggle}
+		class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm transition-colors {on
+			? tone
+			: 'border-gray-300 text-gray-500 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
+	>
+		<Icon class="h-4 w-4 shrink-0" />{label}
+	</button>
+{/snippet}
+
 {#snippet textButton(label: string, onclick: () => void)}
 	<button
 		type="button"
@@ -558,25 +567,42 @@
 		     the "Flags" label and read as belonging to nothing. -->
 		<div class="col-span-full">
 			<Label class="mb-2 block">Flags</Label>
-			<!-- One icon per state, and the same one wherever that state is named: here, in the
-			     list's badges, and in the toolbar's Status filter. Five words of the same length
-			     in the same weight are read one after another; five shapes are recognised. -->
-			<div class="flex flex-wrap gap-x-6 gap-y-2">
-				<Checkbox bind:checked={isTemplate}>
-					<FileCloneOutline class="me-1.5 h-4 w-4 shrink-0" />Vorlage
-				</Checkbox>
-				<Checkbox bind:checked={isUnchecked}>
-					<QuestionCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Unbestätigt
-				</Checkbox>
-				<Checkbox bind:checked={isIncomplete}>
-					<ExclamationCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Unvollständig
-				</Checkbox>
-				<Checkbox bind:checked={isExtraordinary}>
-					<StarOutline class="me-1.5 h-4 w-4 shrink-0" />Außergewöhnlich
-				</Checkbox>
-				<Checkbox bind:checked={isTaxRelevant}>
-					<LandmarkOutline class="me-1.5 h-4 w-4 shrink-0" />Steuerrelevant
-				</Checkbox>
+			<div class="flex flex-wrap gap-2">
+				{@render flagChip(
+					'Vorlage',
+					FileCloneOutline,
+					isTemplate,
+					() => (isTemplate = !isTemplate),
+					'border-transparent bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+				)}
+				{@render flagChip(
+					'Unbestätigt',
+					QuestionCircleOutline,
+					isUnchecked,
+					() => (isUnchecked = !isUnchecked),
+					'border-transparent bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200'
+				)}
+				{@render flagChip(
+					'Unvollständig',
+					ExclamationCircleOutline,
+					isIncomplete,
+					() => (isIncomplete = !isIncomplete),
+					'border-transparent bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200'
+				)}
+				{@render flagChip(
+					'Außergewöhnlich',
+					StarOutline,
+					isExtraordinary,
+					() => (isExtraordinary = !isExtraordinary),
+					'border-transparent bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200'
+				)}
+				{@render flagChip(
+					'Steuerrelevant',
+					LandmarkOutline,
+					isTaxRelevant,
+					() => (isTaxRelevant = !isTaxRelevant),
+					'border-transparent bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
+				)}
 			</div>
 		</div>
 
