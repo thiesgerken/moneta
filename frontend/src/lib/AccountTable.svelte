@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { cache, graphql } from '$houdini';
+	import { graphql } from '$houdini';
+	import { invalidate, AFTER_WRITE } from './invalidate';
 
 	import {
 		TableBody,
@@ -203,8 +204,8 @@
 	`);
 
 	async function handleAccountModalSubmit() {
-		cache.markStale('Account');
-		await accountStore.fetch({});
+		invalidate();
+		await accountStore.fetch({ ...AFTER_WRITE });
 		expandedRows = [];
 	}
 
@@ -214,8 +215,8 @@
 		accountIdToDelete = undefined;
 		showDeleteAccountModal = false;
 
-		cache.markStale('Account');
-		await accountStore.fetch({});
+		invalidate();
+		await accountStore.fetch({ ...AFTER_WRITE });
 		expandedRows = [];
 	}
 

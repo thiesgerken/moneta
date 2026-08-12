@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { cache, graphql } from '$houdini';
+	import { graphql } from '$houdini';
+	import { invalidate, AFTER_WRITE } from './invalidate';
 	import {
 		TableBody,
 		TableBodyCell,
@@ -85,8 +86,8 @@
 	`);
 
 	async function reload() {
-		cache.markStale('PeriodicRule');
-		await ruleStore.fetch();
+		invalidate();
+		await ruleStore.fetch(AFTER_WRITE);
 	}
 
 	async function handleSubmit() {
@@ -108,7 +109,7 @@
 		const count = result.data?.periodicRules.run ?? 0;
 		runResult = count === 1 ? '1 Ausgabe erzeugt' : `${count} Ausgaben erzeugt`;
 		// the generated expenses change what is still pending
-		cache.markStale('Expense');
+		invalidate();
 		await reload();
 	}
 </script>

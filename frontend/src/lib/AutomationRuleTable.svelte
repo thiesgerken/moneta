@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { cache, graphql } from '$houdini';
+	import { graphql } from '$houdini';
+	import { invalidate, AFTER_WRITE } from './invalidate';
 	import {
 		TableBody,
 		TableBodyCell,
@@ -82,8 +83,8 @@
 	`);
 
 	async function reload() {
-		cache.markStale('AutomationRule');
-		await ruleStore.fetch();
+		invalidate();
+		await ruleStore.fetch(AFTER_WRITE);
 	}
 
 	async function handleSubmit() {

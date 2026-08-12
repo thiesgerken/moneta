@@ -1,10 +1,5 @@
 <script lang="ts">
-	import {
-		cache,
-		graphql,
-		type ChangelogAuthor$options,
-		type ExpenseChangelog$result
-	} from '$houdini';
+	import { graphql, type ChangelogAuthor$options, type ExpenseChangelog$result } from '$houdini';
 	import { Badge, Spinner } from 'flowbite-svelte';
 	import {
 		CirclePlusOutline,
@@ -16,6 +11,7 @@
 	import ExpenseModal from './ExpenseModal.svelte';
 	import { changedFields, summarizeFields, stateAmount } from './changelog';
 	import ChangeList from './ChangeList.svelte';
+	import { invalidate } from './invalidate';
 	import { formatAccount } from './expense_utils';
 	import { categoryColor } from './analysis/overviews';
 	import { feedState } from './analysis/state.svelte';
@@ -226,7 +222,7 @@
 
 	// editing an expense writes another changelog entry, so the feed itself is out of date
 	async function saved() {
-		cache.markStale('Expense');
+		invalidate();
 		await load();
 	}
 
