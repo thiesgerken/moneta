@@ -22,9 +22,13 @@
 
 ## would be nice
 
-- decide which analysis views should offer a transaction-date / booking-period toggle. Today
-  everything follows transaction dates; `expenses.list` has `valuedAfter`/`valuedBefore` for
-  that axis and `accruedAfter`/`accruedBefore` for the other, so it is a UI question now.
+- the date axis is done, and this is the record of where it stops. Monate, Kategorien, the
+  calendar and the dashboard donut share one toggle (`axisState`); the expense list picks one of
+  the three dates for its column, sort and period filter. `simulate_balances`,
+  `analysis_statement` and everything drawn from them -- Kontostände, Vermögen, Kontoauszug --
+  stay on the value date on purpose, because an accrued share is a cost a month carried rather
+  than money in an account, and the *Fehler* column reconciles against recorded balances. Do not
+  "finish the job" by putting a toggle on those.
   See [docs/analysis-dashboard.md](docs/analysis-dashboard.md).
 - push notifications
 - ausgabe in transaktion umwandeln (zB Retoure mit original zusammenfassen, dann automatisch

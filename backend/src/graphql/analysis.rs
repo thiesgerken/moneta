@@ -20,7 +20,7 @@ use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel::sql_types::{Array, BigInt, Double, Integer, Nullable, Text, Timestamptz};
+use diesel::sql_types::{Array, BigInt, Bool, Double, Integer, Nullable, Text, Timestamptz};
 use diesel_async::RunQueryDsl;
 use itertools::Itertools;
 use juniper::{FieldResult, GraphQLObject, graphql_object};
@@ -124,7 +124,7 @@ pub struct AccountOverview {
     pub start_amount: f64,
     pub end_amount: f64,
     /// `startAmount` plus the month's transactions — see [`MonthOverview::integrated_end_total`]
-    pub integrated_end_amount: f64,
+    pub integrated_end_amount: Option<f64>,
     pub income: f64,
     pub expenses: f64,
     pub expense_count: i32,
@@ -143,7 +143,11 @@ pub struct MonthOverview {
     /// The gap to `endTotal` is MoneyDB's *Integrationsfehler*. It does not mean the
     /// arithmetic drifted — it means an expense is missing, which is the whole point of
     /// showing it.
-    pub integrated_end_total: f64,
+    ///
+    /// Null when the totals are read on the accrual axis: a sixth of a subscription is a cost
+    /// the month carried, not money that left an account, so there is nothing for the recorded
+    /// balances to disagree with.
+    pub integrated_end_total: Option<f64>,
     pub income: f64,
     pub expenses: f64,
     pub expense_count: i32,
@@ -284,17 +288,17 @@ struct StatementRow {
 
 const MONTH_TOTALS: &str = r#"
 SELECT month, account_id, income, expenses, expense_count
-FROM analysis_month_totals($1, $2, $3)
+FROM analysis_month_totals($1, $2, $3, $4)
 "#;
 
 const CATEGORY_TOTALS: &str = r#"
 SELECT month, category_id, income, expenses
-FROM analysis_category_totals($1, $2, $3)
+FROM analysis_category_totals($1, $2, $3, $4)
 "#;
 
 const CATEGORY_EXPENSES: &str = r#"
 SELECT category_id, expense_id, title, amount
-FROM analysis_category_expenses($1, $2, $3, $4)
+FROM analysis_category_expenses($1, $2, $3, $4, $5)
 "#;
 
 const STATEMENT: &str = r#"
@@ -453,17 +457,27 @@ impl AnalysisQuery {
     /// `effectiveAmount`. The totals have to reconcile with the balances, and those are
     /// account balances rather than ownership-weighted shares of them; mixing the two would
     /// make the integration error meaningless.
+    /// `accrued` files each cost in the months it was *for* rather than the month it was
+    /// paid, spread evenly over the days of its Leistungszeitraum. The balances stay where
+    /// they are either way -- they are money in an account, which an accrued share is not --
+    /// so `integratedEndTotal` comes back null and there is no integration error to report.
     pub async fn overviews(
         context: &Context,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
+        accrued: Option<bool>,
     ) -> FieldResult<Overviews> {
         let user_id = require_user(context).await?;
+        let accrued = accrued.unwrap_or(false);
 
         cached(
             &context.cache,
-            format!("overviews:{user_id}:{}:{}", bucket(from), bucket(to)),
-            overviews_uncached(context, user_id, from, to),
+            format!(
+                "overviews:{user_id}:{}:{}:{accrued}",
+                bucket(from),
+                bucket(to)
+            ),
+            overviews_uncached(context, user_id, from, to, accrued),
         )
         .await
     }
@@ -533,6 +547,7 @@ async fn overviews_uncached(
     user_id: Uuid,
     from: DateTime<Utc>,
     to: DateTime<Utc>,
+    accrued: bool,
 ) -> FieldResult<Overviews> {
     // one more boundary than there are months: month i runs [starts[i], starts[i + 1])
     let starts = month_starts(from, to)?;
@@ -548,6 +563,7 @@ async fn overviews_uncached(
             .bind::<diesel::sql_types::Uuid, _>(user_id)
             .bind::<Timestamptz, _>(range_from)
             .bind::<Timestamptz, _>(range_to)
+            .bind::<Bool, _>(accrued)
             .load(conn)
             .await?;
 
@@ -555,6 +571,7 @@ async fn overviews_uncached(
             .bind::<diesel::sql_types::Uuid, _>(user_id)
             .bind::<Timestamptz, _>(range_from)
             .bind::<Timestamptz, _>(range_to)
+            .bind::<Bool, _>(accrued)
             .load(conn)
             .await?;
 
@@ -563,6 +580,7 @@ async fn overviews_uncached(
             .bind::<Timestamptz, _>(range_from)
             .bind::<Timestamptz, _>(range_to)
             .bind::<Integer, _>(TREEMAP_EXPENSES_PER_CATEGORY)
+            .bind::<Bool, _>(accrued)
             .load(conn)
             .await?;
 
@@ -617,7 +635,7 @@ async fn overviews_uncached(
                 account: GraphQLAccount::new(account.clone()),
                 start_amount,
                 end_amount,
-                integrated_end_amount: start_amount + moved,
+                integrated_end_amount: (!accrued).then_some(start_amount + moved),
                 income: totals.map_or(0.0, |t| t.income),
                 expenses: totals.map_or(0.0, |t| t.expenses),
                 expense_count: totals.map_or(0, |t| t.expense_count) as i32,
@@ -631,7 +649,7 @@ async fn overviews_uncached(
             month: *month,
             start_total,
             end_total,
-            integrated_end_total: start_total + income + expenses,
+            integrated_end_total: (!accrued).then_some(start_total + income + expenses),
             income,
             expenses,
             expense_count: expense_count as i32,

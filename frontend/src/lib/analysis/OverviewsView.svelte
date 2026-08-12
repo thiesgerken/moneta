@@ -26,7 +26,8 @@
 		monthDrilldown,
 		type OverviewsData
 	} from './overviews';
-	import { overviewsState } from './state.svelte';
+	import { DATE_AXES, accrued, axisState, overviewsState } from './state.svelte';
+	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import { ANALYSIS_CARD } from './cards';
 	import QueryError from '$lib/QueryError.svelte';
 	import { euro, signedEuro } from '$lib/money';
@@ -44,7 +45,7 @@
 
 		const request = ++latestRequest;
 		void overviewsStore
-			.fetch({ variables: { from: new Date(from), to: new Date(to) } })
+			.fetch({ variables: { from: new Date(from), to: new Date(to), accrued: accrued() } })
 			.then((result) => {
 				if (request !== latestRequest) return;
 				overviews = result.data?.analysis.overviews ?? null;
@@ -82,6 +83,7 @@
 <div class="space-y-4">
 	<div class="flex flex-wrap items-end gap-4">
 		<RangePicker bind:range={overviewsState.range} dates />
+		<ToggleGroup bind:value={axisState.axis} options={DATE_AXES} size="sm" />
 		{#if $overviewsStore.fetching}
 			<Spinner size="5" />
 		{/if}
@@ -124,13 +126,20 @@
 						<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Anzahl</TableHeadCell>
 						<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Vermögen Beginn</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Vermögen Ende</TableHeadCell>
-						<TableHeadCell class="hidden px-4 py-3 sm:table-cell">
-							<span class="underline decoration-dotted">Fehler</span>
-							<Tooltip class="max-w-xs text-xs font-normal normal-case">
-								Die Lücke zwischen dem fortgeschriebenen und dem gemessenen Endvermögen. Eine große
-								Lücke heißt nicht, dass die Rechnung driftet, sondern dass eine Ausgabe fehlt.
-							</Tooltip>
-						</TableHeadCell>
+						<!-- Only on the value axis. The error is the gap between the balances and what the
+						     month booked, and on the accrual axis those are answers to different
+						     questions: a sixth of a subscription is a cost the month carried, not money
+						     that left an account, so there is nothing to reconcile. -->
+						{#if !accrued()}
+							<TableHeadCell class="hidden px-4 py-3 sm:table-cell">
+								<span class="underline decoration-dotted">Fehler</span>
+								<Tooltip class="max-w-xs text-xs font-normal normal-case">
+									Die Lücke zwischen dem fortgeschriebenen und dem gemessenen Endvermögen. Eine
+									große Lücke heißt nicht, dass die Rechnung driftet, sondern dass eine Ausgabe
+									fehlt.
+								</Tooltip>
+							</TableHeadCell>
+						{/if}
 					</TableHead>
 					<TableBody class="divide-y">
 						{#each months.toReversed() as o (o.month.getTime())}
@@ -171,11 +180,12 @@
 									>{euro(o.startTotal)}</TableBodyCell
 								>
 								<TableBodyCell class="px-4 py-3">{euro(o.endTotal)}</TableBodyCell>
-								<TableBodyCell
-									class="hidden px-4 py-3 sm:table-cell {errorClass(integrationError(o))}"
-								>
-									{signedEuro(integrationError(o))}
-								</TableBodyCell>
+								{@const error = integrationError(o)}
+								{#if error !== null}
+									<TableBodyCell class="hidden px-4 py-3 sm:table-cell {errorClass(error)}">
+										{signedEuro(error)}
+									</TableBodyCell>
+								{/if}
 							</TableBodyRow>
 						{/each}
 					</TableBody>

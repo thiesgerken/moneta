@@ -315,11 +315,14 @@
 			<Card class="max-w-none p-4">
 				<span class="text-sm text-gray-500 dark:text-gray-400">Vermögen am Ende</span>
 				<span class="text-2xl font-semibold">{euro(detail.endTotal)}</span>
-				<span class="text-xs text-gray-500 dark:text-gray-400">
-					Integrationsfehler <span class={errorClass(integrationError(detail))}>
-						{euro(integrationError(detail))}
+				{@const error = integrationError(detail)}
+				{#if error !== null}
+					<span class="text-xs text-gray-500 dark:text-gray-400">
+						Integrationsfehler <span class={errorClass(error)}>
+							{euro(error)}
+						</span>
 					</span>
-				</span>
+				{/if}
 			</Card>
 		</div>
 
@@ -354,7 +357,11 @@
 						</TableHead>
 						<TableBody class="divide-y">
 							{#each detail.byAccount as a (a.account.id)}
-								{@const error = Math.abs(a.endAmount - a.integratedEndAmount)}
+								<!-- null only on the accrual axis, which this page never asks for -->
+								{@const error =
+									a.integratedEndAmount === null
+										? null
+										: Math.abs(a.endAmount - a.integratedEndAmount)}
 								<TableBodyRow>
 									<TableBodyCell class="px-4 py-3">
 										<span
@@ -372,7 +379,9 @@
 											{euro(a.endAmount - a.startAmount)}
 										</Badge>
 									</TableBodyCell>
-									<TableBodyCell class="px-4 py-3 {errorClass(error)}">{euro(error)}</TableBodyCell>
+									<TableBodyCell class="px-4 py-3 {error === null ? '' : errorClass(error)}">
+										{error === null ? '—' : euro(error)}
+									</TableBodyCell>
 								</TableBodyRow>
 							{/each}
 						</TableBody>

@@ -28,7 +28,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use diesel::dsl::sql;
 use diesel::prelude::*;
-use diesel::sql_types::{Bool, Text};
+use diesel::sql_types::{Bool, Nullable, Text, Timestamptz};
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 use juniper::{FieldResult, GraphQLEnum, GraphQLObject, graphql_object};
 
@@ -377,6 +377,10 @@ pub enum ChangelogAuthor {
 pub enum ExpenseSortField {
     #[default]
     AccrualStart,
+    /// earliest Wertstellung among the transactions
+    ValueDate,
+    /// earliest Buchungstag among the transactions that have one
+    BookingDate,
     Title,
     Store,
     Description,
@@ -447,6 +451,10 @@ fn search_predicate(term: &str) -> ExpensePredicate {
     predicate
 }
 
+/// Where a transaction stands on the Buchungstag axis. A string because diesel has no
+/// `coalesce`.
+const BOOKED_OR_VALUED: &str = "coalesce(booking_date, date)";
+
 pub struct ExpenseQuery;
 
 #[graphql_object(
@@ -466,6 +474,8 @@ impl ExpenseQuery {
         accrued_before: Option<DateTime<Utc>>,
         valued_after: Option<DateTime<Utc>>,
         valued_before: Option<DateTime<Utc>>,
+        booked_after: Option<DateTime<Utc>>,
+        booked_before: Option<DateTime<Utc>>,
         sort_by: Option<ExpenseSortField>,
         sort_dir: Option<SortDirection>,
     ) -> FieldResult<ExpenseConnection> {
@@ -538,11 +548,15 @@ impl ExpenseQuery {
                 );
             }
 
+            // Overlap, not containment: an expense accruing from January to June was a cost in
+            // March, and a caller asking for March wants it. Each end also stands on its own --
+            // "still accruing after X", "already accruing before Y" -- which is why they are
+            // two arguments rather than a window.
             if let Some(after) = accrued_after {
-                query = query.filter(expenses_rendered::accrual_start.ge(after));
+                query = query.filter(expenses_rendered::accrual_end.ge(after));
             }
             if let Some(before) = accrued_before {
-                query = query.filter(expenses_rendered::accrual_end.le(before));
+                query = query.filter(expenses_rendered::accrual_start.lt(before));
             }
 
             // The booking period is when an expense was *for*; these two are when the money
@@ -569,6 +583,30 @@ impl ExpenseQuery {
                 );
             }
 
+            // A transaction the bank never posted has no booking date and falls back to its
+            // own Wertstellung -- the same fallback the column and the sort use, so a range
+            // picks out the rows the column shows inside it.
+            if let Some(after) = booked_after {
+                query = query.filter(
+                    expenses_rendered::id.eq_any(
+                        expense_transactions_rendered::table
+                            .filter(expense_transactions_rendered::user_id.eq(user_id))
+                            .filter(sql::<Timestamptz>(BOOKED_OR_VALUED).ge(after))
+                            .select(expense_transactions_rendered::expense_id),
+                    ),
+                );
+            }
+            if let Some(before) = booked_before {
+                query = query.filter(
+                    expenses_rendered::id.eq_any(
+                        expense_transactions_rendered::table
+                            .filter(expense_transactions_rendered::user_id.eq(user_id))
+                            .filter(sql::<Timestamptz>(BOOKED_OR_VALUED).lt(before))
+                            .select(expense_transactions_rendered::expense_id),
+                    ),
+                );
+            }
+
             query
         };
 
@@ -579,6 +617,30 @@ impl ExpenseQuery {
             ExpenseSortField::AccrualStart => {
                 crate::order_by!(query, direction, expenses_rendered::accrual_start)
             }
+            // The dates live on the transactions, of which an expense can have several on
+            // several days, so the column shows a span and sorts on where it begins. Read back
+            // out of the rendered jsonb rather than joining, because that is already the
+            // reader's own view of them -- a mirrored transaction included, a stranger's not.
+            ExpenseSortField::ValueDate => crate::order_by!(
+                query,
+                direction,
+                sql::<Nullable<Timestamptz>>(
+                    "(SELECT min((t->>'date')::timestamptz) FROM jsonb_array_elements(transactions) t)"
+                )
+            ),
+            // Falling back to the transaction's own Wertstellung, because many of them
+            // were never posted by a bank and have no booking date at all. Where a bank did
+            // post one the two are a day or two apart anyway, so it is the closest thing to an
+            // answer, and it keeps the column, the sort and the period filter agreeing about
+            // where such a row belongs.
+            ExpenseSortField::BookingDate => crate::order_by!(
+                query,
+                direction,
+                sql::<Timestamptz>(
+                    "(SELECT min(coalesce((t->>'bookingDate')::timestamptz, (t->>'date')::timestamptz)) \
+                     FROM jsonb_array_elements(transactions) t)"
+                )
+            ),
             ExpenseSortField::Title => crate::order_by!(query, direction, expenses_rendered::title),
             ExpenseSortField::Store => crate::order_by!(query, direction, expenses_rendered::store),
             ExpenseSortField::Description => {
