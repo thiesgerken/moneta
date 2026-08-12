@@ -12,8 +12,19 @@
 	import { euro } from '$lib/money';
 
 	const month = $derived(new Date(calendarState.month));
+
+	/// Days whose chips are all showing rather than the first three. By day number, and cleared
+	/// on the way out of the month, because day 12 of the next one is a different day.
+	let expandedDays = $state<number[]>([]);
+	const toggleDay = (day: number) => {
+		expandedDays = expandedDays.includes(day)
+			? expandedDays.filter((d) => d !== day)
+			: [...expandedDays, day];
+	};
+
 	const shift = (n: number) => {
 		calendarState.month = shiftMonth(calendarState.month, n);
+		expandedDays = [];
 	};
 
 	const nextMonth = $derived(new Date(month.getFullYear(), month.getMonth() + 1, 1));
@@ -72,12 +83,20 @@
 	`);
 
 	$effect(() => {
+		// Both pairs every time, the unused one explicitly null: houdini merges variables into
+		// the ones the last fetch used, so leaving them out kept the previous axis's window
+		// alive and asked for expenses accruing in this month that were paid in the last one.
+		//
 		// The accrual pair overlaps rather than contains, which is what brings in a period that
 		// runs through this month without starting or ending in it.
+		const on = accrued();
 		void calendarStore.fetch({
-			variables: accrued()
-				? { accruedAfter: month, accruedBefore: nextMonth }
-				: { valuedAfter: month, valuedBefore: nextMonth }
+			variables: {
+				valuedAfter: on ? null : month,
+				valuedBefore: on ? null : nextMonth,
+				accruedAfter: on ? month : null,
+				accruedBefore: on ? nextMonth : null
+			}
 		});
 	});
 
@@ -206,15 +225,22 @@
 								</span>
 							{/if}
 						</div>
-						{#each entries.slice(0, 3) as e (e.id)}
+						{#each expandedDays.includes(day) ? entries : entries.slice(0, 3) as e (e.id)}
 							<div class="mt-0.5 truncate rounded px-1" style="background-color: {e.color}33">
 								{e.title}
 							</div>
 						{/each}
 						{#if entries.length > 3}
-							<div class="mt-0.5 text-gray-500 dark:text-gray-400">
-								+{entries.length - 3} weitere
-							</div>
+							<!-- On the accrual axis every subscription is on every day of its period, so
+							     a cell routinely has a dozen. The count was the only thing saying so and
+							     there was no way to read them. -->
+							<button
+								type="button"
+								class="mt-0.5 w-full text-left text-gray-500 hover:underline dark:text-gray-400"
+								onclick={() => toggleDay(day)}
+							>
+								{expandedDays.includes(day) ? 'weniger' : `+${entries.length - 3} weitere`}
+							</button>
 						{/if}
 					</div>
 				{/each}
