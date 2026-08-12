@@ -83,9 +83,9 @@
 	/// rather than a column each: eight columns already do not fit a phone. It is made inside
 	/// the period filter, next to the range it decides the meaning of.
 	const DATE_AXES = {
-		accrual: { label: 'Zeitraum', name: 'Leistungszeitraum', sort: 'accrualStart' },
-		value: { label: 'Wertstellung', name: 'Wertstellung', sort: 'valueDate' },
-		booking: { label: 'Buchung', name: 'Buchungstag', sort: 'bookingDate' }
+		accrual: { label: 'Leistungszeitraum', sort: 'accrualStart' },
+		value: { label: 'Wertstellung', sort: 'valueDate' },
+		booking: { label: 'Buchungstag', sort: 'bookingDate' }
 	} as const;
 	type DateAxis = keyof typeof DATE_AXES;
 
@@ -1028,7 +1028,7 @@
 						<Select
 							value={dateAxis}
 							onchange={(e) => setDateAxis((e.target as HTMLSelectElement).value as DateAxis)}
-							items={Object.entries(DATE_AXES).map(([value, a]) => ({ value, name: a.name }))}
+							items={Object.entries(DATE_AXES).map(([value, a]) => ({ value, name: a.label }))}
 							size="sm"
 							selectClass="h-9 py-0"
 							placeholder=""
@@ -1114,9 +1114,12 @@
 			     label started 24px to the left of every date under it. -->
 			<!-- The header only says which date it is showing; the period filter picks it, since
 			     that is where the range it applies to is chosen too. min-w rather than w, because
-			     "Wertstellung" is wider than the dates under it and a fixed width clipped it. -->
+			     the names are wider than the dates under them and a fixed width clipped them.
+			     On a phone it wraps instead: "Leistungszeitraum" on one line would take half the
+			     row from the title, and `wrap-anywhere` is what breaks a word with no space in
+			     it. -->
 			<TableHeadCell
-				class="w-28 py-3 pr-2 pl-7 whitespace-nowrap md:w-auto md:min-w-36 md:pr-4 md:pl-10"
+				class="w-28 py-3 pr-2 pl-7 wrap-anywhere md:w-auto md:min-w-36 md:pr-4 md:pl-10 md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField(axis.sort)}
 			>
