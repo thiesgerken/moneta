@@ -602,19 +602,23 @@
 	/// Value and booking dates sit on the transactions, and an expense can have several -- a
 	/// refund is the debit and the credit months apart, a chained prepayment more still. Both
 	/// ends, then, and `formatAccrualPeriod` collapses them when they agree, which is the
-	/// common case. Null where no transaction carries the date at all.
+	/// common case.
+	///
+	/// A transaction no bank posted has no booking date, and the day the expense starts to
+	/// accrue is the best guess at when it would have been booked -- for a manual entry the
+	/// two are usually the same day anyway. Better than a hole in the column, and it is what
+	/// the sort and the period filter assume as well.
 	function axisPeriod(expense: {
 		accrualStart: Date;
 		accrualEnd: Date;
 		transactions: { date: Date; bookingDate: Date | null }[];
-	}): [Date, Date] | null {
+	}): [Date, Date] {
 		if (dateAxis === 'accrual') return [expense.accrualStart, expense.accrualEnd];
 
 		const dates = expense.transactions
-			.map((t) => (dateAxis === 'value' ? t.date : t.bookingDate))
-			.filter((d) => d !== null)
+			.map((t) => (dateAxis === 'value' ? t.date : (t.bookingDate ?? expense.accrualStart)))
 			.map((d) => d.getTime());
-		if (dates.length === 0) return null;
+		if (dates.length === 0) return [expense.accrualStart, expense.accrualEnd];
 
 		return [new Date(Math.min(...dates)), new Date(Math.max(...dates))];
 	}
@@ -1228,11 +1232,7 @@
 							{/if}
 						</button>
 						{@const period = axisPeriod(expense)}
-						{#if period}
-							{formatAccrualPeriod(period[0], period[1], false)}
-						{:else}
-							<span class="text-gray-400 dark:text-gray-500">—</span>
-						{/if}
+						{formatAccrualPeriod(period[0], period[1], false)}
 					</TableBodyCell>
 					<!-- `w-full max-w-0` is what makes the inner block truncate: a table cell is as wide
 					     as its content unless something says otherwise, and `truncate` on the cell

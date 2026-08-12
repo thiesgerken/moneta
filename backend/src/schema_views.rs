@@ -100,3 +100,4 @@ diesel::allow_tables_to_appear_in_same_query!(expenses_rendered, expense_categor
 diesel::allow_tables_to_appear_in_same_query!(expenses_rendered, expense_changes);
 diesel::allow_tables_to_appear_in_same_query!(balances_rendered, accounts);
 diesel::allow_tables_to_appear_in_same_query!(expense_transactions_rendered, accounts);
+diesel::allow_tables_to_appear_in_same_query!(expense_transactions_rendered, expenses);
