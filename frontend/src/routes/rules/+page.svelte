@@ -10,11 +10,11 @@
 		class="flex-nowrap overflow-x-auto whitespace-nowrap"
 		classes={{ content: 'mt-4 rounded-lg bg-gray-50 p-2 sm:p-4 dark:bg-gray-800' }}
 	>
-		<TabItem open title="Periodisch">
-			<PeriodicRuleTable />
-		</TabItem>
-		<TabItem title="Automatisierung">
+		<TabItem open title="Automatisierung">
 			<AutomationRuleTable />
+		</TabItem>
+		<TabItem title="Periodisch">
+			<PeriodicRuleTable />
 		</TabItem>
 	</Tabs>
 </div>
