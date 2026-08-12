@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { cache, graphql } from '$houdini';
+	import { graphql } from '$houdini';
+	import { invalidate, AFTER_WRITE } from './invalidate';
 
 	import {
 		TableBody,
@@ -142,8 +143,8 @@
 	`);
 
 	async function handleCategoryModalSubmit() {
-		cache.markStale('Category');
-		await categoryStore.fetch({});
+		invalidate();
+		await categoryStore.fetch({ ...AFTER_WRITE });
 		expandedRows = [];
 	}
 
@@ -153,8 +154,8 @@
 		categoryIdToDelete = undefined;
 		showDeleteCategoryModal = false;
 
-		cache.markStale('Category');
-		await categoryStore.fetch({});
+		invalidate();
+		await categoryStore.fetch({ ...AFTER_WRITE });
 		expandedRows = [];
 	}
 </script>

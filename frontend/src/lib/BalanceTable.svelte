@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { BalanceSortField$options, SortDirection$options } from '$houdini';
-	import { cache, graphql } from '$houdini';
+	import { graphql } from '$houdini';
+	import { invalidate, AFTER_WRITE } from './invalidate';
 
 	import {
 		TableBody,
@@ -196,8 +197,8 @@
 	`);
 
 	async function handleBalanceModalSubmit() {
-		cache.markStale('Balance');
-		await balanceStore.fetch({ variables: balanceVariables() });
+		invalidate();
+		await balanceStore.fetch({ variables: balanceVariables(), ...AFTER_WRITE });
 		expandedRows = [];
 	}
 
@@ -207,8 +208,8 @@
 		balanceIdToDelete = undefined;
 		showDeleteBalanceModal = false;
 
-		cache.markStale('Balance');
-		await balanceStore.fetch({ variables: balanceVariables() });
+		invalidate();
+		await balanceStore.fetch({ variables: balanceVariables(), ...AFTER_WRITE });
 		expandedRows = [];
 	}
 </script>

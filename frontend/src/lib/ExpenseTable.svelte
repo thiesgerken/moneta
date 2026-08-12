@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { ExpenseSortField$options, SortDirection$options } from '$houdini';
-	import { cache, graphql } from '$houdini';
+	import { graphql } from '$houdini';
+	import { invalidate, AFTER_WRITE } from './invalidate';
 
 	import {
 		TableBody,
@@ -566,8 +567,8 @@
 	`);
 
 	async function handleExpenseModalSubmit() {
-		cache.markStale('Expense');
-		await expenseStore.fetch({ variables: expenseVariables() });
+		invalidate();
+		await expenseStore.fetch({ variables: expenseVariables(), ...AFTER_WRITE });
 		expandedRows = [];
 	}
 
@@ -600,8 +601,8 @@
 		showResortExpenseModal = false;
 		expenseIdToResort = undefined;
 
-		cache.markStale('Expense');
-		await expenseStore.fetch({ variables: expenseVariables() });
+		invalidate();
+		await expenseStore.fetch({ variables: expenseVariables(), ...AFTER_WRITE });
 		expandedRows = [];
 	}
 
@@ -611,8 +612,8 @@
 		expenseIdToDelete = undefined;
 		showDeleteExpenseModal = false;
 
-		cache.markStale('Expense');
-		await expenseStore.fetch({ variables: expenseVariables() });
+		invalidate();
+		await expenseStore.fetch({ variables: expenseVariables(), ...AFTER_WRITE });
 		expandedRows = [];
 	}
 </script>

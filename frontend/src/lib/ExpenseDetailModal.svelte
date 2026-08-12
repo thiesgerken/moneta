@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { graphql, cache } from '$houdini';
+	import { graphql } from '$houdini';
+	import { invalidate } from './invalidate';
 	import ExpenseModal from './ExpenseModal.svelte';
 
 	interface Props {
@@ -114,7 +115,7 @@
 	});
 
 	async function handleSubmit() {
-		cache.markStale('Expense');
+		invalidate();
 		await onsubmit?.();
 	}
 </script>
