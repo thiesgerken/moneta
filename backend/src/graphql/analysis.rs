@@ -191,8 +191,10 @@ struct SimulatedRow {
     sample_idx: i64,
     #[diesel(sql_type = diesel::sql_types::Uuid)]
     account_id: Uuid,
-    #[diesel(sql_type = diesel::sql_types::Uuid)]
-    balance_id: Uuid,
+    /// null where the anchor is the empty balance an account starts from rather than a
+    /// recorded one, and so has nothing for a drift to be measured against
+    #[diesel(sql_type = Nullable<diesel::sql_types::Uuid>)]
+    balance_id: Option<Uuid>,
     #[diesel(sql_type = Double)]
     amount: f64,
 }
@@ -905,7 +907,8 @@ async fn compute(
         let references: Vec<RenderedBalance> = balances_rendered::table
             .filter(balances_rendered::user_id.eq(user_id))
             .filter(
-                balances_rendered::id.eq_any(rows.iter().map(|r| r.balance_id).collect::<Vec<_>>()),
+                balances_rendered::id
+                    .eq_any(rows.iter().filter_map(|r| r.balance_id).collect::<Vec<_>>()),
             )
             .select(RenderedBalance::as_select())
             .load(conn)
@@ -923,7 +926,7 @@ async fn compute(
     for reference in references {
         let row = rows
             .iter()
-            .find(|r| r.balance_id == reference.id)
+            .find(|r| r.balance_id == Some(reference.id))
             .expect("every reference balance came out of the computation");
         let account = accounts
             .get(&reference.account_id)
