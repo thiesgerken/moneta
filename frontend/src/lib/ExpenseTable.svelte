@@ -604,10 +604,10 @@
 	/// ends, then, and `formatAccrualPeriod` collapses them when they agree, which is the
 	/// common case.
 	///
-	/// A transaction no bank posted has no booking date, and the day the expense starts to
-	/// accrue is the best guess at when it would have been booked -- for a manual entry the
-	/// two are usually the same day anyway. Better than a hole in the column, and it is what
-	/// the sort and the period filter assume as well.
+	/// A transaction no bank posted has no booking date and falls back to its own
+	/// Wertstellung: where a bank did post one the two are a day or two apart anyway, so it is
+	/// the closest thing to an answer. Better than a hole in the column, and it is what the
+	/// sort and the period filter assume as well.
 	function axisPeriod(expense: {
 		accrualStart: Date;
 		accrualEnd: Date;
@@ -616,7 +616,7 @@
 		if (dateAxis === 'accrual') return [expense.accrualStart, expense.accrualEnd];
 
 		const dates = expense.transactions
-			.map((t) => (dateAxis === 'value' ? t.date : (t.bookingDate ?? expense.accrualStart)))
+			.map((t) => (dateAxis === 'value' ? t.date : (t.bookingDate ?? t.date)))
 			.map((d) => d.getTime());
 		if (dates.length === 0) return [expense.accrualStart, expense.accrualEnd];
 

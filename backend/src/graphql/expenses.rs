@@ -451,11 +451,9 @@ fn search_predicate(term: &str) -> ExpensePredicate {
     predicate
 }
 
-/// Where a transaction stands on the Buchungstag axis. Names are qualified because the view
-/// and the table are only unambiguous together, and it is a string because diesel has no
-/// `coalesce` over two tables.
-const BOOKED_OR_ACCRUED: &str =
-    "coalesce(expense_transactions_rendered.booking_date, expenses.accrual_start)";
+/// Where a transaction stands on the Buchungstag axis. A string because diesel has no
+/// `coalesce`.
+const BOOKED_OR_VALUED: &str = "coalesce(booking_date, date)";
 
 pub struct ExpenseQuery;
 
@@ -581,22 +579,15 @@ impl ExpenseQuery {
                 );
             }
 
-            // A transaction the bank never posted has no booking date, and stands where its
-            // expense starts to accrue -- the same fallback the column and the sort use, so a
-            // range picks out the rows the column shows inside it.
-            let booked = || {
-                expense_transactions_rendered::table
-                    .inner_join(
-                        expenses::table
-                            .on(expenses::id.eq(expense_transactions_rendered::expense_id)),
-                    )
-                    .filter(expense_transactions_rendered::user_id.eq(user_id))
-            };
+            // A transaction the bank never posted has no booking date and falls back to its
+            // own Wertstellung -- the same fallback the column and the sort use, so a range
+            // picks out the rows the column shows inside it.
             if let Some(after) = booked_after {
                 query = query.filter(
                     expenses_rendered::id.eq_any(
-                        booked()
-                            .filter(sql::<Timestamptz>(BOOKED_OR_ACCRUED).ge(after))
+                        expense_transactions_rendered::table
+                            .filter(expense_transactions_rendered::user_id.eq(user_id))
+                            .filter(sql::<Timestamptz>(BOOKED_OR_VALUED).ge(after))
                             .select(expense_transactions_rendered::expense_id),
                     ),
                 );
@@ -604,8 +595,9 @@ impl ExpenseQuery {
             if let Some(before) = booked_before {
                 query = query.filter(
                     expenses_rendered::id.eq_any(
-                        booked()
-                            .filter(sql::<Timestamptz>(BOOKED_OR_ACCRUED).lt(before))
+                        expense_transactions_rendered::table
+                            .filter(expense_transactions_rendered::user_id.eq(user_id))
+                            .filter(sql::<Timestamptz>(BOOKED_OR_VALUED).lt(before))
                             .select(expense_transactions_rendered::expense_id),
                     ),
                 );
@@ -632,16 +624,16 @@ impl ExpenseQuery {
                     "(SELECT min((t->>'date')::timestamptz) FROM jsonb_array_elements(transactions) t)"
                 )
             ),
-            // Falling back to the day the expense starts to accrue, because two fifths of the
-            // transactions were never posted by a bank and have no booking date at all. It is
-            // the best guess at when one would have been booked -- for a manual entry the two
-            // are usually the same day -- and it keeps the column, the sort and the period
-            // filter agreeing about where such a row belongs.
+            // Falling back to the transaction's own Wertstellung, because many of them
+            // were never posted by a bank and have no booking date at all. Where a bank did
+            // post one the two are a day or two apart anyway, so it is the closest thing to an
+            // answer, and it keeps the column, the sort and the period filter agreeing about
+            // where such a row belongs.
             ExpenseSortField::BookingDate => crate::order_by!(
                 query,
                 direction,
                 sql::<Timestamptz>(
-                    "(SELECT min(coalesce((t->>'bookingDate')::timestamptz, accrual_start)) \
+                    "(SELECT min(coalesce((t->>'bookingDate')::timestamptz, (t->>'date')::timestamptz)) \
                      FROM jsonb_array_elements(transactions) t)"
                 )
             ),
