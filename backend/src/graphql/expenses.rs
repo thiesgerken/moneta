@@ -548,11 +548,15 @@ impl ExpenseQuery {
                 );
             }
 
+            // Overlap, not containment: an expense accruing from January to June was a cost in
+            // March, and a caller asking for March wants it. Each end also stands on its own --
+            // "still accruing after X", "already accruing before Y" -- which is why they are
+            // two arguments rather than a window.
             if let Some(after) = accrued_after {
-                query = query.filter(expenses_rendered::accrual_start.ge(after));
+                query = query.filter(expenses_rendered::accrual_end.ge(after));
             }
             if let Some(before) = accrued_before {
-                query = query.filter(expenses_rendered::accrual_end.le(before));
+                query = query.filter(expenses_rendered::accrual_start.lt(before));
             }
 
             // The booking period is when an expense was *for*; these two are when the money
