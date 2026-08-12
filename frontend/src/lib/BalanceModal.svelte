@@ -67,7 +67,7 @@
 
 		const input: BalanceInput = {
 			comments,
-			amount: Number(amount) * 100,
+			amount: Math.round(Number(amount) * 100),
 			date: date!,
 			accountId
 		};

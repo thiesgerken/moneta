@@ -393,13 +393,26 @@
 				{group.label}
 			</h2>
 
-			<ol class="divide-y divide-gray-100 dark:divide-gray-800">
+			<!--
+				One thread per day. The badges were already a column of dots beside the entries;
+				running a line through them is what makes the day read as a sequence rather than as
+				a list that happens to have icons. The rule stops at the day header on purpose --
+				the header is the break.
+
+				Not flowbite's Timeline: its group variant is this markup in a `p-5` card with no
+				line at all, and its item variants pair a `text-lg` heading with 40px of margin.
+				A badge over a `border-s` is the whole component at this size.
+			-->
+			<ol class="relative ms-3.5 border-s border-gray-300 dark:border-gray-600">
 				{#each group.entries as entry (entry.id)}
 					{@const created = !entry.oldState}
 					{@const amount = entry.newState ? stateAmount(entry.newState) : null}
-					<li class="flex gap-3 py-3">
+					<li class="relative py-2.5 ps-6">
+						<!-- centred on the rule by its own half-width, so the badge can change size
+						     without the offset having to be worked out again. Its background is
+						     opaque, which is what hides the rule behind it. -->
 						<span
-							class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full {created
+							class="absolute top-3.5 left-0 flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full {created
 								? 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400'
 								: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}"
 						>
@@ -410,7 +423,7 @@
 							{/if}
 						</span>
 
-						<div class="min-w-0 flex-1">
+						<div class="min-w-0">
 							<button
 								type="button"
 								class="group flex w-full items-baseline justify-between gap-3 text-left"
