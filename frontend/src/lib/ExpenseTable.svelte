@@ -15,6 +15,7 @@
 		ButtonGroup,
 		Datepicker,
 		Modal,
+		Select,
 		Spinner
 	} from 'flowbite-svelte';
 	import { Section } from 'flowbite-svelte-blocks';
@@ -79,7 +80,8 @@
 	///
 	/// They answer different questions -- what a cost was *for* against when the money left --
 	/// and a list showing one while filtering by another does not add up. So it is one choice
-	/// for the column, not a column each: eight columns already do not fit a phone.
+	/// rather than a column each: eight columns already do not fit a phone. It is made inside
+	/// the period filter, next to the range it decides the meaning of.
 	const DATE_AXES = {
 		accrual: { label: 'Zeitraum', name: 'Leistungszeitraum', sort: 'accrualStart' },
 		value: { label: 'Wertstellung', name: 'Wertstellung', sort: 'valueDate' },
@@ -88,7 +90,6 @@
 	type DateAxis = keyof typeof DATE_AXES;
 
 	let dateAxis = $state<DateAxis>('accrual');
-	let dateAxisOpen = $state(false);
 	const axis = $derived(DATE_AXES[dateAxis]);
 
 	/// only consulted below `md`, where the filters are collapsed
@@ -594,7 +595,6 @@
 		if (onDate) sortBy = { field: DATE_AXES[next].sort, direction: sortBy.direction };
 		dateAxis = next;
 		currentPage = 1;
-		dateAxisOpen = false;
 	}
 
 	/// What the date column shows: the accrual period, or the span the transactions cover.
@@ -1022,6 +1022,17 @@
 						<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 					</Button>
 					<Dropdown class="flex w-fit flex-col gap-2 divide-y-0 p-2">
+						<!-- Which date, above the calendar that picks the range on it. The two belong
+						     together: the range means a different set of expenses per date, and this is
+						     also what the column shows and sorts by. -->
+						<Select
+							value={dateAxis}
+							onchange={(e) => setDateAxis((e.target as HTMLSelectElement).value as DateAxis)}
+							items={Object.entries(DATE_AXES).map(([value, a]) => ({ value, name: a.name }))}
+							size="sm"
+							selectClass="h-9 py-0"
+							placeholder=""
+						/>
 						<!-- the inline calendar draws its own white, shadowed, padded card, which inside
 						     the dropdown's card is a second box around the same thing -->
 						<Datepicker
@@ -1101,12 +1112,11 @@
 		<TableHead>
 			<!-- pl to clear the chevron: it hangs in the column's left margin, and without this the
 			     label started 24px to the left of every date under it. -->
-			<!-- The only header that is two controls: the cell sorts like every other one, the
-			     chevron at its end picks which of the three dates the column is about. Both that
-			     button and the menu it opens sit inside the cell, so they stop the click that
-			     would otherwise sort as well. -->
+			<!-- The header only says which date it is showing; the period filter picks it, since
+			     that is where the range it applies to is chosen too. min-w rather than w, because
+			     "Wertstellung" is wider than the dates under it and a fixed width clipped it. -->
 			<TableHeadCell
-				class="w-28 py-3 pr-2 pl-7 whitespace-nowrap md:w-36 md:pr-4 md:pl-10"
+				class="w-28 py-3 pr-2 pl-7 whitespace-nowrap md:w-auto md:min-w-36 md:pr-4 md:pl-10"
 				scope="col"
 				onclick={() => sortByField(axis.sort)}
 			>
@@ -1114,40 +1124,6 @@
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>{axis.label}
 				{@render sortIcon(axis.sort)}
-				<button
-					type="button"
-					id="date-axis-trigger"
-					aria-label="Datum wählen"
-					class="ml-1 align-middle"
-					onclick={(e) => e.stopPropagation()}
-				>
-					<ChevronDownOutline class="inline h-3 w-3" />
-				</button>
-				<!-- named rather than left to the preceding sibling, which in a table header resolves
-				     to the wrong element -->
-				<!-- `whitespace-normal` because the popover is a child of the header cell and would
-				     otherwise inherit its `nowrap`, which laid the three options out in a row -->
-				<Dropdown
-					bind:isOpen={dateAxisOpen}
-					triggeredBy="#date-axis-trigger"
-					class="flex w-56 flex-col gap-1 p-2 text-sm whitespace-normal"
-				>
-					{#each Object.entries(DATE_AXES) as [key, option] (key)}
-						<button
-							type="button"
-							class="w-full rounded-md px-2 py-1.5 text-left normal-case hover:bg-gray-100 dark:hover:bg-gray-600 {key ===
-							dateAxis
-								? 'text-primary-600 dark:text-primary-500 font-semibold'
-								: ''}"
-							onclick={(e) => {
-								e.stopPropagation();
-								setDateAxis(key as DateAxis);
-							}}
-						>
-							{option.name}
-						</button>
-					{/each}
-				</Dropdown>
 			</TableHeadCell>
 			<TableHeadCell class="px-2 py-3 md:px-4" scope="col" onclick={() => sortByField('title')}>
 				<TextSizeOutline
