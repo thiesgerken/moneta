@@ -446,6 +446,14 @@ type AutomationRuleMutation {
 }
 
 type AutomationRuleQuery {
+  """
+    What a rule pointed at this template would do with a payment, before there is a rule to
+    ask — the same derivation `AutomationRule.accrual` reports, so a template can be picked
+    with its consequences visible.
+
+    `at` is the payment to work the example from, and defaults to now.
+  """
+  preview(templateId: UUID!, accountId: UUID, at: DateTime): AccrualShape
   list(limit: Int, skip: Int, search: String, sortBy: AutomationRuleSortField, sortDir: SortDirection): [AutomationRule!]!
   get(id: UUID!): AutomationRule!
 }

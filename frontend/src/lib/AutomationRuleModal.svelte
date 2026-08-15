@@ -5,6 +5,7 @@
 	import { graphql } from '$houdini';
 	import type { AutomationRuleInput } from '$houdini/graphql/inputs';
 	import TemplatePicker from './TemplatePicker.svelte';
+	import RegexInput from './RegexInput.svelte';
 	import { describeAccrual, formatAccrualPeriod } from './expense_utils';
 	import { shortDate } from './analysis/dates';
 
@@ -21,15 +22,7 @@
 			readonly filterAmount: number | null;
 			readonly filterAccountId: string | null;
 			readonly templateId: string | null;
-			readonly accrual: {
-				readonly months: number | null;
-				readonly days: number | null;
-				readonly anchorDay: number;
-				readonly phaseDays: number;
-				readonly exampleAt: Date;
-				readonly exampleFrom: Date;
-				readonly exampleTo: Date;
-			} | null;
+			readonly lastDelivery: Date | null;
 		};
 	}
 	let { open = $bindable(), accounts, rule, onsubmit }: Props = $props();
@@ -56,6 +49,42 @@
 	);
 
 	const formHasErrors = $derived(titleError || templateError || priorityError || amountError);
+
+	/// What the picked template would make of a payment. Asked for by template rather than read
+	/// off the rule, so it follows the picker instead of showing what was saved last time.
+	const previewStore = graphql(`
+		query AccrualPreview($templateId: UUID!, $accountId: UUID, $at: DateTime) {
+			automationRules {
+				preview(templateId: $templateId, accountId: $accountId, at: $at) {
+					months
+					days
+					anchorDay
+					phaseDays
+					exampleAt
+					exampleFrom
+					exampleTo
+				}
+			}
+		}
+	`);
+
+	$effect(() => {
+		if (!templateId) return;
+
+		// every variable every time: houdini merges them into the last fetch's, so an account
+		// cleared back to "beliebig" would otherwise keep filtering by the old one
+		void previewStore.fetch({
+			variables: {
+				templateId,
+				accountId: filterAccountId || null,
+				at: rule?.lastDelivery ?? null
+			}
+		});
+	});
+
+	const preview = $derived(
+		templateId ? ($previewStore.data?.automationRules.preview ?? null) : null
+	);
 
 	const CreateAutomationRule = graphql(`
 		mutation CreateAutomationRule($input: AutomationRuleInput!) {
@@ -108,74 +137,99 @@
 	};
 </script>
 
+{#snippet heading(text: string)}
+	<h3 class="text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
+		{text}
+	</h3>
+{/snippet}
+
 <Modal title={rule ? 'Regel bearbeiten' : 'Neue Automatisierungsregel'} bind:open size="lg">
-	<form class="flex flex-col space-y-4" onsubmit={handleSubmit}>
+	<form class="flex flex-col space-y-6" onsubmit={handleSubmit}>
 		<Label class="space-y-2">
 			<span>Titel</span>
 			<Input type="text" bind:value={title} required color={titleError ? 'red' : undefined} />
 		</Label>
 
-		<TemplatePicker bind:templateId error={templateError} />
+		<!-- The template and what follows from it are one thing: everything about the generated
+		     expense comes from the template, including a Leistungszeitraum that is derived rather
+		     than set. Grouping them is what makes the second half read as a consequence of the
+		     first rather than as another setting. -->
+		<section class="space-y-2">
+			{@render heading('Was erzeugt wird')}
+			<TemplatePicker bind:templateId error={templateError} />
 
-		{#if rule?.accrual && templateId === rule.templateId}
-			<!-- Read-only because there is nothing here to set: the period comes from what the bank
-			     names on the line, else from the template's own Leistungszeitraum against the day
-			     the template was paid. A template that is a day out from a whole month silently
-			     stops snapping, and this line is where that shows. -->
-			<div class="text-sm text-gray-500 dark:text-gray-400">
-				<span class="font-medium text-gray-700 dark:text-gray-300">Leistungszeitraum</span>
-				<span class="ml-2">{describeAccrual(rule.accrual)}</span>
-				<Helper class="mt-1">
-					Zuletzt ausgelöst {shortDate(rule.accrual.exampleAt)} →
-					{formatAccrualPeriod(rule.accrual.exampleFrom, rule.accrual.exampleTo)}. Nennt der
-					Verwendungszweck selbst einen Zeitraum, gilt dieser.
-				</Helper>
+			{#if preview}
+				<div
+					class="ml-1 border-l-2 border-gray-200 py-0.5 pl-3 text-sm text-gray-500 dark:border-gray-600 dark:text-gray-400"
+				>
+					<span class="text-gray-700 dark:text-gray-300">
+						Leistungszeitraum: {describeAccrual(preview)}
+					</span>
+					<span class="mt-0.5 block text-xs">
+						{preview.exampleAt ? shortDate(preview.exampleAt) : ''} →
+						{formatAccrualPeriod(preview.exampleFrom, preview.exampleTo)}
+						{#if rule?.lastDelivery}(zuletzt ausgelöst){:else}(heute){/if}. Nennt der
+						Verwendungszweck selbst einen Zeitraum, gilt dieser.
+					</span>
+				</div>
+			{/if}
+		</section>
+
+		<section class="space-y-4">
+			{@render heading('Worauf sie passt')}
+
+			<div class="space-y-2">
+				<Label for="regex-statement">Verwendungszweck (Regex)</Label>
+				<RegexInput
+					id="regex-statement"
+					bind:value={regexStatement}
+					placeholder="z.B. Muster Stadtreinigung"
+				/>
 			</div>
-		{/if}
 
-		<Label class="space-y-2">
-			<span>Verwendungszweck (Regex)</span>
-			<Input type="text" bind:value={regexStatement} placeholder="z.B. Muster Stadtreinigung" />
-		</Label>
+			<Label class="space-y-2">
+				<span>Konto</span>
+				<Select
+					bind:value={filterAccountId}
+					items={[
+						{ value: '', name: 'Beliebig' },
+						...accounts.map((a) => ({ value: a.id, name: a.name }))
+					]}
+				/>
+			</Label>
 
-		<Label class="space-y-2">
-			<span>Konto</span>
-			<Select
-				bind:value={filterAccountId}
-				items={[
-					{ value: '', name: 'Beliebig' },
-					...accounts.map((a) => ({ value: a.id, name: a.name }))
-				]}
-			/>
-		</Label>
+			<Label class="space-y-2">
+				<span>Betrag (€, exakt)</span>
+				<Input
+					type="text"
+					bind:value={filterAmount}
+					placeholder="beliebig"
+					color={amountError ? 'red' : undefined}
+				/>
+				<Helper>Ausgaben sind negativ.</Helper>
+			</Label>
 
-		<Label class="space-y-2">
-			<span>Betrag (€, exakt)</span>
-			<Input
-				type="text"
-				bind:value={filterAmount}
-				placeholder="beliebig"
-				color={amountError ? 'red' : undefined}
-			/>
-			<Helper>Ausgaben sind negativ.</Helper>
-		</Label>
+			<div class="space-y-2">
+				<Label for="regex-time">Datum (Regex)</Label>
+				<RegexInput
+					id="regex-time"
+					bind:value={regexTime}
+					placeholder="beliebig, Format TT.MM.JJJJ HH:MM"
+				/>
+			</div>
 
-		<Label class="space-y-2">
-			<span>Datum (Regex)</span>
-			<Input type="text" bind:value={regexTime} placeholder="beliebig, Format TT.MM.JJJJ HH:MM" />
-		</Label>
+			<Label class="space-y-2">
+				<span>Priorität</span>
+				<Input type="number" bind:value={priority} color={priorityError ? 'red' : undefined} />
+				<Helper>Bei mehreren Treffern gewinnt die höchste Priorität.</Helper>
+			</Label>
 
-		<Label class="space-y-2">
-			<span>Priorität</span>
-			<Input type="number" bind:value={priority} color={priorityError ? 'red' : undefined} />
-			<Helper>Bei mehreren Treffern gewinnt die höchste Priorität.</Helper>
-		</Label>
-
-		{#if noFilters}
-			<p class="text-sm text-orange-600 dark:text-orange-400">
-				Ohne Filter passt diese Regel auf jede gelieferte Transaktion.
-			</p>
-		{/if}
+			{#if noFilters}
+				<p class="text-sm text-orange-600 dark:text-orange-400">
+					Ohne Filter passt diese Regel auf jede gelieferte Transaktion.
+				</p>
+			{/if}
+		</section>
 
 		{#if error}
 			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>
