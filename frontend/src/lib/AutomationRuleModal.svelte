@@ -5,6 +5,8 @@
 	import { graphql } from '$houdini';
 	import type { AutomationRuleInput } from '$houdini/graphql/inputs';
 	import TemplatePicker from './TemplatePicker.svelte';
+	import { describeAccrual, formatAccrualPeriod } from './expense_utils';
+	import { shortDate } from './analysis/dates';
 
 	interface Props {
 		open?: boolean;
@@ -19,6 +21,15 @@
 			readonly filterAmount: number | null;
 			readonly filterAccountId: string | null;
 			readonly templateId: string | null;
+			readonly accrual: {
+				readonly months: number | null;
+				readonly days: number | null;
+				readonly anchorDay: number;
+				readonly phaseDays: number;
+				readonly exampleAt: Date;
+				readonly exampleFrom: Date;
+				readonly exampleTo: Date;
+			} | null;
 		};
 	}
 	let { open = $bindable(), accounts, rule, onsubmit }: Props = $props();
@@ -105,6 +116,22 @@
 		</Label>
 
 		<TemplatePicker bind:templateId error={templateError} />
+
+		{#if rule?.accrual && templateId === rule.templateId}
+			<!-- Read-only because there is nothing here to set: the period comes from what the bank
+			     names on the line, else from the template's own Leistungszeitraum against the day
+			     the template was paid. A template that is a day out from a whole month silently
+			     stops snapping, and this line is where that shows. -->
+			<div class="text-sm text-gray-500 dark:text-gray-400">
+				<span class="font-medium text-gray-700 dark:text-gray-300">Leistungszeitraum</span>
+				<span class="ml-2">{describeAccrual(rule.accrual)}</span>
+				<Helper class="mt-1">
+					Zuletzt ausgelöst {shortDate(rule.accrual.exampleAt)} →
+					{formatAccrualPeriod(rule.accrual.exampleFrom, rule.accrual.exampleTo)}. Nennt der
+					Verwendungszweck selbst einen Zeitraum, gilt dieser.
+				</Helper>
+			</div>
+		{/if}
 
 		<Label class="space-y-2">
 			<span>Verwendungszweck (Regex)</span>

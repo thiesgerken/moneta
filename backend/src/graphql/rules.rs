@@ -6,6 +6,7 @@ use diesel_async::RunQueryDsl;
 use juniper::{FieldResult, GraphQLEnum, graphql_object};
 
 use super::util::{self, SortDirection};
+use crate::accrual;
 use crate::graphql::root::{Context, require_user};
 use crate::models::{
     AutomationRule, AutomationRuleInput, ExpenseDelivery, PeriodicInterval, PeriodicRule,
@@ -13,7 +14,7 @@ use crate::models::{
 };
 use crate::order_by;
 use crate::queries;
-use crate::rules::DeliveryOutcome;
+use crate::rules::{self, DeliveryOutcome};
 use crate::schema::{automation_rules, periodic_rules, seen_deliveries};
 use crate::schema_views::expenses_rendered;
 
@@ -88,6 +89,68 @@ impl GraphQLAutomationRule {
         let conn = &mut context.conn().await?;
         visible_expense(conn, user_id, self.data.template_id).await
     }
+
+    /// null when the template is gone or pays with nothing, in which case the rule cannot fire
+    /// anyway
+    async fn accrual(&self, context: &Context) -> FieldResult<Option<AccrualShape>> {
+        let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
+        if visible_expense(conn, user_id, self.data.template_id)
+            .await?
+            .is_none()
+        {
+            return Ok(None);
+        }
+
+        let Some(template) = queries::load_expense(conn, self.data.template_id).await? else {
+            return Ok(None);
+        };
+        let Some(paid) = rules::template_booking(&template, self.data.filter_account_id) else {
+            return Ok(None);
+        };
+
+        let shape = accrual::Shape::of(template.accrual_start, template.accrual_end, paid);
+        let at = self.data.last_delivery.unwrap_or_else(Utc::now);
+        let (from, to) = shape.period(at);
+
+        Ok(Some(AccrualShape {
+            months: match shape.length {
+                accrual::Length::Months(k) => Some(k as i32),
+                accrual::Length::Days(_) => None,
+            },
+            days: match shape.length {
+                accrual::Length::Days(d) => Some(d as i32),
+                accrual::Length::Months(_) => None,
+            },
+            anchor_day: shape.anchor_day as i32,
+            phase_days: shape.phase.num_days() as i32,
+            example_at: at,
+            example_from: from,
+            example_to: to,
+        }))
+    }
+}
+
+/// What a rule will make of the next delivery's Leistungszeitraum.
+///
+/// All of it is read off the template rather than configured on the rule, so without somewhere
+/// to show it the behaviour would be invisible — and a template whose own period is a day out
+/// silently produces a period that never lines up with a month.
+#[derive(Debug, Clone, juniper::GraphQLObject)]
+pub struct AccrualShape {
+    /// the grid the period snaps to, in months; null when the template's span is not a whole
+    /// number of them and the period follows the payment around instead
+    pub months: Option<i32>,
+    /// that free-floating span, in days; null when `months` says otherwise
+    pub days: Option<i32>,
+    /// the day of the month a snapped period starts on
+    pub anchor_day: i32,
+    /// days from the start of a period to the payment for it, negative when paid in advance
+    pub phase_days: i32,
+    /// what the example below is worked from: when the rule last fired, else now
+    pub example_at: chrono::DateTime<Utc>,
+    pub example_from: chrono::DateTime<Utc>,
+    pub example_to: chrono::DateTime<Utc>,
 }
 
 #[derive(Debug, Clone)]

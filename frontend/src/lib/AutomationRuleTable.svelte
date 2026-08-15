@@ -22,6 +22,7 @@
 	import AutomationRuleModal from './AutomationRuleModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
 	import { shortDate } from './analysis/dates';
+	import { describeAccrual, formatAccrualPeriod } from './expense_utils';
 	import QueryError from './QueryError.svelte';
 
 	let searchTerm = $state('');
@@ -44,6 +45,15 @@
 					filterAccountId
 					lastDelivery
 					templateId
+					accrual {
+						months
+						days
+						anchorDay
+						phaseDays
+						exampleAt
+						exampleFrom
+						exampleTo
+					}
 				}
 			}
 			accounts {
@@ -181,6 +191,17 @@
 							· Prio {rule.priority}
 							· {rule.lastDelivery ? shortDate(rule.lastDelivery) : '–'}
 						</span>
+						{#if rule.accrual}
+							<!-- Derived from the template, editable only there, and wrong in a way nobody
+							     would notice until a generated expense turns up in the wrong month. -->
+							<span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+								{describeAccrual(rule.accrual)}
+								<span class="text-gray-400 dark:text-gray-500">
+									· {shortDate(rule.accrual.exampleAt)} →
+									{formatAccrualPeriod(rule.accrual.exampleFrom, rule.accrual.exampleTo)}
+								</span>
+							</span>
+						{/if}
 					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 font-mono text-xs md:table-cell">
 						{rule.regexStatement ?? '–'}

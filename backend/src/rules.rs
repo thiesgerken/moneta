@@ -13,6 +13,7 @@ use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 use regex::Regex;
 use uuid::Uuid;
 
+use crate::accrual;
 use crate::models::{
     AutomationRule, Expense, ExpenseChangelogEntry, ExpenseDelivery, Json, PeriodicRule,
     SeenDelivery,
@@ -148,29 +149,14 @@ pub fn impose(
     delivery: &ExpenseDelivery,
     now: DateTime<Utc>,
 ) -> Result<Expense, Box<dyn Error>> {
-    let mut e = template.clone();
-    e.id = Uuid::now_v7();
-    e.is_template = false;
-    // the delivery is a bank statement line, so it is worth a human look before it counts
-    e.is_unchecked = true;
-    e.accrual_start = delivery.date;
-    e.accrual_end = delivery.date + (template.accrual_end - template.accrual_start);
-    e.created_at = now;
-    e.updated_at = now;
-
-    let shift = delivery.date - template.accrual_start;
-    for t in e.transactions.iter_mut() {
-        t.date += shift;
-    }
-
     // The delivered line replaces the template's own booking against that account. Without
     // such a booking there is nowhere to put the delivered amount, and carrying on would
     // produce an expense holding the template's amounts instead of the real ones — wrong
     // money, silently. That means the rule is pointed at the wrong template, so refuse.
-    let Some(t) = e
+    let Some(idx) = template
         .transactions
-        .iter_mut()
-        .find(|t| t.account_id == delivery.account_id)
+        .iter()
+        .position(|t| t.account_id == delivery.account_id)
     else {
         return Err(format!(
             "template {:?} books nothing against account {:?}, so the delivered amount has nowhere to go",
@@ -178,6 +164,27 @@ pub fn impose(
         )
         .into());
     };
+
+    let mut e = template.clone();
+    e.id = Uuid::now_v7();
+    e.is_template = false;
+    // the delivery is a bank statement line, so it is worth a human look before it counts
+    e.is_unchecked = true;
+    e.created_at = now;
+    e.updated_at = now;
+
+    let (start, end) = period(template, template.transactions[idx].date, delivery);
+    e.accrual_start = start;
+    e.accrual_end = end;
+
+    // The rest of the template hangs off its booking, not off its period: a counter-booking a
+    // day after the payment is a day after this payment too.
+    let shift = delivery.date - template.transactions[idx].date;
+    for t in e.transactions.iter_mut() {
+        t.date += shift;
+    }
+
+    let t = &mut e.transactions[idx];
 
     t.amount = Some(delivery.amount);
     t.fraction = None;
@@ -191,6 +198,45 @@ pub fn impose(
     }
 
     Ok(e)
+}
+
+/// The period a delivered payment is *for*.
+///
+/// What the bank prints beats what the template implies: a broadcaster or an insurer names the
+/// period on the line, and no heuristic improves on being told. Failing that, the template says
+/// how a payment sits inside its own period and the payment is placed the same way — see
+/// [`accrual::Shape`].
+pub fn period(
+    template: &Expense,
+    template_paid: DateTime<Utc>,
+    delivery: &ExpenseDelivery,
+) -> (DateTime<Utc>, DateTime<Utc>) {
+    accrual::statement_period(&delivery.statement, delivery.date).unwrap_or_else(|| {
+        accrual::Shape::of(template.accrual_start, template.accrual_end, template_paid)
+            .period(delivery.date)
+    })
+}
+
+/// When a template was itself paid, which is what [`accrual::Shape`] measures its phase
+/// against. The rule's account filter names the booking where it has one; failing that the
+/// line the bank delivered, and failing that whatever the template actually pays with.
+pub fn template_booking(template: &Expense, account_id: Option<Uuid>) -> Option<DateTime<Utc>> {
+    let of_account = account_id.and_then(|a| {
+        template
+            .transactions
+            .iter()
+            .find(|t| t.account_id == a && t.amount.is_some())
+    });
+
+    of_account
+        .or_else(|| {
+            template
+                .transactions
+                .iter()
+                .find(|t| !t.statement.trim().is_empty() && t.amount.is_some())
+        })
+        .or_else(|| template.transactions.iter().find(|t| t.amount.is_some()))
+        .map(|t| t.date)
 }
 
 /// The bank line an expense came from, put back together so the rules can be run over it
@@ -890,6 +936,101 @@ mod tests {
         assert_eq!(e.transactions[0].amount, Some(-4237));
         assert_eq!(e.transactions[0].fraction, None);
         assert!(e.validate().is_ok());
+    }
+
+    /// What the bank names beats everything the template implies, which is the whole reason a
+    /// quarterly demand stops accruing over the quarter that follows it.
+    #[test]
+    fn a_period_on_the_statement_wins() {
+        let account = Uuid::now_v7();
+        let tpl = template(vec![transaction(account, Some(-5500))]);
+
+        let d = ExpenseDelivery {
+            date: at(2026, 8, 15),
+            ..delivery(account, -5500, "RUNDFUNK ARD ZDF 07.2026 - 09.2026")
+        };
+        let e = impose(&tpl, &d, at(2026, 8, 15)).unwrap();
+
+        assert_eq!(e.accrual_start, at(2026, 7, 1));
+        assert_eq!(e.accrual_end, at(2026, 9, 30));
+    }
+
+    /// The template says a payment falls on the first day of the month it pays for, so a rent
+    /// debited on the 1st is for that month...
+    #[test]
+    fn without_one_the_template_says_where_the_payment_sits() {
+        let account = Uuid::now_v7();
+        let mut tpl = template(vec![transaction(account, Some(-95000))]);
+        tpl.accrual_start = at(2018, 10, 1);
+        tpl.accrual_end = at(2018, 10, 31);
+        tpl.transactions[0].date = at(2018, 10, 1);
+
+        let d = ExpenseDelivery {
+            date: at(2026, 11, 2),
+            ..delivery(account, -95000, "DAUERAUFTRAG MIETE")
+        };
+        let e = impose(&tpl, &d, at(2026, 11, 2)).unwrap();
+
+        assert_eq!(e.accrual_start, at(2026, 11, 1));
+        assert_eq!(e.accrual_end, at(2026, 11, 30));
+    }
+
+    /// ...while a fee debited on the last day of the month it pays for keeps that month even
+    /// when a bank holiday pushes the payment into the next one.
+    #[test]
+    fn a_payment_delayed_past_the_month_end_keeps_the_month_it_paid_for() {
+        let account = Uuid::now_v7();
+        let mut tpl = template(vec![transaction(account, Some(-29000))]);
+        tpl.accrual_start = at(2024, 8, 1);
+        tpl.accrual_end = at(2024, 8, 31);
+        tpl.transactions[0].date = at(2024, 8, 31);
+
+        let d = ExpenseDelivery {
+            date: at(2026, 10, 2),
+            ..delivery(account, -29000, "KITA BEITRAG")
+        };
+        let e = impose(&tpl, &d, at(2026, 10, 2)).unwrap();
+
+        assert_eq!(e.accrual_start, at(2026, 9, 1));
+        assert_eq!(e.accrual_end, at(2026, 9, 30));
+    }
+
+    /// The other transactions hang off the payment, not off the period: a template whose
+    /// counter-booking follows its payment by a day keeps that day.
+    #[test]
+    fn the_counter_bookings_follow_the_payment() {
+        let account = Uuid::now_v7();
+        let other = Uuid::now_v7();
+        let mut tpl = template(vec![transaction(account, Some(-8000)), {
+            let mut t = transaction(other, Some(8000));
+            t.date = at(2024, 8, 1);
+            t
+        }]);
+        tpl.accrual_start = at(2024, 7, 1);
+        tpl.accrual_end = at(2024, 7, 31);
+        tpl.transactions[0].date = at(2024, 7, 31);
+
+        let d = ExpenseDelivery {
+            date: at(2026, 10, 30),
+            ..delivery(account, -8000, "ABSCHLAG")
+        };
+        let e = impose(&tpl, &d, at(2026, 10, 30)).unwrap();
+
+        assert_eq!(e.transactions[0].date, at(2026, 10, 30));
+        assert_eq!(e.transactions[1].date, at(2026, 10, 31));
+    }
+
+    /// A one-day template is a purchase, and a purchase is for the day it happened wherever
+    /// the delivery lands.
+    #[test]
+    fn a_single_day_template_still_accrues_on_the_day_it_was_paid() {
+        let account = Uuid::now_v7();
+        let tpl = template(vec![transaction(account, Some(-100))]);
+
+        let e = impose(&tpl, &delivery(account, -4237, "REWE"), at(2025, 3, 5)).unwrap();
+
+        assert_eq!(e.accrual_start, at(2025, 3, 4));
+        assert_eq!(e.accrual_end, at(2025, 3, 4));
     }
 
     /// every generated expense goes through validate() before being stored, so imposing must

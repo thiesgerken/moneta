@@ -168,8 +168,9 @@ the monthly drawdowns is dropped rather than kept: the mechanism it fed is gone,
 it would generate a copy of the whole merged expense every month.
 
 **Three things set an accrual period, in this order.** A chain derives it from its drawdowns, a
-statement can name it outright (`statement_period`), and `widen_recurring` gives the rest of a
-recurring contract the month each payment buys. The last of those runs over the finished
+statement can name it outright (`accrual::statement_period`, which the automation rules call on
+the same text), and `widen_recurring` gives the rest of a recurring contract the month each
+payment buys. The last of those runs over the finished
 `Vec<Expense>` and only touches what still sits on a single day, so it cannot argue with the other
 two — keep it that way, and keep its gates strict. A regular cadence on its own also describes a
 fortnightly beer and a yearly pair of jeans, and widening those invents a period nobody recorded.
