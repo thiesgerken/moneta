@@ -109,10 +109,17 @@ jobs:
       # being a second run of the same 23 tests
       - run: cd frontend && pnpm test --coverage
 
+      # Named where it is uploaded from, not renamed on the way out: an artifact built from a
+      # single path keeps only that file's basename, so uploading
+      # `frontend/coverage/coverage-summary.json` lands as `coverage-summary.json` and the
+      # directories are gone. The two artifacts unpack into one directory here, so each has to
+      # arrive under a name that says which half it is.
+      - run: cp frontend/coverage/coverage-summary.json frontend-coverage.json
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: frontend-coverage
-          path: frontend/coverage/coverage-summary.json
+          path: frontend-coverage.json
 
   # Reports where the branch stands to the pull request itself, editing its own comment on
   # every push rather than leaving one per push. Deliberately not a gate: there is no

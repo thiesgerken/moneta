@@ -11,7 +11,19 @@
 // Environment: GITEA_TOKEN, GITEA_API (server url), GITEA_REPO (owner/name), PR_NUMBER,
 //              SQL_ASSERTIONS
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+
+/// Both artifacts unpack into this directory, and an artifact built from a single path keeps
+/// only that file's basename — so what arrives here depends on how the upload was spelled, and
+/// getting it wrong shows up as an ENOENT with no clue in it. Say what was there instead.
+function read(file) {
+	try {
+		return JSON.parse(readFileSync(file, 'utf8'));
+	} catch (error) {
+		if (error.code !== 'ENOENT') throw error;
+		throw new Error(`${file} is not among the downloaded artifacts: ${readdirSync('.').join(', ')}`);
+	}
+}
 
 // What identifies our own comment among all of them. Invisible in the rendered markdown.
 const MARKER = '<!-- moneta-coverage -->';
@@ -39,8 +51,8 @@ function splitFrontend(summary) {
 }
 
 function body() {
-	const backend = JSON.parse(readFileSync('backend-coverage.json', 'utf8')).data[0].totals;
-	const front = splitFrontend(JSON.parse(readFileSync('frontend-coverage.json', 'utf8')));
+	const backend = read('backend-coverage.json').data[0].totals;
+	const front = splitFrontend(read('frontend-coverage.json'));
 
 	const rows = [
 		// llvm-cov says {covered, count}; the split above already produces [covered, total]
