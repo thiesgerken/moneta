@@ -165,6 +165,12 @@
 	</Button>
 {/snippet}
 
+{#snippet runButton(cls: string)}
+	<Button color="teal" class="{toolbarControl} {cls}" onclick={handleRun}>
+		<PlayOutline class="mr-2 h-3.5 w-3.5" />Jetzt erzeugen
+	</Button>
+{/snippet}
+
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
 	<QueryError
 		errors={$ruleStore.errors}
@@ -183,8 +189,12 @@
 				class="flex w-full flex-shrink-0 flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
 			>
 				<!-- Bearbeiten and Löschen act on the open row, which a phone has no room for beside
-				     Neu -- and there the open row carries the same two buttons itself. -->
-				{@render newButton('grow md:hidden')}
+				     Neu -- and there the open row carries the same two buttons itself. Jetzt erzeugen
+				     acts on every rule at once, so it stays whatever is open. -->
+				<div class="flex items-center gap-2 md:hidden">
+					{@render newButton('grow')}
+					{@render runButton('')}
+				</div>
 				<ButtonGroup class="hidden md:inline-flex">
 					{@render newButton('')}
 					<ActionButton
@@ -209,13 +219,11 @@
 					>
 						<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
 					</ActionButton>
+					{@render runButton('')}
 				</ButtonGroup>
 				{#if runResult}
 					<span class="self-center text-sm text-gray-500 dark:text-gray-400">{runResult}</span>
 				{/if}
-				<Button color="alternative" class={toolbarControl} onclick={handleRun}>
-					<PlayOutline class="mr-2 h-3.5 w-3.5" />Jetzt erzeugen
-				</Button>
 			</div>
 		{/snippet}
 
