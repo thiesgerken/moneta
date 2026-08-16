@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { Label, Input, Spinner } from 'flowbite-svelte';
-	import { CloseOutline, SearchOutline } from 'flowbite-svelte-icons';
+	import {
+		ArrowUpRightFromSquareOutline,
+		CloseOutline,
+		SearchOutline
+	} from 'flowbite-svelte-icons';
 	import { graphql } from '$houdini';
+	import { resolve } from '$app/paths';
 	import { shortDate } from './analysis/dates';
 	import QueryError from '$lib/QueryError.svelte';
 
@@ -161,12 +166,15 @@
 <Label class="space-y-2">
 	<span>Vorlage</span>
 	<div class="relative" onclick={(e) => e.stopPropagation()} role="none">
+		<!-- flowbite lays the left and right slots over the field rather than beside it, and pads
+		     for neither, so the text has to be kept out from under them here -->
 		<Input
 			type="text"
 			bind:value={query}
 			placeholder="Ausgabe suchen (leer = nur Vorlagen)"
 			color={error ? 'red' : undefined}
 			autocomplete="off"
+			class="ps-10 pe-16"
 			bind:elementRef={inputRef}
 			onfocus={() => {
 				open = true;
@@ -183,13 +191,32 @@
 				<SearchOutline class="h-4 w-4 text-gray-400 dark:text-gray-500" />
 			{/snippet}
 			{#snippet right()}
-				{#if $templateStore.fetching}
-					<Spinner size="4" />
-				{:else if selected}
-					<button type="button" aria-label="Vorlage entfernen" onclick={clear}>
-						<CloseOutline class="h-4 w-4 text-gray-400 hover:text-gray-600 dark:text-gray-500" />
-					</button>
-				{/if}
+				<span class="flex items-center gap-2">
+					{#if $templateStore.fetching}
+						<Spinner size="4" />
+					{/if}
+					{#if selected}
+						<!-- A new tab, because this form holds unsaved edits: going there and coming
+						     back must not be how they are lost. The expenses page takes the id as a
+						     filter, so it lands on that one expense with its editor open. -->
+						<a
+							href="{resolve('/expenses')}?expense={selected.id}"
+							target="_blank"
+							rel="noreferrer"
+							aria-label="Vorlage in neuem Tab öffnen"
+							title="Vorlage in neuem Tab öffnen"
+						>
+							<ArrowUpRightFromSquareOutline
+								class="h-4 w-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+							/>
+						</a>
+						<button type="button" aria-label="Vorlage entfernen" onclick={clear}>
+							<CloseOutline
+								class="h-4 w-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+							/>
+						</button>
+					{/if}
+				</span>
 			{/snippet}
 		</Input>
 

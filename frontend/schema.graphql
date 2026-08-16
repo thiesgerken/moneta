@@ -713,7 +713,7 @@ type ExpensePosition {
 }
 
 type ExpenseQuery {
-  list(limit: Int, skip: Int, search: String, accountIds: [UUID!], categoryIds: [UUID!], flags: ExpenseFlagFilter, accruedAfter: DateTime, accruedBefore: DateTime, valuedAfter: DateTime, valuedBefore: DateTime, bookedAfter: DateTime, bookedBefore: DateTime, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
+  list(limit: Int, skip: Int, search: String, ids: [UUID!], accountIds: [UUID!], categoryIds: [UUID!], flags: ExpenseFlagFilter, accruedAfter: DateTime, accruedBefore: DateTime, valuedAfter: DateTime, valuedBefore: DateTime, bookedAfter: DateTime, bookedBefore: DateTime, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
   get(id: UUID!): Expense!
   changelog(limit: Int, skip: Int, author: ChangelogAuthor, since: DateTime): ExpenseChangelogConnection!
 }

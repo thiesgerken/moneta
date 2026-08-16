@@ -131,6 +131,16 @@
 	// brauchen Prüfung" has to land on those twelve, a treemap tile on the expenses behind it.
 	// Once here the filters are the reader's again, so a later edit must not be reset by the url.
 	if (page.url.searchParams.has('new')) showNewExpenseModal = true;
+
+	/// One expense, named by whoever linked here — the template behind an automation rule is
+	/// years old and would be nowhere near the first page. Kept as a filter rather than fetched
+	/// on the side so the list still says what it is showing, and so it can be cleared.
+	const handover = page.url.searchParams.get('expense') ?? '';
+	let handedOver = $state(handover);
+	// a rule's template is usually flagged as one, and templates are hidden by default, so
+	// naming one and then filtering it back out would land on an empty table
+	if (handover) showTemplates = true;
+
 	if (page.url.searchParams.has('review')) {
 		showTaxRelevant = false;
 		showExtraordinary = false;
@@ -171,6 +181,12 @@
 
 		if (searchTerm.trim()) {
 			out.push({ label: `Suche: ${searchTerm.trim()}`, clear: () => (searchTerm = '') });
+		}
+
+		// A list narrowed to a single expense looks like an almost-empty database, so this one
+		// has to be as visible and as removable as any other filter.
+		if (handedOver) {
+			out.push({ label: 'Einzelne Ausgabe', clear: () => (handedOver = '') });
 		}
 
 		for (const id of filteredAccounts) {
@@ -278,6 +294,7 @@
 		limit: itemsPerPage || 10,
 		offset: ((currentPage || 1) - 1) * (itemsPerPage || 10),
 		search: searchTerm.trim() || undefined,
+		ids: handedOver ? [handedOver] : undefined,
 		accountIds: filteredAccounts.length > 0 ? filteredAccounts : undefined,
 		categoryIds: filteredCategories.length > 0 ? filteredCategories : undefined,
 		flags: {
@@ -517,6 +534,17 @@
 	let rows = $derived(slow ? [] : expenses);
 
 	let expenseToEdit = $derived(expenses.find((e) => e.id === expenseIdToEdit) || undefined);
+
+	// Opened once the row is actually here: the modal reads its expense out of the loaded page,
+	// and opening it against a list that has not arrived shows the empty form for a moment.
+	let handoverOpened = false;
+	$effect(() => {
+		if (handoverOpened || !handedOver) return;
+		if (!expenses.some((e) => e.id === handedOver)) return;
+
+		handoverOpened = true;
+		openEditModal(handedOver);
+	});
 	let expenseToDelete = $derived(expenses.find((e) => e.id === expenseIdToDelete) || undefined);
 	let expenseToResort = $derived(expenses.find((e) => e.id === expenseIdToResort) || undefined);
 
