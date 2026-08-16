@@ -88,9 +88,10 @@
 	const accounts = $derived($ruleStore.data?.accounts.list || []);
 	const accountNames = $derived(new Map(accounts.map((a) => [a.id, a.name])));
 
-	/// Priority first, which is the order the rules are actually tried in. A third click on a
-	/// header comes back here.
-	const DEFAULT_SORT = { field: 'priority', direction: -1 };
+	/// Most recently used first: a rule that fired last week is one you still have, and the
+	/// long tail that has not matched anything for years is not what the page is for. A third
+	/// click on a header comes back here.
+	const DEFAULT_SORT = { field: 'lastDelivery', direction: -1 };
 	let sortBy: { field: string; direction: number } = $state({ ...DEFAULT_SORT });
 
 	/// Descending, ascending, off. Sorted here rather than by the server: the whole list is
@@ -122,11 +123,13 @@
 				)
 			: allRules;
 
-		const key = sortKeys[sortBy.field] ?? sortKeys.priority;
+		const key = sortKeys[sortBy.field] ?? sortKeys.lastDelivery;
 		return [...filtered].sort((a, b) => {
 			const [x, y] = [key(a), key(b)];
 			if (x === y) return a.title.localeCompare(b.title);
-			return (x < y ? 1 : -1) * sortBy.direction;
+			// -1 is descending, as everywhere else here: the expense list maps the same field
+			// onto the API's DESC.
+			return (x < y ? -1 : 1) * sortBy.direction;
 		});
 	});
 

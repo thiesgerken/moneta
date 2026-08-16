@@ -100,7 +100,9 @@
 		return [...filtered].sort((a, b) => {
 			const [x, y] = [key(a), key(b)];
 			if (x === y) return a.title.localeCompare(b.title);
-			return (x < y ? 1 : -1) * sortBy.direction;
+			// -1 is descending, as everywhere else here: the expense list maps the same field
+			// onto the API's DESC.
+			return (x < y ? -1 : 1) * sortBy.direction;
 		});
 	});
 
