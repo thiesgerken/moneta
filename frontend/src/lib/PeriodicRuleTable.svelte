@@ -204,7 +204,14 @@
 {/snippet}
 
 {#snippet runButton(cls: string)}
-	<Button color="teal" class="{toolbarControl} {cls}" onclick={handleRun}>
+	<!-- A `title` rather than a flowbite Tooltip: that renders a sibling element, and inside the
+	     ButtonGroup it would take the last-child position this button needs for its rounded edge. -->
+	<Button
+		color="teal"
+		class="{toolbarControl} {cls}"
+		title="Erzeugt die fälligen Ausgaben aller periodischen Regeln, nicht nur der ausgewählten."
+		onclick={handleRun}
+	>
 		<PlayOutline class="mr-2 h-3.5 w-3.5" />Jetzt erzeugen
 	</Button>
 {/snippet}
