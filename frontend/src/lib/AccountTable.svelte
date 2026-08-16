@@ -129,6 +129,11 @@
 		query AccountTableInvestments($now: DateTime!) {
 			investments {
 				url
+				# what the account dialog offers instead of asking for a number
+				accounts {
+					id
+					name
+				}
 				list {
 					account {
 						id
@@ -158,6 +163,7 @@
 
 	const investments = $derived($investmentStore.data?.investments.list ?? []);
 	const stockdbUrl = $derived($investmentStore.data?.investments.url ?? null);
+	const stockdbAccounts = $derived($investmentStore.data?.investments.accounts ?? []);
 	const committedBalances = $derived(
 		new Map(($investmentStore.data?.analysis.balances ?? []).map((b) => [b.account.id, b.amount]))
 	);
@@ -352,6 +358,7 @@
 <AccountModal
 	bind:open={showNewAccountModal}
 	onsubmit={handleAccountModalSubmit}
+	{stockdbAccounts}
 	accounts={allAccounts.map((a) => ({
 		id: a.id.toString(),
 		name: a.name,
@@ -378,6 +385,7 @@
 <AccountModal
 	bind:open={showEditAccountModal}
 	onsubmit={handleAccountModalSubmit}
+	{stockdbAccounts}
 	account={accountToEdit}
 	accounts={allAccounts.map((a) => ({
 		id: a.id.toString(),
@@ -688,8 +696,9 @@
 									{@const investment = investmentFor(account.id)}
 									{@const committed = committedBalances.get(account.id) ?? 0}
 									<div class="mt-1 border-t border-gray-200 pt-2 dark:border-gray-700">
-										<b>Depot in stockdb:</b>
-										Nr. {account.stockdbAccountId}
+										<b>Depot in StockDB:</b>
+										{stockdbAccounts.find((a) => a.id === account.stockdbAccountId)?.name ??
+											`Nr. ${account.stockdbAccountId}`}
 										{#if stockdbUrl}
 											<!-- stockdb has no page per depot, so this lands on its list of them -->
 											<!-- eslint-disable svelte/no-navigation-without-resolve -- another app entirely -->

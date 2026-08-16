@@ -8,6 +8,10 @@
 
 	interface Props {
 		open?: boolean;
+		/// The depots this reader has in StockDB. Empty when there is no token, no StockDB or
+		/// nothing reachable — the field then goes disabled rather than disappearing, since a
+		/// missing control reads as a feature that does not exist.
+		stockdbAccounts?: { readonly id: number; readonly name: string }[];
 		onsubmit?: () => Promise<void>; // used to signal that the form has been successfully submitted, need to invalidate cached stuff
 		accounts: {
 			readonly id: string;
@@ -50,7 +54,7 @@
 			} | null;
 		};
 	}
-	let { open = $bindable(), accounts, account, onsubmit }: Props = $props();
+	let { open = $bindable(), accounts, stockdbAccounts = [], account, onsubmit }: Props = $props();
 
 	let name = $derived(account?.name || '');
 	let description = $derived(account?.description || '');
@@ -89,11 +93,6 @@
 			Number(ownershipFraction) < 0 ||
 			Number(ownershipFraction) > 100
 	);
-	/// Optional, and an id when it is there at all: stockdb numbers its accounts serially.
-	const stockdbAccountIdError = $derived(
-		!!stockdbAccountId.trim() &&
-			(isNaN(Number(stockdbAccountId)) || !Number.isInteger(Number(stockdbAccountId)))
-	);
 	const synchronizationError = $derived(false);
 
 	const formHasErrors = $derived(
@@ -108,7 +107,6 @@
 			openedError ||
 			closedError ||
 			ownershipFractionError ||
-			stockdbAccountIdError ||
 			synchronizationError
 		)
 	);
@@ -132,6 +130,12 @@
 		{ value: 'YEARS', name: 'Jahre' },
 		{ value: 'DECADES', name: 'Jahrzehnte' }
 	];
+
+	/// `''` is "not linked", and the ids are strings because that is what a `Select` binds.
+	const stockdbOptions = $derived([
+		{ value: '', name: 'Nicht verknüpft' },
+		...stockdbAccounts.map((a) => ({ value: String(a.id), name: a.name }))
+	]);
 
 	const riskOptions = [
 		{ value: 'NONE', name: 'Kein Risiko' },
@@ -235,16 +239,23 @@
 				<Input id="iban" placeholder="" bind:value={iban} color={ibanError ? 'red' : undefined} />
 			</div>
 			<div>
-				<!-- The number stockdb gives the depot, which is also the last part of its url there.
-				     Only the link is kept; nothing is ever written back to this account from it. -->
-				<Label for="stockdbAccountId" class="mb-2">stockdb-Depot</Label>
-				<Input
+				<!-- Which depot in StockDB this account stands for. Only the link is kept here;
+				     nothing is ever written back to this account from it. -->
+				<Label for="stockdbAccountId" class="mb-2">StockDB-Depot</Label>
+				<Select
 					id="stockdbAccountId"
-					type="number"
-					placeholder="Nummer in stockdb"
+					items={stockdbOptions}
 					bind:value={stockdbAccountId}
-					color={stockdbAccountIdError ? 'red' : undefined}
+					disabled={stockdbAccounts.length === 0}
+					placeholder=""
 				/>
+				{#if stockdbAccounts.length === 0}
+					<!-- Disabled and said out loud, rather than hidden: which of the three reasons it
+					     is matters less than not looking like a feature that was never built. -->
+					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+						Keine StockDB-Depots verfügbar – Token hinterlegt?
+					</p>
+				{/if}
 			</div>
 			<div>
 				<Label for="kind" class="mb-2">Typ</Label>

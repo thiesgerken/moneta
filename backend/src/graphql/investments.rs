@@ -20,6 +20,7 @@ use diesel_async::RunQueryDsl;
 use juniper::{FieldResult, GraphQLObject, graphql_object};
 use log::warn;
 use serde::Deserialize;
+use uuid::Uuid;
 
 use crate::graphql::root::{Context, require_user};
 use crate::models::Account;
@@ -86,6 +87,14 @@ pub struct GraphQLInvestment {
     pub as_of: Option<DateTime<Utc>>,
 }
 
+/// A depot as stockdb lists it, which is all the account dialog needs to offer a choice.
+#[derive(Debug, Clone, GraphQLObject, Deserialize)]
+#[graphql(name = "StockdbAccount", context = Context)]
+pub struct GraphQLStockdbAccount {
+    pub id: i32,
+    pub name: String,
+}
+
 pub struct InvestmentQuery;
 
 #[graphql_object(
@@ -105,43 +114,49 @@ impl InvestmentQuery {
         .map(str::to_owned)
     }
 
+    /// The depots this reader has over in stockdb, so the account dialog can offer a choice
+    /// rather than ask for a number. Empty when there is no stockdb configured, no token, or
+    /// nothing to reach — the dialog goes disabled on that rather than guessing why.
+    pub async fn accounts(context: &Context) -> FieldResult<Vec<GraphQLStockdbAccount>> {
+        let user_id = require_user(context).await?;
+
+        let Some((base_url, token)) = credentials(context, user_id).await? else {
+            return Ok(vec![]);
+        };
+
+        let timeout = Duration::from_secs(context.config.stockdb.timeout_seconds);
+
+        Ok(
+            get::<Vec<GraphQLStockdbAccount>>(&base_url, &token, "/api/accounts", timeout)
+                .await
+                .unwrap_or_default(),
+        )
+    }
+
     /// Every account of the reader's that is linked to a depot in stockdb. Empty when none is
     /// linked, or when this deployment has no stockdb configured.
     pub async fn list(context: &Context) -> FieldResult<Vec<GraphQLInvestment>> {
         let user_id = require_user(context).await?;
 
-        let base_url = context.config.stockdb.url.trim_end_matches('/');
-        if base_url.is_empty() {
-            return Ok(vec![]);
-        }
-
         // The connection is given back before the first request goes out. A page load holds one
         // per query as it is, and an HTTP call is a far longer await than a dataloader batch --
         // exactly the pattern that deadlocks a bounded pool.
-        let (linked, token) = {
+        let linked: Vec<Account> = {
             let conn = &mut context.conn().await?;
 
-            let linked: Vec<Account> = accounts::table
+            accounts::table
                 .filter(accounts::user_id.eq(user_id))
                 .filter(accounts::stockdb_account_id.is_not_null())
                 .select(Account::as_select())
                 .load(conn)
-                .await?;
-
-            let token: Option<String> = users::table
-                .find(user_id)
-                .select(users::stockdb_token)
-                .first(conn)
-                .await?;
-
-            (linked, token)
+                .await?
         };
 
-        let Some(token) = token else {
+        let Some((base_url, token)) = credentials(context, user_id).await? else {
             if !linked.is_empty() {
                 warn!(
-                    "User {user_id} has {} account(s) linked to stockdb but no stockdb token; \
-                     set one with `moneta user --stockdb-token`",
+                    "User {user_id} has {} account(s) linked to stockdb but no token or no \
+                     configured url; `moneta user --stockdb-token` sets the former",
                     linked.len()
                 );
             }
@@ -149,6 +164,7 @@ impl InvestmentQuery {
             return Ok(vec![]);
         };
 
+        let base_url = base_url.as_str();
         let timeout = Duration::from_secs(context.config.stockdb.timeout_seconds);
 
         // Concurrently, so that two depots cost one round trip rather than two in a row.
@@ -160,7 +176,8 @@ impl InvestmentQuery {
                     .stockdb_account_id
                     .expect("filtered on stockdb_account_id being present");
 
-                let portfolio = fetch(base_url, &token, stockdb_account_id, timeout).await;
+                let path = format!("/api/accounts/{stockdb_account_id}/portfolio");
+                let portfolio = get::<StockdbPortfolio>(base_url, &token, &path, timeout).await;
                 (account, stockdb_account_id, portfolio)
             }
         }))
@@ -173,6 +190,12 @@ impl InvestmentQuery {
                 // the rendered views scale its balance. Without this the two numbers on the
                 // dashboard would be measuring different things.
                 let share = account.ownership_fraction;
+
+                // A portfolio with no positions in it is what stockdb answers for a depot that
+                // is not there any more, or never was this reader's -- and it answers 0,00 EUR,
+                // which is a wrong number rather than a missing one. A link left pointing at a
+                // deleted depot should say nothing, not claim the money is gone.
+                let portfolio = portfolio.filter(|p| !p.stocks.is_empty());
 
                 GraphQLInvestment {
                     account: GraphQLAccount::new(account),
@@ -201,16 +224,37 @@ impl StockdbPortfolio {
     }
 }
 
-/// `None` for every way this can fail -- unreachable, refused, unparseable. The caller turns
-/// that into missing figures, because a dashboard that cannot say what a depot is worth today
-/// is still right about everything that was actually booked.
-async fn fetch(
+/// The base url and this reader's token, or `None` where either is missing -- which is what
+/// every deployment without a stockdb looks like, and is not an error.
+async fn credentials(context: &Context, user_id: Uuid) -> FieldResult<Option<(String, String)>> {
+    let base_url = context.config.stockdb.url.trim_end_matches('/').to_owned();
+    if base_url.is_empty() {
+        return Ok(None);
+    }
+
+    let token: Option<String> = {
+        let conn = &mut context.conn().await?;
+
+        users::table
+            .find(user_id)
+            .select(users::stockdb_token)
+            .first(conn)
+            .await?
+    };
+
+    Ok(token.map(|token| (base_url, token)))
+}
+
+/// `None` for every way this can fail -- unreachable, refused, unparseable. Callers turn that
+/// into a missing figure or an empty list, because a dashboard that cannot say what a depot is
+/// worth today is still right about everything that was actually booked.
+async fn get<T: serde::de::DeserializeOwned>(
     base_url: &str,
     token: &str,
-    stockdb_account_id: i32,
+    path: &str,
     timeout: Duration,
-) -> Option<StockdbPortfolio> {
-    let url = format!("{base_url}/api/accounts/{stockdb_account_id}/portfolio");
+) -> Option<T> {
+    let url = format!("{base_url}{path}");
 
     let response = CLIENT
         .get(&url)
@@ -231,8 +275,8 @@ async fn fetch(
         }
     };
 
-    match response.json::<StockdbPortfolio>().await {
-        Ok(portfolio) => Some(portfolio),
+    match response.json::<T>().await {
+        Ok(parsed) => Some(parsed),
         Err(e) => {
             warn!("Could not read stockdb's answer for {url}: {e}");
             None
