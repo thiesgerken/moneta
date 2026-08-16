@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { graphql } from '$houdini';
-	import { Navbar, NavBrand, NavHamburger, NavUl, NavLi, Avatar, Tooltip } from 'flowbite-svelte';
+	import { version } from '$app/environment';
+	import { Navbar, NavBrand, NavHamburger, NavUl, NavLi, Avatar, Dropdown } from 'flowbite-svelte';
+	import { ArrowRightToBracketOutline } from 'flowbite-svelte-icons';
 	import { NAV } from '$lib/navigation';
 
 	// No error surface, deliberately: a bar across the top of every page is the wrong place
@@ -10,6 +12,7 @@
 			users {
 				me {
 					name
+					fullName
 					firstName
 					lastName
 				}
@@ -20,6 +23,22 @@
 	$effect(() => void basicStore.fetch());
 
 	let open = $state(false);
+	let menuOpen = $state(false);
+
+	const me = $derived($basicStore.data?.users.me);
+	const initials = $derived(`${me?.firstName?.[0] ?? ''}${me?.lastName?.[0] ?? ''}`);
+
+	// ponytail: no version string of our own. sveltekit already stamps every build -- it is what
+	// the layout watches to notice a deploy -- and its default is the build's `Date.now()`. That
+	// answers the only question this line is here for, "am I looking at the deploy I just made",
+	// without a build arg to thread through the Dockerfile and CI. Non-numeric if anyone ever
+	// sets `kit.version.name` by hand, hence the fallback.
+	const build = $derived.by(() => {
+		const stamp = Number(version);
+		if (!Number.isFinite(stamp)) return version;
+
+		return new Date(stamp).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+	});
 
 	async function logout() {
 		const logoutMutation = graphql(`
@@ -52,21 +71,48 @@
 	<NavHamburger onclick={() => (open = !open)} />
 	<!-- md:p-0 is what the bar's height came from: flowbite's own `p-4` is there for the stacked
 	     phone menu and it kept padding the row on a desktop too, where the list is one line -->
-	<NavUl class={open ? 'block' : ''} classes={{ ul: 'md:gap-6 md:p-0' }}>
-		{#if $basicStore.data?.users.me}
+	<!-- md:items-center: the list stretches its children, and the avatar is the one child with a
+	     height of its own, so it hung from the top of a row the labels had made taller. -->
+	<NavUl class={open ? 'block' : ''} classes={{ ul: 'md:items-center md:gap-6 md:p-0' }}>
+		{#if me}
 			{#each NAV as { href, label } (href)}
 				<!-- a tap navigates without a page load, which would otherwise leave the menu
 				     standing open over the page it just took you to -->
 				<NavLi {href} onclick={() => (open = false)}>{label}</NavLi>
 			{/each}
-			<!-- <NavLi onclick={logout} href="/">Logout</NavLi> -->
-			<Avatar size="sm" class="mr-0 ml-5" onclick={logout} href="/"
-				>{$basicStore.data?.users.me?.firstName?.[0]}{$basicStore.data?.users.me
-					?.lastName?.[0]}</Avatar
-			>
-			<Tooltip>Logout</Tooltip>
+			<button type="button" data-user-menu class="flex cursor-pointer" aria-label="Konto">
+				<Avatar size="sm">{initials}</Avatar>
+			</button>
 		{:else}
 			<NavLi href="/login">Login</NavLi>
 		{/if}
 	</NavUl>
 </Navbar>
+
+{#if me}
+	<!-- outside the bar rather than next to the avatar: the trigger sits in the navbar's `ul`,
+	     and the dropdown's own panel is not a list item. -->
+	<Dropdown
+		bind:isOpen={menuOpen}
+		triggeredBy="[data-user-menu]"
+		placement="bottom-end"
+		class="w-60 overflow-hidden p-0"
+	>
+		<div class="px-4 py-3">
+			<div class="truncate text-sm font-medium text-gray-900 dark:text-white">{me.fullName}</div>
+			<div class="truncate text-xs text-gray-500 dark:text-gray-400">{me.name}</div>
+			<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">Stand {build}</div>
+		</div>
+		<button
+			type="button"
+			onclick={() => {
+				menuOpen = false;
+				logout();
+			}}
+			class="flex w-full cursor-pointer items-center gap-2 border-t border-gray-100 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-600"
+		>
+			<ArrowRightToBracketOutline class="h-4 w-4" />
+			Abmelden
+		</button>
+	</Dropdown>
+{/if}
