@@ -221,3 +221,99 @@ impl ExpenseDelivery {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    const INTERVALS: [PeriodicInterval; 4] = [
+        PeriodicInterval::Daily,
+        PeriodicInterval::Weekly,
+        PeriodicInterval::Monthly,
+        PeriodicInterval::Yearly,
+    ];
+
+    fn at(y: i32, m: u32, d: u32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(y, m, d, 12, 0, 0).unwrap()
+    }
+
+    #[test]
+    fn each_interval_advances_by_its_own_step() {
+        assert_eq!(PeriodicInterval::Daily.next(at(2026, 3, 1)), at(2026, 3, 2));
+        assert_eq!(
+            PeriodicInterval::Weekly.next(at(2026, 3, 1)),
+            at(2026, 3, 8)
+        );
+        assert_eq!(
+            PeriodicInterval::Monthly.next(at(2026, 3, 1)),
+            at(2026, 4, 1)
+        );
+        assert_eq!(
+            PeriodicInterval::Yearly.next(at(2026, 3, 1)),
+            at(2027, 3, 1)
+        );
+    }
+
+    /// A rule anchored on the 31st has to keep firing through the months that have no 31st,
+    /// and has to land on the last day of them rather than slipping into the next month.
+    #[test]
+    fn a_month_end_anchor_clamps_instead_of_overflowing() {
+        assert_eq!(
+            PeriodicInterval::Monthly.next(at(2026, 1, 31)),
+            at(2026, 2, 28)
+        );
+        assert_eq!(
+            PeriodicInterval::Monthly.next(at(2026, 3, 31)),
+            at(2026, 4, 30)
+        );
+        // a leap year still has a 29th to clamp onto
+        assert_eq!(
+            PeriodicInterval::Monthly.next(at(2028, 1, 31)),
+            at(2028, 2, 29)
+        );
+        // and the same anchor a year later, which is the one that only bites every four years
+        assert_eq!(
+            PeriodicInterval::Yearly.next(at(2028, 2, 29)),
+            at(2029, 2, 28)
+        );
+    }
+
+    /// moneydb's format, which every imported automation rule's `regex_time` was written
+    /// against. Widening a field or dropping a leading zero silently stops those matching, and
+    /// a rule that no longer fires looks like a bank that stopped sending the line.
+    #[test]
+    fn a_delivery_date_is_formatted_the_way_moneydb_wrote_it() {
+        let delivery = ExpenseDelivery {
+            account_id: Uuid::nil(),
+            date: Utc.with_ymd_and_hms(2026, 8, 4, 9, 5, 0).unwrap(),
+            booking_date: None,
+            amount: -1234,
+            statement: String::new(),
+        };
+
+        assert_eq!(delivery.formatted_date(), "04.08.2026 09:05");
+    }
+
+    /// The same agreement as the account enums: the literals are what the column holds, and
+    /// the CHECK constraint in the migration is the other half of it.
+    #[test]
+    fn every_interval_is_one_the_check_constraint_allows() {
+        let schema = include_str!("../../migrations/2026-08-05-000001_initial_schema/up.sql");
+        let rest = schema
+            .split_once("periodic_rules_period_known")
+            .expect("the constraint is gone from the migration")
+            .1;
+        let allowed = &rest[..rest.find(')').expect("the CHECK list closes")];
+
+        for interval in INTERVALS {
+            assert!(
+                allowed.contains(&format!("'{}'", interval.as_str())),
+                "the constraint does not allow '{}'",
+                interval.as_str()
+            );
+        }
+
+        assert_eq!(allowed.matches('\'').count() / 2, INTERVALS.len());
+    }
+}
