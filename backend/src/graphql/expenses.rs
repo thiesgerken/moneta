@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::graphql::accounts::GraphQLAccount;
 use crate::graphql::categories::GraphQLCategory;
 use crate::graphql::root::{Context, require_user};
+use crate::graphql::scoped;
 use crate::graphql::users::GraphQLUserInfo;
 use crate::graphql::util::{self, SortDirection};
 use crate::models::Category;
@@ -21,7 +22,7 @@ use crate::models::rendering::{
 use crate::models::{Account, AutomationRule, Expense};
 use crate::queries;
 use crate::rules;
-use crate::schema::{automation_rules, expense_categorizations, expense_changes, expenses};
+use crate::schema::{expense_categorizations, expense_changes, expenses};
 use crate::schema_views::{expense_transactions_rendered, expenses_rendered};
 
 use chrono::DateTime;
@@ -418,7 +419,7 @@ impl Default for ExpenseFlagFilter {
 }
 
 type ExpensePredicate =
-    Box<dyn BoxableExpression<expenses_rendered::table, diesel::pg::Pg, SqlType = Bool>>;
+    Box<dyn BoxableExpression<expenses_rendered::table, diesel::pg::Pg, SqlType = Bool>>; // scoped-ok: names the table as a type, builds no query
 
 /// Everything a search term can match: the free-text fields, the position titles inside the
 /// jsonb, and -- if the term reads as a number -- the total in either sign, since the table
@@ -491,9 +492,7 @@ impl ExpenseQuery {
         // A boxed query is consumed by the count, so the filter is built twice rather than
         // cloned.
         let filtered = || {
-            let mut query = expenses_rendered::table
-                .into_boxed()
-                .filter(expenses_rendered::user_id.eq(user_id));
+            let mut query = scoped::expenses(user_id);
 
             if let Some(term) = &search {
                 query = query.filter(search_predicate(term.trim()));
@@ -511,8 +510,7 @@ impl ExpenseQuery {
             {
                 query = query.filter(
                     expenses_rendered::id.eq_any(
-                        expense_transactions_rendered::table
-                            .filter(expense_transactions_rendered::user_id.eq(user_id))
+                        scoped::expense_transactions(user_id)
                             .filter(expense_transactions_rendered::account_id.eq_any(account_ids))
                             .select(expense_transactions_rendered::expense_id),
                     ),
@@ -573,8 +571,7 @@ impl ExpenseQuery {
             if let Some(after) = valued_after {
                 query = query.filter(
                     expenses_rendered::id.eq_any(
-                        expense_transactions_rendered::table
-                            .filter(expense_transactions_rendered::user_id.eq(user_id))
+                        scoped::expense_transactions(user_id)
                             .filter(expense_transactions_rendered::date.ge(after))
                             .select(expense_transactions_rendered::expense_id),
                     ),
@@ -583,8 +580,7 @@ impl ExpenseQuery {
             if let Some(before) = valued_before {
                 query = query.filter(
                     expenses_rendered::id.eq_any(
-                        expense_transactions_rendered::table
-                            .filter(expense_transactions_rendered::user_id.eq(user_id))
+                        scoped::expense_transactions(user_id)
                             .filter(expense_transactions_rendered::date.lt(before))
                             .select(expense_transactions_rendered::expense_id),
                     ),
@@ -597,8 +593,7 @@ impl ExpenseQuery {
             if let Some(after) = booked_after {
                 query = query.filter(
                     expenses_rendered::id.eq_any(
-                        expense_transactions_rendered::table
-                            .filter(expense_transactions_rendered::user_id.eq(user_id))
+                        scoped::expense_transactions(user_id)
                             .filter(sql::<Timestamptz>(BOOKED_OR_VALUED).ge(after))
                             .select(expense_transactions_rendered::expense_id),
                     ),
@@ -607,8 +602,7 @@ impl ExpenseQuery {
             if let Some(before) = booked_before {
                 query = query.filter(
                     expenses_rendered::id.eq_any(
-                        expense_transactions_rendered::table
-                            .filter(expense_transactions_rendered::user_id.eq(user_id))
+                        scoped::expense_transactions(user_id)
                             .filter(sql::<Timestamptz>(BOOKED_OR_VALUED).lt(before))
                             .select(expense_transactions_rendered::expense_id),
                     ),
@@ -704,8 +698,7 @@ impl ExpenseQuery {
             .load(conn)
             .await?;
 
-        let mut found: Vec<RenderedExpense> = expenses_rendered::table
-            .filter(expenses_rendered::user_id.eq(user_id))
+        let mut found: Vec<RenderedExpense> = scoped::expenses(user_id)
             .filter(expenses_rendered::id.eq_any(&ids))
             .select(RenderedExpense::as_select())
             .load(conn)
@@ -753,11 +746,8 @@ impl ExpenseQuery {
             // and its changes drop out of the list, which is what the old query did too.
             let mut query = expense_changes::table
                 .filter(
-                    expense_changes::target_id.eq_any(
-                        expenses_rendered::table
-                            .filter(expenses_rendered::user_id.eq(user_id))
-                            .select(expenses_rendered::upstream_id),
-                    ),
+                    expense_changes::target_id
+                        .eq_any(scoped::expenses(user_id).select(expenses_rendered::upstream_id)),
                 )
                 .into_boxed();
 
@@ -955,8 +945,7 @@ impl ExpenseMutation {
                 .into()
         })?;
 
-        let all_rules = automation_rules::table
-            .filter(automation_rules::user_id.eq(user_id))
+        let all_rules = scoped::automation_rules(user_id)
             .select(AutomationRule::as_select())
             .load(conn)
             .await?;
@@ -1010,9 +999,8 @@ impl ExpenseMutation {
 type Conn = diesel_async::pooled_connection::deadpool::Object<AsyncPgConnection>;
 
 async fn load_rendered(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<RenderedExpense> {
-    expenses_rendered::table
+    scoped::expenses(user_id)
         .filter(expenses_rendered::id.eq(id))
-        .filter(expenses_rendered::user_id.eq(user_id))
         .select(RenderedExpense::as_select())
         .first(conn)
         .await
