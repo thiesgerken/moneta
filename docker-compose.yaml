@@ -18,6 +18,12 @@ services:
       - MONETA__API__PORT=80
       - MONETA__API__ADDRESS=0.0.0.0
       - MONETA__API__SECRET_KEY=M7/dfyV00H6WoOGNxygzdOudibhuPdQwJay5pi+I1cg=
+      # There is no stockdb in this stack, so the depots are read from the deployed one. That
+      # needs a token per user, which is not in here and cannot be: `moneta user
+      # --stockdb-token <name>` sets it, `stockdb user --token <name>` issues it, and it only
+      # reads. Blank either of these and the integration switches itself off.
+      - MONETA__STOCKDB__URL=https://stocks.gerken.haus
+      - MONETA__STOCKDB__PUBLIC_URL=https://stocks.gerken.haus
     command: moneta serve
     labels:
       - "traefik.enable=true"
