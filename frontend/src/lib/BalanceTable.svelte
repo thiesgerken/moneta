@@ -195,8 +195,6 @@
 		else expandedRows = [...expandedRows, id];
 	}
 
-	/// Descending, ascending, off -- a header clicked by accident is otherwise only undone by
-	/// reloading the page, since the sort lives here rather than in the url.
 	/// The chosen period, spelled out. This is the control's own label as well as its chip, so
 	/// what the filter row says and what the button says cannot drift apart.
 	const dateRangeLabel = $derived.by(() => {
@@ -244,6 +242,8 @@
 		clearDateRange();
 	}
 
+	/// Descending, ascending, off -- a header clicked by accident is otherwise only undone by
+	/// reloading the page, since the sort lives here rather than in the url.
 	function sortByField(field: string) {
 		if (sortBy.field !== field) sortBy = { field, direction: -1 };
 		else if (sortBy.direction === -1) sortBy = { field, direction: 1 };
@@ -508,7 +508,7 @@
 						})}
 					</TableBodyCell>
 					<TableBodyCell
-						class="w-full max-w-0 truncate px-2 py-3 md:px-4"
+						class="w-full max-w-0 truncate px-2 py-3 md:w-56 md:max-w-56 md:px-4"
 						style={tint(balance.account.color)}
 					>
 						{#if balance.account.owner.name != $basicStore.data?.users.me.name}
@@ -525,7 +525,7 @@
 									? 'bg-green-100 text-green-700'
 									: '')}>{(balance.amount / 100).toFixed(2)}€</TableBodyCell
 					>
-					<TableBodyCell class="hidden max-w-96 truncate px-4 py-3 md:table-cell"
+					<TableBodyCell class="hidden truncate px-4 py-3 md:table-cell md:w-full md:max-w-0"
 						>{balance.comments}</TableBodyCell
 					>
 				</TableBodyRow>

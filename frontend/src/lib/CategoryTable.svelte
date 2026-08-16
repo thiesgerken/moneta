@@ -325,7 +325,9 @@
 		<TableBody class="divide-y">
 			{#each filteredCategories as category (category.id)}
 				<TableBodyRow onclick={() => toggleRow(category.id)}>
-					<TableBodyCell class="w-full max-w-0 px-4 py-3 wrap-anywhere whitespace-normal">
+					<TableBodyCell
+						class="w-full max-w-0 px-4 py-3 wrap-anywhere whitespace-normal md:w-64 md:max-w-64"
+					>
 						<button type="button" class="mr-2 focus:outline-none">
 							{#if expandedRows.includes(category.id)}
 								<ChevronDownOutline class="inline h-4 w-4" />
@@ -339,7 +341,7 @@
 						></span>
 						{category.name}
 					</TableBodyCell>
-					<TableBodyCell class="hidden max-w-96 truncate px-4 py-3 md:table-cell">
+					<TableBodyCell class="hidden truncate px-4 py-3 md:table-cell md:w-full md:max-w-0">
 						{category.description || '-'}
 					</TableBodyCell>
 					<TableBodyCell class="px-4 py-3">

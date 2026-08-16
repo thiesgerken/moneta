@@ -337,7 +337,7 @@
 		<TableBody class="divide-y">
 			{#each rules as rule (rule.id)}
 				<TableBodyRow onclick={() => toggleRow(rule.id)}>
-					<TableBodyCell class="w-full max-w-0 px-4 py-3 whitespace-normal">
+					<TableBodyCell class="w-full max-w-0 px-4 py-3 whitespace-normal md:w-72 md:max-w-72">
 						<button type="button" class="mr-2 focus:outline-none" aria-label="Details">
 							{#if expandedRows.includes(rule.id)}
 								<ChevronDownOutline class="inline h-4 w-4" />
@@ -360,7 +360,7 @@
 							· {rule.lastDelivery ? shortDate(rule.lastDelivery) : '–'}
 						</span>
 					</TableBodyCell>
-					<TableBodyCell class="hidden px-4 py-3 text-xs md:table-cell">
+					<TableBodyCell class="hidden px-4 py-3 text-xs md:table-cell md:w-full md:max-w-0">
 						<RegexText pattern={rule.regexStatement} />
 					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
