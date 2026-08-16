@@ -38,6 +38,8 @@
 	import { toggleOption, type ActiveFilter } from './filters';
 	import RegexText from './RegexText.svelte';
 	import QueryError from './QueryError.svelte';
+	import SortIcon from './SortIcon.svelte';
+	import { DESC, TableSort } from './table_sort.svelte';
 	import {
 		tableSearchClasses,
 		tableSearchTableClass,
@@ -46,7 +48,7 @@
 	} from './table_styles';
 	import { shortDate } from './analysis/dates';
 	import { describeAccrual, formatAccrualPeriod } from './expense_utils';
-	import { euro } from './money';
+	import { amountColor, euro } from './money';
 
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
@@ -180,24 +182,7 @@
 	/// Most recently used first: a rule that fired last week is one you still have, and the long
 	/// tail that has not matched anything for years is not what the page is for. A third click
 	/// on a header comes back here.
-	const DEFAULT_SORT = { field: 'lastUsed', direction: -1 };
-	let sortBy: { field: string; direction: number } = $state({ ...DEFAULT_SORT });
-
-	function sortByField(field: string) {
-		if (sortBy.field !== field) sortBy = { field, direction: -1 };
-		else if (sortBy.direction === -1) sortBy = { field, direction: 1 };
-		else sortBy = { ...DEFAULT_SORT };
-	}
-
-	const isSortedBy = (field: string) => (sortBy.field === field ? sortBy.direction : null);
-
-	const sortKeys: Record<string, (r: Row) => string | number> = {
-		title: (r) => r.title.toLowerCase(),
-		kind: (r) => r.kind,
-		trigger: (r) => r.trigger.toLowerCase(),
-		lastUsed: (r) => r.lastUsed?.getTime() ?? 0,
-		priority: (r) => r.priority ?? -Infinity
-	};
+	const sort = new TableSort({ field: 'lastUsed', direction: DESC });
 
 	const visible = $derived.by(() => {
 		const term = searchTerm.trim().toLowerCase();
@@ -207,13 +192,19 @@
 				(!term || r.title.toLowerCase().includes(term) || r.trigger.toLowerCase().includes(term))
 		);
 
-		const key = sortKeys[sortBy.field] ?? sortKeys.lastUsed;
-		return [...filtered].sort((a, b) => {
-			const [x, y] = [key(a), key(b)];
-			if (x === y) return a.title.localeCompare(b.title);
-			// -1 is descending, as everywhere else here
-			return (x < y ? -1 : 1) * sortBy.direction;
-		});
+		return sort.apply(
+			filtered,
+			{
+				title: (r) => r.title.toLowerCase(),
+				kind: (r) => r.kind,
+				trigger: (r) => r.trigger.toLowerCase(),
+				// a rule that has never fired sorts behind every rule that has
+				lastUsed: (r) => r.lastUsed?.getTime() ?? 0,
+				// and a periodic rule, which has no priority, behind every rule that has one
+				priority: (r) => r.priority ?? -Infinity
+			},
+			(r) => r.title
+		);
 	});
 
 	const activeFilters = $derived.by(() => {
@@ -337,14 +328,6 @@
 	}
 </script>
 
-{#snippet sortIcon(field: string)}
-	{#if isSortedBy(field) === -1}
-		▲
-	{:else if isSortedBy(field) === 1}
-		▼
-	{/if}
-{/snippet}
-
 {#snippet kindBadge(kind: Row['kind'])}
 	<Badge color={kind === 'automation' ? 'blue' : 'purple'}>
 		{kind === 'automation' ? 'Bankumsatz' : 'Kalender'}
@@ -355,10 +338,7 @@
 	{#if cents == null}
 		<span class="text-gray-400 dark:text-gray-500">{absent}</span>
 	{:else}
-		<span
-			class={cents < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}
-			>{euro(cents)}</span
-		>
+		<span class={amountColor(cents)}>{euro(cents)}</span>
 	{/if}
 {/snippet}
 
@@ -540,37 +520,39 @@
 			<TableHeadCell
 				class="px-4 py-3 md:w-64 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('title')}
+				onclick={() => sort.by('title')}
 			>
-				<TextSizeOutline class={headIcon} />Titel{@render sortIcon('title')}
+				<TextSizeOutline class={headIcon} />Titel<SortIcon direction={sort.on('title')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-36 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('kind')}
+				onclick={() => sort.by('kind')}
 			>
-				<WandMagicSparklesOutline class={headIcon} />Auslöser{@render sortIcon('kind')}
+				<WandMagicSparklesOutline class={headIcon} />Auslöser<SortIcon
+					direction={sort.on('kind')}
+				/>
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('trigger')}
+				onclick={() => sort.by('trigger')}
 			>
-				<SearchOutline class={headIcon} />Bedingung{@render sortIcon('trigger')}
+				<SearchOutline class={headIcon} />Bedingung<SortIcon direction={sort.on('trigger')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-24 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('priority')}
+				onclick={() => sort.by('priority')}
 			>
-				<SortOutline class={headIcon} />Prio{@render sortIcon('priority')}
+				<SortOutline class={headIcon} />Prio<SortIcon direction={sort.on('priority')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-32 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('lastUsed')}
+				onclick={() => sort.by('lastUsed')}
 			>
-				<ClockArrowOutline class={headIcon} />Zuletzt{@render sortIcon('lastUsed')}
+				<ClockArrowOutline class={headIcon} />Zuletzt<SortIcon direction={sort.on('lastUsed')} />
 			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">

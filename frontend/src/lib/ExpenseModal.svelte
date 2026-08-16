@@ -7,7 +7,7 @@
 	import type { ExpenseInput } from '$houdini/graphql/inputs';
 	import { accountSorter, byUsageThen, categorySorter, formatAccount } from './expense_utils';
 	import ColorSelect from './ColorSelect.svelte';
-	import { signedEuro } from './money';
+	import { amountColor, signedEuro } from './money';
 	import {
 		CircleMinusOutline,
 		ArrowsRepeatOutline,
@@ -251,7 +251,7 @@
 			return 'text-gray-600 dark:text-gray-400';
 		}
 
-		return value < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400';
+		return amountColor(value);
 	}
 
 	/// The two things that happen to an expense often enough to be worth a button: half of it is

@@ -65,6 +65,8 @@
 	import { shortDate } from './analysis/dates';
 	import { signedEuro } from './money';
 	import QueryError from './QueryError.svelte';
+	import SortIcon from './SortIcon.svelte';
+	import { DESC, TableSort } from './table_sort.svelte';
 	import OptionFilter from './OptionFilter.svelte';
 	import FilterChips from './FilterChips.svelte';
 	import { toggleOption } from './filters';
@@ -75,9 +77,7 @@
 	let expandedRows = $state<string[]>([]);
 	/// Unbestätigt and unvollständig first, which is the list somebody opens this page to work
 	/// through. A third click on a header comes back here.
-	const DEFAULT_SORT = { field: 'status', direction: -1 };
-
-	let sortBy: { field: string; direction: number } = $state({ ...DEFAULT_SORT });
+	const sort = new TableSort({ field: 'status', direction: DESC });
 
 	/// Which of the three dates the date column, its sort and the period filter mean.
 	///
@@ -312,8 +312,8 @@
 		valuedBefore: dateAxis === 'value' ? filterDateRange.to : undefined,
 		bookedAfter: dateAxis === 'booking' ? filterDateRange.from : undefined,
 		bookedBefore: dateAxis === 'booking' ? filterDateRange.to : undefined,
-		sortBy: SORT_FIELDS[sortBy.field],
-		sortDir: (sortBy.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options
+		sortBy: SORT_FIELDS[sort.field],
+		sortDir: (sort.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options
 	});
 
 	// Stuff that we always need independently of the current page and sorting and so on
@@ -605,22 +605,11 @@
 
 	/// Descending, ascending, off. The third state is what there was no way back to: sorting
 	/// lives in the component rather than in the url, so a header clicked by accident could only
-	/// be undone by reloading the page.
-	function sortByField(field: string) {
-		if (sortBy.field !== field) sortBy = { field, direction: -1 };
-		else if (sortBy.direction === -1) sortBy = { field, direction: 1 };
-		else sortBy = { ...DEFAULT_SORT };
-	}
-
-	function isSortedBy(field: string) {
-		return sortBy.field === field ? sortBy.direction : null;
-	}
-
 	/// Switching the column takes the sort with it, but only if the sort was on a date: someone
 	/// who ordered by amount asked for that, and it does not become a different question here.
 	function setDateAxis(next: DateAxis) {
-		const onDate = Object.values(DATE_AXES).some((a) => a.sort === sortBy.field);
-		if (onDate) sortBy = { field: DATE_AXES[next].sort, direction: sortBy.direction };
+		const onDate = Object.values(DATE_AXES).some((a) => a.sort === sort.field);
+		if (onDate) sort.current = { field: DATE_AXES[next].sort, direction: sort.direction };
 		dateAxis = next;
 		currentPage = 1;
 	}
@@ -772,14 +761,6 @@
 		<span class="rounded-md bg-purple-100 px-2 py-1 text-purple-700">
 			<StarOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Außergewöhnlich
 		</span>
-	{/if}
-{/snippet}
-
-{#snippet sortIcon(field: string)}
-	{#if isSortedBy(field) === -1}
-		▲
-	{:else if isSortedBy(field) === 1}
-		▼
 	{/if}
 {/snippet}
 
@@ -1091,68 +1072,68 @@
 			<TableHeadCell
 				class="w-28 py-3 pr-2 pl-7 wrap-anywhere md:w-auto md:min-w-36 md:pr-4 md:pl-10 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField(axis.sort)}
+				onclick={() => sort.by(axis.sort)}
 			>
 				<CalendarMonthOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>{axis.label}
-				{@render sortIcon(axis.sort)}
+				<SortIcon direction={sort.on(axis.sort)} />
 			</TableHeadCell>
-			<TableHeadCell class="px-2 py-3 md:px-4" scope="col" onclick={() => sortByField('title')}>
+			<TableHeadCell class="px-2 py-3 md:px-4" scope="col" onclick={() => sort.by('title')}>
 				<TextSizeOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>Titel
-				{@render sortIcon('title')}
+				<SortIcon direction={sort.on('title')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
-				onclick={() => sortByField('accounts')}
+				onclick={() => sort.by('accounts')}
 			>
 				<WalletOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>Konten
-				{@render sortIcon('accounts')}
+				<SortIcon direction={sort.on('accounts')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
-				onclick={() => sortByField('categories')}
+				onclick={() => sort.by('categories')}
 			>
 				<TagOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>Kategorien
-				{@render sortIcon('categories')}
+				<SortIcon direction={sort.on('categories')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="w-28 px-2 py-3 text-right md:w-32 md:px-4"
 				scope="col"
-				onclick={() => sortByField('effectiveAmount')}
+				onclick={() => sort.by('effectiveAmount')}
 			>
 				<EuroOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>Betrag
-				{@render sortIcon('effectiveAmount')}
+				<SortIcon direction={sort.on('effectiveAmount')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-32"
 				scope="col"
-				onclick={() => sortByField('store')}
+				onclick={() => sort.by('store')}
 			>
 				<StoreOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>Geschäft
-				{@render sortIcon('store')}
+				<SortIcon direction={sort.on('store')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-56"
 				scope="col"
-				onclick={() => sortByField('description')}
+				onclick={() => sort.by('description')}
 			>
 				<AlignLeftOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>Beschreibung
-				{@render sortIcon('description')}
+				<SortIcon direction={sort.on('description')} />
 			</TableHeadCell>
 			<!-- What the bank wrote. No sort arrow: the backend names its sortable columns and this
 			     is not one of them. From 2xl only, and it shares what the fixed columns leave with
@@ -1166,12 +1147,12 @@
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
-				onclick={() => sortByField('status')}
+				onclick={() => sort.by('status')}
 			>
 				<FlagOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>Status
-				{@render sortIcon('status')}
+				<SortIcon direction={sort.on('status')} />
 			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">

@@ -8,6 +8,7 @@
 	import RegexInput from './RegexInput.svelte';
 	import { describeAccrual, formatAccrualPeriod } from './expense_utils';
 	import { shortDate } from './analysis/dates';
+	import { amountColor } from './money';
 
 	interface Props {
 		open?: boolean;
@@ -198,11 +199,7 @@
 					bind:value={filterAmount}
 					placeholder="beliebig"
 					color={amountError ? 'red' : undefined}
-					class="pr-6 {amountError || !filterAmount
-						? ''
-						: Number(filterAmount) < 0
-							? 'text-red-600 dark:text-red-400'
-							: 'text-green-700 dark:text-green-400'}"
+					class="pr-6 {amountError || !filterAmount ? '' : amountColor(Number(filterAmount))}"
 				/>
 				<span class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500">
 					€

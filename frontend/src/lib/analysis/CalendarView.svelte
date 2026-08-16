@@ -9,7 +9,7 @@
 	import { shiftMonth } from './dates';
 	import { resolve } from '$app/paths';
 	import QueryError from '$lib/QueryError.svelte';
-	import { euro } from '$lib/money';
+	import { amountColor, euro } from '$lib/money';
 
 	const month = $derived(new Date(calendarState.month));
 
@@ -216,11 +216,7 @@
 						<div class="flex justify-between">
 							<span class="font-semibold">{day}</span>
 							{#if entries.length}
-								<span
-									class={total < 0
-										? 'text-red-600 dark:text-red-400'
-										: 'text-green-700 dark:text-green-400'}
-								>
+								<span class={amountColor(total)}>
 									{euro(total)}
 								</span>
 							{/if}

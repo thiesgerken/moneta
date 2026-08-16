@@ -42,6 +42,8 @@
 		headIcon
 	} from './table_styles';
 	import QueryError from './QueryError.svelte';
+	import SortIcon from './SortIcon.svelte';
+	import { DESC, TableSort } from './table_sort.svelte';
 	import OptionFilter from './OptionFilter.svelte';
 	import FilterChips from './FilterChips.svelte';
 	import { toggleOption, type ActiveFilter } from './filters';
@@ -55,8 +57,7 @@
 	/// several open rows are no answer at all rather than a reason to pick the first.
 	const selectedBalanceId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
 	/// Newest first, and a third click on a header comes back here.
-	const DEFAULT_SORT = { field: 'date', direction: -1 };
-	let sortBy: { field: string; direction: number } = $state({ ...DEFAULT_SORT });
+	const sort = new TableSort({ field: 'date', direction: DESC });
 
 	/// only consulted below `md`, where the filters are collapsed
 	let filtersOpen = $state(false);
@@ -88,8 +89,8 @@
 		accountIds: filteredAccounts.length > 0 ? filteredAccounts : undefined,
 		after: filterDateRange.from,
 		before: filterDateRange.to,
-		sortBy: SORT_FIELDS[sortBy.field],
-		sortDir: (sortBy.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options
+		sortBy: SORT_FIELDS[sort.field],
+		sortDir: (sort.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options
 	});
 
 	// Stuff that we always need independently of the current page and sorting and so on
@@ -242,15 +243,6 @@
 
 	/// Descending, ascending, off -- a header clicked by accident is otherwise only undone by
 	/// reloading the page, since the sort lives here rather than in the url.
-	function sortByField(field: string) {
-		if (sortBy.field !== field) sortBy = { field, direction: -1 };
-		else if (sortBy.direction === -1) sortBy = { field, direction: 1 };
-		else sortBy = { ...DEFAULT_SORT };
-	}
-
-	function isSortedBy(field: string) {
-		return sortBy.field === field ? sortBy.direction : null;
-	}
 
 	$effect(() => void basicStore.fetch());
 	$effect(() => void balanceStore.fetch({ variables: balanceVariables() }));
@@ -280,14 +272,6 @@
 		expandedRows = [];
 	}
 </script>
-
-{#snippet sortIcon(field: string)}
-	{#if isSortedBy(field) === -1}
-		▲
-	{:else if isSortedBy(field) === 1}
-		▼
-	{/if}
-{/snippet}
 
 <Modal bind:open={showDeleteBalanceModal} size="xs">
 	<div class="text-center">
@@ -466,34 +450,34 @@
 			<TableHeadCell
 				class="px-4 py-3 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('date')}
+				onclick={() => sort.by('date')}
 			>
 				<CalendarMonthOutline class={headIcon} />Datum
-				{@render sortIcon('date')}
+				<SortIcon direction={sort.on('date')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="px-4 py-3 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('account')}
+				onclick={() => sort.by('account')}
 			>
 				<WalletOutline class={headIcon} />Konto
-				{@render sortIcon('account')}
+				<SortIcon direction={sort.on('account')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="px-2 py-3 text-right md:px-4 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('amount')}
+				onclick={() => sort.by('amount')}
 			>
 				<CashOutline class={headIcon} />Betrag
-				{@render sortIcon('amount')}
+				<SortIcon direction={sort.on('amount')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('comments')}
+				onclick={() => sort.by('comments')}
 			>
 				<AnnotationOutline class={headIcon} />Kommentare
-				{@render sortIcon('comments')}
+				<SortIcon direction={sort.on('comments')} />
 			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">

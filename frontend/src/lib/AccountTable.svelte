@@ -39,6 +39,8 @@
 		headIcon
 	} from './table_styles';
 	import QueryError from './QueryError.svelte';
+	import SortIcon from './SortIcon.svelte';
+	import { ASC, TableSort } from './table_sort.svelte';
 	import FilterChips from './FilterChips.svelte';
 	import { toggleOption, type ActiveFilter } from './filters';
 	import OptionFilter from './OptionFilter.svelte';
@@ -49,12 +51,8 @@
 	/// What the toolbar acts on. An open row is this list's idea of "the one you mean", and
 	/// several open rows are no answer at all rather than a reason to pick the first.
 	const selectedAccountId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
-	/// Newest first, and a third click on a header comes back here.
-	const DEFAULT_SORT = [
-		{ field: 'opened', direction: 1 },
-		{ field: 'name', direction: 1 }
-	];
-	let sortBy: { field: string; direction: number }[] = $state(DEFAULT_SORT.map((s) => ({ ...s })));
+	/// A third click on a header comes back here.
+	const sort = new TableSort({ field: 'opened', direction: ASC });
 
 	let showNewAccountModal = $state(false);
 	let showEditAccountModal = $state(false);
@@ -143,60 +141,22 @@
 			);
 		}
 
-		// Apply sorting
-		if (sortBy.length > 0) {
-			const { field, direction } = sortBy[0];
-			filtered = [...filtered].sort((a, b) => {
-				let aVal, bVal;
-
-				switch (field) {
-					case 'name':
-						aVal = a.name;
-						bVal = b.name;
-						break;
-					case 'description':
-						aVal = a.description || '';
-						bVal = b.description || '';
-						break;
-					case 'owner':
-						aVal = a.owner.name;
-						bVal = b.owner.name;
-						break;
-					case 'kind':
-						aVal = a.kind;
-						bVal = b.kind;
-						break;
-					case 'availability':
-						aVal = a.availability;
-						bVal = b.availability;
-						break;
-					case 'risk':
-						aVal = a.risk;
-						bVal = b.risk;
-						break;
-					case 'opened':
-						aVal = a.opened;
-						bVal = b.opened;
-						break;
-					case 'closed':
-						aVal = a.closed || new Date(9999, 11, 31);
-						bVal = b.closed || new Date(9999, 11, 31);
-						break;
-					case 'ownershipFraction':
-						aVal = a.ownershipFraction;
-						bVal = b.ownershipFraction;
-						break;
-					default:
-						return 0;
-				}
-
-				if (aVal < bVal) return direction;
-				if (aVal > bVal) return -direction;
-				return 0;
-			});
-		}
-
-		return filtered;
+		return sort.apply(
+			filtered,
+			{
+				name: (a) => a.name.toLowerCase(),
+				description: (a) => (a.description || '').toLowerCase(),
+				owner: (a) => a.owner.name.toLowerCase(),
+				kind: (a) => a.kind,
+				availability: (a) => a.availability,
+				risk: (a) => a.risk,
+				opened: (a) => a.opened.getTime(),
+				// an account still open outlasts every closed one
+				closed: (a) => a.closed?.getTime() ?? Infinity,
+				ownershipFraction: (a) => a.ownershipFraction
+			},
+			(a) => a.name
+		);
 	});
 
 	let accountToEdit = $derived(allAccounts.find((a) => a.id === accountIdToEdit) || undefined);
@@ -236,18 +196,6 @@
 	function resetFilters() {
 		searchTerm = '';
 		accountStates = [...OPEN_ONLY];
-	}
-
-	function sortByField(field: string) {
-		if (sortBy[0]?.field !== field) sortBy = [{ field, direction: -1 }];
-		else if (sortBy[0].direction === -1) sortBy = [{ field, direction: 1 }];
-		else sortBy = DEFAULT_SORT.map((s) => ({ ...s }));
-	}
-
-	function isSortedBy(field: string) {
-		const index = sortBy.findIndex(({ field: f }) => f === field);
-		if (index === -1) return null;
-		return sortBy[index].direction;
 	}
 
 	const DeleteAccount = graphql(`
@@ -326,14 +274,6 @@
 		return riskColorMap[risk] || 'bg-gray-100 text-gray-700';
 	}
 </script>
-
-{#snippet sortIcon(field: string)}
-	{#if isSortedBy(field) === -1}
-		▲
-	{:else if isSortedBy(field) === 1}
-		▼
-	{/if}
-{/snippet}
 
 <Modal bind:open={showDeleteAccountModal} size="xs">
 	<div class="text-center">
@@ -485,66 +425,66 @@
 			<TableHeadCell
 				class="px-4 py-3 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('name')}
+				onclick={() => sort.by('name')}
 			>
 				<TextSizeOutline class={headIcon} />Name
-				{@render sortIcon('name')}
+				<SortIcon direction={sort.on('name')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('description')}
+				onclick={() => sort.by('description')}
 			>
 				<AnnotationOutline class={headIcon} />Beschreibung
-				{@render sortIcon('description')}
+				<SortIcon direction={sort.on('description')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="px-4 py-3 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('kind')}
+				onclick={() => sort.by('kind')}
 			>
 				<GridOutline class={headIcon} />Typ
-				{@render sortIcon('kind')}
+				<SortIcon direction={sort.on('kind')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('availability')}
+				onclick={() => sort.by('availability')}
 			>
 				<ClockOutline class={headIcon} />Verfügbarkeit
-				{@render sortIcon('availability')}
+				<SortIcon direction={sort.on('availability')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('risk')}
+				onclick={() => sort.by('risk')}
 			>
 				<ScaleBalancedOutline class={headIcon} />Risiko
-				{@render sortIcon('risk')}
+				<SortIcon direction={sort.on('risk')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('ownershipFraction')}
+				onclick={() => sort.by('ownershipFraction')}
 			>
 				<ChartPieOutline class={headIcon} />Anteil
-				{@render sortIcon('ownershipFraction')}
+				<SortIcon direction={sort.on('ownershipFraction')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('opened')}
+				onclick={() => sort.by('opened')}
 			>
 				<CalendarMonthOutline class={headIcon} />Eröffnet
-				{@render sortIcon('opened')}
+				<SortIcon direction={sort.on('opened')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('closed')}
+				onclick={() => sort.by('closed')}
 			>
 				<CalendarMonthOutline class={headIcon} />Geschlossen
-				{@render sortIcon('closed')}
+				<SortIcon direction={sort.on('closed')} />
 			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">

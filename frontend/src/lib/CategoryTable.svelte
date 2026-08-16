@@ -35,6 +35,8 @@
 		headIcon
 	} from './table_styles';
 	import QueryError from './QueryError.svelte';
+	import SortIcon from './SortIcon.svelte';
+	import { ASC, TableSort } from './table_sort.svelte';
 
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
@@ -42,9 +44,8 @@
 	/// What the toolbar acts on. An open row is this list's idea of "the one you mean", and
 	/// several open rows are no answer at all rather than a reason to pick the first.
 	const selectedCategoryId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
-	/// By name, and a third click on a header comes back here.
-	const DEFAULT_SORT = [{ field: 'name', direction: 1 }];
-	let sortBy: { field: string; direction: number }[] = $state(DEFAULT_SORT.map((s) => ({ ...s })));
+	/// A third click on a header comes back here.
+	const sort = new TableSort({ field: 'name', direction: ASC });
 
 	let showNewCategoryModal = $state(false);
 	let showEditCategoryModal = $state(false);
@@ -90,40 +91,16 @@
 			);
 		}
 
-		// Apply sorting
-		if (sortBy.length > 0) {
-			const { field, direction } = sortBy[0];
-			filtered = [...filtered].sort((a, b) => {
-				let aVal, bVal;
-
-				switch (field) {
-					case 'name':
-						aVal = a.name;
-						bVal = b.name;
-						break;
-					case 'description':
-						aVal = a.description || '';
-						bVal = b.description || '';
-						break;
-					case 'parent':
-						aVal = a.parent?.name || '';
-						bVal = b.parent?.name || '';
-						break;
-					case 'monthlyLimit':
-						aVal = a.monthlyLimit || 0;
-						bVal = b.monthlyLimit || 0;
-						break;
-					default:
-						return 0;
-				}
-
-				if (aVal < bVal) return direction;
-				if (aVal > bVal) return -direction;
-				return 0;
-			});
-		}
-
-		return filtered;
+		return sort.apply(
+			filtered,
+			{
+				name: (c) => c.name.toLowerCase(),
+				description: (c) => (c.description || '').toLowerCase(),
+				parent: (c) => (c.parent?.name || '').toLowerCase(),
+				monthlyLimit: (c) => c.monthlyLimit || 0
+			},
+			(c) => c.name
+		);
 	});
 
 	let categoryToEdit = $derived(allCategories.find((c) => c.id === categoryIdToEdit) || undefined);
@@ -134,20 +111,6 @@
 	function toggleRow(id: string) {
 		if (expandedRows.includes(id)) expandedRows = expandedRows.filter((rowId) => rowId !== id);
 		else expandedRows = [...expandedRows, id];
-	}
-
-	/// Descending, ascending, off -- a header clicked by accident is otherwise only undone by
-	/// reloading the page, since the sort lives here rather than in the url.
-	function sortByField(field: string) {
-		if (sortBy[0]?.field !== field) sortBy = [{ field, direction: -1 }];
-		else if (sortBy[0].direction === -1) sortBy = [{ field, direction: 1 }];
-		else sortBy = DEFAULT_SORT.map((s) => ({ ...s }));
-	}
-
-	function isSortedBy(field: string) {
-		const index = sortBy.findIndex(({ field: f }) => f === field);
-		if (index === -1) return null;
-		return sortBy[index].direction;
 	}
 
 	const DeleteCategory = graphql(`
@@ -175,14 +138,6 @@
 		expandedRows = [];
 	}
 </script>
-
-{#snippet sortIcon(field: string)}
-	{#if isSortedBy(field) === -1}
-		▲
-	{:else if isSortedBy(field) === 1}
-		▼
-	{/if}
-{/snippet}
 
 <Modal bind:open={showDeleteCategoryModal} size="xs">
 	<div class="text-center">
@@ -300,34 +255,34 @@
 			<TableHeadCell
 				class="px-4 py-3 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('name')}
+				onclick={() => sort.by('name')}
 			>
 				<TextSizeOutline class={headIcon} />Name
-				{@render sortIcon('name')}
+				<SortIcon direction={sort.on('name')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('description')}
+				onclick={() => sort.by('description')}
 			>
 				<AnnotationOutline class={headIcon} />Beschreibung
-				{@render sortIcon('description')}
+				<SortIcon direction={sort.on('description')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="px-4 py-3 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('parent')}
+				onclick={() => sort.by('parent')}
 			>
 				<LayersOutline class={headIcon} />Übergeordnet
-				{@render sortIcon('parent')}
+				<SortIcon direction={sort.on('parent')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('monthlyLimit')}
+				onclick={() => sort.by('monthlyLimit')}
 			>
 				<CashOutline class={headIcon} />Monatliches Limit
-				{@render sortIcon('monthlyLimit')}
+				<SortIcon direction={sort.on('monthlyLimit')} />
 			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">

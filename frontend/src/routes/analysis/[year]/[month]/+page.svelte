@@ -17,6 +17,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { graphql } from '$houdini';
+	import { amountColor } from '$lib/money';
 	import Chart from '$lib/Chart.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import { integrationError, errorClass, deltaColor, categoryColor } from '$lib/analysis/overviews';
@@ -304,11 +305,7 @@
 			</Card>
 			<Card class="max-w-none p-4">
 				<span class="text-sm text-gray-500 dark:text-gray-400">Delta</span>
-				<span
-					class="text-2xl font-semibold {detail.endTotal - detail.startTotal < 0
-						? 'text-red-600 dark:text-red-400'
-						: 'text-green-700 dark:text-green-400'}"
-				>
+				<span class="text-2xl font-semibold {amountColor(detail.endTotal - detail.startTotal)}">
 					{euro(detail.endTotal - detail.startTotal)}
 				</span>
 			</Card>
