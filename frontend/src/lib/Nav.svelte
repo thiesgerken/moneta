@@ -105,8 +105,19 @@
 		<div class="px-4 py-3">
 			<div class="truncate text-sm font-medium text-gray-900 dark:text-white">{me.fullName}</div>
 			<div class="truncate text-xs text-gray-500 dark:text-gray-400">{me.name}</div>
-			<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
-				Stand {build}{commit ? ` · ${commit}` : ''}
+			<!-- flex rather than one run of text: svelte eats the whitespace either side of a
+			     block, so the separator would sit against the stamp -->
+			<div class="mt-2 flex gap-1 text-xs text-gray-400 dark:text-gray-500">
+				<span>Build {build}</span>
+				{#if commit}
+					<span>·</span>
+					<a
+						href="https://gitea.gerken.haus/thies/moneta/commit/{__GIT_SHA__}"
+						target="_blank"
+						rel="noreferrer"
+						class="hover:underline">#{commit}</a
+					>
+				{/if}
 			</div>
 		</div>
 		<button
