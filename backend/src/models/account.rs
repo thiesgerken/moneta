@@ -126,6 +126,11 @@ pub struct Account {
     /// account has to be kept in step by hand, since no constraint can see across rows.
     pub sync_account_id: Option<Uuid>,
     pub sync_invert: Option<bool>,
+
+    /// The same depot over in stockdb, which knows what it is worth at today's prices. What
+    /// that link is good for is `graphql::investments`, and it is read-only there: nothing on
+    /// this side is ever written from it.
+    pub stockdb_account_id: Option<i32>,
 }
 
 impl Account {
@@ -151,6 +156,8 @@ pub struct AccountInput {
     pub closed: Option<DateTime<Utc>>,
 
     pub ownership_fraction: f64,
+
+    pub stockdb_account_id: Option<i32>,
 }
 
 pub type AccountUpdateInput = AccountInput;
@@ -200,6 +207,7 @@ impl AccountInput {
             ownership_fraction: self.ownership_fraction,
             sync_account_id: None,
             sync_invert: None,
+            stockdb_account_id: self.stockdb_account_id,
         }
     }
 }

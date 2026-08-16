@@ -17,6 +17,9 @@
 	import { WEALTH_COLOR } from '$lib/analysis/cards';
 	import { shortDate } from '$lib/analysis/dates';
 	import QueryError from '$lib/QueryError.svelte';
+	import { signedEuro } from '$lib/money';
+	import { marketState, showMarket } from '$lib/investments.svelte';
+	import { asOf as investmentsAsOf, priced, uncommittedGain } from '$lib/investments';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', {
@@ -95,6 +98,10 @@
 				# the two ends of the delta, in one round trip
 				current: balances(date: $now) {
 					amount
+					# only to hold a linked depot's market value against what is booked for it
+					account {
+						id
+					}
 				}
 				earlier: balances(date: $monthAgo) {
 					amount
@@ -123,6 +130,18 @@
 							expenses
 						}
 					}
+				}
+			}
+
+			# beside the analysis payload rather than inside it: what a depot is worth today is
+			# read from stockdb, is never booked, and must not reach anything memoized there
+			investments {
+				list {
+					account {
+						id
+					}
+					value
+					asOf
 				}
 			}
 
@@ -188,6 +207,23 @@
 	const total = $derived((data?.analysis.current ?? []).reduce((sum, b) => sum + b.amount, 0));
 	const earlier = $derived((data?.analysis.earlier ?? []).reduce((sum, b) => sum + b.amount, 0));
 	const delta = $derived(total - earlier);
+
+	/// The depots at today's prices, beside the booked total rather than instead of it. The
+	/// booked figure stays the one in large type: it is the conservative record, and this is a
+	/// number that moves every minute the market is open.
+	const investments = $derived(data?.investments.list ?? []);
+	const committed = $derived(
+		new Map((data?.analysis.current ?? []).map((b) => [b.account.id, b.amount]))
+	);
+	const gain = $derived(uncommittedGain(investments, committed));
+	const marketTotal = $derived(total + gain);
+	const marketAsOf = $derived(investmentsAsOf(investments));
+	const hasMarket = $derived(priced(investments));
+
+	/// `ToggleGroup` binds a value, the preference outlives the page. This is the seam between
+	/// the two; writing straight into `marketState` from the binding would not persist it.
+	let marketMode = $state(marketState.show ? 'market' : 'booked');
+	$effect(() => showMarket(marketMode === 'market'));
 
 	const spark = $derived.by(() => {
 		const history = data?.analysis.history;
@@ -373,6 +409,29 @@
 								})}
 							</span>
 						</p>
+						<!-- Both figures, and the booked one keeps the large type. What the depots are
+						     worth today is the market's opinion and moves by the minute; what has been
+						     booked is a decision somebody took, and this page is built on those. -->
+						{#if hasMarket}
+							<div class="mt-3">
+								<ToggleGroup
+									bind:value={marketMode}
+									options={[
+										{ value: 'booked', label: 'Gebucht' },
+										{ value: 'market', label: 'Mit Kursen' }
+									]}
+								/>
+								{#if marketMode === 'market'}
+									<p class="mt-2 text-sm">
+										<span class="font-semibold tabular-nums">{euro(marketTotal)}</span>
+										<span class="text-gray-500 dark:text-gray-400">
+											mit den Depots zum Kurs{marketAsOf ? ` vom ${shortDate(marketAsOf)}` : ''},
+											davon {signedEuro(gain)} noch nicht gebucht
+										</span>
+									</p>
+								{/if}
+							</div>
+						{/if}
 					{/if}
 				</div>
 				<div class="min-w-0">

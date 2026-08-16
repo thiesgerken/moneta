@@ -115,6 +115,12 @@ impl GraphQLAccount {
         self.data.ownership_fraction
     }
 
+    /// The depot in stockdb this account stands for, where there is one. Only the link lives
+    /// here; what it is worth today is `investments`, deliberately a query of its own.
+    fn stockdb_account_id(&self) -> Option<i32> {
+        self.data.stockdb_account_id
+    }
+
     fn synchronization(&self) -> Option<GraphQLAccountSynchronization> {
         self.data
             .synchronization()
@@ -314,6 +320,7 @@ impl AccountMutation {
             accounts::opened.eq(account.opened),
             accounts::closed.eq(account.closed),
             accounts::ownership_fraction.eq(account.ownership_fraction),
+            accounts::stockdb_account_id.eq(account.stockdb_account_id),
         ))
         .execute(conn)
         .await?;

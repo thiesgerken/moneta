@@ -23,6 +23,7 @@
 			readonly opened: Date;
 			readonly closed: Date | null;
 			readonly ownershipFraction: number;
+			readonly stockdbAccountId: number | null;
 			readonly synchronization: {
 				readonly account: { readonly id: string };
 				readonly invert: boolean;
@@ -42,6 +43,7 @@
 			readonly opened: Date;
 			readonly closed: Date | null;
 			readonly ownershipFraction: number;
+			readonly stockdbAccountId: number | null;
 			readonly synchronization: {
 				readonly account: { readonly id: string };
 				readonly invert: boolean;
@@ -64,6 +66,11 @@
 	let ownershipFraction = $derived(
 		account?.ownershipFraction ? (account.ownershipFraction * 100).toFixed(0) : '100'
 	);
+	let stockdbAccountId = $derived(
+		account?.stockdbAccountId === null || account?.stockdbAccountId === undefined
+			? ''
+			: String(account.stockdbAccountId)
+	);
 	let synchronizationAccountId = $derived(account?.synchronization?.account.id.toString() || '');
 	let synchronizationInvert = $derived(account?.synchronization?.invert || false);
 
@@ -82,6 +89,11 @@
 			Number(ownershipFraction) < 0 ||
 			Number(ownershipFraction) > 100
 	);
+	/// Optional, and an id when it is there at all: stockdb numbers its accounts serially.
+	const stockdbAccountIdError = $derived(
+		!!stockdbAccountId.trim() &&
+			(isNaN(Number(stockdbAccountId)) || !Number.isInteger(Number(stockdbAccountId)))
+	);
 	const synchronizationError = $derived(false);
 
 	const formHasErrors = $derived(
@@ -96,6 +108,7 @@
 			openedError ||
 			closedError ||
 			ownershipFractionError ||
+			stockdbAccountIdError ||
 			synchronizationError
 		)
 	);
@@ -160,7 +173,8 @@
 			risk,
 			opened,
 			closed,
-			ownershipFraction: Number(ownershipFraction) / 100
+			ownershipFraction: Number(ownershipFraction) / 100,
+			stockdbAccountId: stockdbAccountId.trim() ? Number(stockdbAccountId) : null
 		};
 
 		console.log('account', account);
@@ -219,6 +233,18 @@
 			<div>
 				<Label for="iban" class="mb-2">IBAN</Label>
 				<Input id="iban" placeholder="" bind:value={iban} color={ibanError ? 'red' : undefined} />
+			</div>
+			<div>
+				<!-- The number stockdb gives the depot, which is also the last part of its url there.
+				     Only the link is kept; nothing is ever written back to this account from it. -->
+				<Label for="stockdbAccountId" class="mb-2">stockdb-Depot</Label>
+				<Input
+					id="stockdbAccountId"
+					type="number"
+					placeholder="Nummer in stockdb"
+					bind:value={stockdbAccountId}
+					color={stockdbAccountIdError ? 'red' : undefined}
+				/>
 			</div>
 			<div>
 				<Label for="kind" class="mb-2">Typ</Label>

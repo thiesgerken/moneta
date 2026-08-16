@@ -65,6 +65,9 @@ Settings come from environment variables prefixed `MONETA__`, nested with `__`
 | `MONETA__API__PORT` | `8181` | |
 | `MONETA__API__ADDRESS` | `127.0.0.1` | |
 | `MONETA__API__SECRET_KEY` | *(empty)* | signs the session cookie; `openssl rand -base64 32` |
+| `MONETA__STOCKDB__URL` | *(empty)* | where the backend reaches stockdb; empty switches the integration off |
+| `MONETA__STOCKDB__PUBLIC_URL` | *(empty)* | where a *browser* reaches it, for the link on a depot; falls back to `URL` |
+| `MONETA__STOCKDB__TIMEOUT_SECONDS` | `5` | a page load waits on this, so it has to give up quickly |
 
 ## CLI
 
@@ -73,6 +76,7 @@ Settings come from environment variables prefixed `MONETA__`, nested with `__`
 ```sh
 moneta serve                         # run the API
 moneta user --add|--update|--remove <name> | --list
+moneta user --stockdb-token <name>   # paste the token on stdin; empty clears it
 moneta account --list x              # the flags take a dummy value, see below
 moneta account --sync <id1> <id2> [--invert x]
 moneta account --unsync <id>
@@ -147,6 +151,28 @@ drawdowns; a cancelled order is one expense holding the debit and the credit, ea
 date, costing nothing in between. What the source never resolved — money paid out that nothing
 has come back from — is what `isIncomplete` means: more transactions are expected and their size
 is not known yet, so unlike a prepayment there is no remainder to compute.
+
+### Depots, and what they are worth today
+
+A depot is an account like any other here, and its balance is a reading somebody took on
+purpose — which for a depot happens about once a year, at year end, with a conservative haircut
+on the gains. That is deliberate. The monthly analysis is about spending habits, and a stock
+market moving those figures around would ruin it as an answer to that question.
+
+[stockdb](https://gitea.gerken.haus/thies/StockDB) knows what the same depots are worth at
+today's prices. `accounts.stockdb_account_id` links the two, `users.stockdb_token` is the API
+token that reads it, and `investments` (`backend/src/graphql/investments.rs`) is where the two
+numbers meet. It is an overlay and never a write:
+
+- nothing is stored, in `balances` or anywhere else
+- it never enters `simulate_balances` or the analysis SQL, and it is not part of the memoized
+  analysis payload, so a stockdb that is down costs one null rather than the dashboard
+- no *flow* — monthly totals, category totals, the calendar, prepayments — is offered it, not
+  even behind a toggle. Only the start page and the Vermögen tab, which are a stock of wealth
+  right now, and there only for today's Stichtag
+
+The one path from the market value into the books is a button on a linked depot that opens the
+ordinary balance dialog with the figure filled in. What gets saved is still typed by hand.
 
 ### Rules
 

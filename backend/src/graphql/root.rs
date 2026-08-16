@@ -12,6 +12,7 @@ use crate::graphql::{
     balances::{BalanceMutation, BalanceQuery},
     categories::{CategoryMutation, CategoryQuery},
     expenses::{ExpenseMutation, ExpenseQuery},
+    investments::InvestmentQuery,
     rules::{
         AutomationRuleMutation, AutomationRuleQuery, DeliveryMutation, DeliveryQuery,
         PeriodicRuleMutation, PeriodicRuleQuery,
@@ -187,6 +188,13 @@ impl Query {
 
     fn analysis() -> AnalysisQuery {
         AnalysisQuery
+    }
+
+    /// Deliberately beside `analysis` rather than inside it: what a depot is worth today is
+    /// read from stockdb and never booked, so it must not reach the memoized analysis, the
+    /// balances or anything monthly.
+    fn investments() -> InvestmentQuery {
+        InvestmentQuery
     }
 
     fn automation_rules() -> AutomationRuleQuery {

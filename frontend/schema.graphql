@@ -142,6 +142,7 @@ input AccountInput {
   opened: DateTime!
   closed: DateTime
   ownershipFraction: Float!
+  stockdbAccountId: Int
 }
 
 input AutomationRuleInput {
@@ -302,6 +303,11 @@ type Account {
   opened: DateTime!
   closed: DateTime
   ownershipFraction: Float!
+  """
+    The depot in stockdb this account stands for, where there is one. Only the link lives
+    here; what it is worth today is `investments`, deliberately a query of its own.
+  """
+  stockdbAccountId: Int
   synchronization: AccountSynchronization
 }
 
@@ -799,6 +805,50 @@ type History {
   byAvailability: [AvailabilitySeries!]!
 }
 
+"""
+  What a linked depot is worth, beside what has been booked for it.
+
+  Every figure is nullable and for one reason: stockdb could not answer, or had no price
+  recent enough to use. A reader is told that rather than shown a zero.
+"""
+type Investment {
+  "The moneta account, so a caller can hold this against the balance it already has."
+  account: Account!
+  "The depot in stockdb, which is also what a link into stockdb is built from."
+  stockdbAccountId: Int!
+  """
+    Market value at stockdb's latest usable price, in cents, scaled by the account's
+    ownership fraction so that it compares to a rendered balance.
+  """
+  value: Float
+  """
+    What went in, in cents: the net of every payment and fee, sign flipped, since stockdb
+    counts a purchase as money leaving.
+  """
+  invested: Float
+  "Internal rate of return as a fraction, so 0.07 is seven percent."
+  irr: Float
+  """
+    How old the oldest price behind `value` is. stockdb will use a price up to four days
+    stale, so "realtime" needs a date next to it or it claims more than it knows.
+  """
+  asOf: DateTime
+}
+
+type InvestmentQuery {
+  """
+    Where a browser reaches stockdb, so a linked depot can offer a way over to it. Null
+    where none is configured, and deliberately not the url the backend itself calls: in the
+    cluster that one is a Service name and resolves nowhere outside it.
+  """
+  url: String
+  """
+    Every account of the reader's that is linked to a depot in stockdb. Empty when none is
+    linked, or when this deployment has no stockdb configured.
+  """
+  list: [Investment!]!
+}
+
 type MonthOverview {
   "midnight on the first of the month, UTC"
   month: DateTime!
@@ -889,6 +939,12 @@ type Query {
   expenses: ExpenseQuery!
   categories: CategoryQuery!
   analysis: AnalysisQuery!
+  """
+    Deliberately beside `analysis` rather than inside it: what a depot is worth today is
+    read from stockdb and never booked, so it must not reach the memoized analysis, the
+    balances or anything monthly.
+  """
+  investments: InvestmentQuery!
   automationRules: AutomationRuleQuery!
   periodicRules: PeriodicRuleQuery!
   deliveries: DeliveryQuery!

@@ -22,6 +22,8 @@
 	import { AVAILABILITY_LABELS, availabilityColor } from './availability';
 	import { CUSTOM_SPAN, wealthState } from './state.svelte';
 	import { shortDate, todayIso } from './dates';
+	import { marketState, showMarket } from '$lib/investments.svelte';
+	import { priced } from '$lib/investments';
 	import { ANALYSIS_CARD, WEALTH_COLOR } from './cards';
 	import QueryError from '$lib/QueryError.svelte';
 	import { amountColor, euro } from '$lib/money';
@@ -96,6 +98,22 @@
 		}
 	`);
 
+	/// What the linked depots are worth today. Its own query, never folded into the analysis
+	/// above: nothing here is booked, and none of it may reach the memoized balances.
+	const investmentStore = graphql(`
+		query WealthInvestments {
+			investments {
+				list {
+					account {
+						id
+					}
+					value
+					asOf
+				}
+			}
+		}
+	`);
+
 	// houdini 2 has no @load, so every query needs its own effect; referencing the variables
 	// inside it is what makes zooming and the Stichtag re-run them.
 	//
@@ -127,6 +145,8 @@
 		void balanceStore.fetch({ variables: { date: new Date(wealthState.date) } });
 	});
 
+	$effect(() => void investmentStore.fetch());
+
 	/// A closed account held money once, so it belongs in the history — but a decade of accounts
 	/// you have since given up is not what the chart is opened for, and with thirty-odd series
 	/// the legend alone fills a phone. They start collapsed, once per session: after that the
@@ -153,9 +173,29 @@
 		wealthState.balanceAccounts === 'all' ? balances : balances.filter((b) => !b.account.closed)
 	);
 
+	const investments = $derived($investmentStore.data?.investments.list ?? []);
+
+	/// Only on today's Stichtag. stockdb prices what a depot is worth *now*, and laying that
+	/// over a balance computed for some day in 2019 would answer a question nobody asked.
+	const marketAvailable = $derived(wealthState.date === todayIso() && priced(investments));
+	const useMarket = $derived(marketAvailable && marketState.show);
+
+	/// The market value of a linked depot, where there is one and it is wanted; otherwise the
+	/// balance that has been booked, so the column stays a column of comparable figures.
+	const shownAmount = (accountId: string, amount: number) => {
+		if (!useMarket) return amount;
+		return investments.find((i) => i.account.id === accountId)?.value ?? amount;
+	};
+
 	/// Of what is shown: a total that counts rows you cannot see is a total of nothing in
 	/// particular, and a closed account contributes the same figure for ever.
-	const total = $derived(shownBalances.reduce((sum, b) => sum + b.amount, 0));
+	const total = $derived(
+		shownBalances.reduce((sum, b) => sum + shownAmount(b.account.id, b.amount), 0)
+	);
+
+	/// `ToggleGroup` binds a value; the preference outlives the tab, which flowbite unmounts.
+	let marketMode = $state(marketState.show ? 'market' : 'booked');
+	$effect(() => showMarket(marketMode === 'market'));
 
 	const dates = $derived(history?.dates.map((d) => d.getTime()) ?? []);
 
@@ -464,16 +504,30 @@
 				<!-- A closed account keeps its last balance for ever, so it sits in this table at
 			     whatever it held on the day it was closed and never moves again. Open ones only
 			     by default; the total follows whichever is shown. -->
-				{#if closedCount > 0}
-					<ToggleGroup
-						bind:value={wealthState.balanceAccounts}
-						size="sm"
-						options={[
-							{ value: 'open', label: 'Aktive Konten' },
-							{ value: 'all', label: 'Alle' }
-						]}
-					/>
-				{/if}
+				<div class="flex flex-wrap items-center gap-2">
+					<!-- Only ever offered on today's Stichtag: a price from this afternoon laid over a
+					     balance computed for a day in 2019 would be an answer to no question at all. -->
+					{#if marketAvailable}
+						<ToggleGroup
+							bind:value={marketMode}
+							size="sm"
+							options={[
+								{ value: 'booked', label: 'Gebucht' },
+								{ value: 'market', label: 'Mit Kursen' }
+							]}
+						/>
+					{/if}
+					{#if closedCount > 0}
+						<ToggleGroup
+							bind:value={wealthState.balanceAccounts}
+							size="sm"
+							options={[
+								{ value: 'open', label: 'Aktive Konten' },
+								{ value: 'all', label: 'Alle' }
+							]}
+						/>
+					{/if}
+				</div>
 			</div>
 			<Table hoverable striped class="w-full text-left text-sm">
 				<TableHead>
@@ -502,15 +556,22 @@
 									style="background-color: {b.account.color ?? '#94a3b8'}"
 								></span>{b.account.name}
 							</TableBodyCell>
-							<TableBodyCell class="px-4 py-3 {amountColor(b.amount)}">
-								{euro(b.amount)}
+							{@const shown = shownAmount(b.account.id, b.amount)}
+							<TableBodyCell class="px-4 py-3 {amountColor(shown)}">
+								{euro(shown)}
 							</TableBodyCell>
 							<TableBodyCell
 								class="hidden px-4 py-3 text-gray-500 sm:table-cell dark:text-gray-400"
 							>
-								{euro(b.reference.amount)} am {shortDate(b.reference.date)}{b.expenseCount > 0
-									? ` + ${b.expenseCount} ${b.expenseCount === 1 ? 'Ausgabe' : 'Ausgaben'}`
-									: ''}
+								<!-- A depot shown at its market value says so, and what was booked for it
+								     stays visible beside it -- that difference is the whole point. -->
+								{#if shown !== b.amount}
+									Kurswert, gebucht {euro(b.amount)}
+								{:else}
+									{euro(b.reference.amount)} am {shortDate(b.reference.date)}{b.expenseCount > 0
+										? ` + ${b.expenseCount} ${b.expenseCount === 1 ? 'Ausgabe' : 'Ausgaben'}`
+										: ''}
+								{/if}
 							</TableBodyCell>
 						</TableBodyRow>
 					{/each}
