@@ -6,7 +6,7 @@
 //! of forgetting one is not an error but another person's money on the screen.
 //!
 //! So the filter is applied here, once per table, and the resolvers ask for a query that is
-//! already scoped. `no_resolver_reaches_a_scoped_table_directly` in `tests.rs` is what keeps
+//! already scoped. `no_resolver_reaches_a_scoped_table_directly` below is what keeps
 //! that true: it reads the resolver sources and fails if one of them names a scoped table.
 //!
 //! Two different guarantees live here and are worth telling apart:
