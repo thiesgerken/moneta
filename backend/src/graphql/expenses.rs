@@ -567,7 +567,7 @@ impl ExpenseQuery {
                 query = query.filter(expenses_rendered::accrual_start.lt(before));
             }
 
-            // The booking period is when an expense was *for*; these two are when the money
+            // The accrual period is when an expense was *for*; these two are when the money
             // actually moved. A prepayment's period spans a year while its payment lands on
             // one day, so a caller asking "what happened in March" wants these.
             if let Some(after) = valued_after {
