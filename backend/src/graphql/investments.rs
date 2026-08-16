@@ -23,6 +23,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::graphql::root::{Context, require_user};
+use crate::graphql::scoped;
 use crate::models::Account;
 use crate::schema::{accounts, users};
 
@@ -144,8 +145,7 @@ impl InvestmentQuery {
         let linked: Vec<Account> = {
             let conn = &mut context.conn().await?;
 
-            accounts::table
-                .filter(accounts::user_id.eq(user_id))
+            scoped::accounts(user_id)
                 .filter(accounts::stockdb_account_id.is_not_null())
                 .select(Account::as_select())
                 .load(conn)

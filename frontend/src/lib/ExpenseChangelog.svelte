@@ -13,7 +13,7 @@
 	import ChangeList from './ChangeList.svelte';
 	import { invalidate } from './invalidate';
 	import { formatAccount } from './expense_utils';
-	import { categoryColor } from './analysis/overviews';
+	import { categoryColor } from './analysis/format';
 	import { feedState } from './analysis/state.svelte';
 	import { shortDate } from './analysis/dates';
 	import QueryError from './QueryError.svelte';

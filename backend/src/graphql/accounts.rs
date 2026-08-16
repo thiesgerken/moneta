@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::graphql::root::{Context, require_user};
+use crate::graphql::scoped;
 use crate::graphql::util::{self, SortDirection};
 use crate::models::AccountAvailability;
 use crate::models::AccountKind;
@@ -160,6 +161,8 @@ impl AccountQuery {
         let (limit, offset) = util::page(limit, skip);
         let direction = sort_dir.unwrap_or_default();
 
+        // scoped-ok: everybody sees every account on purpose -- a shared expense names its
+        // other side, the pickers offer it, and a sync pair is two people's accounts
         let mut query = accounts::table.into_boxed();
         if let Some(term) = search.filter(|s| !s.trim().is_empty()) {
             let pattern = util::ilike_pattern(term.trim());
@@ -220,9 +223,7 @@ impl AccountMutation {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let account = accounts::table
-            .find(id)
-            .filter(accounts::user_id.eq(user_id))
+        let account = scoped::own_account(user_id, id)
             .select(Account::as_select())
             .first(conn)
             .await
@@ -239,7 +240,7 @@ impl AccountMutation {
         // Balances are ON DELETE CASCADE, so nothing stops this at the database level -- they
         // would just disappear along with the account. Refuse instead, since losing them is not
         // what someone deleting an account is asking for.
-        let balance_count: i64 = balances::table
+        let balance_count: i64 = balances::table // scoped-ok: the account's ownership is checked above, and every balance on it is its owner's
             .filter(balances::account_id.eq(id))
             .count()
             .get_result(conn)
@@ -265,13 +266,9 @@ impl AccountMutation {
             ).into());
         }
 
-        let count = diesel::delete(
-            accounts::table
-                .find(id)
-                .filter(accounts::user_id.eq(user_id)),
-        )
-        .execute(conn)
-        .await?;
+        let count = diesel::delete(scoped::own_account(user_id, id))
+            .execute(conn)
+            .await?;
         Ok(count == 1)
     }
 
@@ -304,26 +301,22 @@ impl AccountMutation {
         account.validate()?;
 
         // The synchronization pair is not part of the input, so it is left alone here.
-        let count = diesel::update(
-            accounts::table
-                .find(id)
-                .filter(accounts::user_id.eq(user_id)),
-        )
-        .set((
-            accounts::name.eq(account.name),
-            accounts::description.eq(account.description),
-            accounts::color.eq(account.color),
-            accounts::iban.eq(account.iban),
-            accounts::kind.eq(account.kind),
-            accounts::availability.eq(account.availability),
-            accounts::risk.eq(account.risk),
-            accounts::opened.eq(account.opened),
-            accounts::closed.eq(account.closed),
-            accounts::ownership_fraction.eq(account.ownership_fraction),
-            accounts::stockdb_account_id.eq(account.stockdb_account_id),
-        ))
-        .execute(conn)
-        .await?;
+        let count = diesel::update(scoped::own_account(user_id, id))
+            .set((
+                accounts::name.eq(account.name),
+                accounts::description.eq(account.description),
+                accounts::color.eq(account.color),
+                accounts::iban.eq(account.iban),
+                accounts::kind.eq(account.kind),
+                accounts::availability.eq(account.availability),
+                accounts::risk.eq(account.risk),
+                accounts::opened.eq(account.opened),
+                accounts::closed.eq(account.closed),
+                accounts::ownership_fraction.eq(account.ownership_fraction),
+                accounts::stockdb_account_id.eq(account.stockdb_account_id),
+            ))
+            .execute(conn)
+            .await?;
 
         Ok(count == 1)
     }
@@ -344,6 +337,8 @@ impl BatchFn<Uuid, Account> for AccountBatcher {
             return HashMap::new();
         };
 
+        // scoped-ok: loads by the ids a resolver already resolved, and an account is visible to
+        // everybody anyway -- a shared expense names accounts on both sides of it
         accounts::table
             .filter(accounts::id.eq_any(keys))
             .select(Account::as_select())

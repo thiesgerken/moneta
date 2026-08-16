@@ -12,7 +12,7 @@
 	import Chart from '$lib/Chart.svelte';
 	import ExpenseChangelog from '$lib/ExpenseChangelog.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
-	import { categoryColor } from '$lib/analysis/overviews';
+	import { categoryColor } from '$lib/analysis/format';
 	import { DATE_AXES, accrued, axisState } from '$lib/analysis/state.svelte';
 	import { WEALTH_COLOR } from '$lib/analysis/cards';
 	import { shortDate } from '$lib/analysis/dates';

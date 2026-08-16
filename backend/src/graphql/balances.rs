@@ -2,6 +2,7 @@ use uuid::Uuid;
 
 use crate::graphql::accounts::GraphQLAccount;
 use crate::graphql::root::{Context, require_user};
+use crate::graphql::scoped;
 use crate::graphql::util::{self, SortDirection};
 use crate::models::Balance;
 use crate::models::rendering::{
@@ -84,7 +85,7 @@ pub enum BalanceSortField {
 }
 
 type BalancePredicate =
-    Box<dyn BoxableExpression<balances_rendered::table, diesel::pg::Pg, SqlType = Bool>>;
+    Box<dyn BoxableExpression<balances_rendered::table, diesel::pg::Pg, SqlType = Bool>>; // scoped-ok: names the table as a type, builds no query
 
 /// The comments, plus -- if the term reads as a number -- the amount in either sign, since a
 /// balance can be negative and the table shows it unsigned.
@@ -136,9 +137,7 @@ impl BalanceQuery {
         // A boxed query is consumed by the count, so the filter is built twice rather than
         // cloned.
         let filtered = || {
-            let mut query = balances_rendered::table
-                .into_boxed()
-                .filter(balances_rendered::user_id.eq(user_id));
+            let mut query = scoped::balances(user_id);
 
             if let Some(term) = &search {
                 query = query.filter(search_predicate(term.trim()));
@@ -208,7 +207,7 @@ impl BalanceMutation {
 
         require_own_balance(conn, user_id, id).await?;
 
-        let count = diesel::delete(balances::table.find(id))
+        let count = diesel::delete(balances::table.find(id)) // scoped-ok: require_own_balance above is the check
             .execute(conn)
             .await?;
         Ok(count == 1)
@@ -244,7 +243,7 @@ impl BalanceMutation {
         require_own_balance(conn, user_id, id).await?;
         require_own_account(conn, user_id, balance.account_id).await?;
 
-        diesel::update(balances::table.find(id))
+        diesel::update(balances::table.find(id)) // scoped-ok: require_own_balance above is the check
             .set((
                 balances::account_id.eq(balance.account_id),
                 balances::date.eq(balance.date),
@@ -262,9 +261,8 @@ impl BalanceMutation {
 type Conn = diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>;
 
 async fn load_rendered(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<RenderedBalance> {
-    balances_rendered::table
+    scoped::balances(user_id)
         .filter(balances_rendered::id.eq(id))
-        .filter(balances_rendered::user_id.eq(user_id))
         .select(RenderedBalance::as_select())
         .first(conn)
         .await
@@ -276,10 +274,8 @@ async fn load_rendered(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<
 /// rendering is not the same as owning the row behind it. Writes go to the upstream row, so
 /// they have to be checked against the account that actually holds it.
 async fn require_own_balance(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<()> {
-    let owned: Option<Uuid> = balances::table
-        .inner_join(accounts::table)
+    let owned: Option<Uuid> = scoped::owned_balances(user_id)
         .filter(balances::id.eq(id))
-        .filter(accounts::user_id.eq(user_id))
         .select(balances::id)
         .first(conn)
         .await
@@ -291,6 +287,8 @@ async fn require_own_balance(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldR
 }
 
 async fn require_own_account(conn: &mut Conn, user_id: Uuid, account_id: Uuid) -> FieldResult<()> {
+    // scoped-ok: reads the owner rather than filtering on it, so "somebody else's" and
+    // "does not exist" stay two different answers
     let owner: Option<Uuid> = accounts::table
         .find(account_id)
         .select(accounts::user_id)

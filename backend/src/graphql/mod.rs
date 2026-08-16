@@ -7,6 +7,7 @@ pub mod expenses;
 pub mod investments;
 mod root;
 pub mod rules;
+pub mod scoped;
 pub mod users;
 mod util;
 

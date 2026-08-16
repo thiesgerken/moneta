@@ -211,3 +211,174 @@ impl AccountInput {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    /// The variants, spelled out, because nothing here can enumerate them for us. A variant
+    /// added to one of these enums has to be added here too — the count check below is what
+    /// says so, by disagreeing with the CHECK constraint the moment the two lists differ.
+    const KINDS: [AccountKind; 8] = [
+        AccountKind::Cash,
+        AccountKind::Debit,
+        AccountKind::Credit,
+        AccountKind::Debt,
+        AccountKind::Stocks,
+        AccountKind::RealEstate,
+        AccountKind::Virtual,
+        AccountKind::Other,
+    ];
+    const RISKS: [AccountRisk; 6] = [
+        AccountRisk::None,
+        AccountRisk::Slight,
+        AccountRisk::Low,
+        AccountRisk::Medium,
+        AccountRisk::High,
+        AccountRisk::Huge,
+    ];
+
+    fn at(y: i32, m: u32, d: u32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(y, m, d, 12, 0, 0).unwrap()
+    }
+
+    fn input() -> AccountInput {
+        AccountInput {
+            name: "Girokonto".into(),
+            description: String::new(),
+            color: None,
+            iban: None,
+            kind: AccountKind::Debit,
+            availability: AccountAvailability::Immediately,
+            risk: AccountRisk::None,
+            opened: at(2025, 1, 1),
+            closed: None,
+            ownership_fraction: 1.0,
+            stockdb_account_id: None,
+        }
+    }
+
+    #[test]
+    fn accepts_an_open_account_owned_outright() {
+        assert!(input().validate().is_ok());
+    }
+
+    #[test]
+    fn accepts_a_closing_date_after_the_opening_one() {
+        let account = AccountInput {
+            closed: Some(at(2025, 6, 1)),
+            ..input()
+        };
+        assert!(account.validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_a_closing_date_before_the_opening_one() {
+        let account = AccountInput {
+            closed: Some(at(2024, 6, 1)),
+            ..input()
+        };
+        assert!(account.validate().is_err());
+    }
+
+    /// The constraint is `closed > opened`, so the two falling on the same instant is not a
+    /// zero-length account but a contradiction — and the API has to say so in the same place
+    /// the database would.
+    #[test]
+    fn rejects_a_closing_date_equal_to_the_opening_one() {
+        let account = AccountInput {
+            closed: Some(at(2025, 1, 1)),
+            ..input()
+        };
+        assert!(account.validate().is_err());
+    }
+
+    #[test]
+    fn accepts_a_half_owned_account() {
+        let account = AccountInput {
+            ownership_fraction: 0.5,
+            ..input()
+        };
+        assert!(account.validate().is_ok());
+    }
+
+    /// Zero is the end worth pinning: an account nobody owns any of contributes nothing to
+    /// anybody's wealth, so it renders as a column of zeroes rather than as an error.
+    #[test]
+    fn rejects_an_ownership_fraction_outside_zero_to_one() {
+        for fraction in [0.0, -0.5, 1.5] {
+            let account = AccountInput {
+                ownership_fraction: fraction,
+                ..input()
+            };
+            assert!(
+                account.validate().is_err(),
+                "ownership fraction {fraction} should have been rejected"
+            );
+        }
+    }
+
+    /// The literals are the on-disk representation and the CHECK constraint is the other half
+    /// of that agreement. A mismatch surfaces the first time a row is written, which is a long
+    /// way from where the mistake was made — so the migration is read here rather than a
+    /// database being asked for an opinion.
+    #[test]
+    fn every_variant_is_one_the_check_constraint_allows() {
+        let schema = include_str!("../../migrations/2026-08-05-000001_initial_schema/up.sql");
+
+        let cases: [(&str, Vec<&'static str>); 3] = [
+            (
+                "accounts_kind_known",
+                KINDS.iter().map(AccountKind::as_str).collect(),
+            ),
+            (
+                "accounts_availability_known",
+                AccountAvailability::ORDERED
+                    .iter()
+                    .map(AccountAvailability::as_str)
+                    .collect(),
+            ),
+            (
+                "accounts_risk_known",
+                RISKS.iter().map(AccountRisk::as_str).collect(),
+            ),
+        ];
+
+        for (constraint, variants) in cases {
+            let rest = schema
+                .split_once(constraint)
+                .unwrap_or_else(|| panic!("{constraint} is gone from the migration"))
+                .1;
+            let allowed = &rest[..rest.find(')').expect("the CHECK list closes")];
+
+            for variant in &variants {
+                assert!(
+                    allowed.contains(&format!("'{variant}'")),
+                    "{constraint} does not allow '{variant}'"
+                );
+            }
+
+            // and nothing the enum cannot name, which is the direction a widened CHECK breaks
+            assert_eq!(
+                allowed.matches('\'').count() / 2,
+                variants.len(),
+                "{constraint} and the enum list different numbers of values"
+            );
+        }
+    }
+
+    /// `from_db` is the only thing standing between a row written by hand and a variant Rust
+    /// does not know about.
+    #[test]
+    fn the_text_mapping_round_trips() {
+        for kind in KINDS {
+            assert_eq!(
+                AccountKind::from_db(kind.as_str()).map(|k| k.as_str()),
+                Ok(kind.as_str())
+            );
+        }
+
+        assert!(AccountKind::from_db("crypto").is_err());
+    }
+}
