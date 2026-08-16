@@ -20,10 +20,13 @@
      it is what the cells in the table below are tinted with. flowbite's MultiSelect prints its
      options as bare text and offers no hook to change that, so the filters are a checkbox list
      with the swatch in front of each name. -->
-<Button color="alternative" class="{toolbarControl} justify-between {className}">
+<!-- The count only when the filter is actually narrowing something: every option ticked is the
+     same list as none of them, and "(2)" on an untouched filter is noise that also wrapped the
+     label onto a second line. -->
+<Button color="alternative" class="{toolbarControl} justify-between whitespace-nowrap {className}">
 	<span class="flex items-center gap-2">
 		{@render icon?.()}
-		{selected.length ? `${label} (${selected.length})` : label}
+		{selected.length && selected.length < options.length ? `${label} (${selected.length})` : label}
 	</span>
 	<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 </Button>

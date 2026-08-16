@@ -29,8 +29,7 @@
 		WandMagicSparklesOutline,
 		SearchOutline,
 		SortOutline,
-		ClockArrowOutline,
-		FlagOutline
+		ClockArrowOutline
 	} from 'flowbite-svelte-icons';
 	import AutomationRuleModal from './AutomationRuleModal.svelte';
 	import PeriodicRuleModal from './PeriodicRuleModal.svelte';
@@ -146,8 +145,6 @@
 		trigger: string;
 		lastUsed: Date | null;
 		hasTemplate: boolean;
-		/// how much this row wants looking at: a missing template first, then what a rule owes
-		attention: number;
 		priority: number | null;
 		pending: number | null;
 		automation?: (typeof automation)[number];
@@ -162,7 +159,6 @@
 			trigger: r.regexStatement ?? '',
 			lastUsed: r.lastDelivery,
 			hasTemplate: !!r.templateId,
-			attention: r.templateId ? 0 : 1000,
 			priority: r.priority,
 			pending: null,
 			automation: r
@@ -174,7 +170,6 @@
 			trigger: PERIOD_NAMES[r.period] ?? r.period,
 			lastUsed: r.lastCreation,
 			hasTemplate: !!r.templateId,
-			attention: r.templateId ? r.pending.length : 1000,
 			priority: null,
 			pending: r.pending.length,
 			periodic: r
@@ -200,7 +195,6 @@
 		kind: (r) => r.kind,
 		trigger: (r) => r.trigger.toLowerCase(),
 		lastUsed: (r) => r.lastUsed?.getTime() ?? 0,
-		attention: (r) => r.attention,
 		priority: (r) => r.priority ?? -Infinity
 	};
 
@@ -396,6 +390,9 @@
 		{/if}
 	{:else}
 		{row.trigger}
+		{#if row.pending}
+			<Badge color="yellow" class="ml-2">{row.pending} fällig</Badge>
+		{/if}
 	{/if}
 {/snippet}
 
@@ -578,13 +575,6 @@
 			>
 				<ClockArrowOutline class={headIcon} />Zuletzt{@render sortIcon('lastUsed')}
 			</TableHeadCell>
-			<TableHeadCell
-				class="w-32 px-4 py-3 md:whitespace-nowrap"
-				scope="col"
-				onclick={() => sortByField('attention')}
-			>
-				<FlagOutline class={headIcon} />Status{@render sortIcon('attention')}
-			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each visible as row (row.id)}
@@ -598,6 +588,9 @@
 							{/if}
 						</button>
 						{row.title}
+						{#if !row.hasTemplate}
+							<Badge color="red" class="ml-2">Vorlage fehlt</Badge>
+						{/if}
 						<!-- Four columns do not fit on a phone, and a rule is nothing without what fires
 						     it, so they come back as a line under the title rather than being dropped. -->
 						<span class="mt-1 block text-xs text-gray-500 md:hidden dark:text-gray-400">
@@ -621,19 +614,10 @@
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap">
 						{row.lastUsed ? shortDate(row.lastUsed) : '–'}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3 md:whitespace-nowrap">
-						{#if !row.hasTemplate}
-							<Badge color="red">Vorlage fehlt</Badge>
-						{:else if row.pending}
-							<Badge color="yellow">{row.pending} fällig</Badge>
-						{:else}
-							<span class="text-gray-400 dark:text-gray-500">–</span>
-						{/if}
-					</TableBodyCell>
 				</TableBodyRow>
 				{#if expandedRows.includes(row.id)}
 					<tr>
-						<td colspan="6" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
+						<td colspan="5" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
 							<div class="flex flex-col gap-2">
 								{#if row.automation}
 									{@const rule = row.automation}
