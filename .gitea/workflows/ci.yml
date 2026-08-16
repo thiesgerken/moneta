@@ -124,6 +124,9 @@ jobs:
         with:
           context: ./frontend
           push: true
+          # the context has no .git in it, so the commit is handed in rather than looked up
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           tags: gitea.gerken.haus/thies/moneta/frontend:${{ github.ref_name }}
           cache-from: type=registry,ref=gitea.gerken.haus/thies/moneta/frontend:${{ github.ref_name }}
           cache-to: type=inline

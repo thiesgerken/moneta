@@ -37,8 +37,12 @@
 		const stamp = Number(version);
 		if (!Number.isFinite(stamp)) return version;
 
-		return new Date(stamp).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+		// short, so that the stamp and the commit stay on one line of the menu
+		return new Date(stamp).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
 	});
+
+	// empty outside a CI build, where nothing handed the commit in -- see vite.config.ts
+	const commit = __GIT_SHA__.slice(0, 7);
 
 	async function logout() {
 		const logoutMutation = graphql(`
@@ -101,7 +105,9 @@
 		<div class="px-4 py-3">
 			<div class="truncate text-sm font-medium text-gray-900 dark:text-white">{me.fullName}</div>
 			<div class="truncate text-xs text-gray-500 dark:text-gray-400">{me.name}</div>
-			<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">Stand {build}</div>
+			<div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
+				Stand {build}{commit ? ` · ${commit}` : ''}
+			</div>
 		</div>
 		<button
 			type="button"
