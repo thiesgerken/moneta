@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { cache, graphql } from '$houdini';
+	import { graphql } from '$houdini';
+	import { invalidate, AFTER_WRITE } from './invalidate';
 
 	import {
 		TableBody,
@@ -9,12 +10,10 @@
 		TableHeadCell,
 		TableSearch,
 		Button,
-		Dropdown,
-		Checkbox,
-		List,
-		Li,
+		ButtonGroup,
 		Modal
 	} from 'flowbite-svelte';
+	import ActionButton from './ActionButton.svelte';
 	import { Section } from 'flowbite-svelte-blocks';
 	import {
 		PlusOutline,
@@ -23,18 +22,37 @@
 		EditOutline,
 		TrashBinOutline,
 		ExclamationCircleOutline,
-		FilterSolid
+		FilterSolid,
+		AnnotationOutline,
+		CalendarMonthOutline,
+		ChartPieOutline,
+		ClockOutline,
+		GridOutline,
+		ScaleBalancedOutline,
+		TextSizeOutline
 	} from 'flowbite-svelte-icons';
 	import AccountModal from './AccountModal.svelte';
-	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
+	import {
+		tableSearchClasses,
+		tableSearchTableClass,
+		toolbarControl,
+		headIcon
+	} from './table_styles';
 	import QueryError from './QueryError.svelte';
+	import SortIcon from './SortIcon.svelte';
+	import { ASC, TableSort } from './table_sort.svelte';
+	import FilterChips from './FilterChips.svelte';
+	import { toggleOption, type ActiveFilter } from './filters';
+	import OptionFilter from './OptionFilter.svelte';
 
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
-	let sortBy: { field: string; direction: number }[] = $state([
-		{ field: 'opened', direction: 1 },
-		{ field: 'name', direction: 1 }
-	]);
+
+	/// What the toolbar acts on. An open row is this list's idea of "the one you mean", and
+	/// several open rows are no answer at all rather than a reason to pick the first.
+	const selectedAccountId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
+	/// A third click on a header comes back here.
+	const sort = new TableSort({ field: 'opened', direction: ASC });
 
 	let showNewAccountModal = $state(false);
 	let showEditAccountModal = $state(false);
@@ -42,7 +60,15 @@
 	let accountIdToEdit: string | undefined = $state(undefined);
 	let accountIdToDelete: string | undefined = $state(undefined);
 
-	let showClosedAccounts = $state(false);
+	/// Which states the list shows. A single "also show closed" checkbox could only be described
+	/// as a filter for closed accounts, which is the opposite of what it did; two states named
+	/// out loud say what is on screen.
+	const OPEN_ONLY = ['open'];
+	const ACCOUNT_STATES = [
+		{ value: 'open', name: 'Aktiv' },
+		{ value: 'closed', name: 'Geschlossen' }
+	];
+	let accountStates = $state<string[]>([...OPEN_ONLY]);
 
 	// Get current user and all accounts
 	const basicStore = graphql(`
@@ -101,9 +127,9 @@
 			return account.owner.name === currentUserName;
 		});
 
-		if (!showClosedAccounts) {
-			filtered = filtered.filter((account) => !account.closed);
-		}
+		filtered = filtered.filter((account) =>
+			accountStates.includes(account.closed ? 'closed' : 'open')
+		);
 
 		if (searchTerm) {
 			const searchLower = searchTerm.toLowerCase();
@@ -115,60 +141,22 @@
 			);
 		}
 
-		// Apply sorting
-		if (sortBy.length > 0) {
-			const { field, direction } = sortBy[0];
-			filtered = [...filtered].sort((a, b) => {
-				let aVal, bVal;
-
-				switch (field) {
-					case 'name':
-						aVal = a.name;
-						bVal = b.name;
-						break;
-					case 'description':
-						aVal = a.description || '';
-						bVal = b.description || '';
-						break;
-					case 'owner':
-						aVal = a.owner.name;
-						bVal = b.owner.name;
-						break;
-					case 'kind':
-						aVal = a.kind;
-						bVal = b.kind;
-						break;
-					case 'availability':
-						aVal = a.availability;
-						bVal = b.availability;
-						break;
-					case 'risk':
-						aVal = a.risk;
-						bVal = b.risk;
-						break;
-					case 'opened':
-						aVal = a.opened;
-						bVal = b.opened;
-						break;
-					case 'closed':
-						aVal = a.closed || new Date(9999, 11, 31);
-						bVal = b.closed || new Date(9999, 11, 31);
-						break;
-					case 'ownershipFraction':
-						aVal = a.ownershipFraction;
-						bVal = b.ownershipFraction;
-						break;
-					default:
-						return 0;
-				}
-
-				if (aVal < bVal) return direction;
-				if (aVal > bVal) return -direction;
-				return 0;
-			});
-		}
-
-		return filtered;
+		return sort.apply(
+			filtered,
+			{
+				name: (a) => a.name.toLowerCase(),
+				description: (a) => (a.description || '').toLowerCase(),
+				owner: (a) => a.owner.name.toLowerCase(),
+				kind: (a) => a.kind,
+				availability: (a) => a.availability,
+				risk: (a) => a.risk,
+				opened: (a) => a.opened.getTime(),
+				// an account still open outlasts every closed one
+				closed: (a) => a.closed?.getTime() ?? Infinity,
+				ownershipFraction: (a) => a.ownershipFraction
+			},
+			(a) => a.name
+		);
 	});
 
 	let accountToEdit = $derived(allAccounts.find((a) => a.id === accountIdToEdit) || undefined);
@@ -179,19 +167,35 @@
 		else expandedRows = [...expandedRows, id];
 	}
 
-	function sortByField(field: string) {
-		const index = sortBy.findIndex(({ field: f }) => f === field);
-		if (index === -1) {
-			sortBy = [{ field, direction: 1 }];
-		} else {
-			sortBy = [{ field, direction: -sortBy[index].direction }];
-		}
-	}
+	/// Descending, ascending, off -- a header clicked by accident is otherwise only undone by
+	/// reloading the page, since the sort lives here rather than in the url.
+	/// What is currently being filtered on, and how to undo each of them. A list arriving
+	/// pre-filtered otherwise looks like the whole list, only shorter.
+	const activeFilters = $derived.by(() => {
+		const out: ActiveFilter[] = [];
 
-	function isSortedBy(field: string) {
-		const index = sortBy.findIndex(({ field: f }) => f === field);
-		if (index === -1) return null;
-		return sortBy[index].direction;
+		if (searchTerm.trim()) {
+			out.push({ label: `Suche: ${searchTerm.trim()}`, clear: () => (searchTerm = '') });
+		}
+		// only worth a chip when it is not the default, and then it says what is on screen
+		// rather than what was ticked
+		if (accountStates.join() !== OPEN_ONLY.join()) {
+			out.push({
+				label: accountStates.length
+					? ACCOUNT_STATES.filter((s) => accountStates.includes(s.value))
+							.map((s) => s.name)
+							.join(' + ')
+					: 'Keine Konten',
+				clear: () => (accountStates = [...OPEN_ONLY])
+			});
+		}
+
+		return out;
+	});
+
+	function resetFilters() {
+		searchTerm = '';
+		accountStates = [...OPEN_ONLY];
 	}
 
 	const DeleteAccount = graphql(`
@@ -203,8 +207,8 @@
 	`);
 
 	async function handleAccountModalSubmit() {
-		cache.markStale('Account');
-		await accountStore.fetch({});
+		invalidate();
+		await accountStore.fetch({ ...AFTER_WRITE });
 		expandedRows = [];
 	}
 
@@ -214,8 +218,8 @@
 		accountIdToDelete = undefined;
 		showDeleteAccountModal = false;
 
-		cache.markStale('Account');
-		await accountStore.fetch({});
+		invalidate();
+		await accountStore.fetch({ ...AFTER_WRITE });
 		expandedRows = [];
 	}
 
@@ -270,14 +274,6 @@
 		return riskColorMap[risk] || 'bg-gray-100 text-gray-700';
 	}
 </script>
-
-{#snippet sortIcon(field: string)}
-	{#if isSortedBy(field) === -1}
-		▲
-	{:else if isSortedBy(field) === 1}
-		▼
-	{/if}
-{/snippet}
 
 <Modal bind:open={showDeleteAccountModal} size="xs">
 	<div class="text-center">
@@ -354,12 +350,25 @@
 	}))}
 />
 
+{#snippet newButton(cls: string)}
+	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls
+		     back to `alternative` rather than to primary. -->
+	<Button
+		color="primary"
+		class="{toolbarControl} {cls}"
+		onclick={() => (showNewAccountModal = true)}
+	>
+		<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
+	</Button>
+{/snippet}
+
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
 	<QueryError
 		errors={[...($accountStore.errors ?? []), ...($basicStore.errors ?? [])]}
 		message="Die Konten konnten nicht geladen werden."
 		class="mb-4"
 	/>
+	<FilterChips filters={activeFilters} reset={resetFilters} />
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
@@ -369,79 +378,113 @@
 	>
 		{#snippet header()}
 			<div
-				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end space-y-2 md:w-auto md:flex-row md:items-center md:space-y-0 md:space-x-3"
+				class="flex w-full flex-shrink-0 flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
 			>
-				<Button onclick={() => (showNewAccountModal = true)}>
-					<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
-				</Button>
-				<Button size="lg" color="alternative">Filter<FilterSolid class="ml-2 h-3 w-3 " /></Button>
-				<Dropdown class="w-48 space-y-2 p-3 text-sm">
-					<h6 class="mb-3 text-sm font-medium text-gray-900 dark:text-white">Filter</h6>
-					<List tag="dl">
-						<Li>
-							<Checkbox bind:checked={showClosedAccounts}>Zeige Geschlossene Konten</Checkbox>
-						</Li>
-					</List>
-				</Dropdown>
+				<!-- Bearbeiten and Löschen act on the open row, which a phone has no room for beside
+				     Neu -- and there the open row carries the same two buttons itself. -->
+				{@render newButton('grow md:hidden')}
+				<ButtonGroup class="hidden md:inline-flex">
+					{@render newButton('')}
+					<ActionButton
+						color="yellow"
+						class="{toolbarControl} text-gray-900"
+						disabled={!selectedAccountId}
+						onclick={() => {
+							accountIdToEdit = selectedAccountId;
+							showEditAccountModal = true;
+						}}
+					>
+						<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
+					</ActionButton>
+					<ActionButton
+						color="red"
+						class={toolbarControl}
+						disabled={!selectedAccountId}
+						onclick={() => {
+							accountIdToDelete = selectedAccountId;
+							showDeleteAccountModal = true;
+						}}
+					>
+						<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
+					</ActionButton>
+				</ButtonGroup>
+				<OptionFilter
+					label="Status"
+					options={ACCOUNT_STATES}
+					selected={accountStates}
+					toggle={(id) => (accountStates = toggleOption(accountStates, id))}
+				>
+					{#snippet icon()}
+						<FilterSolid class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+					{/snippet}
+				</OptionFilter>
 			</div>
 		{/snippet}
 
 		<TableHead>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('name')}>
-				Name
-				{@render sortIcon('name')}
+			<TableHeadCell
+				class="px-4 py-3 md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sort.by('name')}
+			>
+				<TextSizeOutline class={headIcon} />Name
+				<SortIcon direction={sort.on('name')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('description')}
+				onclick={() => sort.by('description')}
 			>
-				Beschreibung
-				{@render sortIcon('description')}
-			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('kind')}>
-				Typ
-				{@render sortIcon('kind')}
+				<AnnotationOutline class={headIcon} />Beschreibung
+				<SortIcon direction={sort.on('description')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="px-4 py-3 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('availability')}
+				onclick={() => sort.by('kind')}
 			>
-				Verfügbarkeit
-				{@render sortIcon('availability')}
+				<GridOutline class={headIcon} />Typ
+				<SortIcon direction={sort.on('kind')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('risk')}
+				onclick={() => sort.by('availability')}
 			>
-				Risiko
-				{@render sortIcon('risk')}
+				<ClockOutline class={headIcon} />Verfügbarkeit
+				<SortIcon direction={sort.on('availability')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('ownershipFraction')}
+				onclick={() => sort.by('risk')}
 			>
-				Anteil
-				{@render sortIcon('ownershipFraction')}
+				<ScaleBalancedOutline class={headIcon} />Risiko
+				<SortIcon direction={sort.on('risk')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('opened')}
+				onclick={() => sort.by('ownershipFraction')}
 			>
-				Eröffnet
-				{@render sortIcon('opened')}
+				<ChartPieOutline class={headIcon} />Anteil
+				<SortIcon direction={sort.on('ownershipFraction')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('closed')}
+				onclick={() => sort.by('opened')}
 			>
-				Geschlossen
-				{@render sortIcon('closed')}
+				<CalendarMonthOutline class={headIcon} />Eröffnet
+				<SortIcon direction={sort.on('opened')} />
+			</TableHeadCell>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sort.by('closed')}
+			>
+				<CalendarMonthOutline class={headIcon} />Geschlossen
+				<SortIcon direction={sort.on('closed')} />
 			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">

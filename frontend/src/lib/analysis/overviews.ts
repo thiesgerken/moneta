@@ -5,9 +5,9 @@ import { resolve } from '$app/paths';
 /// The Monate and Kategorien tabs are two readings of the same query, so they share it: the
 /// bars come from the monthly totals and the treemap from the whole-period breakdown.
 export const overviewsStore = graphql(`
-	query AnalysisOverviews($from: DateTime!, $to: DateTime!) {
+	query AnalysisOverviews($from: DateTime!, $to: DateTime!, $accrued: Boolean) {
 		analysis {
-			overviews(from: $from, to: $to) {
+			overviews(from: $from, to: $to, accrued: $accrued) {
 				months {
 					month
 					startTotal
@@ -53,8 +53,11 @@ export type OverviewsData = AnalysisOverviews$result['analysis']['overviews'];
 ///
 /// A large gap does not mean the arithmetic drifted — it means an expense is missing, which
 /// is the whole point of showing it. MoneyDB called it the Integrationsfehler.
-export const integrationError = (o: { endTotal: number; integratedEndTotal: number }) =>
-	Math.abs(o.endTotal - o.integratedEndTotal);
+///
+/// Null on the accrual axis, where the backend has nothing to integrate: a share of a
+/// subscription is a cost the month carried rather than money that left an account.
+export const integrationError = (o: { endTotal: number; integratedEndTotal: number | null }) =>
+	o.integratedEndTotal === null ? null : Math.abs(o.endTotal - o.integratedEndTotal);
 
 /// The error is a caveat on the row, not its headline: quiet until it is big enough to mean a
 /// missing expense, which is the only time it asks for anything.

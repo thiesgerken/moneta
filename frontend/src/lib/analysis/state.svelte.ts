@@ -50,6 +50,24 @@ export const wealthState = $state({
 	accountsSeeded: false
 });
 
+/// Which date the monthly and category figures are filed under: `value` for the day the money
+/// moved, `accrued` for the period the cost was for, spread evenly over its days.
+///
+/// Shared between Monate and Kategorien rather than kept per tab, unlike their ranges. A range
+/// is which window you are looking at; this is what the numbers in it mean, and one figure
+/// meaning two different things on two tabs of the same page is the confusion it exists to
+/// remove.
+export const axisState = $state({ axis: 'value' });
+
+export const accrued = () => axisState.axis === 'accrued';
+
+/// The two axes as the toggle above Monate and Kategorien names them, in one place so both
+/// tabs offer the same words for the same thing.
+export const DATE_AXES = [
+	{ value: 'value', label: 'Wertstellung' },
+	{ value: 'accrued', label: 'Leistungszeitraum' }
+];
+
 export const overviewsState = $state({ range: range('1y') });
 
 export const categoriesState = $state({

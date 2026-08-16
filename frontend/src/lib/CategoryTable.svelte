@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { cache, graphql } from '$houdini';
+	import { graphql } from '$houdini';
+	import { invalidate, AFTER_WRITE } from './invalidate';
 
 	import {
 		TableBody,
@@ -9,8 +10,10 @@
 		TableHeadCell,
 		TableSearch,
 		Button,
+		ButtonGroup,
 		Modal
 	} from 'flowbite-svelte';
+	import ActionButton from './ActionButton.svelte';
 	import { Section } from 'flowbite-svelte-blocks';
 	import {
 		PlusOutline,
@@ -18,15 +21,31 @@
 		ChevronDownOutline,
 		EditOutline,
 		TrashBinOutline,
-		ExclamationCircleOutline
+		ExclamationCircleOutline,
+		AnnotationOutline,
+		CashOutline,
+		LayersOutline,
+		TextSizeOutline
 	} from 'flowbite-svelte-icons';
 	import CategoryModal from './CategoryModal.svelte';
-	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
+	import {
+		tableSearchClasses,
+		tableSearchTableClass,
+		toolbarControl,
+		headIcon
+	} from './table_styles';
 	import QueryError from './QueryError.svelte';
+	import SortIcon from './SortIcon.svelte';
+	import { ASC, TableSort } from './table_sort.svelte';
 
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
-	let sortBy: { field: string; direction: number }[] = $state([{ field: 'name', direction: 1 }]);
+
+	/// What the toolbar acts on. An open row is this list's idea of "the one you mean", and
+	/// several open rows are no answer at all rather than a reason to pick the first.
+	const selectedCategoryId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
+	/// A third click on a header comes back here.
+	const sort = new TableSort({ field: 'name', direction: ASC });
 
 	let showNewCategoryModal = $state(false);
 	let showEditCategoryModal = $state(false);
@@ -72,40 +91,16 @@
 			);
 		}
 
-		// Apply sorting
-		if (sortBy.length > 0) {
-			const { field, direction } = sortBy[0];
-			filtered = [...filtered].sort((a, b) => {
-				let aVal, bVal;
-
-				switch (field) {
-					case 'name':
-						aVal = a.name;
-						bVal = b.name;
-						break;
-					case 'description':
-						aVal = a.description || '';
-						bVal = b.description || '';
-						break;
-					case 'parent':
-						aVal = a.parent?.name || '';
-						bVal = b.parent?.name || '';
-						break;
-					case 'monthlyLimit':
-						aVal = a.monthlyLimit || 0;
-						bVal = b.monthlyLimit || 0;
-						break;
-					default:
-						return 0;
-				}
-
-				if (aVal < bVal) return direction;
-				if (aVal > bVal) return -direction;
-				return 0;
-			});
-		}
-
-		return filtered;
+		return sort.apply(
+			filtered,
+			{
+				name: (c) => c.name.toLowerCase(),
+				description: (c) => (c.description || '').toLowerCase(),
+				parent: (c) => (c.parent?.name || '').toLowerCase(),
+				monthlyLimit: (c) => c.monthlyLimit || 0
+			},
+			(c) => c.name
+		);
 	});
 
 	let categoryToEdit = $derived(allCategories.find((c) => c.id === categoryIdToEdit) || undefined);
@@ -118,21 +113,6 @@
 		else expandedRows = [...expandedRows, id];
 	}
 
-	function sortByField(field: string) {
-		const index = sortBy.findIndex(({ field: f }) => f === field);
-		if (index === -1) {
-			sortBy = [{ field, direction: 1 }];
-		} else {
-			sortBy = [{ field, direction: -sortBy[index].direction }];
-		}
-	}
-
-	function isSortedBy(field: string) {
-		const index = sortBy.findIndex(({ field: f }) => f === field);
-		if (index === -1) return null;
-		return sortBy[index].direction;
-	}
-
 	const DeleteCategory = graphql(`
 		mutation DeleteCategory($id: UUID!) {
 			categories {
@@ -142,8 +122,8 @@
 	`);
 
 	async function handleCategoryModalSubmit() {
-		cache.markStale('Category');
-		await categoryStore.fetch({});
+		invalidate();
+		await categoryStore.fetch({ ...AFTER_WRITE });
 		expandedRows = [];
 	}
 
@@ -153,19 +133,11 @@
 		categoryIdToDelete = undefined;
 		showDeleteCategoryModal = false;
 
-		cache.markStale('Category');
-		await categoryStore.fetch({});
+		invalidate();
+		await categoryStore.fetch({ ...AFTER_WRITE });
 		expandedRows = [];
 	}
 </script>
-
-{#snippet sortIcon(field: string)}
-	{#if isSortedBy(field) === -1}
-		▲
-	{:else if isSortedBy(field) === 1}
-		▼
-	{/if}
-{/snippet}
 
 <Modal bind:open={showDeleteCategoryModal} size="xs">
 	<div class="text-center">
@@ -219,6 +191,18 @@
 	}))}
 />
 
+{#snippet newButton(cls: string)}
+	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls
+		     back to `alternative` rather than to primary. -->
+	<Button
+		color="primary"
+		class="{toolbarControl} {cls}"
+		onclick={() => (showNewCategoryModal = true)}
+	>
+		<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
+	</Button>
+{/snippet}
+
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
 	<QueryError
 		errors={$categoryStore.errors}
@@ -234,44 +218,79 @@
 	>
 		{#snippet header()}
 			<div
-				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end space-y-2 md:w-auto md:flex-row md:items-center md:space-y-0 md:space-x-3"
+				class="flex w-full flex-shrink-0 flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
 			>
-				<Button onclick={() => (showNewCategoryModal = true)}>
-					<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
-				</Button>
+				<!-- Bearbeiten and Löschen act on the open row, which a phone has no room for beside
+				     Neu -- and there the open row carries the same two buttons itself. -->
+				{@render newButton('grow md:hidden')}
+				<ButtonGroup class="hidden md:inline-flex">
+					{@render newButton('')}
+					<ActionButton
+						color="yellow"
+						class="{toolbarControl} text-gray-900"
+						disabled={!selectedCategoryId}
+						onclick={() => {
+							categoryIdToEdit = selectedCategoryId;
+							showEditCategoryModal = true;
+						}}
+					>
+						<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
+					</ActionButton>
+					<ActionButton
+						color="red"
+						class={toolbarControl}
+						disabled={!selectedCategoryId}
+						onclick={() => {
+							categoryIdToDelete = selectedCategoryId;
+							showDeleteCategoryModal = true;
+						}}
+					>
+						<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
+					</ActionButton>
+				</ButtonGroup>
 			</div>
 		{/snippet}
 
 		<TableHead>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('name')}>
-				Name
-				{@render sortIcon('name')}
+			<TableHeadCell
+				class="px-4 py-3 md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sort.by('name')}
+			>
+				<TextSizeOutline class={headIcon} />Name
+				<SortIcon direction={sort.on('name')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('description')}
+				onclick={() => sort.by('description')}
 			>
-				Beschreibung
-				{@render sortIcon('description')}
-			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('parent')}>
-				Übergeordnet
-				{@render sortIcon('parent')}
+				<AnnotationOutline class={headIcon} />Beschreibung
+				<SortIcon direction={sort.on('description')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="px-4 py-3 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('monthlyLimit')}
+				onclick={() => sort.by('parent')}
 			>
-				Monatliches Limit
-				{@render sortIcon('monthlyLimit')}
+				<LayersOutline class={headIcon} />Übergeordnet
+				<SortIcon direction={sort.on('parent')} />
+			</TableHeadCell>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sort.by('monthlyLimit')}
+			>
+				<CashOutline class={headIcon} />Monatliches Limit
+				<SortIcon direction={sort.on('monthlyLimit')} />
 			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each filteredCategories as category (category.id)}
 				<TableBodyRow onclick={() => toggleRow(category.id)}>
-					<TableBodyCell class="w-full max-w-0 px-4 py-3 wrap-anywhere whitespace-normal">
+					<TableBodyCell
+						class="w-full max-w-0 px-4 py-3 wrap-anywhere whitespace-normal md:w-56 md:max-w-56 md:min-w-56"
+					>
 						<button type="button" class="mr-2 focus:outline-none">
 							{#if expandedRows.includes(category.id)}
 								<ChevronDownOutline class="inline h-4 w-4" />
@@ -285,7 +304,7 @@
 						></span>
 						{category.name}
 					</TableBodyCell>
-					<TableBodyCell class="hidden max-w-96 truncate px-4 py-3 md:table-cell">
+					<TableBodyCell class="hidden truncate px-4 py-3 md:table-cell md:w-full md:max-w-0">
 						{category.description || '-'}
 					</TableBodyCell>
 					<TableBodyCell class="px-4 py-3">

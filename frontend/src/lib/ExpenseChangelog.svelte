@@ -1,10 +1,5 @@
 <script lang="ts">
-	import {
-		cache,
-		graphql,
-		type ChangelogAuthor$options,
-		type ExpenseChangelog$result
-	} from '$houdini';
+	import { graphql, type ChangelogAuthor$options, type ExpenseChangelog$result } from '$houdini';
 	import { Badge, Spinner } from 'flowbite-svelte';
 	import {
 		CirclePlusOutline,
@@ -16,12 +11,13 @@
 	import ExpenseModal from './ExpenseModal.svelte';
 	import { changedFields, summarizeFields, stateAmount } from './changelog';
 	import ChangeList from './ChangeList.svelte';
+	import { invalidate } from './invalidate';
 	import { formatAccount } from './expense_utils';
 	import { categoryColor } from './analysis/overviews';
 	import { feedState } from './analysis/state.svelte';
 	import { shortDate } from './analysis/dates';
 	import QueryError from './QueryError.svelte';
-	import { euro } from '$lib/money';
+	import { euro, restingAmountColor } from '$lib/money';
 
 	/// The dashboard shows the same feed in a column beside everything else, where the filters
 	/// belong to the tab that owns them and six entries are as many as fit.
@@ -226,7 +222,7 @@
 
 	// editing an expense writes another changelog entry, so the feed itself is out of date
 	async function saved() {
-		cache.markStale('Expense');
+		invalidate();
 		await load();
 	}
 
@@ -438,11 +434,7 @@
 									<!-- the same red/green the expense list uses, so a number means the
 									     same thing in both places -->
 									<span
-										class="shrink-0 text-sm font-medium tabular-nums {amount < 0
-											? 'text-red-700 dark:text-red-400'
-											: amount > 0
-												? 'text-green-700 dark:text-green-400'
-												: 'text-gray-500 dark:text-gray-400'}"
+										class="shrink-0 text-sm font-medium tabular-nums {restingAmountColor(amount)}"
 									>
 										{euro(amount)}
 									</span>
