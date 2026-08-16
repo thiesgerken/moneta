@@ -34,3 +34,10 @@ export const tableSearchTableClass = 'w-full text-left text-sm';
 /// up in one row that reads as a row that could not make up its mind, and no combination of
 /// flowbite sizes makes them agree — so the height is stated instead.
 export const toolbarControl = 'h-10 py-0';
+
+/// The icon in front of a column heading.
+///
+/// A row of headings in one weight is read word by word; the same row with a shape in front of
+/// each is recognised. `align-[-0.15em]` because an inline svg sits on the baseline and the
+/// text does not.
+export const headIcon = 'me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500';

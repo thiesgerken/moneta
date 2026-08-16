@@ -21,10 +21,19 @@
 		ChevronDownOutline,
 		EditOutline,
 		TrashBinOutline,
-		ExclamationCircleOutline
+		ExclamationCircleOutline,
+		AnnotationOutline,
+		CashOutline,
+		LayersOutline,
+		TextSizeOutline
 	} from 'flowbite-svelte-icons';
 	import CategoryModal from './CategoryModal.svelte';
-	import { tableSearchClasses, tableSearchTableClass, toolbarControl } from './table_styles';
+	import {
+		tableSearchClasses,
+		tableSearchTableClass,
+		toolbarControl,
+		headIcon
+	} from './table_styles';
 	import QueryError from './QueryError.svelte';
 
 	let searchTerm = $state('');
@@ -289,7 +298,7 @@
 
 		<TableHead>
 			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('name')}>
-				Name
+				<TextSizeOutline class={headIcon} />Name
 				{@render sortIcon('name')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -297,11 +306,11 @@
 				scope="col"
 				onclick={() => sortByField('description')}
 			>
-				Beschreibung
+				<AnnotationOutline class={headIcon} />Beschreibung
 				{@render sortIcon('description')}
 			</TableHeadCell>
 			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('parent')}>
-				Übergeordnet
+				<LayersOutline class={headIcon} />Übergeordnet
 				{@render sortIcon('parent')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -309,7 +318,7 @@
 				scope="col"
 				onclick={() => sortByField('monthlyLimit')}
 			>
-				Monatliches Limit
+				<CashOutline class={headIcon} />Monatliches Limit
 				{@render sortIcon('monthlyLimit')}
 			</TableHeadCell>
 		</TableHead>

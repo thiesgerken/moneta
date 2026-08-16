@@ -12,8 +12,7 @@
 		TableSearch,
 		Button,
 		ButtonGroup,
-		MultiSelect,
-		Badge,
+		Dropdown,
 		Datepicker,
 		Modal
 	} from 'flowbite-svelte';
@@ -27,12 +26,24 @@
 		EditOutline,
 		TrashBinOutline,
 		ExclamationCircleOutline,
-		FilterSolid
+		FilterSolid,
+		CalendarMonthOutline,
+		WalletOutline,
+		AnnotationOutline,
+		CashOutline
 	} from 'flowbite-svelte-icons';
 	import { accountSorter, byUsageThen, tint } from './expense_utils';
+	import { shortDate } from './analysis/dates';
 	import BalanceModal from './BalanceModal.svelte';
-	import { tableSearchClasses, tableSearchTableClass, toolbarControl } from './table_styles';
+	import {
+		tableSearchClasses,
+		tableSearchTableClass,
+		toolbarControl,
+		headIcon
+	} from './table_styles';
 	import QueryError from './QueryError.svelte';
+	import OptionFilter from './OptionFilter.svelte';
+	import FilterChips, { type ActiveFilter } from './FilterChips.svelte';
 
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
@@ -186,6 +197,53 @@
 
 	/// Descending, ascending, off -- a header clicked by accident is otherwise only undone by
 	/// reloading the page, since the sort lives here rather than in the url.
+	/// The chosen period, spelled out. This is the control's own label as well as its chip, so
+	/// what the filter row says and what the button says cannot drift apart.
+	const dateRangeLabel = $derived.by(() => {
+		const { from, to } = filterDateRange;
+		if (from && to) return `${shortDate(from)} – ${shortDate(to)}`;
+		if (from) return `ab ${shortDate(from)}`;
+		if (to) return `bis ${shortDate(to)}`;
+		return null;
+	});
+
+	function clearDateRange() {
+		filterDateRange = { from: undefined, to: undefined };
+	}
+
+	const toggleOption = (selected: string[], id: string) =>
+		selected.includes(id) ? selected.filter((other) => other !== id) : [...selected, id];
+
+	/// What is currently being filtered on, and how to undo each of them. On a phone the filters
+	/// are behind a button and on a desktop they are a row of empty-looking triggers, so a list
+	/// arriving pre-filtered looked like the whole list, only shorter.
+	const activeFilters = $derived.by(() => {
+		const out: ActiveFilter[] = [];
+
+		if (searchTerm.trim()) {
+			out.push({ label: `Suche: ${searchTerm.trim()}`, clear: () => (searchTerm = '') });
+		}
+
+		for (const id of filteredAccounts) {
+			const account = filterableAccounts?.find((a) => a.value === id);
+			out.push({
+				label: account?.name ?? 'Konto',
+				color: account?.color,
+				clear: () => (filteredAccounts = toggleOption(filteredAccounts, id))
+			});
+		}
+
+		if (dateRangeLabel) out.push({ label: dateRangeLabel, clear: clearDateRange });
+
+		return out;
+	});
+
+	function resetFilters() {
+		searchTerm = '';
+		filteredAccounts = [];
+		clearDateRange();
+	}
+
 	function sortByField(field: string) {
 		if (sortBy.field !== field) sortBy = { field, direction: -1 };
 		else if (sortBy.direction === -1) sortBy = { field, direction: 1 };
@@ -300,6 +358,7 @@
 		message="Die Kontostände konnten nicht geladen werden."
 		class="mb-4"
 	/>
+	<FilterChips filters={activeFilters} reset={resetFilters} />
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
@@ -357,41 +416,61 @@
 						? 'flex'
 						: 'hidden'} flex-col gap-2 md:flex md:flex-row md:items-center md:gap-3"
 				>
-					<Datepicker
-						range
-						bind:rangeFrom={filterDateRange.from}
-						bind:rangeTo={filterDateRange.to}
-						placeholder="Datum"
-						inputClass={toolbarControl}
-					/>
-					<MultiSelect
-						items={filterableAccounts ?? []}
-						bind:value={filteredAccounts}
-						class="{toolbarControl} min-w-48"
-						placeholder="Konten"
+					<!-- The period is the button's label rather than the contents of a text field:
+					     flowbite's own input is sized for one date, so a range arrived clipped, and
+					     in range mode it prints a bare " - " instead of its placeholder. -->
+					<Button
+						color="alternative"
+						class="{toolbarControl} justify-between whitespace-nowrap md:min-w-52"
 					>
-						{#snippet children({ item, clear })}
-							<Badge
-								style={tint(item.color)}
-								dismissable
-								params={{ duration: 100 }}
-								onclose={clear}
-							>
-								{item.name}
-							</Badge>
+						<span class="flex items-center gap-2">
+							<CalendarMonthOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+							{dateRangeLabel ?? 'Datum'}
+						</span>
+						<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
+					</Button>
+					<Dropdown class="flex w-fit flex-col gap-2 divide-y-0 p-2">
+						<!-- the inline calendar draws its own white, shadowed, padded card, which inside
+						     the dropdown's card is a second box around the same thing -->
+						<Datepicker
+							class="bg-transparent p-0 shadow-none dark:bg-transparent"
+							inline
+							range
+							bind:rangeFrom={filterDateRange.from}
+							bind:rangeTo={filterDateRange.to}
+							locale="de-DE"
+							firstDayOfWeek={1}
+						/>
+						<ActionButton
+							size="xs"
+							color="light"
+							disabled={!dateRangeLabel}
+							onclick={clearDateRange}
+						>
+							Zeitraum zurücksetzen
+						</ActionButton>
+					</Dropdown>
+					<OptionFilter
+						label="Konten"
+						options={filterableAccounts ?? []}
+						selected={filteredAccounts}
+						toggle={(id) => (filteredAccounts = toggleOption(filteredAccounts, id))}
+					>
+						{#snippet icon()}
+							<WalletOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
 						{/snippet}
-					</MultiSelect>
+					</OptionFilter>
 				</div>
 			</div>
 		{/snippet}
 
 		<TableHead>
 			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('date')}>
-				Datum
+				<CalendarMonthOutline class={headIcon} />Datum
 				{@render sortIcon('date')}
 			</TableHeadCell>
 			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('account')}>
-				Konto
+				<WalletOutline class={headIcon} />Konto
 				{@render sortIcon('account')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -399,7 +478,7 @@
 				scope="col"
 				onclick={() => sortByField('amount')}
 			>
-				Betrag
+				<CashOutline class={headIcon} />Betrag
 				{@render sortIcon('amount')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -407,7 +486,7 @@
 				scope="col"
 				onclick={() => sortByField('comments')}
 			>
-				Kommentare
+				<AnnotationOutline class={headIcon} />Kommentare
 				{@render sortIcon('comments')}
 			</TableHeadCell>
 		</TableHead>

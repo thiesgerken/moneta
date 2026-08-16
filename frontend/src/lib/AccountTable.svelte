@@ -13,8 +13,6 @@
 		ButtonGroup,
 		Dropdown,
 		Checkbox,
-		List,
-		Li,
 		Modal
 	} from 'flowbite-svelte';
 	import ActionButton from './ActionButton.svelte';
@@ -26,11 +24,24 @@
 		EditOutline,
 		TrashBinOutline,
 		ExclamationCircleOutline,
-		FilterSolid
+		FilterSolid,
+		AnnotationOutline,
+		CalendarMonthOutline,
+		ChartPieOutline,
+		ClockOutline,
+		GridOutline,
+		ScaleBalancedOutline,
+		TextSizeOutline
 	} from 'flowbite-svelte-icons';
 	import AccountModal from './AccountModal.svelte';
-	import { tableSearchClasses, tableSearchTableClass, toolbarControl } from './table_styles';
+	import {
+		tableSearchClasses,
+		tableSearchTableClass,
+		toolbarControl,
+		headIcon
+	} from './table_styles';
 	import QueryError from './QueryError.svelte';
+	import FilterChips, { type ActiveFilter } from './FilterChips.svelte';
 
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
@@ -190,6 +201,26 @@
 
 	/// Descending, ascending, off -- a header clicked by accident is otherwise only undone by
 	/// reloading the page, since the sort lives here rather than in the url.
+	/// What is currently being filtered on, and how to undo each of them. A list arriving
+	/// pre-filtered otherwise looks like the whole list, only shorter.
+	const activeFilters = $derived.by(() => {
+		const out: ActiveFilter[] = [];
+
+		if (searchTerm.trim()) {
+			out.push({ label: `Suche: ${searchTerm.trim()}`, clear: () => (searchTerm = '') });
+		}
+		if (showClosedAccounts) {
+			out.push({ label: 'Geschlossene Konten', clear: () => (showClosedAccounts = false) });
+		}
+
+		return out;
+	});
+
+	function resetFilters() {
+		searchTerm = '';
+		showClosedAccounts = false;
+	}
+
 	function sortByField(field: string) {
 		if (sortBy[0]?.field !== field) sortBy = [{ field, direction: -1 }];
 		else if (sortBy[0].direction === -1) sortBy = [{ field, direction: 1 }];
@@ -380,6 +411,7 @@
 		message="Die Konten konnten nicht geladen werden."
 		class="mb-4"
 	/>
+	<FilterChips filters={activeFilters} reset={resetFilters} />
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
@@ -419,23 +451,25 @@
 						<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
 					</ActionButton>
 				</ButtonGroup>
-				<Button color="alternative" class={toolbarControl}>
-					Filter<FilterSolid class="ml-2 h-3 w-3" />
+				<!-- The same trigger and panel as the expense list's filters: a shape, the word, and
+				     how many are on. It said "Filter" over a heading repeating the word next to it,
+				     wrapped around one checkbox. -->
+				<Button color="alternative" class="{toolbarControl} justify-between md:w-40">
+					<span class="flex items-center gap-2">
+						<FilterSolid class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+						{showClosedAccounts ? 'Filter (1)' : 'Filter'}
+					</span>
+					<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 				</Button>
-				<Dropdown class="w-48 space-y-2 p-3 text-sm">
-					<h6 class="mb-3 text-sm font-medium text-gray-900 dark:text-white">Filter</h6>
-					<List tag="dl">
-						<Li>
-							<Checkbox bind:checked={showClosedAccounts}>Zeige Geschlossene Konten</Checkbox>
-						</Li>
-					</List>
+				<Dropdown class="w-64 divide-y-0 p-3 text-sm">
+					<Checkbox bind:checked={showClosedAccounts}>Geschlossene Konten</Checkbox>
 				</Dropdown>
 			</div>
 		{/snippet}
 
 		<TableHead>
 			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('name')}>
-				Name
+				<TextSizeOutline class={headIcon} />Name
 				{@render sortIcon('name')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -443,11 +477,11 @@
 				scope="col"
 				onclick={() => sortByField('description')}
 			>
-				Beschreibung
+				<AnnotationOutline class={headIcon} />Beschreibung
 				{@render sortIcon('description')}
 			</TableHeadCell>
 			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('kind')}>
-				Typ
+				<GridOutline class={headIcon} />Typ
 				{@render sortIcon('kind')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -455,7 +489,7 @@
 				scope="col"
 				onclick={() => sortByField('availability')}
 			>
-				Verfügbarkeit
+				<ClockOutline class={headIcon} />Verfügbarkeit
 				{@render sortIcon('availability')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -463,7 +497,7 @@
 				scope="col"
 				onclick={() => sortByField('risk')}
 			>
-				Risiko
+				<ScaleBalancedOutline class={headIcon} />Risiko
 				{@render sortIcon('risk')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -471,7 +505,7 @@
 				scope="col"
 				onclick={() => sortByField('ownershipFraction')}
 			>
-				Anteil
+				<ChartPieOutline class={headIcon} />Anteil
 				{@render sortIcon('ownershipFraction')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -479,7 +513,7 @@
 				scope="col"
 				onclick={() => sortByField('opened')}
 			>
-				Eröffnet
+				<CalendarMonthOutline class={headIcon} />Eröffnet
 				{@render sortIcon('opened')}
 			</TableHeadCell>
 			<TableHeadCell
@@ -487,7 +521,7 @@
 				scope="col"
 				onclick={() => sortByField('closed')}
 			>
-				Geschlossen
+				<CalendarMonthOutline class={headIcon} />Geschlossen
 				{@render sortIcon('closed')}
 			</TableHeadCell>
 		</TableHead>

@@ -21,10 +21,21 @@
 		TrashBinOutline,
 		ExclamationCircleOutline,
 		ChevronDownOutline,
-		ChevronRightOutline
+		ChevronRightOutline,
+		CashOutline,
+		ClockArrowOutline,
+		SearchOutline,
+		SortOutline,
+		TextSizeOutline,
+		WalletOutline
 	} from 'flowbite-svelte-icons';
 	import AutomationRuleModal from './AutomationRuleModal.svelte';
-	import { tableSearchClasses, tableSearchTableClass, toolbarControl } from './table_styles';
+	import {
+		tableSearchClasses,
+		tableSearchTableClass,
+		toolbarControl,
+		headIcon
+	} from './table_styles';
 	import { shortDate } from './analysis/dates';
 	import { describeAccrual, formatAccrualPeriod } from './expense_utils';
 	import QueryError from './QueryError.svelte';
@@ -285,42 +296,42 @@
 
 		<TableHead>
 			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('title')}>
-				Titel{@render sortIcon('title')}
+				<TextSizeOutline class={headIcon} />Titel{@render sortIcon('title')}
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell"
 				scope="col"
 				onclick={() => sortByField('regexStatement')}
 			>
-				Verwendungszweck{@render sortIcon('regexStatement')}
+				<SearchOutline class={headIcon} />Verwendungszweck{@render sortIcon('regexStatement')}
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell"
 				scope="col"
 				onclick={() => sortByField('account')}
 			>
-				Konto{@render sortIcon('account')}
+				<WalletOutline class={headIcon} />Konto{@render sortIcon('account')}
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell"
 				scope="col"
 				onclick={() => sortByField('amount')}
 			>
-				Betrag{@render sortIcon('amount')}
+				<CashOutline class={headIcon} />Betrag{@render sortIcon('amount')}
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell"
 				scope="col"
 				onclick={() => sortByField('priority')}
 			>
-				Prio{@render sortIcon('priority')}
+				<SortOutline class={headIcon} />Prio{@render sortIcon('priority')}
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell"
 				scope="col"
 				onclick={() => sortByField('lastDelivery')}
 			>
-				Zuletzt{@render sortIcon('lastDelivery')}
+				<ClockArrowOutline class={headIcon} />Zuletzt{@render sortIcon('lastDelivery')}
 			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">

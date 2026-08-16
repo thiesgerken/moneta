@@ -55,8 +55,7 @@
 		formatAccrualPeriod,
 		formatCategories,
 		makeAccountColor,
-		makeCategoryColor,
-		tint
+		makeCategoryColor
 	} from './expense_utils';
 	import ActionButton from './ActionButton.svelte';
 	import ChangeList from './ChangeList.svelte';
@@ -66,6 +65,8 @@
 	import { shortDate } from './analysis/dates';
 	import { signedEuro } from './money';
 	import QueryError from './QueryError.svelte';
+	import OptionFilter from './OptionFilter.svelte';
+	import FilterChips from './FilterChips.svelte';
 
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
@@ -727,42 +728,6 @@
 	</Button>
 {/snippet}
 
-<!-- Accounts and categories carry a colour, and that colour is how a reader recognises them --
-     it is what the cells in the table below are tinted with. flowbite's MultiSelect prints its
-     options as bare text and offers no hook to change that, so the filters are a checkbox list
-     with the swatch in front of each name, like the Status filter beside them. -->
-{#snippet optionFilter(
-	label: string,
-	options: { name: string; value: string; color?: string | null }[],
-	selected: string[],
-	toggle: (id: string) => void
-)}
-	<Button color="alternative" class="{toolbarControl} justify-between md:w-40">
-		<span class="flex items-center gap-2">
-			{#if label === 'Konten'}
-				<WalletOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
-			{:else}
-				<TagOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
-			{/if}
-			{selected.length ? `${label} (${selected.length})` : label}
-		</span>
-		<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
-	</Button>
-	<Dropdown class="max-h-80 w-64 divide-y-0 overflow-y-auto p-3 text-sm">
-		<div class="space-y-2">
-			{#each options as option (option.value)}
-				<Checkbox checked={selected.includes(option.value)} onchange={() => toggle(option.value)}>
-					<span
-						class="mr-2 inline-block h-3 w-3 shrink-0 rounded-sm"
-						style="background-color: {option.color}"
-					></span>
-					{option.name}
-				</Checkbox>
-			{/each}
-		</div>
-	</Dropdown>
-{/snippet}
-
 {#snippet fieldLabel(text: string)}
 	<dt class="text-xs font-semibold text-gray-500 dark:text-gray-400">{text}</dt>
 {/snippet}
@@ -926,40 +891,7 @@
 		message="Die Ausgaben konnten nicht geladen werden."
 		class="mb-4"
 	/>
-	{#if activeFilters.length > 0}
-		<div class="flex flex-wrap items-center gap-2 px-4 pb-3 text-sm sm:px-0">
-			<span class="text-gray-500 dark:text-gray-400">Gefiltert nach</span>
-			{#each activeFilters as filter (filter.label)}
-				<!-- tinted where what is being filtered on has a colour of its own, so the chip and
-				     the cells it left standing look like each other -->
-				<span
-					class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 {filter.color
-						? ''
-						: 'bg-gray-200 dark:bg-gray-700'}"
-					style={tint(filter.color)}
-				>
-					{filter.label}
-					<!-- dimmed rather than grey: on a tinted chip the text colour is whatever the tint
-					     needs, and a fixed grey × was invisible on the dark ones -->
-					<button
-						type="button"
-						aria-label="{filter.label} entfernen"
-						class="opacity-60 hover:opacity-100"
-						onclick={filter.clear}
-					>
-						×
-					</button>
-				</span>
-			{/each}
-			<button
-				type="button"
-				class="text-primary-600 dark:text-primary-500 hover:underline"
-				onclick={resetFilters}
-			>
-				alle entfernen
-			</button>
-		</div>
-	{/if}
+	<FilterChips filters={activeFilters} reset={resetFilters} />
 
 	<TableSearch
 		placeholder="Suchen"
@@ -1085,18 +1017,26 @@
 							Zeitraum zurücksetzen
 						</ActionButton>
 					</Dropdown>
-					{@render optionFilter(
-						'Kategorien',
-						filterableCategories ?? [],
-						filteredCategories,
-						(id) => (filteredCategories = toggleOption(filteredCategories, id))
-					)}
-					{@render optionFilter(
-						'Konten',
-						filterableAccounts ?? [],
-						filteredAccounts,
-						(id) => (filteredAccounts = toggleOption(filteredAccounts, id))
-					)}
+					<OptionFilter
+						label="Kategorien"
+						options={filterableCategories ?? []}
+						selected={filteredCategories}
+						toggle={(id) => (filteredCategories = toggleOption(filteredCategories, id))}
+					>
+						{#snippet icon()}
+							<TagOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+						{/snippet}
+					</OptionFilter>
+					<OptionFilter
+						label="Konten"
+						options={filterableAccounts ?? []}
+						selected={filteredAccounts}
+						toggle={(id) => (filteredAccounts = toggleOption(filteredAccounts, id))}
+					>
+						{#snippet icon()}
+							<WalletOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+						{/snippet}
+					</OptionFilter>
 					<!-- The third of three filters, and it has to look like the other two: same trigger,
 					     same panel. It said "Filter" over a flowbite List, which drew a rule under a
 					     heading repeating the word next to it and spaced six checkboxes like a table

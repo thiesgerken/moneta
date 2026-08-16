@@ -22,10 +22,20 @@
 		ExclamationCircleOutline,
 		PlayOutline,
 		ChevronDownOutline,
-		ChevronRightOutline
+		ChevronRightOutline,
+		BellOutline,
+		CashOutline,
+		ClockArrowOutline,
+		RefreshOutline,
+		TextSizeOutline
 	} from 'flowbite-svelte-icons';
 	import PeriodicRuleModal from './PeriodicRuleModal.svelte';
-	import { tableSearchClasses, tableSearchTableClass, toolbarControl } from './table_styles';
+	import {
+		tableSearchClasses,
+		tableSearchTableClass,
+		toolbarControl,
+		headIcon
+	} from './table_styles';
 	import { shortDate } from './analysis/dates';
 	import QueryError from './QueryError.svelte';
 	import { euro } from './money';
@@ -276,31 +286,31 @@
 
 		<TableHead>
 			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('title')}>
-				Titel{@render sortIcon('title')}
+				<TextSizeOutline class={headIcon} />Titel{@render sortIcon('title')}
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell"
 				scope="col"
 				onclick={() => sortByField('period')}
 			>
-				Intervall{@render sortIcon('period')}
+				<RefreshOutline class={headIcon} />Intervall{@render sortIcon('period')}
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell"
 				scope="col"
 				onclick={() => sortByField('amount')}
 			>
-				Betrag{@render sortIcon('amount')}
+				<CashOutline class={headIcon} />Betrag{@render sortIcon('amount')}
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell"
 				scope="col"
 				onclick={() => sortByField('lastCreation')}
 			>
-				Zuletzt erzeugt{@render sortIcon('lastCreation')}
+				<ClockArrowOutline class={headIcon} />Zuletzt erzeugt{@render sortIcon('lastCreation')}
 			</TableHeadCell>
 			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('pending')}>
-				Fällig{@render sortIcon('pending')}
+				<BellOutline class={headIcon} />Fällig{@render sortIcon('pending')}
 			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
