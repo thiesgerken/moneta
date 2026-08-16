@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { tint } from './expense_utils';
-
-	export type ActiveFilter = { label: string; color?: string | null; clear: () => void };
+	import type { ActiveFilter } from './filters';
 
 	interface Props {
 		filters: ActiveFilter[];

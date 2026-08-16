@@ -39,7 +39,8 @@
 		headIcon
 	} from './table_styles';
 	import QueryError from './QueryError.svelte';
-	import FilterChips, { type ActiveFilter } from './FilterChips.svelte';
+	import FilterChips from './FilterChips.svelte';
+	import { toggleOption, type ActiveFilter } from './filters';
 	import OptionFilter from './OptionFilter.svelte';
 
 	let searchTerm = $state('');
@@ -70,9 +71,6 @@
 		{ value: 'closed', name: 'Geschlossen' }
 	];
 	let accountStates = $state<string[]>([...OPEN_ONLY]);
-
-	const toggleOption = (selected: string[], id: string) =>
-		selected.includes(id) ? selected.filter((other) => other !== id) : [...selected, id];
 
 	// Get current user and all accounts
 	const basicStore = graphql(`

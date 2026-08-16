@@ -67,6 +67,7 @@
 	import QueryError from './QueryError.svelte';
 	import OptionFilter from './OptionFilter.svelte';
 	import FilterChips from './FilterChips.svelte';
+	import { toggleOption } from './filters';
 
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
@@ -224,9 +225,6 @@
 
 	const withoutOption = (selected: string[], id: string) =>
 		selected.filter((other) => other !== id);
-
-	const toggleOption = (selected: string[], id: string) =>
-		selected.includes(id) ? withoutOption(selected, id) : [...selected, id];
 
 	function clearDateRange() {
 		filterDateRange = { from: undefined, to: undefined };

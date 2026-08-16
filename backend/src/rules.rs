@@ -206,7 +206,7 @@ pub fn impose(
 /// period on the line, and no heuristic improves on being told. Failing that, the template says
 /// how a payment sits inside its own period and the payment is placed the same way — see
 /// [`accrual::Shape`].
-pub fn period(
+fn period(
     template: &Expense,
     template_paid: DateTime<Utc>,
     delivery: &ExpenseDelivery,
@@ -220,6 +220,12 @@ pub fn period(
 /// When a template was itself paid, which is what [`accrual::Shape`] measures its phase
 /// against. The rule's account filter names the booking where it has one; failing that the
 /// line the bank delivered, and failing that whatever the template actually pays with.
+///
+/// A guess, and only for showing a rule what it would do. [`impose`] does not use it: a real
+/// delivery names its account outright, so the booking it replaces is known rather than
+/// guessed. The two agree whenever a rule filters on an account, and where it does not this
+/// can pick a different leg than the delivery eventually will — which is worth knowing when
+/// the preview and the generated expense disagree.
 pub fn template_booking(template: &Expense, account_id: Option<Uuid>) -> Option<DateTime<Utc>> {
     let of_account = account_id.and_then(|a| {
         template

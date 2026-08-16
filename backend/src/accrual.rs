@@ -84,7 +84,7 @@ pub fn statement_period(
 
 /// The number of whole months from `start` to an *inclusive* `end`, if it is a whole number of
 /// them: `01.06.` to `30.06.` is one, `15.02.` to `14.05.` is three.
-pub fn whole_months(start: DateTime<Utc>, end: DateTime<Utc>) -> Option<u32> {
+fn whole_months(start: DateTime<Utc>, end: DateTime<Utc>) -> Option<u32> {
     months_apart(start, end + chrono::Duration::days(1))
 }
 
@@ -201,7 +201,7 @@ impl Shape {
 }
 
 /// Midday, so that nothing about a date depends on which side of midnight a timezone falls.
-pub fn day(year: i32, month: u32, day: u32) -> Option<DateTime<Utc>> {
+fn day(year: i32, month: u32, day: u32) -> Option<DateTime<Utc>> {
     Utc.with_ymd_and_hms(year, month, day, 12, 0, 0).single()
 }
 

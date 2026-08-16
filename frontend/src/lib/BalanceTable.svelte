@@ -43,7 +43,8 @@
 	} from './table_styles';
 	import QueryError from './QueryError.svelte';
 	import OptionFilter from './OptionFilter.svelte';
-	import FilterChips, { type ActiveFilter } from './FilterChips.svelte';
+	import FilterChips from './FilterChips.svelte';
+	import { toggleOption, type ActiveFilter } from './filters';
 
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
@@ -208,9 +209,6 @@
 	function clearDateRange() {
 		filterDateRange = { from: undefined, to: undefined };
 	}
-
-	const toggleOption = (selected: string[], id: string) =>
-		selected.includes(id) ? selected.filter((other) => other !== id) : [...selected, id];
 
 	/// What is currently being filtered on, and how to undo each of them. On a phone the filters
 	/// are behind a button and on a desktop they are a row of empty-looking triggers, so a list

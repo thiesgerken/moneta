@@ -34,7 +34,8 @@
 	import AutomationRuleModal from './AutomationRuleModal.svelte';
 	import PeriodicRuleModal from './PeriodicRuleModal.svelte';
 	import OptionFilter from './OptionFilter.svelte';
-	import FilterChips, { type ActiveFilter } from './FilterChips.svelte';
+	import FilterChips from './FilterChips.svelte';
+	import { toggleOption, type ActiveFilter } from './filters';
 	import RegexText from './RegexText.svelte';
 	import QueryError from './QueryError.svelte';
 	import {
@@ -197,9 +198,6 @@
 		lastUsed: (r) => r.lastUsed?.getTime() ?? 0,
 		priority: (r) => r.priority ?? -Infinity
 	};
-
-	const toggleOption = (selected: string[], id: string) =>
-		selected.includes(id) ? selected.filter((other) => other !== id) : [...selected, id];
 
 	const visible = $derived.by(() => {
 		const term = searchTerm.trim().toLowerCase();
@@ -382,11 +380,10 @@
      whatever else it insists on; for a periodic one it is the calendar. -->
 {#snippet trigger(row: Row)}
 	{#if row.automation}
+		{@const also = conditions(row.automation)}
 		<RegexText pattern={row.automation.regexStatement} empty="jeder Umsatz" />
-		{#if conditions(row.automation).length}
-			<span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
-				{conditions(row.automation).join(' · ')}
-			</span>
+		{#if also.length}
+			<span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">{also.join(' · ')}</span>
 		{/if}
 	{:else}
 		{row.trigger}
