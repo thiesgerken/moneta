@@ -9,9 +9,11 @@
 		TableHeadCell,
 		TableSearch,
 		Button,
+		ButtonGroup,
 		Badge,
 		Modal
 	} from 'flowbite-svelte';
+	import ActionButton from './ActionButton.svelte';
 	import { Section } from 'flowbite-svelte-blocks';
 	import {
 		PlusOutline,
@@ -23,7 +25,7 @@
 		ChevronRightOutline
 	} from 'flowbite-svelte-icons';
 	import PeriodicRuleModal from './PeriodicRuleModal.svelte';
-	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
+	import { tableSearchClasses, tableSearchTableClass, toolbarControl } from './table_styles';
 	import { shortDate } from './analysis/dates';
 	import QueryError from './QueryError.svelte';
 
@@ -41,6 +43,10 @@
 			? expandedRows.filter((rowId) => rowId !== id)
 			: [...expandedRows, id];
 	}
+
+	/// What the toolbar acts on. An open row is this list's idea of "the one you mean", and
+	/// several open rows are no answer at all rather than a reason to pick the first.
+	const selectedRuleId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
 
 	const ruleStore = graphql(`
 		query PeriodicRuleList {
@@ -151,6 +157,14 @@
 <PeriodicRuleModal bind:open={showNewModal} onsubmit={handleSubmit} />
 <PeriodicRuleModal bind:open={showEditModal} onsubmit={handleSubmit} rule={ruleToEdit} />
 
+{#snippet newButton(cls: string)}
+	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls
+		     back to `alternative` rather than to primary. -->
+	<Button color="primary" class="{toolbarControl} {cls}" onclick={() => (showNewModal = true)}>
+		<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
+	</Button>
+{/snippet}
+
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
 	<QueryError
 		errors={$ruleStore.errors}
@@ -166,16 +180,41 @@
 	>
 		{#snippet header()}
 			<div
-				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end space-y-2 md:w-auto md:flex-row md:items-center md:space-y-0 md:space-x-3"
+				class="flex w-full flex-shrink-0 flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
 			>
+				<!-- Bearbeiten and Löschen act on the open row, which a phone has no room for beside
+				     Neu -- and there the open row carries the same two buttons itself. -->
+				{@render newButton('grow md:hidden')}
+				<ButtonGroup class="hidden md:inline-flex">
+					{@render newButton('')}
+					<ActionButton
+						color="yellow"
+						class="{toolbarControl} text-gray-900"
+						disabled={!selectedRuleId}
+						onclick={() => {
+							ruleIdToEdit = selectedRuleId;
+							showEditModal = true;
+						}}
+					>
+						<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
+					</ActionButton>
+					<ActionButton
+						color="red"
+						class={toolbarControl}
+						disabled={!selectedRuleId}
+						onclick={() => {
+							ruleIdToDelete = selectedRuleId;
+							showDeleteModal = true;
+						}}
+					>
+						<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
+					</ActionButton>
+				</ButtonGroup>
 				{#if runResult}
 					<span class="self-center text-sm text-gray-500 dark:text-gray-400">{runResult}</span>
 				{/if}
-				<Button color="alternative" onclick={handleRun}>
+				<Button color="alternative" class={toolbarControl} onclick={handleRun}>
 					<PlayOutline class="mr-2 h-3.5 w-3.5" />Jetzt erzeugen
-				</Button>
-				<Button onclick={() => (showNewModal = true)}>
-					<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
 				</Button>
 			</div>
 		{/snippet}

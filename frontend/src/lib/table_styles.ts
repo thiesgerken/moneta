@@ -21,9 +21,16 @@ export const tableSearchClasses = {
 	// a wide filter row takes the width off the search rather than wrapping it onto its own line
 	search: 'relative w-full min-w-0 flex-1 md:order-last md:w-56 md:max-w-xs',
 	// flowbite sizes the input itself at a fixed `w-80`, which ignores whatever width the
-	// wrapper around it was given and hangs 25px out of the card on the expense list. And
-	// `p-2.5` makes it 42px tall next to 36px buttons, so the row reads as two rows.
-	input: 'w-full p-2 ps-10'
+	// wrapper around it was given and hangs 25px out of the card on the expense list.
+	input: 'w-full ps-10 h-10 py-0'
 };
 
 export const tableSearchTableClass = 'w-full text-left text-sm';
+
+/// The height every control in a table's toolbar is pinned to.
+///
+/// flowbite sizes controls by padding, so at the same nominal `size` a borderless primary button
+/// comes out 40px, a bordered `alternative` one 42, a `<select>` 42 and a `lg` button 50. Lined
+/// up in one row that reads as a row that could not make up its mind, and no combination of
+/// flowbite sizes makes them agree — so the height is stated instead.
+export const toolbarControl = 'h-10 py-0';

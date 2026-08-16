@@ -10,8 +10,10 @@
 		TableHeadCell,
 		TableSearch,
 		Button,
+		ButtonGroup,
 		Modal
 	} from 'flowbite-svelte';
+	import ActionButton from './ActionButton.svelte';
 	import { Section } from 'flowbite-svelte-blocks';
 	import {
 		PlusOutline,
@@ -22,11 +24,15 @@
 		ExclamationCircleOutline
 	} from 'flowbite-svelte-icons';
 	import CategoryModal from './CategoryModal.svelte';
-	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
+	import { tableSearchClasses, tableSearchTableClass, toolbarControl } from './table_styles';
 	import QueryError from './QueryError.svelte';
 
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
+
+	/// What the toolbar acts on. An open row is this list's idea of "the one you mean", and
+	/// several open rows are no answer at all rather than a reason to pick the first.
+	const selectedCategoryId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
 	let sortBy: { field: string; direction: number }[] = $state([{ field: 'name', direction: 1 }]);
 
 	let showNewCategoryModal = $state(false);
@@ -220,6 +226,18 @@
 	}))}
 />
 
+{#snippet newButton(cls: string)}
+	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls
+		     back to `alternative` rather than to primary. -->
+	<Button
+		color="primary"
+		class="{toolbarControl} {cls}"
+		onclick={() => (showNewCategoryModal = true)}
+	>
+		<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
+	</Button>
+{/snippet}
+
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
 	<QueryError
 		errors={$categoryStore.errors}
@@ -235,11 +253,36 @@
 	>
 		{#snippet header()}
 			<div
-				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end space-y-2 md:w-auto md:flex-row md:items-center md:space-y-0 md:space-x-3"
+				class="flex w-full flex-shrink-0 flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
 			>
-				<Button onclick={() => (showNewCategoryModal = true)}>
-					<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
-				</Button>
+				<!-- Bearbeiten and Löschen act on the open row, which a phone has no room for beside
+				     Neu -- and there the open row carries the same two buttons itself. -->
+				{@render newButton('grow md:hidden')}
+				<ButtonGroup class="hidden md:inline-flex">
+					{@render newButton('')}
+					<ActionButton
+						color="yellow"
+						class="{toolbarControl} text-gray-900"
+						disabled={!selectedCategoryId}
+						onclick={() => {
+							categoryIdToEdit = selectedCategoryId;
+							showEditCategoryModal = true;
+						}}
+					>
+						<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
+					</ActionButton>
+					<ActionButton
+						color="red"
+						class={toolbarControl}
+						disabled={!selectedCategoryId}
+						onclick={() => {
+							categoryIdToDelete = selectedCategoryId;
+							showDeleteCategoryModal = true;
+						}}
+					>
+						<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
+					</ActionButton>
+				</ButtonGroup>
 			</div>
 		{/snippet}
 

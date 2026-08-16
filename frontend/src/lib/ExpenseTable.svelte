@@ -61,7 +61,7 @@
 	import ActionButton from './ActionButton.svelte';
 	import ChangeList from './ChangeList.svelte';
 	import ExpenseModal from './ExpenseModal.svelte';
-	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
+	import { tableSearchClasses, tableSearchTableClass, toolbarControl } from './table_styles';
 	import { page } from '$app/state';
 	import { shortDate } from './analysis/dates';
 	import { signedEuro } from './money';
@@ -718,7 +718,11 @@
 {#snippet newExpenseButton(cls: string)}
 	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls back
 	     to `alternative` rather than to primary, which left Neu white in the middle of the row. -->
-	<Button color="primary" class={cls} onclick={() => (showNewExpenseModal = true)}>
+	<Button
+		color="primary"
+		class="{toolbarControl} {cls}"
+		onclick={() => (showNewExpenseModal = true)}
+	>
 		<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
 	</Button>
 {/snippet}
@@ -733,7 +737,7 @@
 	selected: string[],
 	toggle: (id: string) => void
 )}
-	<Button color="alternative" size="sm" class="justify-between md:w-40">
+	<Button color="alternative" class="{toolbarControl} justify-between md:w-40">
 		<span class="flex items-center gap-2">
 			{#if label === 'Konten'}
 				<WalletOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
@@ -977,6 +981,7 @@
 						{@render newExpenseButton('')}
 						<ActionButton
 							color="teal"
+							class={toolbarControl}
 							disabled={!selectedExpenseId}
 							onclick={() => openEditModal(selectedExpenseId!, true)}
 						>
@@ -984,7 +989,7 @@
 						</ActionButton>
 						<ActionButton
 							color="yellow"
-							class="text-gray-900"
+							class="{toolbarControl} text-gray-900"
 							disabled={!selectedExpenseId}
 							onclick={() => openEditModal(selectedExpenseId!)}
 						>
@@ -992,6 +997,7 @@
 						</ActionButton>
 						<ActionButton
 							color="red"
+							class={toolbarControl}
 							disabled={!selectedExpenseId}
 							onclick={() => {
 								expenseIdToDelete = selectedExpenseId;
@@ -1002,6 +1008,7 @@
 						</ActionButton>
 						<ActionButton
 							color="gray"
+							class={toolbarControl}
 							disabled={!selectedExpenseId}
 							onclick={() => {
 								expenseIdToResort = selectedExpenseId;
@@ -1016,8 +1023,7 @@
 					     so on small screens they fold behind this. -->
 					<Button
 						color="alternative"
-						size="sm"
-						class="md:hidden"
+						class="{toolbarControl} md:hidden"
 						aria-label="Filter"
 						aria-expanded={filtersOpen}
 						onclick={() => (filtersOpen = !filtersOpen)}
@@ -1039,8 +1045,7 @@
 					     the other triggers and was running out of the button. Empty it still matches them. -->
 					<Button
 						color="alternative"
-						size="sm"
-						class="justify-between whitespace-nowrap md:min-w-52"
+						class="{toolbarControl} justify-between whitespace-nowrap md:min-w-52"
 					>
 						<span class="flex items-center gap-2">
 							<CalendarMonthOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
@@ -1096,7 +1101,7 @@
 					     same panel. It said "Filter" over a flowbite List, which drew a rule under a
 					     heading repeating the word next to it and spaced six checkboxes like a table
 					     of contents. It filters the Status column and is named after it. -->
-					<Button color="alternative" size="sm" class="justify-between md:w-40">
+					<Button color="alternative" class="{toolbarControl} justify-between md:w-40">
 						<span class="flex items-center gap-2">
 							<FlagOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
 							{activeFlagCount ? `Status (${activeFlagCount})` : 'Status'}
