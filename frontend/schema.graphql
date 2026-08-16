@@ -378,11 +378,11 @@ type AnalysisQuery {
   """
     Expenses whose value is not yet fully consumed at `at`.
 
-    The booking period is what makes this work without the prepayment accounts and
+    The accrual period is what makes this work without the prepayment accounts and
     compensation flags MoneyDB needed: an expense whose money left on the transaction date
     but whose value is spread over a period is simply one with `accrualEnd > accrualStart`.
-    Every imported expense has a zero-length period, so nothing shows up here until a
-    period is actually widened.
+    The import derives such periods for the historical data rather than leaving everything
+    degenerate, so this is populated straight after one.
 
     `isIncomplete` expenses are open items too, but with an unknown missing amount and so
     no remaining balance to compute; they come from `expenses.list` with a flag filter
@@ -875,7 +875,7 @@ type PeriodicRuleQuery {
 "What is left of an expense whose value is still being consumed at the requested date."
 type Prepayment {
   expense: Expense!
-  "how much of the booking period has elapsed, 0..1"
+  "how much of the accrual period has elapsed, 0..1"
   consumedFraction: Float!
   "cents not yet consumed, in the same sign as the expense itself"
   remaining: Float!

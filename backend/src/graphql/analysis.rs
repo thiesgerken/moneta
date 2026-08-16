@@ -73,7 +73,7 @@ pub struct History {
 #[graphql(context = Context)]
 pub struct Prepayment {
     pub expense: GraphQLExpense,
-    /// how much of the booking period has elapsed, 0..1
+    /// how much of the accrual period has elapsed, 0..1
     pub consumed_fraction: f64,
     /// cents not yet consumed, in the same sign as the expense itself
     pub remaining: f64,
@@ -403,11 +403,11 @@ impl AnalysisQuery {
 
     /// Expenses whose value is not yet fully consumed at `at`.
     ///
-    /// The booking period is what makes this work without the prepayment accounts and
+    /// The accrual period is what makes this work without the prepayment accounts and
     /// compensation flags MoneyDB needed: an expense whose money left on the transaction date
     /// but whose value is spread over a period is simply one with `accrualEnd > accrualStart`.
-    /// Every imported expense has a zero-length period, so nothing shows up here until a
-    /// period is actually widened.
+    /// The import derives such periods for the historical data rather than leaving everything
+    /// degenerate, so this is populated straight after one.
     ///
     /// `isIncomplete` expenses are open items too, but with an unknown missing amount and so
     /// no remaining balance to compute; they come from `expenses.list` with a flag filter
@@ -840,7 +840,7 @@ fn month_starts(from: DateTime<Utc>, to: DateTime<Utc>) -> FieldResult<Vec<DateT
     Ok(starts)
 }
 
-/// Linear accrual across the booking period, as [`AnalysisQuery::prepayments`] describes.
+/// Linear accrual across the accrual period, as [`AnalysisQuery::prepayments`] describes.
 fn consumed_fraction(start: DateTime<Utc>, end: DateTime<Utc>, at: DateTime<Utc>) -> f64 {
     let span = (end - start).num_milliseconds();
     if span <= 0 {
