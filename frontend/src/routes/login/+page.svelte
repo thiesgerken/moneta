@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { graphql } from '$houdini';
-	import { Section } from 'flowbite-svelte-blocks';
 	import { Button, Label, Input, Helper } from 'flowbite-svelte';
 
 	let error = $state<string | null>(null);
@@ -47,41 +46,48 @@
 	}
 </script>
 
-<Section name="login" class="">
-	<div class="space-y-4 p-6 sm:p-8 md:space-y-6">
-		<form class="flex flex-col space-y-6" onsubmit={login}>
-			<h3 class="p-0 text-xl font-medium text-gray-900 dark:text-white">Login</h3>
-			<Label class="space-y-2">
-				<span>Benutzername</span>
-				<!-- A phone keyboard capitalises the first letter of a plain text field and offers a
-				     correction for the rest of it, both of which produce a name nobody has. -->
-				<Input
-					type="text"
-					name="username"
-					placeholder="Benutzername"
-					autocomplete="username"
-					autocapitalize="none"
-					autocorrect="off"
-					spellcheck="false"
-					required
-				/>
-			</Label>
-			<Label class="space-y-2">
-				<span>Passwort</span>
-				<Input
-					type="password"
-					name="password"
-					placeholder="Passwort"
-					autocomplete="current-password"
-					required
-				/>
-			</Label>
-
-			{#if error}
-				<Helper color="red">{error}</Helper>
-			{/if}
-
-			<Button type="submit" disabled={busy}>Anmelden</Button>
-		</form>
+<!-- the page is the whole window here, the bar being gone, so the form sits in the middle of it
+     rather than under a corner it no longer has -->
+<div class="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6">
+	<div class="mb-8 flex items-center justify-center">
+		<img src="/logo.svg" class="me-2.5 h-9" alt="" />
+		<span class="font-display text-2xl font-semibold whitespace-nowrap dark:text-white">
+			Moneta
+		</span>
 	</div>
-</Section>
+
+	<!-- no heading: the wordmark above the two fields says what this is -->
+	<form class="flex flex-col space-y-6" onsubmit={login}>
+		<Label class="space-y-2">
+			<span>Benutzername</span>
+			<!-- A phone keyboard capitalises the first letter of a plain text field and offers a
+			     correction for the rest of it, both of which produce a name nobody has. -->
+			<Input
+				type="text"
+				name="username"
+				placeholder="Benutzername"
+				autocomplete="username"
+				autocapitalize="none"
+				autocorrect="off"
+				spellcheck="false"
+				required
+			/>
+		</Label>
+		<Label class="space-y-2">
+			<span>Passwort</span>
+			<Input
+				type="password"
+				name="password"
+				placeholder="Passwort"
+				autocomplete="current-password"
+				required
+			/>
+		</Label>
+
+		{#if error}
+			<Helper color="red">{error}</Helper>
+		{/if}
+
+		<Button type="submit" disabled={busy}>Anmelden</Button>
+	</form>
+</div>

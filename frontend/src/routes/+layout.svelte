@@ -66,6 +66,10 @@
 	<title>{pageTitle(page.url.pathname)}</title>
 </svelte:head>
 
-<Nav />
+<!-- not on the login form: the only thing the bar can offer there is a link to the page it is
+     already on, and the wordmark in its corner is the one the form carries itself -->
+{#if page.url.pathname !== '/login'}
+	<Nav />
+{/if}
 
 {@render children()}
