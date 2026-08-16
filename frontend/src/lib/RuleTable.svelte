@@ -28,6 +28,7 @@
 		TextSizeOutline,
 		WandMagicSparklesOutline,
 		SearchOutline,
+		SortOutline,
 		ClockArrowOutline,
 		FlagOutline
 	} from 'flowbite-svelte-icons';
@@ -143,8 +144,7 @@
 		trigger: string;
 		lastUsed: Date | null;
 		hasTemplate: boolean;
-		/// how much this row wants looking at: a missing template first, then what a rule owes,
-		/// then a priority somebody moved off the default
+		/// how much this row wants looking at: a missing template first, then what a rule owes
 		attention: number;
 		priority: number | null;
 		pending: number | null;
@@ -160,7 +160,7 @@
 			trigger: r.regexStatement ?? '',
 			lastUsed: r.lastDelivery,
 			hasTemplate: !!r.templateId,
-			attention: r.templateId ? (r.priority === 1 ? 0 : Math.abs(r.priority - 1)) : 1000,
+			attention: r.templateId ? 0 : 1000,
 			priority: r.priority,
 			pending: null,
 			automation: r
@@ -198,7 +198,8 @@
 		kind: (r) => r.kind,
 		trigger: (r) => r.trigger.toLowerCase(),
 		lastUsed: (r) => r.lastUsed?.getTime() ?? 0,
-		attention: (r) => r.attention
+		attention: (r) => r.attention,
+		priority: (r) => r.priority ?? -Infinity
 	};
 
 	const toggleOption = (selected: string[], id: string) =>
@@ -371,7 +372,7 @@
 				? 'text-gray-400 dark:text-gray-500'
 				: ''}
 	>
-		Prio {value}
+		{value}
 	</span>
 {/snippet}
 
@@ -556,6 +557,13 @@
 				<SearchOutline class={headIcon} />Bedingung{@render sortIcon('trigger')}
 			</TableHeadCell>
 			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell md:w-24 md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sortByField('priority')}
+			>
+				<SortOutline class={headIcon} />Prio{@render sortIcon('priority')}
+			</TableHeadCell>
+			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-32 md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('lastUsed')}
@@ -595,6 +603,13 @@
 					<TableBodyCell class="hidden px-4 py-3 wrap-anywhere md:table-cell">
 						{@render trigger(row)}
 					</TableBodyCell>
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
+						{#if row.priority === null}
+							<span class="text-gray-400 dark:text-gray-500">–</span>
+						{:else}
+							{@render prio(row.priority)}
+						{/if}
+					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap">
 						{row.lastUsed ? shortDate(row.lastUsed) : '–'}
 					</TableBodyCell>
@@ -603,8 +618,6 @@
 							<Badge color="red">Vorlage fehlt</Badge>
 						{:else if row.pending}
 							<Badge color="yellow">{row.pending} fällig</Badge>
-						{:else if row.priority !== null && row.priority !== 1}
-							{@render prio(row.priority)}
 						{:else}
 							<span class="text-gray-400 dark:text-gray-500">–</span>
 						{/if}
@@ -612,7 +625,7 @@
 				</TableBodyRow>
 				{#if expandedRows.includes(row.id)}
 					<tr>
-						<td colspan="5" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
+						<td colspan="6" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
 							<div class="flex flex-col gap-2">
 								{#if row.automation}
 									{@const rule = row.automation}
