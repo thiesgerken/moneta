@@ -16,16 +16,8 @@
 	import { resolve } from '$app/paths';
 	import Chart from '$lib/Chart.svelte';
 	import RangePicker from './RangePicker.svelte';
-	import {
-		overviewsStore,
-		integrationError,
-		errorClass,
-		deltaColor,
-		monthLabel,
-		monthTicks,
-		monthDrilldown,
-		type OverviewsData
-	} from './overviews';
+	import { overviewsStore, monthDrilldown, type OverviewsData } from './overviews';
+	import { integrationError, errorClass, deltaColor, monthLabel, monthTicks } from './format';
 	import { DATE_AXES, accrued, axisState, overviewsState } from './state.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import { ANALYSIS_CARD } from './cards';

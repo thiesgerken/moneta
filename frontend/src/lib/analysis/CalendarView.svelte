@@ -2,7 +2,7 @@
 	import { Card, Button, Spinner } from 'flowbite-svelte';
 	import { ChevronLeftOutline, ChevronRightOutline } from 'flowbite-svelte-icons';
 	import { graphql } from '$houdini';
-	import { categoryColor } from './overviews';
+	import { categoryColor } from './format';
 	import { DATE_AXES, accrued, axisState, calendarState } from './state.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import { ANALYSIS_CARD } from './cards';

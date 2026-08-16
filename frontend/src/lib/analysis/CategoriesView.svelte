@@ -6,14 +6,8 @@
 	import RangePicker from './RangePicker.svelte';
 	import SeriesToggle from './SeriesToggle.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
-	import {
-		overviewsStore,
-		monthLabel,
-		monthTicks,
-		monthDrilldown,
-		categoryColor,
-		type OverviewsData
-	} from './overviews';
+	import { overviewsStore, monthDrilldown, type OverviewsData } from './overviews';
+	import { monthLabel, monthTicks, categoryColor } from './format';
 	import { DATE_AXES, accrued, axisState, categoriesState } from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
 	import { isoDate } from './dates';
