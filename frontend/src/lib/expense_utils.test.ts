@@ -5,7 +5,10 @@ import {
 	byUsageThen,
 	categorySorter,
 	describeAccrual,
+	formatAccount,
+	formatAccrualPeriod,
 	formatCategories,
+	formatTransactionAccounts,
 	makeAccountColor,
 	makeCategoryColor,
 	makeStripedBackground,
@@ -59,6 +62,93 @@ describe('describeAccrual', () => {
 		expect(describeAccrual({ months: null, days: 9, anchorDay: 4, phaseDays: 0 })).toBe(
 			'9 Tage ab Zahlung'
 		);
+	});
+});
+
+/// An ordinary expense and a prepayment differ by nothing but whether the two ends of the
+/// accrual period are the same instant, so this sentence is where that shows up on screen.
+describe('formatAccrualPeriod', () => {
+	const day = (d: number) => new Date(Date.UTC(2026, 7, d, 12));
+
+	it('writes one date where the period is a single instant', () => {
+		expect(formatAccrualPeriod(day(4), day(4))).toBe('04.08.2026');
+	});
+
+	it('writes both ends of a span', () => {
+		expect(formatAccrualPeriod(day(1), day(31))).toBe('01.08.2026 - 31.08.2026');
+	});
+
+	// two instants on the same day are still a span, since the comparison is on the instant
+	it('compares instants rather than days', () => {
+		const morning = new Date(Date.UTC(2026, 7, 4, 6));
+		const evening = new Date(Date.UTC(2026, 7, 4, 18));
+		expect(formatAccrualPeriod(morning, evening)).toContain(' - ');
+	});
+});
+
+describe('formatAccount', () => {
+	const account = (name: string, owner: string, firstName: string | null = null) => ({
+		name,
+		owner: { name: owner, firstName }
+	});
+
+	// my own accounts are the common case and naming me on every row of my own list is noise
+	it('leaves my own account bare', () => {
+		expect(formatAccount(account('Girokonto', 'thies'), 'thies')).toBe('Girokonto');
+	});
+
+	it('says whose it is when it is not mine', () => {
+		expect(formatAccount(account('Girokonto', 'kroesus', 'Krösus'), 'thies')).toBe(
+			'Krösus / Girokonto'
+		);
+	});
+
+	it('falls back to the login name where there is no first name', () => {
+		expect(formatAccount(account('Girokonto', 'kroesus'), 'thies')).toBe('kroesus / Girokonto');
+	});
+
+	// nobody logged in yet: every account is somebody else's, which is the safe way round
+	it('qualifies everything when it does not know who is reading', () => {
+		expect(formatAccount(account('Girokonto', 'thies', 'Thies'), undefined)).toBe(
+			'Thies / Girokonto'
+		);
+	});
+});
+
+describe('formatTransactionAccounts', () => {
+	const leg = (name: string, owner: string, effectiveAmount: number) => ({
+		effectiveAmount,
+		account: { name, owner: { name: owner, firstName: null } }
+	});
+
+	it('names the account the most money moved on first', () => {
+		expect(
+			formatTransactionAccounts(
+				[leg('Bargeld', 'thies', -100), leg('Giro', 'thies', -900)],
+				'thies'
+			)
+		).toBe('Giro, Bargeld');
+	});
+
+	// two legs on one account are one account, not two entries
+	it('adds up the legs that land on the same account', () => {
+		expect(
+			formatTransactionAccounts(
+				[leg('Giro', 'thies', -100), leg('Bargeld', 'thies', -200), leg('Giro', 'thies', -500)],
+				'thies'
+			)
+		).toBe('Giro, Bargeld');
+	});
+
+	// a transfer has legs pointing opposite ways, and a big one either way is still the big one
+	it('ranks by how much moved, not by which direction', () => {
+		expect(
+			formatTransactionAccounts([leg('Giro', 'thies', 900), leg('Bargeld', 'thies', -100)], 'thies')
+		).toBe('Giro, Bargeld');
+	});
+
+	it('has nothing to say about no transactions', () => {
+		expect(formatTransactionAccounts([], 'thies')).toBe('');
 	});
 });
 

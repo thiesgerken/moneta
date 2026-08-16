@@ -20,7 +20,7 @@
 	import { amountColor } from '$lib/money';
 	import Chart from '$lib/Chart.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
-	import { integrationError, errorClass, deltaColor, categoryColor } from '$lib/analysis/overviews';
+	import { integrationError, errorClass, deltaColor, categoryColor } from '$lib/analysis/format';
 	import QueryError from '$lib/QueryError.svelte';
 
 	const euro = (cents: number) =>
