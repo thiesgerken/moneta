@@ -29,7 +29,7 @@
 		WandMagicSparklesOutline,
 		SearchOutline,
 		ClockArrowOutline,
-		BellOutline
+		FlagOutline
 	} from 'flowbite-svelte-icons';
 	import AutomationRuleModal from './AutomationRuleModal.svelte';
 	import PeriodicRuleModal from './PeriodicRuleModal.svelte';
@@ -139,13 +139,15 @@
 		id: string;
 		kind: 'automation' | 'periodic';
 		title: string;
-		subtitle: string | null;
 		/// the text the trigger sorts and searches on
 		trigger: string;
 		lastUsed: Date | null;
 		hasTemplate: boolean;
-		/// how far ahead of the others this rule is: priority, or how much it owes
-		open: number;
+		/// how much this row wants looking at: a missing template first, then what a rule owes,
+		/// then a priority somebody moved off the default
+		attention: number;
+		priority: number | null;
+		pending: number | null;
 		automation?: (typeof automation)[number];
 		periodic?: (typeof periodic)[number];
 	};
@@ -155,22 +157,24 @@
 			id: r.id,
 			kind: 'automation' as const,
 			title: r.title,
-			subtitle: null,
 			trigger: r.regexStatement ?? '',
 			lastUsed: r.lastDelivery,
 			hasTemplate: !!r.templateId,
-			open: r.priority,
+			attention: r.templateId ? (r.priority === 1 ? 0 : Math.abs(r.priority - 1)) : 1000,
+			priority: r.priority,
+			pending: null,
 			automation: r
 		})),
 		...periodic.map((r) => ({
 			id: r.id,
 			kind: 'periodic' as const,
 			title: r.title,
-			subtitle: r.titleReplacement,
 			trigger: PERIOD_NAMES[r.period] ?? r.period,
 			lastUsed: r.lastCreation,
 			hasTemplate: !!r.templateId,
-			open: r.pending.length,
+			attention: r.templateId ? r.pending.length : 1000,
+			priority: null,
+			pending: r.pending.length,
 			periodic: r
 		}))
 	]);
@@ -194,7 +198,7 @@
 		kind: (r) => r.kind,
 		trigger: (r) => r.trigger.toLowerCase(),
 		lastUsed: (r) => r.lastUsed?.getTime() ?? 0,
-		open: (r) => r.open
+		attention: (r) => r.attention
 	};
 
 	const toggleOption = (selected: string[], id: string) =>
@@ -312,6 +316,19 @@
 		await reload();
 	}
 
+	/// What a bank rule insists on besides its pattern. Joined rather than each printed with a
+	/// separator in front, which left a line starting with a stray dot whenever the account was
+	/// the missing one.
+	function conditions(rule: (typeof automation)[number]): string[] {
+		const out: string[] = [];
+
+		if (rule.filterAccountId) out.push(accountNames.get(rule.filterAccountId) ?? 'unbek. Konto');
+		if (rule.filterAmount != null) out.push(euro(rule.filterAmount));
+		if (rule.regexTime) out.push(`Datum ${rule.regexTime}`);
+
+		return out;
+	}
+
 	function edit(id: string) {
 		ruleIdToEdit = id;
 		if (rows.find((r) => r.id === id)?.kind === 'automation') showEditAutomation = true;
@@ -363,17 +380,9 @@
 {#snippet trigger(row: Row)}
 	{#if row.automation}
 		<RegexText pattern={row.automation.regexStatement} empty="jeder Umsatz" />
-		{#if row.automation.filterAccountId || row.automation.filterAmount != null || row.automation.regexTime}
+		{#if conditions(row.automation).length}
 			<span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
-				{#if row.automation.filterAccountId}
-					{accountNames.get(row.automation.filterAccountId) ?? 'unbekanntes Konto'}
-				{/if}
-				{#if row.automation.filterAmount != null}
-					· {euro(row.automation.filterAmount)}
-				{/if}
-				{#if row.automation.regexTime}
-					· Datum <RegexText pattern={row.automation.regexTime} />
-				{/if}
+				{conditions(row.automation).join(' · ')}
 			</span>
 		{/if}
 	{:else}
@@ -471,7 +480,7 @@
 		placeholder="Suchen"
 		hoverable={true}
 		bind:inputValue={searchTerm}
-		class={tableSearchTableClass}
+		class="{tableSearchTableClass} table-fixed"
 		classes={tableSearchClasses}
 	>
 		{#snippet header()}
@@ -526,14 +535,14 @@
 
 		<TableHead>
 			<TableHeadCell
-				class="px-4 py-3 md:whitespace-nowrap"
+				class="px-4 py-3 md:w-64 md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('title')}
 			>
 				<TextSizeOutline class={headIcon} />Titel{@render sortIcon('title')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
+				class="hidden px-4 py-3 md:table-cell md:w-36 md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('kind')}
 			>
@@ -547,26 +556,24 @@
 				<SearchOutline class={headIcon} />Bedingung{@render sortIcon('trigger')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
+				class="hidden px-4 py-3 md:table-cell md:w-32 md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('lastUsed')}
 			>
 				<ClockArrowOutline class={headIcon} />Zuletzt{@render sortIcon('lastUsed')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="px-4 py-3 md:whitespace-nowrap"
+				class="w-32 px-4 py-3 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('open')}
+				onclick={() => sortByField('attention')}
 			>
-				<BellOutline class={headIcon} />Offen{@render sortIcon('open')}
+				<FlagOutline class={headIcon} />Status{@render sortIcon('attention')}
 			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each visible as row (row.id)}
 				<TableBodyRow onclick={() => toggleRow(row.id)}>
-					<TableBodyCell
-						class="w-full max-w-0 px-4 py-3 whitespace-normal md:w-64 md:max-w-64 md:min-w-64"
-					>
+					<TableBodyCell class="px-4 py-3 wrap-anywhere whitespace-normal">
 						<button type="button" class="mr-2 focus:outline-none" aria-label="Details">
 							{#if expandedRows.includes(row.id)}
 								<ChevronDownOutline class="inline h-4 w-4" />
@@ -575,12 +582,6 @@
 							{/if}
 						</button>
 						{row.title}
-						{#if !row.hasTemplate}
-							<Badge color="red" class="ml-2">Vorlage fehlt</Badge>
-						{/if}
-						{#if row.subtitle}
-							<span class="block text-xs text-gray-500 dark:text-gray-400">→ {row.subtitle}</span>
-						{/if}
 						<!-- Four columns do not fit on a phone, and a rule is nothing without what fires
 						     it, so they come back as a line under the title rather than being dropped. -->
 						<span class="mt-1 block text-xs text-gray-500 md:hidden dark:text-gray-400">
@@ -591,17 +592,19 @@
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{@render kindBadge(row.kind)}
 					</TableBodyCell>
-					<TableBodyCell class="hidden px-4 py-3 text-xs md:table-cell md:w-full md:max-w-0">
+					<TableBodyCell class="hidden px-4 py-3 wrap-anywhere md:table-cell">
 						{@render trigger(row)}
 					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap">
 						{row.lastUsed ? shortDate(row.lastUsed) : '–'}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
-						{#if row.automation}
-							{@render prio(row.open)}
-						{:else if row.open > 0}
-							<Badge color="yellow">{row.open} fällig</Badge>
+					<TableBodyCell class="px-4 py-3 md:whitespace-nowrap">
+						{#if !row.hasTemplate}
+							<Badge color="red">Vorlage fehlt</Badge>
+						{:else if row.pending}
+							<Badge color="yellow">{row.pending} fällig</Badge>
+						{:else if row.priority !== null && row.priority !== 1}
+							{@render prio(row.priority)}
 						{:else}
 							<span class="text-gray-400 dark:text-gray-500">–</span>
 						{/if}

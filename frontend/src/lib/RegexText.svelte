@@ -18,11 +18,14 @@
 {#if !pattern}
 	<span class="text-gray-400 dark:text-gray-500">{empty}</span>
 {:else if broken}
-	<span class="font-mono wrap-anywhere text-red-600 dark:text-red-400" title="Ungültiger Ausdruck">
+	<span
+		class="font-mono text-xs wrap-anywhere text-red-600 dark:text-red-400"
+		title="Ungültiger Ausdruck"
+	>
 		{pattern}
 	</span>
 {:else}
-	<span class="font-mono wrap-anywhere {className}"
+	<span class="font-mono text-xs wrap-anywhere {className}"
 		>{#each tokens as t, i (i)}<span class={COLORS[t.kind]}>{t.text}</span>{/each}</span
 	>
 {/if}
