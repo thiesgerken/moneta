@@ -11,8 +11,6 @@
 		TableSearch,
 		Button,
 		ButtonGroup,
-		Dropdown,
-		Checkbox,
 		Modal
 	} from 'flowbite-svelte';
 	import ActionButton from './ActionButton.svelte';
@@ -42,6 +40,7 @@
 	} from './table_styles';
 	import QueryError from './QueryError.svelte';
 	import FilterChips, { type ActiveFilter } from './FilterChips.svelte';
+	import OptionFilter from './OptionFilter.svelte';
 
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
@@ -62,7 +61,18 @@
 	let accountIdToEdit: string | undefined = $state(undefined);
 	let accountIdToDelete: string | undefined = $state(undefined);
 
-	let showClosedAccounts = $state(false);
+	/// Which states the list shows. A single "also show closed" checkbox could only be described
+	/// as a filter for closed accounts, which is the opposite of what it did; two states named
+	/// out loud say what is on screen.
+	const OPEN_ONLY = ['open'];
+	const ACCOUNT_STATES = [
+		{ value: 'open', name: 'Aktiv' },
+		{ value: 'closed', name: 'Geschlossen' }
+	];
+	let accountStates = $state<string[]>([...OPEN_ONLY]);
+
+	const toggleOption = (selected: string[], id: string) =>
+		selected.includes(id) ? selected.filter((other) => other !== id) : [...selected, id];
 
 	// Get current user and all accounts
 	const basicStore = graphql(`
@@ -121,9 +131,9 @@
 			return account.owner.name === currentUserName;
 		});
 
-		if (!showClosedAccounts) {
-			filtered = filtered.filter((account) => !account.closed);
-		}
+		filtered = filtered.filter((account) =>
+			accountStates.includes(account.closed ? 'closed' : 'open')
+		);
 
 		if (searchTerm) {
 			const searchLower = searchTerm.toLowerCase();
@@ -209,8 +219,17 @@
 		if (searchTerm.trim()) {
 			out.push({ label: `Suche: ${searchTerm.trim()}`, clear: () => (searchTerm = '') });
 		}
-		if (showClosedAccounts) {
-			out.push({ label: 'Geschlossene Konten', clear: () => (showClosedAccounts = false) });
+		// only worth a chip when it is not the default, and then it says what is on screen
+		// rather than what was ticked
+		if (accountStates.join() !== OPEN_ONLY.join()) {
+			out.push({
+				label: accountStates.length
+					? ACCOUNT_STATES.filter((s) => accountStates.includes(s.value))
+							.map((s) => s.name)
+							.join(' + ')
+					: 'Keine Konten',
+				clear: () => (accountStates = [...OPEN_ONLY])
+			});
 		}
 
 		return out;
@@ -218,7 +237,7 @@
 
 	function resetFilters() {
 		searchTerm = '';
-		showClosedAccounts = false;
+		accountStates = [...OPEN_ONLY];
 	}
 
 	function sortByField(field: string) {
@@ -451,19 +470,16 @@
 						<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
 					</ActionButton>
 				</ButtonGroup>
-				<!-- The same trigger and panel as the expense list's filters: a shape, the word, and
-				     how many are on. It said "Filter" over a heading repeating the word next to it,
-				     wrapped around one checkbox. -->
-				<Button color="alternative" class="{toolbarControl} justify-between md:w-40">
-					<span class="flex items-center gap-2">
+				<OptionFilter
+					label="Status"
+					options={ACCOUNT_STATES}
+					selected={accountStates}
+					toggle={(id) => (accountStates = toggleOption(accountStates, id))}
+				>
+					{#snippet icon()}
 						<FilterSolid class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
-						{showClosedAccounts ? 'Filter (1)' : 'Filter'}
-					</span>
-					<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
-				</Button>
-				<Dropdown class="w-64 divide-y-0 p-3 text-sm">
-					<Checkbox bind:checked={showClosedAccounts}>Geschlossene Konten</Checkbox>
-				</Dropdown>
+					{/snippet}
+				</OptionFilter>
 			</div>
 		{/snippet}
 

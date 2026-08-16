@@ -60,8 +60,10 @@
 	let ruleIdToEdit: string | undefined = $state(undefined);
 	let ruleIdToDelete: string | undefined = $state(undefined);
 	let runResult: string | undefined = $state(undefined);
-	/// which kinds the list is showing; empty means all of them
-	let filteredKinds = $state<string[]>([]);
+	/// Which kinds the list is showing. Ticked rather than empty-means-all: an untouched filter
+	/// that shows everything should look like it, and unticking one is then the obvious way to
+	/// see only the other.
+	let filteredKinds = $state<string[]>(['automation', 'periodic']);
 
 	const store = graphql(`
 		query RuleList {
@@ -209,7 +211,7 @@
 		const term = searchTerm.trim().toLowerCase();
 		const filtered = rows.filter(
 			(r) =>
-				(filteredKinds.length === 0 || filteredKinds.includes(r.kind)) &&
+				filteredKinds.includes(r.kind) &&
 				(!term || r.title.toLowerCase().includes(term) || r.trigger.toLowerCase().includes(term))
 		);
 
@@ -228,10 +230,16 @@
 		if (searchTerm.trim()) {
 			out.push({ label: `Suche: ${searchTerm.trim()}`, clear: () => (searchTerm = '') });
 		}
-		for (const kind of filteredKinds) {
+		// only worth a chip when it is not the default, and then it says what is on screen
+		// rather than what was ticked
+		if (filteredKinds.length !== KINDS.length) {
 			out.push({
-				label: KINDS.find((k) => k.value === kind)?.name ?? kind,
-				clear: () => (filteredKinds = toggleOption(filteredKinds, kind))
+				label: filteredKinds.length
+					? KINDS.filter((k) => filteredKinds.includes(k.value))
+							.map((k) => k.name)
+							.join(' + ')
+					: 'Keine Regeln',
+				clear: () => (filteredKinds = KINDS.map((k) => k.value))
 			});
 		}
 
@@ -240,7 +248,7 @@
 
 	function resetFilters() {
 		searchTerm = '';
-		filteredKinds = [];
+		filteredKinds = KINDS.map((k) => k.value);
 	}
 
 	function toggleRow(id: string) {
