@@ -12,3 +12,13 @@ export const euro = (cents: number) =>
 /// is silent, so "5,99" in a column of "-5,99" reads as a number someone forgot to sign rather
 /// than as money that came in. `Intl` writes the minus itself, so only the plus is added here.
 export const signedEuro = (cents: number) => (cents > 0 ? '+' : '') + euro(cents);
+
+/// Red for money going out, green for money coming in — one pair, so a figure is recognised
+/// before it is read.
+export const amountColor = (cents: number) =>
+	cents < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400';
+
+/// The same, but zero stays grey: where "nothing moved" is a real answer, a green 0,00 € claims
+/// otherwise.
+export const restingAmountColor = (cents: number) =>
+	cents === 0 ? 'text-gray-500 dark:text-gray-400' : amountColor(cents);

@@ -1,3 +1,33 @@
+/// How an automation rule will date what it generates, in words.
+///
+/// None of it is configured on the rule — it is read off the template's own period against the
+/// day the template was paid — so this is the only place the behaviour is visible.
+export function describeAccrual(a: {
+	months: number | null;
+	days: number | null;
+	anchorDay: number;
+	phaseDays: number;
+}): string {
+	if (a.months === null) {
+		return `${a.days} ${a.days === 1 ? 'Tag' : 'Tage'} ab Zahlung`;
+	}
+
+	const grid =
+		{ 1: 'Monatlich', 3: 'Quartalsweise', 6: 'Halbjährlich', 12: 'Jährlich' }[a.months] ??
+		`alle ${a.months} Monate`;
+
+	// The phase is what places a payment in the period it pays for rather than the one it lands
+	// in, so a rule that is anything other than paid on day one has to say so.
+	const phase =
+		a.phaseDays === 0
+			? ''
+			: `, Zahlung ${a.phaseDays > 0 ? `+${a.phaseDays}` : a.phaseDays} ${
+					Math.abs(a.phaseDays) === 1 ? 'Tag' : 'Tage'
+				}`;
+
+	return `${grid} ab dem ${a.anchorDay}.${phase}`;
+}
+
 export function formatAccrualPeriod(begin: Date, end: Date, time: boolean = false) {
 	const fmt: Intl.DateTimeFormatOptions = time
 		? {

@@ -12,11 +12,11 @@
 		TableSearch,
 		Button,
 		ButtonGroup,
-		MultiSelect,
-		Badge,
+		Dropdown,
 		Datepicker,
 		Modal
 	} from 'flowbite-svelte';
+	import ActionButton from './ActionButton.svelte';
 	import { Section } from 'flowbite-svelte-blocks';
 	import {
 		PlusOutline,
@@ -26,18 +26,38 @@
 		EditOutline,
 		TrashBinOutline,
 		ExclamationCircleOutline,
-		FilterSolid
+		FilterSolid,
+		CalendarMonthOutline,
+		WalletOutline,
+		AnnotationOutline,
+		CashOutline
 	} from 'flowbite-svelte-icons';
 	import { accountSorter, byUsageThen, tint } from './expense_utils';
+	import { shortDate } from './analysis/dates';
 	import BalanceModal from './BalanceModal.svelte';
-	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
+	import {
+		tableSearchClasses,
+		tableSearchTableClass,
+		toolbarControl,
+		headIcon
+	} from './table_styles';
 	import QueryError from './QueryError.svelte';
+	import SortIcon from './SortIcon.svelte';
+	import { DESC, TableSort } from './table_sort.svelte';
+	import OptionFilter from './OptionFilter.svelte';
+	import FilterChips from './FilterChips.svelte';
+	import { toggleOption, type ActiveFilter } from './filters';
 
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
 	let searchTerm = $state('');
 	let expandedRows = $state<string[]>([]);
-	let sortBy: { field: string; direction: number } = $state({ field: 'date', direction: -1 });
+
+	/// What the toolbar acts on. An open row is this list's idea of "the one you mean", and
+	/// several open rows are no answer at all rather than a reason to pick the first.
+	const selectedBalanceId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
+	/// Newest first, and a third click on a header comes back here.
+	const sort = new TableSort({ field: 'date', direction: DESC });
 
 	/// only consulted below `md`, where the filters are collapsed
 	let filtersOpen = $state(false);
@@ -69,8 +89,8 @@
 		accountIds: filteredAccounts.length > 0 ? filteredAccounts : undefined,
 		after: filterDateRange.from,
 		before: filterDateRange.to,
-		sortBy: SORT_FIELDS[sortBy.field],
-		sortDir: (sortBy.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options
+		sortBy: SORT_FIELDS[sort.field],
+		sortDir: (sort.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options
 	});
 
 	// Stuff that we always need independently of the current page and sorting and so on
@@ -177,13 +197,52 @@
 		else expandedRows = [...expandedRows, id];
 	}
 
-	function sortByField(field: string) {
-		sortBy = { field, direction: sortBy.field === field ? -sortBy.direction : -1 };
+	/// The chosen period, spelled out. This is the control's own label as well as its chip, so
+	/// what the filter row says and what the button says cannot drift apart.
+	const dateRangeLabel = $derived.by(() => {
+		const { from, to } = filterDateRange;
+		if (from && to) return `${shortDate(from)} – ${shortDate(to)}`;
+		if (from) return `ab ${shortDate(from)}`;
+		if (to) return `bis ${shortDate(to)}`;
+		return null;
+	});
+
+	function clearDateRange() {
+		filterDateRange = { from: undefined, to: undefined };
 	}
 
-	function isSortedBy(field: string) {
-		return sortBy.field === field ? sortBy.direction : null;
+	/// What is currently being filtered on, and how to undo each of them. On a phone the filters
+	/// are behind a button and on a desktop they are a row of empty-looking triggers, so a list
+	/// arriving pre-filtered looked like the whole list, only shorter.
+	const activeFilters = $derived.by(() => {
+		const out: ActiveFilter[] = [];
+
+		if (searchTerm.trim()) {
+			out.push({ label: `Suche: ${searchTerm.trim()}`, clear: () => (searchTerm = '') });
+		}
+
+		for (const id of filteredAccounts) {
+			const account = filterableAccounts?.find((a) => a.value === id);
+			out.push({
+				label: account?.name ?? 'Konto',
+				color: account?.color,
+				clear: () => (filteredAccounts = toggleOption(filteredAccounts, id))
+			});
+		}
+
+		if (dateRangeLabel) out.push({ label: dateRangeLabel, clear: clearDateRange });
+
+		return out;
+	});
+
+	function resetFilters() {
+		searchTerm = '';
+		filteredAccounts = [];
+		clearDateRange();
 	}
+
+	/// Descending, ascending, off -- a header clicked by accident is otherwise only undone by
+	/// reloading the page, since the sort lives here rather than in the url.
 
 	$effect(() => void basicStore.fetch());
 	$effect(() => void balanceStore.fetch({ variables: balanceVariables() }));
@@ -213,14 +272,6 @@
 		expandedRows = [];
 	}
 </script>
-
-{#snippet sortIcon(field: string)}
-	{#if isSortedBy(field) === -1}
-		▲
-	{:else if isSortedBy(field) === 1}
-		▼
-	{/if}
-{/snippet}
 
 <Modal bind:open={showDeleteBalanceModal} size="xs">
 	<div class="text-center">
@@ -271,12 +322,25 @@
 	})) || []}
 />
 
+{#snippet newButton(cls: string)}
+	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls
+		     back to `alternative` rather than to primary. -->
+	<Button
+		color="primary"
+		class="{toolbarControl} {cls}"
+		onclick={() => (showNewBalanceModal = true)}
+	>
+		<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
+	</Button>
+{/snippet}
+
 <Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
 	<QueryError
 		errors={[...($balanceStore.errors ?? []), ...($basicStore.errors ?? [])]}
 		message="Die Kontostände konnten nicht geladen werden."
 		class="mb-4"
 	/>
+	<FilterChips filters={activeFilters} reset={resetFilters} />
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
@@ -286,17 +350,42 @@
 	>
 		{#snippet header()}
 			<div
-				class="flex w-full flex-shrink-0 flex-col items-stretch justify-end gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
+				class="flex w-full flex-shrink-0 flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
 			>
 				<div class="flex items-center gap-2">
-					<Button class="grow md:grow-0" onclick={() => (showNewBalanceModal = true)}>
-						<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
-					</Button>
+					<!-- Bearbeiten and Löschen act on the open row, which a phone has no room for beside
+					     Neu -- and there the open row carries the same two buttons itself. -->
+					{@render newButton('grow md:hidden')}
+					<ButtonGroup class="hidden md:inline-flex">
+						{@render newButton('')}
+						<ActionButton
+							color="yellow"
+							class="{toolbarControl} text-gray-900"
+							disabled={!selectedBalanceId}
+							onclick={() => {
+								balanceIdToEdit = selectedBalanceId;
+								showEditBalanceModal = true;
+							}}
+						>
+							<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
+						</ActionButton>
+						<ActionButton
+							color="red"
+							class={toolbarControl}
+							disabled={!selectedBalanceId}
+							onclick={() => {
+								balanceIdToDelete = selectedBalanceId;
+								showDeleteBalanceModal = true;
+							}}
+						>
+							<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
+						</ActionButton>
+					</ButtonGroup>
 					<!-- as in the expense list: stacked, the filters filled the screen before the
 					     first balance did -->
 					<Button
 						color="alternative"
-						class="md:hidden"
+						class="{toolbarControl} md:hidden"
 						aria-label="Filter"
 						aria-expanded={filtersOpen}
 						onclick={() => (filtersOpen = !filtersOpen)}
@@ -309,58 +398,86 @@
 						? 'flex'
 						: 'hidden'} flex-col gap-2 md:flex md:flex-row md:items-center md:gap-3"
 				>
-					<Datepicker
-						range
-						bind:rangeFrom={filterDateRange.from}
-						bind:rangeTo={filterDateRange.to}
-						placeholder="Datum"
-					/>
-					<MultiSelect
-						items={filterableAccounts ?? []}
-						bind:value={filteredAccounts}
-						size="lg"
-						class="ml-2 h-1 min-w-48"
-						placeholder="Konten"
+					<!-- The period is the button's label rather than the contents of a text field:
+					     flowbite's own input is sized for one date, so a range arrived clipped, and
+					     in range mode it prints a bare " - " instead of its placeholder. -->
+					<Button
+						color="alternative"
+						class="{toolbarControl} justify-between whitespace-nowrap md:min-w-52"
 					>
-						{#snippet children({ item, clear })}
-							<Badge
-								style={tint(item.color)}
-								dismissable
-								params={{ duration: 100 }}
-								onclose={clear}
-							>
-								{item.name}
-							</Badge>
+						<span class="flex items-center gap-2">
+							<CalendarMonthOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+							{dateRangeLabel ?? 'Datum'}
+						</span>
+						<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
+					</Button>
+					<Dropdown class="flex w-fit flex-col gap-2 divide-y-0 p-2">
+						<!-- the inline calendar draws its own white, shadowed, padded card, which inside
+						     the dropdown's card is a second box around the same thing -->
+						<Datepicker
+							class="bg-transparent p-0 shadow-none dark:bg-transparent"
+							inline
+							range
+							bind:rangeFrom={filterDateRange.from}
+							bind:rangeTo={filterDateRange.to}
+							locale="de-DE"
+							firstDayOfWeek={1}
+						/>
+						<ActionButton
+							size="xs"
+							color="light"
+							disabled={!dateRangeLabel}
+							onclick={clearDateRange}
+						>
+							Zeitraum zurücksetzen
+						</ActionButton>
+					</Dropdown>
+					<OptionFilter
+						label="Konten"
+						options={filterableAccounts ?? []}
+						selected={filteredAccounts}
+						toggle={(id) => (filteredAccounts = toggleOption(filteredAccounts, id))}
+					>
+						{#snippet icon()}
+							<WalletOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
 						{/snippet}
-					</MultiSelect>
+					</OptionFilter>
 				</div>
 			</div>
 		{/snippet}
 
 		<TableHead>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('date')}>
-				Datum
-				{@render sortIcon('date')}
-			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('account')}>
-				Konto
-				{@render sortIcon('account')}
+			<TableHeadCell
+				class="px-4 py-3 md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sort.by('date')}
+			>
+				<CalendarMonthOutline class={headIcon} />Datum
+				<SortIcon direction={sort.on('date')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="px-2 py-3 text-right md:px-4"
+				class="px-4 py-3 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('amount')}
+				onclick={() => sort.by('account')}
 			>
-				Betrag
-				{@render sortIcon('amount')}
+				<WalletOutline class={headIcon} />Konto
+				<SortIcon direction={sort.on('account')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="px-2 py-3 text-right md:px-4 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('comments')}
+				onclick={() => sort.by('amount')}
 			>
-				Kommentare
-				{@render sortIcon('comments')}
+				<CashOutline class={headIcon} />Betrag
+				<SortIcon direction={sort.on('amount')} />
+			</TableHeadCell>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sort.by('comments')}
+			>
+				<AnnotationOutline class={headIcon} />Kommentare
+				<SortIcon direction={sort.on('comments')} />
 			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
@@ -381,7 +498,7 @@
 						})}
 					</TableBodyCell>
 					<TableBodyCell
-						class="w-full max-w-0 truncate px-2 py-3 md:px-4"
+						class="w-full max-w-0 truncate px-2 py-3 md:w-56 md:max-w-56 md:min-w-56 md:px-4"
 						style={tint(balance.account.color)}
 					>
 						{#if balance.account.owner.name != $basicStore.data?.users.me.name}
@@ -398,7 +515,7 @@
 									? 'bg-green-100 text-green-700'
 									: '')}>{(balance.amount / 100).toFixed(2)}€</TableBodyCell
 					>
-					<TableBodyCell class="hidden max-w-96 truncate px-4 py-3 md:table-cell"
+					<TableBodyCell class="hidden truncate px-4 py-3 md:table-cell md:w-full md:max-w-0"
 						>{balance.comments}</TableBodyCell
 					>
 				</TableBodyRow>

@@ -88,6 +88,7 @@ jobs:
       - run: cd frontend && pnpm build
       - run: cd frontend && pnpm check
       - run: cd frontend && pnpm lint
+      - run: cd frontend && pnpm test
 
   # Two steps rather than a matrix over the components, because checkout, buildx and the
   # registry login are shared. The rollout is in the same job as the build so that it cannot

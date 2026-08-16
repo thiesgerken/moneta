@@ -467,6 +467,7 @@ impl ExpenseQuery {
         limit: Option<i32>,
         skip: Option<i32>,
         search: Option<String>,
+        ids: Option<Vec<Uuid>>,
         account_ids: Option<Vec<Uuid>>,
         category_ids: Option<Vec<Uuid>>,
         flags: Option<ExpenseFlagFilter>,
@@ -496,6 +497,13 @@ impl ExpenseQuery {
 
             if let Some(term) = &search {
                 query = query.filter(search_predicate(term.trim()));
+            }
+
+            // An empty list is not "everything": a caller that meant to name expenses and
+            // named none wants none, which is what the other id filters would say too if they
+            // could tell the two apart.
+            if let Some(ids) = &ids {
+                query = query.filter(expenses_rendered::id.eq_any(ids));
             }
 
             if let Some(account_ids) = &account_ids

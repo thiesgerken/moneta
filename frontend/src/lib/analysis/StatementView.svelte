@@ -20,7 +20,7 @@
 	import { ANALYSIS_CARD } from './cards';
 	import { shortDate } from './dates';
 	import QueryError from '$lib/QueryError.svelte';
-	import { euro } from '$lib/money';
+	import { amountColor, euro } from '$lib/money';
 
 	const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -198,9 +198,7 @@
 									{shortDate(r.date)}
 								</TableBodyCell>
 								<TableBodyCell
-									class="px-4 py-3 text-right whitespace-nowrap {(r.amount ?? 0) < 0
-										? 'text-red-600 dark:text-red-400'
-										: 'text-green-700 dark:text-green-400'}"
+									class="px-4 py-3 text-right whitespace-nowrap {amountColor(r.amount ?? 0)}"
 								>
 									{r.amount == null ? '' : euro(r.amount)}
 								</TableBodyCell>

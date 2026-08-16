@@ -339,6 +339,31 @@ type AccountSynchronization {
   account: Account!
 }
 
+"""
+  What a rule will make of the next delivery's Leistungszeitraum.
+
+  All of it is read off the template rather than configured on the rule, so without somewhere
+  to show it the behaviour would be invisible — and a template whose own period is a day out
+  silently produces a period that never lines up with a month.
+"""
+type AccrualShape {
+  """
+    the grid the period snaps to, in months; null when the template's span is not a whole
+    number of them and the period follows the payment around instead
+  """
+  months: Int
+  "that free-floating span, in days; null when `months` says otherwise"
+  days: Int
+  "the day of the month a snapped period starts on"
+  anchorDay: Int!
+  "days from the start of a period to the payment for it, negative when paid in advance"
+  phaseDays: Int!
+  "what the example below is worked from: when the rule last fired, else now"
+  exampleAt: DateTime!
+  exampleFrom: DateTime!
+  exampleTo: DateTime!
+}
+
 type AnalysisQuery {
   balance(date: DateTime, accountId: UUID!): ComputedBalance!
   balances(date: DateTime): [ComputedBalance!]!
@@ -407,6 +432,11 @@ type AutomationRule {
     for them
   """
   templateId: UUID
+  """
+    null when the template is gone or pays with nothing, in which case the rule cannot fire
+    anyway
+  """
+  accrual: AccrualShape
 }
 
 type AutomationRuleMutation {
@@ -416,6 +446,14 @@ type AutomationRuleMutation {
 }
 
 type AutomationRuleQuery {
+  """
+    What a rule pointed at this template would do with a payment, before there is a rule to
+    ask — the same derivation `AutomationRule.accrual` reports, so a template can be picked
+    with its consequences visible.
+
+    `at` is the payment to work the example from, and defaults to now.
+  """
+  preview(templateId: UUID!, accountId: UUID, at: DateTime): AccrualShape
   list(limit: Int, skip: Int, search: String, sortBy: AutomationRuleSortField, sortDir: SortDirection): [AutomationRule!]!
   get(id: UUID!): AutomationRule!
 }
@@ -675,7 +713,7 @@ type ExpensePosition {
 }
 
 type ExpenseQuery {
-  list(limit: Int, skip: Int, search: String, accountIds: [UUID!], categoryIds: [UUID!], flags: ExpenseFlagFilter, accruedAfter: DateTime, accruedBefore: DateTime, valuedAfter: DateTime, valuedBefore: DateTime, bookedAfter: DateTime, bookedBefore: DateTime, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
+  list(limit: Int, skip: Int, search: String, ids: [UUID!], accountIds: [UUID!], categoryIds: [UUID!], flags: ExpenseFlagFilter, accruedAfter: DateTime, accruedBefore: DateTime, valuedAfter: DateTime, valuedBefore: DateTime, bookedAfter: DateTime, bookedBefore: DateTime, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
   get(id: UUID!): Expense!
   changelog(limit: Int, skip: Int, author: ChangelogAuthor, since: DateTime): ExpenseChangelogConnection!
 }

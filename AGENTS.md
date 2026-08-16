@@ -10,7 +10,7 @@ own document, and `TODO.md` is what is deliberately not built yet.
 ```sh
 cd backend  && cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test
 cd backend  && PGURL=postgres://moneta:moneta@localhost:5433/moneta tests/run-sql-tests.sh
-cd frontend && pnpm build && pnpm check && pnpm lint
+cd frontend && pnpm build && pnpm check && pnpm lint && pnpm test
 ```
 
 The SQL tests need an empty postgres 18 (`docker compose up -d postgres` gives you one on
@@ -23,6 +23,11 @@ build, including on test code.
 A push to `main` also builds both images and restarts the deployments in the cluster, so a
 merge is a deploy. `main` is the only branch CI runs on; work happens in pull requests
 against it, which run the tests but neither build nor deploy.
+
+`pnpm test` is vitest over the plain modules under `src/lib` — the pure ones, where the logic
+is worth pinning down and no browser is needed. It has a `vitest.config.ts` of its own so it
+loads neither houdini's plugin, whose watcher held every run open for ten seconds after the
+last assertion, nor anything else the app needs only to build.
 
 **Run `pnpm build` before `pnpm check` or `pnpm lint`.** The build triggers houdini codegen;
 without it `$houdini` types are stale or missing and you will chase type errors that aren't
@@ -168,8 +173,9 @@ the monthly drawdowns is dropped rather than kept: the mechanism it fed is gone,
 it would generate a copy of the whole merged expense every month.
 
 **Three things set an accrual period, in this order.** A chain derives it from its drawdowns, a
-statement can name it outright (`statement_period`), and `widen_recurring` gives the rest of a
-recurring contract the month each payment buys. The last of those runs over the finished
+statement can name it outright (`accrual::statement_period`, which the automation rules call on
+the same text), and `widen_recurring` gives the rest of a recurring contract the month each
+payment buys. The last of those runs over the finished
 `Vec<Expense>` and only touches what still sits on a single day, so it cannot argue with the other
 two — keep it that way, and keep its gates strict. A regular cadence on its own also describes a
 fortnightly beer and a yearly pair of jeans, and widening those invents a period nobody recorded.
