@@ -285,31 +285,39 @@
 		{/snippet}
 
 		<TableHead>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('title')}>
+			<TableHeadCell
+				class="px-4 py-3 md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sortByField('title')}
+			>
 				<TextSizeOutline class={headIcon} />Titel{@render sortIcon('title')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('period')}
 			>
 				<RefreshOutline class={headIcon} />Intervall{@render sortIcon('period')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('amount')}
 			>
 				<CashOutline class={headIcon} />Betrag{@render sortIcon('amount')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('lastCreation')}
 			>
 				<ClockArrowOutline class={headIcon} />Zuletzt erzeugt{@render sortIcon('lastCreation')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('pending')}>
+			<TableHeadCell
+				class="px-4 py-3 md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sortByField('pending')}
+			>
 				<BellOutline class={headIcon} />Fällig{@render sortIcon('pending')}
 			</TableHeadCell>
 		</TableHead>

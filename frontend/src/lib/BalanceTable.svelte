@@ -465,16 +465,24 @@
 		{/snippet}
 
 		<TableHead>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('date')}>
+			<TableHeadCell
+				class="px-4 py-3 md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sortByField('date')}
+			>
 				<CalendarMonthOutline class={headIcon} />Datum
 				{@render sortIcon('date')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('account')}>
+			<TableHeadCell
+				class="px-4 py-3 md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sortByField('account')}
+			>
 				<WalletOutline class={headIcon} />Konto
 				{@render sortIcon('account')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="px-2 py-3 text-right md:px-4"
+				class="px-2 py-3 text-right md:px-4 md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('amount')}
 			>
@@ -482,7 +490,7 @@
 				{@render sortIcon('amount')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('comments')}
 			>
@@ -508,7 +516,7 @@
 						})}
 					</TableBodyCell>
 					<TableBodyCell
-						class="w-full max-w-0 truncate px-2 py-3 md:w-56 md:max-w-56 md:px-4"
+						class="w-full max-w-0 truncate px-2 py-3 md:w-56 md:max-w-56 md:min-w-56 md:px-4"
 						style={tint(balance.account.color)}
 					>
 						{#if balance.account.owner.name != $basicStore.data?.users.me.name}

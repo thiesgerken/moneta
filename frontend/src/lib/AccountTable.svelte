@@ -468,24 +468,32 @@
 		{/snippet}
 
 		<TableHead>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('name')}>
+			<TableHeadCell
+				class="px-4 py-3 md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sortByField('name')}
+			>
 				<TextSizeOutline class={headIcon} />Name
 				{@render sortIcon('name')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('description')}
 			>
 				<AnnotationOutline class={headIcon} />Beschreibung
 				{@render sortIcon('description')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('kind')}>
+			<TableHeadCell
+				class="px-4 py-3 md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sortByField('kind')}
+			>
 				<GridOutline class={headIcon} />Typ
 				{@render sortIcon('kind')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('availability')}
 			>
@@ -493,7 +501,7 @@
 				{@render sortIcon('availability')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('risk')}
 			>
@@ -501,7 +509,7 @@
 				{@render sortIcon('risk')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('ownershipFraction')}
 			>
@@ -509,7 +517,7 @@
 				{@render sortIcon('ownershipFraction')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('opened')}
 			>
@@ -517,7 +525,7 @@
 				{@render sortIcon('opened')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('closed')}
 			>

@@ -295,39 +295,43 @@
 		{/snippet}
 
 		<TableHead>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('title')}>
+			<TableHeadCell
+				class="px-4 py-3 md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sortByField('title')}
+			>
 				<TextSizeOutline class={headIcon} />Titel{@render sortIcon('title')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('regexStatement')}
 			>
 				<SearchOutline class={headIcon} />Verwendungszweck{@render sortIcon('regexStatement')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('account')}
 			>
 				<WalletOutline class={headIcon} />Konto{@render sortIcon('account')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('amount')}
 			>
 				<CashOutline class={headIcon} />Betrag{@render sortIcon('amount')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('priority')}
 			>
 				<SortOutline class={headIcon} />Prio{@render sortIcon('priority')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('lastDelivery')}
 			>
@@ -337,7 +341,9 @@
 		<TableBody class="divide-y">
 			{#each rules as rule (rule.id)}
 				<TableBodyRow onclick={() => toggleRow(rule.id)}>
-					<TableBodyCell class="w-full max-w-0 px-4 py-3 whitespace-normal md:w-72 md:max-w-72">
+					<TableBodyCell
+						class="w-full max-w-0 px-4 py-3 whitespace-normal md:w-64 md:max-w-64 md:min-w-64"
+					>
 						<button type="button" class="mr-2 focus:outline-none" aria-label="Details">
 							{#if expandedRows.includes(rule.id)}
 								<ChevronDownOutline class="inline h-4 w-4" />

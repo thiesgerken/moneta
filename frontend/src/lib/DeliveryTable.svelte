@@ -87,19 +87,19 @@
 		{/snippet}
 
 		<TableHead>
-			<TableHeadCell class="px-4 py-3">
+			<TableHeadCell class="px-4 py-3 md:whitespace-nowrap">
 				<CalendarMonthOutline class={headIcon} />Datum
 			</TableHeadCell>
-			<TableHeadCell class="hidden px-4 py-3 md:table-cell">
+			<TableHeadCell class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap">
 				<WalletOutline class={headIcon} />Konto
 			</TableHeadCell>
-			<TableHeadCell class="px-2 py-3 text-right md:px-4 md:text-left">
+			<TableHeadCell class="px-2 py-3 text-right md:px-4 md:text-left md:whitespace-nowrap">
 				<CashOutline class={headIcon} />Betrag
 			</TableHeadCell>
-			<TableHeadCell class="hidden px-4 py-3 md:table-cell">
+			<TableHeadCell class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap">
 				<SearchOutline class={headIcon} />Verwendungszweck
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3">
+			<TableHeadCell class="px-4 py-3 md:whitespace-nowrap">
 				<FlagOutline class={headIcon} />Status
 			</TableHeadCell>
 		</TableHead>

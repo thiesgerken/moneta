@@ -297,24 +297,32 @@
 		{/snippet}
 
 		<TableHead>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('name')}>
+			<TableHeadCell
+				class="px-4 py-3 md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sortByField('name')}
+			>
 				<TextSizeOutline class={headIcon} />Name
 				{@render sortIcon('name')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('description')}
 			>
 				<AnnotationOutline class={headIcon} />Beschreibung
 				{@render sortIcon('description')}
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('parent')}>
+			<TableHeadCell
+				class="px-4 py-3 md:whitespace-nowrap"
+				scope="col"
+				onclick={() => sortByField('parent')}
+			>
 				<LayersOutline class={headIcon} />Übergeordnet
 				{@render sortIcon('parent')}
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell"
+				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sortByField('monthlyLimit')}
 			>
@@ -326,7 +334,7 @@
 			{#each filteredCategories as category (category.id)}
 				<TableBodyRow onclick={() => toggleRow(category.id)}>
 					<TableBodyCell
-						class="w-full max-w-0 px-4 py-3 wrap-anywhere whitespace-normal md:w-64 md:max-w-64"
+						class="w-full max-w-0 px-4 py-3 wrap-anywhere whitespace-normal md:w-56 md:max-w-56 md:min-w-56"
 					>
 						<button type="button" class="mr-2 focus:outline-none">
 							{#if expandedRows.includes(category.id)}
