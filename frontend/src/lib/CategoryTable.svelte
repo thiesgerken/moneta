@@ -33,7 +33,9 @@
 	/// What the toolbar acts on. An open row is this list's idea of "the one you mean", and
 	/// several open rows are no answer at all rather than a reason to pick the first.
 	const selectedCategoryId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
-	let sortBy: { field: string; direction: number }[] = $state([{ field: 'name', direction: 1 }]);
+	/// By name, and a third click on a header comes back here.
+	const DEFAULT_SORT = [{ field: 'name', direction: 1 }];
+	let sortBy: { field: string; direction: number }[] = $state(DEFAULT_SORT.map((s) => ({ ...s })));
 
 	let showNewCategoryModal = $state(false);
 	let showEditCategoryModal = $state(false);
@@ -125,13 +127,12 @@
 		else expandedRows = [...expandedRows, id];
 	}
 
+	/// Descending, ascending, off -- a header clicked by accident is otherwise only undone by
+	/// reloading the page, since the sort lives here rather than in the url.
 	function sortByField(field: string) {
-		const index = sortBy.findIndex(({ field: f }) => f === field);
-		if (index === -1) {
-			sortBy = [{ field, direction: 1 }];
-		} else {
-			sortBy = [{ field, direction: -sortBy[index].direction }];
-		}
+		if (sortBy[0]?.field !== field) sortBy = [{ field, direction: -1 }];
+		else if (sortBy[0].direction === -1) sortBy = [{ field, direction: 1 }];
+		else sortBy = DEFAULT_SORT.map((s) => ({ ...s }));
 	}
 
 	function isSortedBy(field: string) {

@@ -42,7 +42,9 @@
 	/// What the toolbar acts on. An open row is this list's idea of "the one you mean", and
 	/// several open rows are no answer at all rather than a reason to pick the first.
 	const selectedBalanceId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
-	let sortBy: { field: string; direction: number } = $state({ field: 'date', direction: -1 });
+	/// Newest first, and a third click on a header comes back here.
+	const DEFAULT_SORT = { field: 'date', direction: -1 };
+	let sortBy: { field: string; direction: number } = $state({ ...DEFAULT_SORT });
 
 	/// only consulted below `md`, where the filters are collapsed
 	let filtersOpen = $state(false);
@@ -182,8 +184,12 @@
 		else expandedRows = [...expandedRows, id];
 	}
 
+	/// Descending, ascending, off -- a header clicked by accident is otherwise only undone by
+	/// reloading the page, since the sort lives here rather than in the url.
 	function sortByField(field: string) {
-		sortBy = { field, direction: sortBy.field === field ? -sortBy.direction : -1 };
+		if (sortBy.field !== field) sortBy = { field, direction: -1 };
+		else if (sortBy.direction === -1) sortBy = { field, direction: 1 };
+		else sortBy = { ...DEFAULT_SORT };
 	}
 
 	function isSortedBy(field: string) {

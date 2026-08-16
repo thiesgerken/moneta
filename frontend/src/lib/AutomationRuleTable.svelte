@@ -28,6 +28,8 @@
 	import { shortDate } from './analysis/dates';
 	import { describeAccrual, formatAccrualPeriod } from './expense_utils';
 	import QueryError from './QueryError.svelte';
+	import RegexText from './RegexText.svelte';
+	import { euro } from './money';
 
 	let searchTerm = $state('');
 	let showNewModal = $state(false);
@@ -50,7 +52,7 @@
 	const ruleStore = graphql(`
 		query AutomationRuleList {
 			automationRules {
-				list(sortBy: PRIORITY, sortDir: DESC) {
+				list(limit: 1000) {
 					id
 					title
 					priority
@@ -86,15 +88,47 @@
 	const accounts = $derived($ruleStore.data?.accounts.list || []);
 	const accountNames = $derived(new Map(accounts.map((a) => [a.id, a.name])));
 
-	const rules = $derived(
-		searchTerm.trim()
+	/// Priority first, which is the order the rules are actually tried in. A third click on a
+	/// header comes back here.
+	const DEFAULT_SORT = { field: 'priority', direction: -1 };
+	let sortBy: { field: string; direction: number } = $state({ ...DEFAULT_SORT });
+
+	/// Descending, ascending, off. Sorted here rather than by the server: the whole list is
+	/// loaded anyway, and Konto reads as an account name that only this side knows.
+	function sortByField(field: string) {
+		if (sortBy.field !== field) sortBy = { field, direction: -1 };
+		else if (sortBy.direction === -1) sortBy = { field, direction: 1 };
+		else sortBy = { ...DEFAULT_SORT };
+	}
+
+	const isSortedBy = (field: string) => (sortBy.field === field ? sortBy.direction : null);
+
+	const sortKeys: Record<string, (r: (typeof allRules)[number]) => string | number> = {
+		title: (r) => r.title.toLowerCase(),
+		regexStatement: (r) => (r.regexStatement ?? '').toLowerCase(),
+		account: (r) => (r.filterAccountId ? (accountNames.get(r.filterAccountId) ?? '') : ''),
+		amount: (r) => r.filterAmount ?? 0,
+		priority: (r) => r.priority,
+		lastDelivery: (r) => r.lastDelivery?.getTime() ?? 0
+	};
+
+	const rules = $derived.by(() => {
+		const term = searchTerm.trim().toLowerCase();
+		const filtered = term
 			? allRules.filter(
 					(r) =>
-						r.title.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
-						(r.regexStatement ?? '').toLowerCase().includes(searchTerm.trim().toLowerCase())
+						r.title.toLowerCase().includes(term) ||
+						(r.regexStatement ?? '').toLowerCase().includes(term)
 				)
-			: allRules
-	);
+			: allRules;
+
+		const key = sortKeys[sortBy.field] ?? sortKeys.priority;
+		return [...filtered].sort((a, b) => {
+			const [x, y] = [key(a), key(b)];
+			if (x === y) return a.title.localeCompare(b.title);
+			return (x < y ? 1 : -1) * sortBy.direction;
+		});
+	});
 
 	const ruleToEdit = $derived(allRules.find((r) => r.id === ruleIdToEdit));
 	const ruleToDelete = $derived(allRules.find((r) => r.id === ruleIdToDelete));
@@ -157,6 +191,39 @@
 	rule={ruleToEdit}
 />
 
+{#snippet sortIcon(field: string)}
+	{#if isSortedBy(field) === -1}
+		▲
+	{:else if isSortedBy(field) === 1}
+		▼
+	{/if}
+{/snippet}
+
+{#snippet amount(cents: number | null)}
+	{#if cents == null}
+		<span class="text-gray-400 dark:text-gray-500">–</span>
+	{:else}
+		<span
+			class={cents < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}
+			>{euro(cents)}</span
+		>
+	{/if}
+{/snippet}
+
+<!-- Priority decides which rule wins when several match, so it is worth seeing at a glance
+     which ones were deliberately pushed above or below the default of 1. -->
+{#snippet prio(value: number)}
+	<span
+		class={value > 1
+			? 'font-semibold text-orange-600 dark:text-orange-400'
+			: value < 1
+				? 'text-gray-400 dark:text-gray-500'
+				: ''}
+	>
+		{value}
+	</span>
+{/snippet}
+
 {#snippet newButton(cls: string)}
 	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls
 		     back to `alternative` rather than to primary. -->
@@ -214,12 +281,44 @@
 		{/snippet}
 
 		<TableHead>
-			<TableHeadCell class="px-4 py-3">Titel</TableHeadCell>
-			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Verwendungszweck</TableHeadCell>
-			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Konto</TableHeadCell>
-			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Betrag</TableHeadCell>
-			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Prio</TableHeadCell>
-			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Zuletzt</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('title')}>
+				Titel{@render sortIcon('title')}
+			</TableHeadCell>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('regexStatement')}
+			>
+				Verwendungszweck{@render sortIcon('regexStatement')}
+			</TableHeadCell>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('account')}
+			>
+				Konto{@render sortIcon('account')}
+			</TableHeadCell>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('amount')}
+			>
+				Betrag{@render sortIcon('amount')}
+			</TableHeadCell>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('priority')}
+			>
+				Prio{@render sortIcon('priority')}
+			</TableHeadCell>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('lastDelivery')}
+			>
+				Zuletzt{@render sortIcon('lastDelivery')}
+			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each rules as rule (rule.id)}
@@ -240,23 +339,25 @@
 						     it matches on, so the hidden ones come back as a line under the title
 						     rather than being dropped. -->
 						<span class="mt-1 block text-xs text-gray-500 md:hidden dark:text-gray-400">
-							<span class="font-mono wrap-anywhere">{rule.regexStatement ?? '–'}</span>
+							<RegexText pattern={rule.regexStatement} />
 							· {rule.filterAccountId ? (accountNames.get(rule.filterAccountId) ?? '?') : '–'}
-							· {rule.filterAmount != null ? (rule.filterAmount / 100).toFixed(2) + '€' : '–'}
+							· {@render amount(rule.filterAmount)}
 							· Prio {rule.priority}
 							· {rule.lastDelivery ? shortDate(rule.lastDelivery) : '–'}
 						</span>
 					</TableBodyCell>
-					<TableBodyCell class="hidden px-4 py-3 font-mono text-xs md:table-cell">
-						{rule.regexStatement ?? '–'}
+					<TableBodyCell class="hidden px-4 py-3 text-xs md:table-cell">
+						<RegexText pattern={rule.regexStatement} />
 					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{rule.filterAccountId ? (accountNames.get(rule.filterAccountId) ?? '?') : '–'}
 					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
-						{rule.filterAmount != null ? (rule.filterAmount / 100).toFixed(2) + '€' : '–'}
+						{@render amount(rule.filterAmount)}
 					</TableBodyCell>
-					<TableBodyCell class="hidden px-4 py-3 md:table-cell">{rule.priority}</TableBodyCell>
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
+						{@render prio(rule.priority)}
+					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{rule.lastDelivery ? shortDate(rule.lastDelivery) : '–'}
 					</TableBodyCell>

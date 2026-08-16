@@ -28,6 +28,7 @@
 	import { tableSearchClasses, tableSearchTableClass, toolbarControl } from './table_styles';
 	import { shortDate } from './analysis/dates';
 	import QueryError from './QueryError.svelte';
+	import { euro } from './money';
 
 	let searchTerm = $state('');
 	let showNewModal = $state(false);
@@ -68,11 +69,40 @@
 	$effect(() => void ruleStore.fetch());
 
 	const allRules = $derived($ruleStore.data?.periodicRules.list || []);
-	const rules = $derived(
-		searchTerm.trim()
-			? allRules.filter((r) => r.title.toLowerCase().includes(searchTerm.trim().toLowerCase()))
-			: allRules
-	);
+
+	/// What is due first, which is what this page is opened to check. A third click on a header
+	/// comes back here.
+	const DEFAULT_SORT = { field: 'pending', direction: -1 };
+	let sortBy: { field: string; direction: number } = $state({ ...DEFAULT_SORT });
+
+	/// Descending, ascending, off.
+	function sortByField(field: string) {
+		if (sortBy.field !== field) sortBy = { field, direction: -1 };
+		else if (sortBy.direction === -1) sortBy = { field, direction: 1 };
+		else sortBy = { ...DEFAULT_SORT };
+	}
+
+	const isSortedBy = (field: string) => (sortBy.field === field ? sortBy.direction : null);
+
+	const sortKeys: Record<string, (r: (typeof allRules)[number]) => string | number> = {
+		title: (r) => r.title.toLowerCase(),
+		period: (r) => ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].indexOf(r.period),
+		amount: (r) => r.amountReplacement ?? 0,
+		lastCreation: (r) => r.lastCreation.getTime(),
+		pending: (r) => r.pending.length
+	};
+
+	const rules = $derived.by(() => {
+		const term = searchTerm.trim().toLowerCase();
+		const filtered = term ? allRules.filter((r) => r.title.toLowerCase().includes(term)) : allRules;
+
+		const key = sortKeys[sortBy.field] ?? sortKeys.pending;
+		return [...filtered].sort((a, b) => {
+			const [x, y] = [key(a), key(b)];
+			if (x === y) return a.title.localeCompare(b.title);
+			return (x < y ? 1 : -1) * sortBy.direction;
+		});
+	});
 
 	const ruleToEdit = $derived(allRules.find((r) => r.id === ruleIdToEdit));
 	const ruleToDelete = $derived(allRules.find((r) => r.id === ruleIdToDelete));
@@ -157,6 +187,14 @@
 <PeriodicRuleModal bind:open={showNewModal} onsubmit={handleSubmit} />
 <PeriodicRuleModal bind:open={showEditModal} onsubmit={handleSubmit} rule={ruleToEdit} />
 
+{#snippet sortIcon(field: string)}
+	{#if isSortedBy(field) === -1}
+		▲
+	{:else if isSortedBy(field) === 1}
+		▼
+	{/if}
+{/snippet}
+
 {#snippet newButton(cls: string)}
 	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls
 		     back to `alternative` rather than to primary. -->
@@ -228,11 +266,33 @@
 		{/snippet}
 
 		<TableHead>
-			<TableHeadCell class="px-4 py-3">Titel</TableHeadCell>
-			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Intervall</TableHeadCell>
-			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Betrag</TableHeadCell>
-			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Zuletzt erzeugt</TableHeadCell>
-			<TableHeadCell class="px-4 py-3">Fällig</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('title')}>
+				Titel{@render sortIcon('title')}
+			</TableHeadCell>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('period')}
+			>
+				Intervall{@render sortIcon('period')}
+			</TableHeadCell>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('amount')}
+			>
+				Betrag{@render sortIcon('amount')}
+			</TableHeadCell>
+			<TableHeadCell
+				class="hidden px-4 py-3 md:table-cell"
+				scope="col"
+				onclick={() => sortByField('lastCreation')}
+			>
+				Zuletzt erzeugt{@render sortIcon('lastCreation')}
+			</TableHeadCell>
+			<TableHeadCell class="px-4 py-3" scope="col" onclick={() => sortByField('pending')}>
+				Fällig{@render sortIcon('pending')}
+			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each rules as rule (rule.id)}
@@ -265,9 +325,17 @@
 						>{periodNames[rule.period] ?? rule.period}</TableBodyCell
 					>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
-						{rule.amountReplacement != null
-							? (rule.amountReplacement / 100).toFixed(2) + '€'
-							: 'wie Vorlage'}
+						{#if rule.amountReplacement == null}
+							<span class="text-gray-400 dark:text-gray-500">wie Vorlage</span>
+						{:else}
+							<span
+								class={rule.amountReplacement < 0
+									? 'text-red-600 dark:text-red-400'
+									: 'text-green-700 dark:text-green-400'}
+							>
+								{euro(rule.amountReplacement)}
+							</span>
+						{/if}
 					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell"
 						>{shortDate(rule.lastCreation)}</TableBodyCell
