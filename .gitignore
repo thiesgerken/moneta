@@ -4,3 +4,5 @@ vapid.pem
 moneydb-export.json
 .env
 /volumes
+backend-coverage.json
+frontend-coverage.json

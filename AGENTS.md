@@ -24,6 +24,10 @@ than one holding real data).
 CI runs exactly these and is strict — `clippy -D warnings` and `fmt --check` both fail the
 build, including on test code.
 
+On a pull request it also comments the coverage of both halves, editing the same comment on
+every push. It is a report, not a gate: nothing fails on a number going down. Locally the
+same figures come from `cargo llvm-cov --summary-only` and `pnpm test --coverage`.
+
 A push to `main` also builds both images and restarts the deployments in the cluster, so a
 merge is a deploy. `main` is the only branch CI runs on; work happens in pull requests
 against it, which run the tests but neither build nor deploy.
