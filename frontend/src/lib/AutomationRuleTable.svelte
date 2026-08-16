@@ -17,7 +17,9 @@
 		PlusOutline,
 		EditOutline,
 		TrashBinOutline,
-		ExclamationCircleOutline
+		ExclamationCircleOutline,
+		ChevronDownOutline,
+		ChevronRightOutline
 	} from 'flowbite-svelte-icons';
 	import AutomationRuleModal from './AutomationRuleModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
@@ -31,6 +33,13 @@
 	let showDeleteModal = $state(false);
 	let ruleIdToEdit: string | undefined = $state(undefined);
 	let ruleIdToDelete: string | undefined = $state(undefined);
+	let expandedRows = $state<string[]>([]);
+
+	function toggleRow(id: string) {
+		expandedRows = expandedRows.includes(id)
+			? expandedRows.filter((rowId) => rowId !== id)
+			: [...expandedRows, id];
+	}
 
 	const ruleStore = graphql(`
 		query AutomationRuleList {
@@ -95,6 +104,7 @@
 	async function reload() {
 		invalidate();
 		await ruleStore.fetch(AFTER_WRITE);
+		expandedRows = [];
 	}
 
 	async function handleSubmit() {
@@ -171,17 +181,23 @@
 			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Betrag</TableHeadCell>
 			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Prio</TableHeadCell>
 			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Zuletzt</TableHeadCell>
-			<TableHeadCell class="px-4 py-3"></TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each rules as rule (rule.id)}
-				<TableBodyRow>
+				<TableBodyRow onclick={() => toggleRow(rule.id)}>
 					<TableBodyCell class="w-full max-w-0 px-4 py-3 whitespace-normal">
+						<button type="button" class="mr-2 focus:outline-none" aria-label="Details">
+							{#if expandedRows.includes(rule.id)}
+								<ChevronDownOutline class="inline h-4 w-4" />
+							{:else}
+								<ChevronRightOutline class="inline h-4 w-4" />
+							{/if}
+						</button>
 						{rule.title}
 						{#if !rule.templateId}
 							<Badge color="red" class="ml-2">Vorlage fehlt</Badge>
 						{/if}
-						<!-- Six columns do not fit on a phone, and a rule is nothing without the pattern
+						<!-- Five columns do not fit on a phone, and a rule is nothing without the pattern
 						     it matches on, so the hidden ones come back as a line under the title
 						     rather than being dropped. -->
 						<span class="mt-1 block text-xs text-gray-500 md:hidden dark:text-gray-400">
@@ -191,17 +207,6 @@
 							· Prio {rule.priority}
 							· {rule.lastDelivery ? shortDate(rule.lastDelivery) : '–'}
 						</span>
-						{#if rule.accrual}
-							<!-- Derived from the template, editable only there, and wrong in a way nobody
-							     would notice until a generated expense turns up in the wrong month. -->
-							<span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">
-								{describeAccrual(rule.accrual)}
-								<span class="text-gray-400 dark:text-gray-500">
-									· {shortDate(rule.accrual.exampleAt)} →
-									{formatAccrualPeriod(rule.accrual.exampleFrom, rule.accrual.exampleTo)}
-								</span>
-							</span>
-						{/if}
 					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 font-mono text-xs md:table-cell">
 						{rule.regexStatement ?? '–'}
@@ -216,30 +221,81 @@
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{rule.lastDelivery ? shortDate(rule.lastDelivery) : '–'}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3 text-right">
-						<button
-							type="button"
-							aria-label="Bearbeiten"
-							onclick={() => {
-								ruleIdToEdit = rule.id;
-								showEditModal = true;
-							}}
-						>
-							<EditOutline class="inline h-4 w-4" />
-						</button>
-						<button
-							type="button"
-							aria-label="Löschen"
-							class="ml-2"
-							onclick={() => {
-								ruleIdToDelete = rule.id;
-								showDeleteModal = true;
-							}}
-						>
-							<TrashBinOutline class="inline h-4 w-4" />
-						</button>
-					</TableBodyCell>
 				</TableBodyRow>
+				{#if expandedRows.includes(rule.id)}
+					<tr>
+						<td colspan="6" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
+							<div class="flex flex-col gap-2">
+								<div>
+									<b>Verwendungszweck:</b>
+									<span class="font-mono wrap-anywhere">{rule.regexStatement ?? 'beliebig'}</span>
+								</div>
+								<div>
+									<b>Datum:</b>
+									<span class="font-mono wrap-anywhere">{rule.regexTime ?? 'beliebig'}</span>
+								</div>
+								<div>
+									<b>Konto:</b>
+									{rule.filterAccountId
+										? (accountNames.get(rule.filterAccountId) ?? 'unbekannt')
+										: 'beliebig'}
+								</div>
+								<div>
+									<b>Betrag:</b>
+									{rule.filterAmount != null
+										? (rule.filterAmount / 100).toFixed(2) + '€'
+										: 'beliebig'}
+								</div>
+								<div>
+									<b>Priorität:</b>
+									{rule.priority}
+								</div>
+								<div>
+									<b>Zuletzt ausgelöst:</b>
+									{rule.lastDelivery ? shortDate(rule.lastDelivery) : 'nie'}
+								</div>
+								{#if rule.accrual}
+									<!-- Derived from the template, editable only there, and wrong in a way
+									     nobody would notice until a generated expense turns up in the wrong
+									     month. -->
+									<div>
+										<b>Leistungszeitraum:</b>
+										{describeAccrual(rule.accrual)}
+										<span class="text-gray-500 dark:text-gray-400">
+											· {shortDate(rule.accrual.exampleAt)} →
+											{formatAccrualPeriod(rule.accrual.exampleFrom, rule.accrual.exampleTo)}
+										</span>
+									</div>
+								{/if}
+
+								<div class="flex gap-2">
+									<Button
+										color="yellow"
+										size="xs"
+										onclick={() => {
+											ruleIdToEdit = rule.id;
+											showEditModal = true;
+										}}
+									>
+										<EditOutline class="mr-2 h-3.5 w-3.5" />
+										Bearbeiten
+									</Button>
+									<Button
+										color="red"
+										size="xs"
+										onclick={() => {
+											ruleIdToDelete = rule.id;
+											showDeleteModal = true;
+										}}
+									>
+										<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
+										Löschen
+									</Button>
+								</div>
+							</div>
+						</td>
+					</tr>
+				{/if}
 			{/each}
 		</TableBody>
 	</TableSearch>

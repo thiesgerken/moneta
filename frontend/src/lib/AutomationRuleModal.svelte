@@ -137,25 +137,17 @@
 	};
 </script>
 
-{#snippet heading(text: string)}
-	<h3 class="text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">
-		{text}
-	</h3>
-{/snippet}
-
 <Modal title={rule ? 'Regel bearbeiten' : 'Neue Automatisierungsregel'} bind:open size="lg">
-	<form class="flex flex-col space-y-6" onsubmit={handleSubmit}>
+	<form class="flex flex-col space-y-4" onsubmit={handleSubmit}>
 		<Label class="space-y-2">
 			<span>Titel</span>
 			<Input type="text" bind:value={title} required color={titleError ? 'red' : undefined} />
 		</Label>
 
-		<!-- The template and what follows from it are one thing: everything about the generated
-		     expense comes from the template, including a Leistungszeitraum that is derived rather
-		     than set. Grouping them is what makes the second half read as a consequence of the
-		     first rather than as another setting. -->
-		<section class="space-y-2">
-			{@render heading('Was erzeugt wird')}
+		<!-- The template and what follows from it are one thing: the Leistungszeitraum is derived
+		     from the picked expense rather than set here, and being attached to the picker is what
+		     says so. -->
+		<div class="space-y-2">
 			<TemplatePicker bind:templateId error={templateError} />
 
 			{#if preview}
@@ -173,44 +165,54 @@
 					</span>
 				</div>
 			{/if}
-		</section>
+		</div>
 
-		<section class="space-y-4">
-			{@render heading('Worauf sie passt')}
+		<div class="space-y-2">
+			<Label for="regex-statement">Ausdruck für Verwendungszweck</Label>
+			<RegexInput
+				id="regex-statement"
+				bind:value={regexStatement}
+				placeholder="z.B. Muster Stadtreinigung"
+			/>
+		</div>
 
-			<div class="space-y-2">
-				<Label for="regex-statement">Verwendungszweck (Regex)</Label>
-				<RegexInput
-					id="regex-statement"
-					bind:value={regexStatement}
-					placeholder="z.B. Muster Stadtreinigung"
-				/>
-			</div>
+		<Label class="space-y-2">
+			<span>Konto</span>
+			<Select
+				bind:value={filterAccountId}
+				items={[
+					{ value: '', name: 'Beliebig' },
+					...accounts.map((a) => ({ value: a.id, name: a.name }))
+				]}
+			/>
+		</Label>
 
-			<Label class="space-y-2">
-				<span>Konto</span>
-				<Select
-					bind:value={filterAccountId}
-					items={[
-						{ value: '', name: 'Beliebig' },
-						...accounts.map((a) => ({ value: a.id, name: a.name }))
-					]}
-				/>
-			</Label>
-
-			<Label class="space-y-2">
-				<span>Betrag (€, exakt)</span>
+		<Label class="space-y-2">
+			<span>Betrag (exakt)</span>
+			<!-- Coloured by its sign rather than explained by a note under it: red is what an
+			     expense looks like everywhere else in the app, so a rule typed with the wrong sign
+			     reads wrong instead of merely being wrong. -->
+			<div class="relative">
 				<Input
 					type="text"
 					bind:value={filterAmount}
 					placeholder="beliebig"
 					color={amountError ? 'red' : undefined}
+					class="pr-6 {amountError || !filterAmount
+						? ''
+						: Number(filterAmount) < 0
+							? 'text-red-600 dark:text-red-400'
+							: 'text-green-700 dark:text-green-400'}"
 				/>
-				<Helper>Ausgaben sind negativ.</Helper>
-			</Label>
+				<span class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-gray-500">
+					€
+				</span>
+			</div>
+		</Label>
 
-			<div class="space-y-2">
-				<Label for="regex-time">Datum (Regex)</Label>
+		<div class="flex flex-col gap-4 md:flex-row md:items-start">
+			<div class="flex-1 space-y-2">
+				<Label for="regex-time">Ausdruck für Datum</Label>
 				<RegexInput
 					id="regex-time"
 					bind:value={regexTime}
@@ -218,18 +220,18 @@
 				/>
 			</div>
 
-			<Label class="space-y-2">
+			<Label class="w-full space-y-2 md:w-40">
 				<span>Priorität</span>
 				<Input type="number" bind:value={priority} color={priorityError ? 'red' : undefined} />
-				<Helper>Bei mehreren Treffern gewinnt die höchste Priorität.</Helper>
+				<Helper>Höchste gewinnt.</Helper>
 			</Label>
+		</div>
 
-			{#if noFilters}
-				<p class="text-sm text-orange-600 dark:text-orange-400">
-					Ohne Filter passt diese Regel auf jede gelieferte Transaktion.
-				</p>
-			{/if}
-		</section>
+		{#if noFilters}
+			<p class="text-sm text-orange-600 dark:text-orange-400">
+				Ohne Filter passt diese Regel auf jede gelieferte Transaktion.
+			</p>
+		{/if}
 
 		{#if error}
 			<p class="text-sm text-red-600 dark:text-red-400">{error}</p>

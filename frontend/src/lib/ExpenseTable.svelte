@@ -957,18 +957,12 @@
 		</div>
 	{/if}
 
-	<!-- The search takes what is left rather than a fixed 256px: at a fixed width the row came to
-	     1656px against 1654px of card and wrapped the search onto a line of its own. It gives way
-	     now instead, down to 176px before anything wraps. -->
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
 		bind:inputValue={searchTerm}
 		class="{tableSearchTableClass} table-fixed"
-		classes={{
-			...tableSearchClasses,
-			search: 'relative w-full md:order-last md:w-56'
-		}}
+		classes={tableSearchClasses}
 	>
 		{#snippet header()}
 			<div

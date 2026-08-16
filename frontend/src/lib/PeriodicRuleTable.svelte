@@ -18,7 +18,9 @@
 		EditOutline,
 		TrashBinOutline,
 		ExclamationCircleOutline,
-		PlayOutline
+		PlayOutline,
+		ChevronDownOutline,
+		ChevronRightOutline
 	} from 'flowbite-svelte-icons';
 	import PeriodicRuleModal from './PeriodicRuleModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
@@ -32,6 +34,13 @@
 	let ruleIdToEdit: string | undefined = $state(undefined);
 	let ruleIdToDelete: string | undefined = $state(undefined);
 	let runResult: string | undefined = $state(undefined);
+	let expandedRows = $state<string[]>([]);
+
+	function toggleRow(id: string) {
+		expandedRows = expandedRows.includes(id)
+			? expandedRows.filter((rowId) => rowId !== id)
+			: [...expandedRows, id];
+	}
 
 	const ruleStore = graphql(`
 		query PeriodicRuleList {
@@ -88,6 +97,7 @@
 	async function reload() {
 		invalidate();
 		await ruleStore.fetch(AFTER_WRITE);
+		expandedRows = [];
 	}
 
 	async function handleSubmit() {
@@ -176,12 +186,18 @@
 			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Betrag</TableHeadCell>
 			<TableHeadCell class="hidden px-4 py-3 md:table-cell">Zuletzt erzeugt</TableHeadCell>
 			<TableHeadCell class="px-4 py-3">Fällig</TableHeadCell>
-			<TableHeadCell class="px-4 py-3"></TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each rules as rule (rule.id)}
-				<TableBodyRow>
+				<TableBodyRow onclick={() => toggleRow(rule.id)}>
 					<TableBodyCell class="w-full max-w-0 px-4 py-3 whitespace-normal">
+						<button type="button" class="mr-2 focus:outline-none" aria-label="Details">
+							{#if expandedRows.includes(rule.id)}
+								<ChevronDownOutline class="inline h-4 w-4" />
+							{:else}
+								<ChevronRightOutline class="inline h-4 w-4" />
+							{/if}
+						</button>
 						{rule.title}
 						{#if rule.titleReplacement}
 							<span class="block text-xs text-gray-500 dark:text-gray-400"
@@ -218,30 +234,68 @@
 							<span class="text-gray-400">–</span>
 						{/if}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3 text-right">
-						<button
-							type="button"
-							aria-label="Bearbeiten"
-							onclick={() => {
-								ruleIdToEdit = rule.id;
-								showEditModal = true;
-							}}
-						>
-							<EditOutline class="inline h-4 w-4" />
-						</button>
-						<button
-							type="button"
-							aria-label="Löschen"
-							class="ml-2"
-							onclick={() => {
-								ruleIdToDelete = rule.id;
-								showDeleteModal = true;
-							}}
-						>
-							<TrashBinOutline class="inline h-4 w-4" />
-						</button>
-					</TableBodyCell>
 				</TableBodyRow>
+				{#if expandedRows.includes(rule.id)}
+					<tr>
+						<td colspan="5" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
+							<div class="flex flex-col gap-2">
+								<div>
+									<b>Intervall:</b>
+									{periodNames[rule.period] ?? rule.period}
+								</div>
+								<div>
+									<b>Titel der erzeugten Ausgabe:</b>
+									{rule.titleReplacement || 'wie Vorlage'}
+								</div>
+								<div>
+									<b>Betrag:</b>
+									{rule.amountReplacement != null
+										? (rule.amountReplacement / 100).toFixed(2) + '€'
+										: 'wie Vorlage'}
+								</div>
+								<div>
+									<b>Zuletzt erzeugt:</b>
+									{shortDate(rule.lastCreation)}
+								</div>
+								<div>
+									<b>Fällig:</b>
+									{#if !rule.templateId}
+										Die Vorlage gibt es nicht mehr, die Regel kann nichts erzeugen.
+									{:else if rule.pending.length > 0}
+										{rule.pending.map(shortDate).join(', ')}
+									{:else}
+										nichts offen
+									{/if}
+								</div>
+
+								<div class="flex gap-2">
+									<Button
+										color="yellow"
+										size="xs"
+										onclick={() => {
+											ruleIdToEdit = rule.id;
+											showEditModal = true;
+										}}
+									>
+										<EditOutline class="mr-2 h-3.5 w-3.5" />
+										Bearbeiten
+									</Button>
+									<Button
+										color="red"
+										size="xs"
+										onclick={() => {
+											ruleIdToDelete = rule.id;
+											showDeleteModal = true;
+										}}
+									>
+										<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
+										Löschen
+									</Button>
+								</div>
+							</div>
+						</td>
+					</tr>
+				{/if}
 			{/each}
 		</TableBody>
 	</TableSearch>
