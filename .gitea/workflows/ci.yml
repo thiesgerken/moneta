@@ -35,16 +35,32 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
         with:
-          components: rustfmt, clippy
+          # llvm-tools is what cargo-llvm-cov needs to read the instrumented profiles
+          components: rustfmt, clippy, llvm-tools-preview
           # `cache-workspaces`, not `workspaces`: the latter is not an input of this action,
           # so it was dropped silently and the cache step looked for a Cargo.toml in the repo
           # root, where there is none. It only surfaced when the save got far enough to run
           # `cargo metadata`, which failed the whole job from a post step.
           cache-workspaces: backend
 
+      # a prebuilt binary; `cargo install cargo-llvm-cov` is a couple of minutes of compiling
+      # a tool this job only calls once
+      - uses: taiki-e/install-action@288e746965032cfcc232e09af2daf5f23c14d780 # v2
+        with:
+          tool: cargo-llvm-cov
+
       - run: cd backend && cargo fmt --all -- --check
       - run: cd backend && cargo clippy --all-targets -- -D warnings
-      - run: cd backend && cargo test
+
+      # llvm-cov runs the tests, so this is `cargo test` with the profile turned on rather
+      # than a second run of the suite. It fails the job on a failing test exactly as before.
+      - name: Test with coverage
+        run: cd backend && cargo llvm-cov --json --summary-only --output-path ../backend-coverage.json
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: backend-coverage
+          path: backend-coverage.json
 
   test-schema:
     runs-on: ubuntu-latest
@@ -88,7 +104,61 @@ jobs:
       - run: cd frontend && pnpm build
       - run: cd frontend && pnpm check
       - run: cd frontend && pnpm lint
-      - run: cd frontend && pnpm test
+
+      # v8 coverage costs a few hundred milliseconds here, so it is always on rather than
+      # being a second run of the same 23 tests
+      - run: cd frontend && pnpm test --coverage
+
+      # Named where it is uploaded from, not renamed on the way out: an artifact built from a
+      # single path keeps only that file's basename, so uploading
+      # `frontend/coverage/coverage-summary.json` lands as `coverage-summary.json` and the
+      # directories are gone. The two artifacts unpack into one directory here, so each has to
+      # arrive under a name that says which half it is.
+      - run: cp frontend/coverage/coverage-summary.json frontend-coverage.json
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: frontend-coverage
+          path: frontend-coverage.json
+
+  # Reports where the branch stands to the pull request itself, editing its own comment on
+  # every push rather than leaving one per push. Deliberately not a gate: there is no
+  # threshold to fail against, and a number that blocks a merge is a number people work
+  # around.
+  #
+  # It runs only when both test jobs are green, which is not a policy but a fact: llvm-cov
+  # exits non-zero on a failing test and uploads nothing, so there would be no figure to
+  # report anyway.
+  coverage-comment:
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: backend-coverage
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: frontend-coverage
+
+      # The SQL suite has no coverage tool -- it is psql running assertions against a real
+      # database -- so the comment carries its size instead of pretending it does not exist.
+      - name: Count the SQL assertions
+        # the labelled rows of the check tables, plus the rejection cases in constraints.sql
+        run: echo "SQL_ASSERTIONS=$(grep -hoE "UNION ALL SELECT '|^ {8}\('" backend/tests/sql/*.sql | wc -l | tr -d ' ')" >> $GITHUB_ENV
+
+      - name: Comment on the pull request
+        run: node .gitea/coverage-comment.mjs
+        env:
+          GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITEA_API: ${{ github.server_url }}
+          GITEA_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
 
   # Two steps rather than a matrix over the components, because checkout, buildx and the
   # registry login are shared. The rollout is in the same job as the build so that it cannot

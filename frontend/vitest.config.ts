@@ -8,6 +8,15 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
 	plugins: [svelte()],
 	test: {
-		include: ['src/**/*.test.ts']
+		include: ['src/**/*.test.ts'],
+		coverage: {
+			reporter: ['text-summary', 'json-summary'],
+			// Everything under src, not just what a test happens to import, so the figure
+			// counts what is untested as well. CI reports .ts and .svelte separately: there
+			// is no component test setup at all, and nine hundred untested component
+			// functions in one total would pin it and hide every later movement.
+			include: ['src/**/*.ts', 'src/**/*.svelte'],
+			exclude: ['src/**/*.test.ts']
+		}
 	}
 });
