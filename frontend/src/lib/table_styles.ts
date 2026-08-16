@@ -16,11 +16,28 @@ export const tableSearchClasses = {
 	// which after a reorder is the one on the left
 	inner:
 		'flex flex-col md:flex-row md:flex-wrap items-center justify-between gap-y-2 space-y-2 md:space-y-0 md:gap-x-4 p-2 sm:p-3',
-	search: 'w-full md:w-2/5 relative',
+	// order-last: the buttons that act on the table belong at the reading edge, the search that
+	// narrows it at the far one, and every table here says it the same way. `min-w-0 flex-1` so
+	// a wide filter row takes the width off the search rather than wrapping it onto its own line
+	search: 'relative w-full min-w-0 flex-1 md:order-last md:w-56 md:max-w-xs',
 	// flowbite sizes the input itself at a fixed `w-80`, which ignores whatever width the
-	// wrapper around it was given and hangs 25px out of the card on the expense list. And
-	// `p-2.5` makes it 42px tall next to 36px buttons, so the row reads as two rows.
-	input: 'w-full p-2 ps-10'
+	// wrapper around it was given and hangs 25px out of the card on the expense list.
+	input: 'w-full ps-10 h-10 py-0'
 };
 
 export const tableSearchTableClass = 'w-full text-left text-sm';
+
+/// The height every control in a table's toolbar is pinned to.
+///
+/// flowbite sizes controls by padding, so at the same nominal `size` a borderless primary button
+/// comes out 40px, a bordered `alternative` one 42, a `<select>` 42 and a `lg` button 50. Lined
+/// up in one row that reads as a row that could not make up its mind, and no combination of
+/// flowbite sizes makes them agree — so the height is stated instead.
+export const toolbarControl = 'h-10 py-0';
+
+/// The icon in front of a column heading.
+///
+/// A row of headings in one weight is read word by word; the same row with a shape in front of
+/// each is recognised. `align-[-0.15em]` because an inline svg sits on the baseline and the
+/// text does not.
+export const headIcon = 'me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500';

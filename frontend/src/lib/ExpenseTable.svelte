@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { ExpenseSortField$options, SortDirection$options } from '$houdini';
-	import { cache, graphql } from '$houdini';
+	import { graphql } from '$houdini';
+	import { invalidate, AFTER_WRITE } from './invalidate';
 
 	import {
 		TableBody,
@@ -15,6 +16,7 @@
 		ButtonGroup,
 		Datepicker,
 		Modal,
+		Select,
 		Spinner
 	} from 'flowbite-svelte';
 	import { Section } from 'flowbite-svelte-blocks';
@@ -53,17 +55,21 @@
 		formatAccrualPeriod,
 		formatCategories,
 		makeAccountColor,
-		makeCategoryColor,
-		tint
+		makeCategoryColor
 	} from './expense_utils';
 	import ActionButton from './ActionButton.svelte';
 	import ChangeList from './ChangeList.svelte';
 	import ExpenseModal from './ExpenseModal.svelte';
-	import { tableSearchClasses, tableSearchTableClass } from './table_styles';
+	import { tableSearchClasses, tableSearchTableClass, toolbarControl } from './table_styles';
 	import { page } from '$app/state';
 	import { shortDate } from './analysis/dates';
 	import { signedEuro } from './money';
 	import QueryError from './QueryError.svelte';
+	import SortIcon from './SortIcon.svelte';
+	import { DESC, TableSort } from './table_sort.svelte';
+	import OptionFilter from './OptionFilter.svelte';
+	import FilterChips from './FilterChips.svelte';
+	import { toggleOption } from './filters';
 
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
@@ -71,9 +77,23 @@
 	let expandedRows = $state<string[]>([]);
 	/// Unbestätigt and unvollständig first, which is the list somebody opens this page to work
 	/// through. A third click on a header comes back here.
-	const DEFAULT_SORT = { field: 'status', direction: -1 };
+	const sort = new TableSort({ field: 'status', direction: DESC });
 
-	let sortBy: { field: string; direction: number } = $state({ ...DEFAULT_SORT });
+	/// Which of the three dates the date column, its sort and the period filter mean.
+	///
+	/// They answer different questions -- what a cost was *for* against when the money left --
+	/// and a list showing one while filtering by another does not add up. So it is one choice
+	/// rather than a column each: eight columns already do not fit a phone. It is made inside
+	/// the period filter, next to the range it decides the meaning of.
+	const DATE_AXES = {
+		accrual: { label: 'Leistungszeitraum', sort: 'accrualStart' },
+		value: { label: 'Wertstellung', sort: 'valueDate' },
+		booking: { label: 'Buchungstag', sort: 'bookingDate' }
+	} as const;
+	type DateAxis = keyof typeof DATE_AXES;
+
+	let dateAxis = $state<DateAxis>('accrual');
+	const axis = $derived(DATE_AXES[dateAxis]);
 
 	/// only consulted below `md`, where the filters are collapsed
 	let filtersOpen = $state(false);
@@ -113,6 +133,16 @@
 	// brauchen Prüfung" has to land on those twelve, a treemap tile on the expenses behind it.
 	// Once here the filters are the reader's again, so a later edit must not be reset by the url.
 	if (page.url.searchParams.has('new')) showNewExpenseModal = true;
+
+	/// One expense, named by whoever linked here — the template behind an automation rule is
+	/// years old and would be nowhere near the first page. Kept as a filter rather than fetched
+	/// on the side so the list still says what it is showing, and so it can be cleared.
+	const handover = page.url.searchParams.get('expense') ?? '';
+	let handedOver = $state(handover);
+	// a rule's template is usually flagged as one, and templates are hidden by default, so
+	// naming one and then filtering it back out would land on an empty table
+	if (handover) showTemplates = true;
+
 	if (page.url.searchParams.has('review')) {
 		showTaxRelevant = false;
 		showExtraordinary = false;
@@ -155,6 +185,12 @@
 			out.push({ label: `Suche: ${searchTerm.trim()}`, clear: () => (searchTerm = '') });
 		}
 
+		// A list narrowed to a single expense looks like an almost-empty database, so this one
+		// has to be as visible and as removable as any other filter.
+		if (handedOver) {
+			out.push({ label: 'Einzelne Ausgabe', clear: () => (handedOver = '') });
+		}
+
 		for (const id of filteredAccounts) {
 			const account = filterableAccounts?.find((a) => a.value === id);
 			out.push({
@@ -173,8 +209,9 @@
 			});
 		}
 
+		// named, because the same range means a different set of expenses per date column
 		if (dateRangeLabel) {
-			out.push({ label: dateRangeLabel, clear: clearDateRange });
+			out.push({ label: `${axis.label}: ${dateRangeLabel}`, clear: clearDateRange });
 		}
 
 		// one chip for the lot: which of the six is off matters less than the fact that the
@@ -188,9 +225,6 @@
 
 	const withoutOption = (selected: string[], id: string) =>
 		selected.filter((other) => other !== id);
-
-	const toggleOption = (selected: string[], id: string) =>
-		selected.includes(id) ? withoutOption(selected, id) : [...selected, id];
 
 	function clearDateRange() {
 		filterDateRange = { from: undefined, to: undefined };
@@ -244,6 +278,8 @@
 	const SORT_FIELDS: Record<string, ExpenseSortField$options> = {
 		status: 'STATUS',
 		accrualStart: 'ACCRUAL_START',
+		valueDate: 'VALUE_DATE',
+		bookingDate: 'BOOKING_DATE',
 		title: 'TITLE',
 		store: 'STORE',
 		description: 'DESCRIPTION',
@@ -257,6 +293,7 @@
 		limit: itemsPerPage || 10,
 		offset: ((currentPage || 1) - 1) * (itemsPerPage || 10),
 		search: searchTerm.trim() || undefined,
+		ids: handedOver ? [handedOver] : undefined,
 		accountIds: filteredAccounts.length > 0 ? filteredAccounts : undefined,
 		categoryIds: filteredCategories.length > 0 ? filteredCategories : undefined,
 		flags: {
@@ -267,10 +304,16 @@
 			incomplete: showIncomplete,
 			normal: showNormal
 		},
-		accruedAfter: filterDateRange.from,
-		accruedBefore: filterDateRange.to,
-		sortBy: SORT_FIELDS[sortBy.field],
-		sortDir: (sortBy.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options
+		// the period filter follows the column: "März" means the month it was for, or the month
+		// it was paid in, depending on which of them the reader is looking at
+		accruedAfter: dateAxis === 'accrual' ? filterDateRange.from : undefined,
+		accruedBefore: dateAxis === 'accrual' ? filterDateRange.to : undefined,
+		valuedAfter: dateAxis === 'value' ? filterDateRange.from : undefined,
+		valuedBefore: dateAxis === 'value' ? filterDateRange.to : undefined,
+		bookedAfter: dateAxis === 'booking' ? filterDateRange.from : undefined,
+		bookedBefore: dateAxis === 'booking' ? filterDateRange.to : undefined,
+		sortBy: SORT_FIELDS[sort.field],
+		sortDir: (sort.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options
 	});
 
 	// Stuff that we always need independently of the current page and sorting and so on
@@ -318,6 +361,10 @@
 			$flags: ExpenseFlagFilter
 			$accruedAfter: DateTime
 			$accruedBefore: DateTime
+			$valuedAfter: DateTime
+			$valuedBefore: DateTime
+			$bookedAfter: DateTime
+			$bookedBefore: DateTime
 			$sortBy: ExpenseSortField
 			$sortDir: SortDirection
 		) {
@@ -331,6 +378,10 @@
 					flags: $flags
 					accruedAfter: $accruedAfter
 					accruedBefore: $accruedBefore
+					valuedAfter: $valuedAfter
+					valuedBefore: $valuedBefore
+					bookedAfter: $bookedAfter
+					bookedBefore: $bookedBefore
 					sortBy: $sortBy
 					sortDir: $sortDir
 				) {
@@ -482,6 +533,17 @@
 	let rows = $derived(slow ? [] : expenses);
 
 	let expenseToEdit = $derived(expenses.find((e) => e.id === expenseIdToEdit) || undefined);
+
+	// Opened once the row is actually here: the modal reads its expense out of the loaded page,
+	// and opening it against a list that has not arrived shows the empty form for a moment.
+	let handoverOpened = false;
+	$effect(() => {
+		if (handoverOpened || !handedOver) return;
+		if (!expenses.some((e) => e.id === handedOver)) return;
+
+		handoverOpened = true;
+		openEditModal(handedOver);
+	});
 	let expenseToDelete = $derived(expenses.find((e) => e.id === expenseIdToDelete) || undefined);
 	let expenseToResort = $derived(expenses.find((e) => e.id === expenseIdToResort) || undefined);
 
@@ -543,15 +605,39 @@
 
 	/// Descending, ascending, off. The third state is what there was no way back to: sorting
 	/// lives in the component rather than in the url, so a header clicked by accident could only
-	/// be undone by reloading the page.
-	function sortByField(field: string) {
-		if (sortBy.field !== field) sortBy = { field, direction: -1 };
-		else if (sortBy.direction === -1) sortBy = { field, direction: 1 };
-		else sortBy = { ...DEFAULT_SORT };
+	/// Switching the column takes the sort with it, but only if the sort was on a date: someone
+	/// who ordered by amount asked for that, and it does not become a different question here.
+	function setDateAxis(next: DateAxis) {
+		const onDate = Object.values(DATE_AXES).some((a) => a.sort === sort.field);
+		if (onDate) sort.current = { field: DATE_AXES[next].sort, direction: sort.direction };
+		dateAxis = next;
+		currentPage = 1;
 	}
 
-	function isSortedBy(field: string) {
-		return sortBy.field === field ? sortBy.direction : null;
+	/// What the date column shows: the accrual period, or the span the transactions cover.
+	///
+	/// Value and booking dates sit on the transactions, and an expense can have several -- a
+	/// refund is the debit and the credit months apart, a chained prepayment more still. Both
+	/// ends, then, and `formatAccrualPeriod` collapses them when they agree, which is the
+	/// common case.
+	///
+	/// A transaction no bank posted has no booking date and falls back to its own
+	/// Wertstellung: where a bank did post one the two are a day or two apart anyway, so it is
+	/// the closest thing to an answer. Better than a hole in the column, and it is what the
+	/// sort and the period filter assume as well.
+	function axisPeriod(expense: {
+		accrualStart: Date;
+		accrualEnd: Date;
+		transactions: { date: Date; bookingDate: Date | null }[];
+	}): [Date, Date] {
+		if (dateAxis === 'accrual') return [expense.accrualStart, expense.accrualEnd];
+
+		const dates = expense.transactions
+			.map((t) => (dateAxis === 'value' ? t.date : (t.bookingDate ?? t.date)))
+			.map((d) => d.getTime());
+		if (dates.length === 0) return [expense.accrualStart, expense.accrualEnd];
+
+		return [new Date(Math.min(...dates)), new Date(Math.max(...dates))];
 	}
 
 	$effect(() => void basicStore.fetch());
@@ -566,8 +652,8 @@
 	`);
 
 	async function handleExpenseModalSubmit() {
-		cache.markStale('Expense');
-		await expenseStore.fetch({ variables: expenseVariables() });
+		invalidate();
+		await expenseStore.fetch({ variables: expenseVariables(), ...AFTER_WRITE });
 		expandedRows = [];
 	}
 
@@ -600,8 +686,8 @@
 		showResortExpenseModal = false;
 		expenseIdToResort = undefined;
 
-		cache.markStale('Expense');
-		await expenseStore.fetch({ variables: expenseVariables() });
+		invalidate();
+		await expenseStore.fetch({ variables: expenseVariables(), ...AFTER_WRITE });
 		expandedRows = [];
 	}
 
@@ -611,8 +697,8 @@
 		expenseIdToDelete = undefined;
 		showDeleteExpenseModal = false;
 
-		cache.markStale('Expense');
-		await expenseStore.fetch({ variables: expenseVariables() });
+		invalidate();
+		await expenseStore.fetch({ variables: expenseVariables(), ...AFTER_WRITE });
 		expandedRows = [];
 	}
 </script>
@@ -620,45 +706,13 @@
 {#snippet newExpenseButton(cls: string)}
 	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls back
 	     to `alternative` rather than to primary, which left Neu white in the middle of the row. -->
-	<Button color="primary" class={cls} onclick={() => (showNewExpenseModal = true)}>
+	<Button
+		color="primary"
+		class="{toolbarControl} {cls}"
+		onclick={() => (showNewExpenseModal = true)}
+	>
 		<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
 	</Button>
-{/snippet}
-
-<!-- Accounts and categories carry a colour, and that colour is how a reader recognises them --
-     it is what the cells in the table below are tinted with. flowbite's MultiSelect prints its
-     options as bare text and offers no hook to change that, so the filters are a checkbox list
-     with the swatch in front of each name, like the Status filter beside them. -->
-{#snippet optionFilter(
-	label: string,
-	options: { name: string; value: string; color?: string | null }[],
-	selected: string[],
-	toggle: (id: string) => void
-)}
-	<Button color="alternative" size="sm" class="justify-between md:w-40">
-		<span class="flex items-center gap-2">
-			{#if label === 'Konten'}
-				<WalletOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
-			{:else}
-				<TagOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
-			{/if}
-			{selected.length ? `${label} (${selected.length})` : label}
-		</span>
-		<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
-	</Button>
-	<Dropdown class="max-h-80 w-64 divide-y-0 overflow-y-auto p-3 text-sm">
-		<div class="space-y-2">
-			{#each options as option (option.value)}
-				<Checkbox checked={selected.includes(option.value)} onchange={() => toggle(option.value)}>
-					<span
-						class="mr-2 inline-block h-3 w-3 shrink-0 rounded-sm"
-						style="background-color: {option.color}"
-					></span>
-					{option.name}
-				</Checkbox>
-			{/each}
-		</div>
-	</Dropdown>
 {/snippet}
 
 {#snippet fieldLabel(text: string)}
@@ -707,14 +761,6 @@
 		<span class="rounded-md bg-purple-100 px-2 py-1 text-purple-700">
 			<StarOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Außergewöhnlich
 		</span>
-	{/if}
-{/snippet}
-
-{#snippet sortIcon(field: string)}
-	{#if isSortedBy(field) === -1}
-		▲
-	{:else if isSortedBy(field) === 1}
-		▼
 	{/if}
 {/snippet}
 
@@ -824,53 +870,14 @@
 		message="Die Ausgaben konnten nicht geladen werden."
 		class="mb-4"
 	/>
-	{#if activeFilters.length > 0}
-		<div class="flex flex-wrap items-center gap-2 px-4 pb-3 text-sm sm:px-0">
-			<span class="text-gray-500 dark:text-gray-400">Gefiltert nach</span>
-			{#each activeFilters as filter (filter.label)}
-				<!-- tinted where what is being filtered on has a colour of its own, so the chip and
-				     the cells it left standing look like each other -->
-				<span
-					class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 {filter.color
-						? ''
-						: 'bg-gray-200 dark:bg-gray-700'}"
-					style={tint(filter.color)}
-				>
-					{filter.label}
-					<!-- dimmed rather than grey: on a tinted chip the text colour is whatever the tint
-					     needs, and a fixed grey × was invisible on the dark ones -->
-					<button
-						type="button"
-						aria-label="{filter.label} entfernen"
-						class="opacity-60 hover:opacity-100"
-						onclick={filter.clear}
-					>
-						×
-					</button>
-				</span>
-			{/each}
-			<button
-				type="button"
-				class="text-primary-600 dark:text-primary-500 hover:underline"
-				onclick={resetFilters}
-			>
-				alle entfernen
-			</button>
-		</div>
-	{/if}
+	<FilterChips filters={activeFilters} reset={resetFilters} />
 
-	<!-- The search takes what is left rather than a fixed 256px: at a fixed width the row came to
-	     1656px against 1654px of card and wrapped the search onto a line of its own. It gives way
-	     now instead, down to 176px before anything wraps. -->
 	<TableSearch
 		placeholder="Suchen"
 		hoverable={true}
 		bind:inputValue={searchTerm}
 		class="{tableSearchTableClass} table-fixed"
-		classes={{
-			...tableSearchClasses,
-			search: 'relative w-full md:order-last md:w-56'
-		}}
+		classes={tableSearchClasses}
 	>
 		{#snippet header()}
 			<div
@@ -885,6 +892,7 @@
 						{@render newExpenseButton('')}
 						<ActionButton
 							color="teal"
+							class={toolbarControl}
 							disabled={!selectedExpenseId}
 							onclick={() => openEditModal(selectedExpenseId!, true)}
 						>
@@ -892,7 +900,7 @@
 						</ActionButton>
 						<ActionButton
 							color="yellow"
-							class="text-gray-900"
+							class="{toolbarControl} text-gray-900"
 							disabled={!selectedExpenseId}
 							onclick={() => openEditModal(selectedExpenseId!)}
 						>
@@ -900,6 +908,7 @@
 						</ActionButton>
 						<ActionButton
 							color="red"
+							class={toolbarControl}
 							disabled={!selectedExpenseId}
 							onclick={() => {
 								expenseIdToDelete = selectedExpenseId;
@@ -910,6 +919,7 @@
 						</ActionButton>
 						<ActionButton
 							color="gray"
+							class={toolbarControl}
 							disabled={!selectedExpenseId}
 							onclick={() => {
 								expenseIdToResort = selectedExpenseId;
@@ -924,8 +934,7 @@
 					     so on small screens they fold behind this. -->
 					<Button
 						color="alternative"
-						size="sm"
-						class="md:hidden"
+						class="{toolbarControl} md:hidden"
 						aria-label="Filter"
 						aria-expanded={filtersOpen}
 						onclick={() => (filtersOpen = !filtersOpen)}
@@ -947,16 +956,26 @@
 					     the other triggers and was running out of the button. Empty it still matches them. -->
 					<Button
 						color="alternative"
-						size="sm"
-						class="justify-between whitespace-nowrap md:min-w-52"
+						class="{toolbarControl} justify-between whitespace-nowrap md:min-w-52"
 					>
 						<span class="flex items-center gap-2">
 							<CalendarMonthOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
-							{dateRangeLabel ?? 'Zeitraum'}
+							{dateRangeLabel ?? axis.label}
 						</span>
 						<ChevronDownOutline class="ml-2 h-3 w-3 shrink-0" />
 					</Button>
 					<Dropdown class="flex w-fit flex-col gap-2 divide-y-0 p-2">
+						<!-- Which date, above the calendar that picks the range on it. The two belong
+						     together: the range means a different set of expenses per date, and this is
+						     also what the column shows and sorts by. -->
+						<Select
+							value={dateAxis}
+							onchange={(e) => setDateAxis((e.target as HTMLSelectElement).value as DateAxis)}
+							items={Object.entries(DATE_AXES).map(([value, a]) => ({ value, name: a.label }))}
+							size="sm"
+							selectClass="h-9 py-0"
+							placeholder=""
+						/>
 						<!-- the inline calendar draws its own white, shadowed, padded card, which inside
 						     the dropdown's card is a second box around the same thing -->
 						<Datepicker
@@ -977,23 +996,31 @@
 							Zeitraum zurücksetzen
 						</ActionButton>
 					</Dropdown>
-					{@render optionFilter(
-						'Kategorien',
-						filterableCategories ?? [],
-						filteredCategories,
-						(id) => (filteredCategories = toggleOption(filteredCategories, id))
-					)}
-					{@render optionFilter(
-						'Konten',
-						filterableAccounts ?? [],
-						filteredAccounts,
-						(id) => (filteredAccounts = toggleOption(filteredAccounts, id))
-					)}
+					<OptionFilter
+						label="Kategorien"
+						options={filterableCategories ?? []}
+						selected={filteredCategories}
+						toggle={(id) => (filteredCategories = toggleOption(filteredCategories, id))}
+					>
+						{#snippet icon()}
+							<TagOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+						{/snippet}
+					</OptionFilter>
+					<OptionFilter
+						label="Konten"
+						options={filterableAccounts ?? []}
+						selected={filteredAccounts}
+						toggle={(id) => (filteredAccounts = toggleOption(filteredAccounts, id))}
+					>
+						{#snippet icon()}
+							<WalletOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+						{/snippet}
+					</OptionFilter>
 					<!-- The third of three filters, and it has to look like the other two: same trigger,
 					     same panel. It said "Filter" over a flowbite List, which drew a rule under a
 					     heading repeating the word next to it and spaced six checkboxes like a table
 					     of contents. It filters the Status column and is named after it. -->
-					<Button color="alternative" size="sm" class="justify-between md:w-40">
+					<Button color="alternative" class="{toolbarControl} justify-between md:w-40">
 						<span class="flex items-center gap-2">
 							<FlagOutline class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
 							{activeFlagCount ? `Status (${activeFlagCount})` : 'Status'}
@@ -1036,71 +1063,77 @@
 		<TableHead>
 			<!-- pl to clear the chevron: it hangs in the column's left margin, and without this the
 			     label started 24px to the left of every date under it. -->
+			<!-- The header only says which date it is showing; the period filter picks it, since
+			     that is where the range it applies to is chosen too. min-w rather than w, because
+			     the names are wider than the dates under them and a fixed width clipped them.
+			     On a phone it wraps instead: "Leistungszeitraum" on one line would take half the
+			     row from the title, and `wrap-anywhere` is what breaks a word with no space in
+			     it. -->
 			<TableHeadCell
-				class="w-28 py-3 pr-2 pl-7 whitespace-nowrap md:w-36 md:pr-4 md:pl-10"
+				class="w-28 py-3 pr-2 pl-7 wrap-anywhere md:w-auto md:min-w-36 md:pr-4 md:pl-10 md:whitespace-nowrap"
 				scope="col"
-				onclick={() => sortByField('accrualStart')}
+				onclick={() => sort.by(axis.sort)}
 			>
 				<CalendarMonthOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
-				/>Datum
-				{@render sortIcon('accrualStart')}
+				/>{axis.label}
+				<SortIcon direction={sort.on(axis.sort)} />
 			</TableHeadCell>
-			<TableHeadCell class="px-2 py-3 md:px-4" scope="col" onclick={() => sortByField('title')}>
+			<TableHeadCell class="px-2 py-3 md:px-4" scope="col" onclick={() => sort.by('title')}>
 				<TextSizeOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>Titel
-				{@render sortIcon('title')}
+				<SortIcon direction={sort.on('title')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
-				onclick={() => sortByField('accounts')}
+				onclick={() => sort.by('accounts')}
 			>
 				<WalletOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>Konten
-				{@render sortIcon('accounts')}
+				<SortIcon direction={sort.on('accounts')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
-				onclick={() => sortByField('categories')}
+				onclick={() => sort.by('categories')}
 			>
 				<TagOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>Kategorien
-				{@render sortIcon('categories')}
+				<SortIcon direction={sort.on('categories')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="w-28 px-2 py-3 text-right md:w-32 md:px-4"
 				scope="col"
-				onclick={() => sortByField('effectiveAmount')}
+				onclick={() => sort.by('effectiveAmount')}
 			>
 				<EuroOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>Betrag
-				{@render sortIcon('effectiveAmount')}
+				<SortIcon direction={sort.on('effectiveAmount')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-32"
 				scope="col"
-				onclick={() => sortByField('store')}
+				onclick={() => sort.by('store')}
 			>
 				<StoreOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>Geschäft
-				{@render sortIcon('store')}
+				<SortIcon direction={sort.on('store')} />
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-56"
 				scope="col"
-				onclick={() => sortByField('description')}
+				onclick={() => sort.by('description')}
 			>
 				<AlignLeftOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>Beschreibung
-				{@render sortIcon('description')}
+				<SortIcon direction={sort.on('description')} />
 			</TableHeadCell>
 			<!-- What the bank wrote. No sort arrow: the backend names its sortable columns and this
 			     is not one of them. From 2xl only, and it shares what the fixed columns leave with
@@ -1114,12 +1147,12 @@
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
-				onclick={() => sortByField('status')}
+				onclick={() => sort.by('status')}
 			>
 				<FlagOutline
 					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
 				/>Status
-				{@render sortIcon('status')}
+				<SortIcon direction={sort.on('status')} />
 			</TableHeadCell>
 		</TableHead>
 		<TableBody class="divide-y">
@@ -1145,7 +1178,8 @@
 								<ChevronRightOutline class="inline h-4 w-4" />
 							{/if}
 						</button>
-						{formatAccrualPeriod(expense.accrualStart, expense.accrualEnd, false)}
+						{@const period = axisPeriod(expense)}
+						{formatAccrualPeriod(period[0], period[1], false)}
 					</TableBodyCell>
 					<!-- `w-full max-w-0` is what makes the inner block truncate: a table cell is as wide
 					     as its content unless something says otherwise, and `truncate` on the cell

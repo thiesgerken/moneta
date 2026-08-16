@@ -24,7 +24,7 @@
 	import { shortDate, todayIso } from './dates';
 	import { ANALYSIS_CARD, WEALTH_COLOR } from './cards';
 	import QueryError from '$lib/QueryError.svelte';
-	import { euro } from '$lib/money';
+	import { amountColor, euro } from '$lib/money';
 
 	const DAY = 86400000;
 
@@ -502,11 +502,7 @@
 									style="background-color: {b.account.color ?? '#94a3b8'}"
 								></span>{b.account.name}
 							</TableBodyCell>
-							<TableBodyCell
-								class="px-4 py-3 {b.amount < 0
-									? 'text-red-600 dark:text-red-400'
-									: 'text-green-700 dark:text-green-400'}"
-							>
+							<TableBodyCell class="px-4 py-3 {amountColor(b.amount)}">
 								{euro(b.amount)}
 							</TableBodyCell>
 							<TableBodyCell

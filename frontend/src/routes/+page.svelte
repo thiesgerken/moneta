@@ -13,6 +13,7 @@
 	import ExpenseChangelog from '$lib/ExpenseChangelog.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import { categoryColor } from '$lib/analysis/overviews';
+	import { DATE_AXES, accrued, axisState } from '$lib/analysis/state.svelte';
 	import { WEALTH_COLOR } from '$lib/analysis/cards';
 	import { shortDate } from '$lib/analysis/dates';
 	import QueryError from '$lib/QueryError.svelte';
@@ -81,6 +82,7 @@
 			$monthAgo: DateTime!
 			$monthsFrom: DateTime!
 			$sparkFrom: DateTime!
+			$accrued: Boolean
 		) {
 			users {
 				me {
@@ -106,7 +108,7 @@
 					}
 				}
 
-				overviews(from: $monthsFrom, to: $now) {
+				overviews(from: $monthsFrom, to: $now, accrued: $accrued) {
 					months {
 						month
 						income
@@ -168,7 +170,14 @@
 		if (!from) return;
 
 		void dashboardStore.fetch({
-			variables: { now, since: from, monthAgo, monthsFrom: compareFrom, sparkFrom: yearAgo }
+			variables: {
+				now,
+				since: from,
+				monthAgo,
+				monthsFrom: compareFrom,
+				sparkFrom: yearAgo,
+				accrued: accrued()
+			}
 		});
 	});
 
@@ -476,13 +485,20 @@
 				     with a control for the same row, and it wrapped into it on the way -->
 				<div class="flex items-center justify-between gap-3">
 					<h2 class="text-lg font-semibold">{monthName(monthStart)}</h2>
-					<ToggleGroup
-						bind:value={sign}
-						options={[
-							{ value: 'expenses', label: 'Ausgaben' },
-							{ value: 'income', label: 'Einnahmen' }
-						]}
-					/>
+					<div class="flex items-center gap-2">
+						<!-- desktop only: three toggles in this card would leave the month name no room
+						     on a phone, and the axis is the one of them a reader changes least -->
+						<span class="hidden md:inline">
+							<ToggleGroup bind:value={axisState.axis} options={DATE_AXES} />
+						</span>
+						<ToggleGroup
+							bind:value={sign}
+							options={[
+								{ value: 'expenses', label: 'Ausgaben' },
+								{ value: 'income', label: 'Einnahmen' }
+							]}
+						/>
+					</div>
 				</div>
 				{#if comparison !== null}
 					<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
