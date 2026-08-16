@@ -8,6 +8,7 @@ use juniper::{FieldResult, GraphQLEnum, graphql_object};
 use super::util::{self, SortDirection};
 use crate::accrual;
 use crate::graphql::root::{Context, require_user};
+use crate::graphql::scoped;
 use crate::models::{
     AutomationRule, AutomationRuleInput, ExpenseDelivery, PeriodicInterval, PeriodicRule,
     PeriodicRuleInput, SeenDelivery,
@@ -26,9 +27,8 @@ type Conn = diesel_async::pooled_connection::deadpool::Object<diesel_async::Asyn
 /// ever sees their own rendering. What still has to be checked is that they see it at all,
 /// since a rule pointing at somebody else's expense would copy money they cannot read.
 async fn visible_expense(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<Option<Uuid>> {
-    Ok(expenses_rendered::table
+    Ok(scoped::expenses(user_id)
         .filter(expenses_rendered::id.eq(id))
-        .filter(expenses_rendered::user_id.eq(user_id))
         .select(expenses_rendered::upstream_id)
         .first(conn)
         .await
@@ -275,9 +275,7 @@ impl AutomationRuleQuery {
         let (limit, offset) = util::page(limit, skip);
         let direction = sort_dir.unwrap_or_default();
 
-        let mut query = automation_rules::table
-            .into_boxed()
-            .filter(automation_rules::user_id.eq(user_id));
+        let mut query = scoped::automation_rules(user_id);
 
         if let Some(term) = search.filter(|s| !s.trim().is_empty()) {
             let pattern = util::ilike_pattern(term.trim());
@@ -314,9 +312,7 @@ impl AutomationRuleQuery {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let data = automation_rules::table
-            .find(id)
-            .filter(automation_rules::user_id.eq(user_id))
+        let data = scoped::own_automation_rule(user_id, id)
             .select(AutomationRule::as_select())
             .first(conn)
             .await
@@ -361,9 +357,7 @@ impl AutomationRuleMutation {
 
         let template_id = require_visible_expense(conn, user_id, rule.template_id).await?;
 
-        let existing = automation_rules::table
-            .find(id)
-            .filter(automation_rules::user_id.eq(user_id))
+        let existing = scoped::own_automation_rule(user_id, id)
             .select(AutomationRule::as_select())
             .first(conn)
             .await
@@ -375,7 +369,7 @@ impl AutomationRuleMutation {
         data.template_id = template_id;
         data.created_at = existing.created_at;
 
-        diesel::update(automation_rules::table.find(id))
+        diesel::update(scoped::own_automation_rule(user_id, id))
             .set(&data)
             .execute(conn)
             .await?;
@@ -387,13 +381,9 @@ impl AutomationRuleMutation {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let count = diesel::delete(
-            automation_rules::table
-                .find(id)
-                .filter(automation_rules::user_id.eq(user_id)),
-        )
-        .execute(conn)
-        .await?;
+        let count = diesel::delete(scoped::own_automation_rule(user_id, id))
+            .execute(conn)
+            .await?;
 
         Ok(count > 0)
     }
@@ -425,9 +415,7 @@ impl PeriodicRuleQuery {
         let (limit, offset) = util::page(limit, skip);
         let direction = sort_dir.unwrap_or_default();
 
-        let mut query = periodic_rules::table
-            .into_boxed()
-            .filter(periodic_rules::user_id.eq(user_id));
+        let mut query = scoped::periodic_rules(user_id);
 
         if let Some(term) = search.filter(|s| !s.trim().is_empty()) {
             query = query.filter(periodic_rules::title.ilike(util::ilike_pattern(term.trim())));
@@ -457,9 +445,7 @@ impl PeriodicRuleQuery {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let data = periodic_rules::table
-            .find(id)
-            .filter(periodic_rules::user_id.eq(user_id))
+        let data = scoped::own_periodic_rule(user_id, id)
             .select(PeriodicRule::as_select())
             .first(conn)
             .await
@@ -504,9 +490,7 @@ impl PeriodicRuleMutation {
 
         let template_id = require_visible_expense(conn, user_id, rule.template_id).await?;
 
-        let existing = periodic_rules::table
-            .find(id)
-            .filter(periodic_rules::user_id.eq(user_id))
+        let existing = scoped::own_periodic_rule(user_id, id)
             .select(PeriodicRule::as_select())
             .first(conn)
             .await
@@ -517,7 +501,7 @@ impl PeriodicRuleMutation {
         data.template_id = template_id;
         data.created_at = existing.created_at;
 
-        diesel::update(periodic_rules::table.find(id))
+        diesel::update(scoped::own_periodic_rule(user_id, id))
             .set(&data)
             .execute(conn)
             .await?;
@@ -529,13 +513,9 @@ impl PeriodicRuleMutation {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let count = diesel::delete(
-            periodic_rules::table
-                .find(id)
-                .filter(periodic_rules::user_id.eq(user_id)),
-        )
-        .execute(conn)
-        .await?;
+        let count = diesel::delete(scoped::own_periodic_rule(user_id, id))
+            .execute(conn)
+            .await?;
 
         Ok(count > 0)
     }
@@ -736,9 +716,7 @@ impl DeliveryQuery {
         let (limit, offset) = util::page(limit, skip);
         let direction = sort_dir.unwrap_or_default();
 
-        let mut query = seen_deliveries::table
-            .into_boxed()
-            .filter(seen_deliveries::user_id.eq(user_id));
+        let mut query = scoped::seen_deliveries(user_id);
 
         if let Some(term) = search.filter(|s| !s.trim().is_empty()) {
             query =

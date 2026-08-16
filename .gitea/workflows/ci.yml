@@ -88,6 +88,43 @@ jobs:
         env:
           PGURL: postgres://moneta:moneta@postgres:5432/moneta
 
+  # The per-user filters against a real database, which `cargo test` in test-backend cannot do
+  # and deliberately does not try to: those are unit tests and stay unit tests.
+  #
+  # Its own postgres rather than test-schema's. That one applies the migrations and asserts
+  # against a known set of fixtures; this one truncates and inserts its own. Sharing the
+  # instance would mean each job's data was whatever the other left behind, and a failure would
+  # depend on which finished first.
+  test-scoping:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+        env:
+          POSTGRES_USER: moneta
+          POSTGRES_PASSWORD: moneta
+          POSTGRES_DB: moneta
+        options: >-
+          --health-cmd "pg_isready -U moneta"
+          --health-interval 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install dependencies
+        run: apt-get update -y && apt-get install -y --no-install-recommends libssl-dev gcc
+
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
+        with:
+          cache-workspaces: backend
+
+      # the second variable turns a missing url from "skip" into a failure, so that a suite
+      # which quietly tested nothing cannot report green
+      - run: cd backend && cargo test --test scoping
+        env:
+          TEST_DATABASE_URL: postgres://moneta:moneta@postgres:5432/moneta
+          MONETA_REQUIRE_DB_TESTS: "1"
+
   test-frontend:
     runs-on: ubuntu-latest
     steps:
@@ -164,7 +201,7 @@ jobs:
   # registry login are shared. The rollout is in the same job as the build so that it cannot
   # restart the deployments onto an image this run did not push.
   build-and-deploy:
-    needs: [test-backend, test-schema, test-frontend]
+    needs: [test-backend, test-schema, test-scoping, test-frontend]
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     steps:

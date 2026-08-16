@@ -6,6 +6,7 @@ pub mod categories;
 pub mod expenses;
 mod root;
 pub mod rules;
+pub mod scoped;
 pub mod users;
 mod util;
 

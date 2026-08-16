@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use crate::graphql::cache::{bucket, cached};
 use crate::graphql::root::{Context, require_user};
+use crate::graphql::scoped;
 use crate::models::AccountAvailability;
 use crate::models::rendering::{RenderedBalance, RenderedExpense};
 use crate::schema_views::{balances_rendered, expenses_rendered};
@@ -420,8 +421,7 @@ impl AnalysisQuery {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let found: Vec<RenderedExpense> = expenses_rendered::table
-            .filter(expenses_rendered::user_id.eq(user_id))
+        let found: Vec<RenderedExpense> = scoped::expenses(user_id)
             .filter(expenses_rendered::is_template.eq(false))
             // a zero-length period degenerates to an ordinary expense, and `accrual_end > at`
             // is what leaves out everything already consumed
@@ -922,8 +922,7 @@ async fn compute(
             .load(conn)
             .await?;
 
-        let references: Vec<RenderedBalance> = balances_rendered::table
-            .filter(balances_rendered::user_id.eq(user_id))
+        let references: Vec<RenderedBalance> = scoped::balances(user_id)
             .filter(
                 balances_rendered::id
                     .eq_any(rows.iter().filter_map(|r| r.balance_id).collect::<Vec<_>>()),
