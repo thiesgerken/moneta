@@ -1,13 +1,20 @@
 # Moneta
 
-Personal finance tracking: expenses, accounts, balances and categories, shared between
-several users. Successor to MoneyDB (Haskell + jQuery, sibling checkout), which it can
-import from. Version 3 of the same idea.
+Personal finance tracking: expenses, accounts, balances and categories, shared between several
+users. Successor to MoneyDB (Haskell + jQuery, sibling checkout), which it can import from.
+Version 3 of the same idea.
 
 - **backend** — Rust: [rocket](https://rocket.rs) + [juniper](https://github.com/graphql-rust/juniper)
   serving a GraphQL API, PostgreSQL 18 for storage (diesel-async)
 - **frontend** — SvelteKit 2 / Svelte 5 (runes), [houdini](https://houdinigraphql.com) as the
   GraphQL client, Tailwind 4 + flowbite-svelte for the UI
+
+**Documentation is in [`docs/`](docs/)** — start with [docs/README.md](docs/README.md), which
+says what to read in which order. The short version: [concepts.md](docs/concepts.md) for the
+data model, [features.md](docs/features.md) for what the app does,
+[moneydb.md](docs/moneydb.md) for where the data came from, and
+[backend.md](docs/backend.md) / [frontend.md](docs/frontend.md) for the code. If you are about
+to change something, [AGENTS.md](AGENTS.md) is the list of traps already stepped in.
 
 ## Running it locally
 
@@ -18,9 +25,11 @@ cd frontend && pnpm install && pnpm dev     # UI on :5173, proxies /graphql to :
 ```
 
 The full stack (traefik in front of backend, frontend and postgres) comes up with
-`docker compose up -d`, reachable on <http://localhost:8485>. It publishes the backend on
-8181 as well, so `pnpm dev` talks to it without any change — run one backend or the other,
-not both.
+`docker compose up -d`, reachable on <http://localhost:8485>. It publishes the backend on 8181
+as well, so `pnpm dev` talks to it without any change — run one backend or the other, not both.
+
+**PostgreSQL 18 is a hard requirement**: ids default to `uuidv7()`, which does not exist
+before it.
 
 You need at least one user before anything is visible, and importing needs every user the
 export mentions, `thies` and `kroesus`:
@@ -30,28 +39,17 @@ cargo run -- user --add <name>                     # or, against the compose sta
 docker compose exec backend moneta user --add <name>
 ```
 
-Importing from MoneyDB then takes the export on stdin. `--clear` wipes everything except
-the users:
+Importing from MoneyDB then takes the export on stdin. `--clear` wipes everything except the
+users:
 
 ```sh
 cargo run -- import --clear < moneydb-export.json
 docker compose exec -T backend moneta import --clear < backend/moneydb-export.json
 ```
 
-The import is not a row-for-row copy. moneydb had no accrual period and only one date per
-expense, so anything paid at a different time than it was for went through a "Vorauszahlungen"
-clearing account: the payment moved the whole sum onto it and one expense per month drew that
-month's share back out again, and a refund left the money sitting there until it came back.
-Moneta says both with a single expense, so the import folds those chains up — see
-[The three dates](#the-three-dates) below and `Chain` in `backend/src/import.rs`.
-
-Where no chain says what an expense was for, two other things do. The bank often prints the
-period on the line (`01.08.2026 -31.08.2026`, `Rundfunk 07.2026 - 09.2026`, `GRUNDST 4VJ.24`),
-and a contract paid month after month buys the month that follows each payment — read off the
-cadence of the series rather than any one entry, and only where the spacing and the amount are
-steady enough to be a contract rather than a habit (`widen_recurring`). moneydb also recorded
-neither when an account was opened nor when it was closed, so both come from the first and last
-thing ever booked on it.
+The import is not a row-for-row copy — it folds up the chains MoneyDB needed to express a
+prepayment and derives accrual periods the source never recorded.
+[docs/moneydb.md](docs/moneydb.md) explains what it does and why.
 
 ### Configuration
 
@@ -86,227 +84,35 @@ moneta import [--clear] < moneydb-export.json
 moneta schema                        # the GraphQL schema as SDL, for frontend/schema.graphql
 ```
 
-`import` matches users by name, so create them with `user --add` before importing;
-`--clear` wipes everything except users.
+`import` matches users by name, so create them with `user --add` before importing; `--clear`
+wipes everything except users.
 
-Note the odd argument shapes on `account`: `--list` and `--invert` are declared
-as value-taking options rather than flags, so they need a throwaway argument
-(`moneta account --list x`). Worth fixing, hasn't been.
-
-## Data model
-
-Two layers, and understanding the split is the key to the whole backend.
-
-**Upstream tables** — `expenses`, `expense_transactions`, `expense_categorizations`,
-`balances`, `accounts`, `categories`, `users`, `expense_changes`. These are the truth. An
-expense is owned by nobody in particular: it has a list of *transactions*, each pointing at
-an account, and each account has an owner. One expense therefore spans three tables, and
-`Expense::split()`/`join()` in `src/models/expense.rs` convert between the aggregate and its
-rows.
-
-**Rendered views** — `expenses_rendered`, `expense_transactions_rendered`, `balances_rendered`
-and `expense_users`, defined in `migrations/*_rendered_views`. One row *per user per upstream
-entry*. Every read path (GraphQL queries, analysis) hits these, never the upstream tables.
-They exist because "what did this expense cost *me*" is asked constantly.
-
-Rendering resolves three things:
-
-- **ownership fraction** — a jointly held account contributes only its owner's share to
-  `effectiveAmount`
-- **fractional transactions** — a transaction may carry a `fraction` instead of an `amount`,
-  resolved against the expense's `referenceAmount`
-- **account synchronization** — two accounts belonging to different users can be linked, so
-  one person's entry shows up in the other's view too. With `invert`, the sign flips, which
-  is how debts between the two users are modelled
-
-They are SQL views rather than stored rows because rendering is a pure function of the
-expense and the accounts it touches: there is nothing to keep in sync, no write path, and no
-rerender step. A rendered row also keeps the id of the row it came from, since a reader only
-ever sees their own rendering of it. `tests/sql/rendered_views.sql` is where the three rules
-above are pinned down.
-
-The analysis endpoints go one step further and compute in SQL as well
-(`simulate_balances`, `analysis_statement`, `analysis_month_totals`,
-`analysis_category_totals`, `analysis_category_expenses`), each added by its own migration.
-
-Money is stored as integer cents (`amount: i32`). Computed values that involve fractions are
-`f64` (`calculatedAmount`, `effectiveAmount`).
-
-### The three dates
-
-- **`date`** on a transaction — when the money moved (Wertstellung). Everything analytical is
-  filed under this: balances, monthly totals, the calendar.
-- **`bookingDate`** on a transaction — when the bank posted the line to its own ledger
-  (Buchungstag). Null unless a bank delivered it, and deliberately used for nothing: two
-  statements of the same payment can disagree about it.
-- **`accrualStart`/`accrualEnd`** on an expense — the period the expense is *for*
-  (Leistungszeitraum). Equal endpoints mean an ordinary expense; a span is a prepayment, and
-  is what `analysis.prepayments` accrues over. Never null: an expense with no period of its
-  own is accrued on the day it was paid.
-
-Between them these are what makes moneydb's clearing account unnecessary, and the import
-([`Chain`](backend/src/import.rs)) undoes it. A quarterly newspaper invoice is one expense with
-one bank transaction and a three month period rather than the payment plus three monthly
-drawdowns; a cancelled order is one expense holding the debit and the credit, each on its own
-date, costing nothing in between. What the source never resolved — money paid out that nothing
-has come back from — is what `isIncomplete` means: more transactions are expected and their size
-is not known yet, so unlike a prepayment there is no remainder to compute.
-
-### Depots, and what they are worth today
-
-A depot is an account like any other here, and its balance is a reading somebody took on
-purpose — which for a depot happens about once a year, at year end, with a conservative haircut
-on the gains. That is deliberate. The monthly analysis is about spending habits, and a stock
-market moving those figures around would ruin it as an answer to that question.
-
-[stockdb](https://gitea.gerken.haus/thies/StockDB) knows what the same depots are worth at
-today's prices. `accounts.stockdb_account_id` links the two, `users.stockdb_token` is the API
-token that reads it, and `investments` (`backend/src/graphql/investments.rs`) is where the two
-numbers meet. It is an overlay and never a write:
-
-- nothing is stored, in `balances` or anywhere else
-- it never enters `simulate_balances` or the analysis SQL, and it is not part of the memoized
-  analysis payload, so a stockdb that is down costs one null rather than the dashboard
-- no *flow* — monthly totals, category totals, the calendar, prepayments — is offered it, not
-  even behind a toggle. Only the start page and the Vermögen tab, which are a stock of wealth
-  right now, and there only for today's Stichtag
-
-The one path from the market value into the books is a button on a linked depot that opens the
-ordinary balance dialog with the figure filled in. What gets saved is still typed by hand.
-
-### Rules
-
-Two kinds of rule create expenses by copying a *template* expense (`periodic_rules`,
-`automation_rules`, logic in `src/rules.rs`):
-
-- **periodic rules** fire on a schedule (daily/weekly/monthly/yearly). Occurrences are
-  anchored on the template's `accrualStart`, so a monthly rule keeps its day of month however
-  long it lay dormant. `titleReplacement` substitutes `%d`/`%m`/`%y`, `amountReplacement`
-  replaces the reference amount and, when the template has exactly one fixed transaction,
-  that transaction too — the shape almost every shared expense has.
-- **automation rules** match a delivered bank transaction on any of statement regex, date
-  regex, exact amount and account; the highest `priority` match wins and its template is
-  copied with the delivered data imposed on it.
-
-Run periodic generation with `moneta periodic --run`, the `periodicRules.run` mutation, or
-the button on the rules page. In production this is a scheduled job (k8s CronJob); the
-compose stack runs the same command from a `periodic` sidecar so both paths stay identical.
-Deliberately not an in-process timer: it would fire once per backend replica and hide its
-failures in the server log. It is idempotent — each rule's `lastCreation` only advances
-after its expenses are stored.
-
-Note that a template need not be flagged `isTemplate`: moneydb let ordinary past expenses
-double as prototypes, and the import preserves that rather than rewriting history.
-
-Bank statement lines are handed in through the `deliveries.submit` mutation, which
-deduplicates, matches, and creates the resulting expenses. Each line comes back as `CREATED`,
-`DUPLICATE`, `UNMATCHED` or `FAILED`.
-
-Statements carry no stable per-line id, so a delivery counts as already seen when the same
-amount hits the same account within 24 hours. The statement text is deliberately not part of
-that comparison — banks reword it between a provisional and a final booking of the same
-payment. The consequence is that a genuine second identical payment on the same day is
-treated as a duplicate, which is the safer way round to be wrong.
-
-Every line is remembered whether or not a rule matched, so re-uploading an overlapping
-statement is cheap and safe. `FAILED` lines are the exception: they are not remembered, so
-fixing the rule and uploading again picks them up.
-
-## Backend layout
-
-```
-migrations/         diesel migrations; the schema, the rendered views and the analysis
-                    functions live here
-src/
-  bin/moneta.rs     entry point, config loading, subcommand dispatch
-  cli/              user, account, periodic and import subcommands
-  config.rs         settings struct
-  lib.rs            password hashing, connection pool, migration runner
-  schema.rs         generated by `diesel print-schema`
-  schema_views.rs   hand-written table! definitions for the views (they have no primary key
-                    for print-schema to infer)
-  models/           row structs (+ models/rendering.rs for what the views return)
-  rendering.rs      what is left of the money math once the views own it
-  rules.rs          periodic and automation rules; pure parts well covered by tests
-  queries.rs        shared queries, incl. loading and writing the expense aggregate
-  graphql/          one module per domain, root.rs wires the schema and auth
-  import.rs         MoneyDB JSON import
-```
-
-An expense spans three tables (`expenses`, `expense_transactions`,
-`expense_categorizations`), so every write goes through `queries::insert_expense` or
-`replace_expense` inside a transaction, together with its changelog entry.
-
-Authentication is a signed private cookie holding the user id; `require_user` in
-`graphql/root.rs` gates every resolver. Per-user scoping is the resolver's own
-`user_id` filter against the rendered views — callers have no way to express one.
-
-## Frontend layout
-
-The list pages (`expenses`, `balances`, `categories`, `accounts`, `rules`, `deliveries`) are
-thin routes wrapping a `*Table.svelte` component in `src/lib/`, paired with a `*Modal.svelte`
-for create/edit. Beside them are `/` (the dashboard), `/analysis` and `/login`.
-
-`rules` holds both rule kinds in tabs; `deliveries` lists what has been handed in, with a
-filter for the lines no rule claimed — that list is the queue of rules still to write.
-
-The dashboard opens on net worth and its curve, the running month against the one before it,
-and the changes since your last visit. `/analysis` is the ported MoneyDB dashboard, seven
-tabs over `src/lib/analysis/` — see [docs/analysis-dashboard.md](docs/analysis-dashboard.md)
-for what each shows and why. Month pages live under `/analysis/[year]/[month]`.
-
-The navbar entries live in `src/lib/navigation.ts`, which is also where page titles come from.
-
-What the UI is supposed to look like — the two typefaces, what each colour means, how dates and
-money are written, and the handful of flowbite defaults that are overridden — is
-[frontend/DESIGN.md](frontend/DESIGN.md). Read it before adding a screen.
-
-Queries are declared inline with `graphql(...)` and fetched explicitly:
-
-```svelte
-const store = graphql(`query Foo { ... }`);
-$effect(() => void store.fetch());
-```
-
-For the filtered tables the variables are computed from component state and passed through,
-which is what makes the effect re-run when a filter changes:
-
-```svelte
-$effect(() => void expenseStore.fetch({ variables: expenseVariables() }));
-```
-
-Filtering and sorting are done **server-side** through typed arguments: each list query takes
-a `search` string, whatever filters that entity has, and a `sortBy` enum plus `sortDir`.
-Nothing on the wire is a query language.
-
-`schema.graphql` is checked in and is what codegen runs against. Refresh it from the backend
-source, no database or running server involved:
-
-```sh
-cd backend && cargo run -- schema > ../frontend/schema.graphql
-```
+Note the odd argument shapes on `account`: `--list` and `--invert` are declared as value-taking
+options rather than flags, so they need a throwaway argument (`moneta account --list x`). Worth
+fixing, hasn't been.
 
 ## Tests and CI
 
 ```sh
 cd backend  && cargo test && cargo clippy --all-targets -- -D warnings && cargo fmt --all -- --check
 cd backend  && PGURL=postgres://moneta:moneta@localhost:5433/moneta tests/run-sql-tests.sh
-cd frontend && pnpm build && pnpm check && pnpm lint
+cd frontend && pnpm build && pnpm check && pnpm lint && pnpm test
 ```
 
-`tests/run-sql-tests.sh` applies every migration to an empty database and then asserts that
-the rendered views and the CHECK constraints do what they claim — the views carry the money
-math, so they are where a mistake would be expensive.
+`tests/run-sql-tests.sh` applies every migration to an empty database and then asserts that the
+rendered views, the CHECK constraints and the analysis functions do what they claim — the views
+carry the money maths, so they are where a mistake would be expensive. `pnpm test` is vitest
+over the pure modules under `src/lib`; there are no component or end-to-end tests.
 
-CI (`.gitea/workflows/ci.yml`) runs exactly those, then builds and pushes both images on
-pushes to `main`, and then restarts the two deployments in the cluster. There are no frontend
-tests.
+CI (`.gitea/workflows/ci.yml`) runs exactly those, then builds and pushes both images on pushes
+to `main`, and then restarts the two deployments in the cluster. A merge to `main` is a deploy.
 
 ## Status
 
 Working: auth, CRUD for all four entities, the rendering pipeline, expense changelog with
 diffs, computed balances, MoneyDB import, periodic and automation rules (both imported from
-MoneyDB, generation runnable from the CLI or the API), and the analysis dashboard.
+MoneyDB, generation runnable from the CLI or the API), and the analysis dashboard with its
+value-date/accrual toggle.
 
 Missing: an upload client feeding `deliveries.submit` from a bank export, receipts in the UI,
 and push notifications. See `TODO.md`.

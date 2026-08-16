@@ -1,9 +1,13 @@
 # Working on this repo
 
-Read `README.md` first for what the project is and how the two-layer data model works. This
-file is the operational stuff: what to run, and the traps that have already been stepped in.
-`docs/analysis-dashboard.md` covers the one part with enough decisions behind it to need its
-own document, and `TODO.md` is what is deliberately not built yet.
+Read [`docs/`](docs/) first for what the project is: [`docs/concepts.md`](docs/concepts.md) is
+the two-layer data model and the three dates, [`docs/features.md`](docs/features.md) is what
+the application does, [`docs/moneydb.md`](docs/moneydb.md) is where the data came from, and
+[`docs/backend.md`](docs/backend.md) / [`docs/frontend.md`](docs/frontend.md) are the code.
+`README.md` is how to run it.
+
+This file is the operational stuff: what to run to verify, and the traps that have already been
+stepped in. `TODO.md` is what is deliberately not built yet.
 
 ## Verify your changes
 
@@ -257,14 +261,18 @@ data is therefore client-side only; there is no SSR of query results.
 
 ## Known gaps worth knowing before you plan work
 
-- No frontend tests. `tests/sql/` covers the views, the constraints and the balance
-  simulation, but nothing exercises the GraphQL resolvers against a database.
+- No component or end-to-end tests in the frontend; `pnpm test` is vitest over the pure
+  modules under `src/lib` and nothing more. `tests/sql/` covers the views, the constraints and
+  the balance simulation, but nothing exercises the GraphQL resolvers against a database.
 - No upload client feeds `deliveries.submit` from a real bank export; that is deliberately
   someone else's program, since it is per-bank and needs credentials.
 - CORS is `AllowedOrigins::all()` with `allow_credentials(true)` in `graphql/mod.rs`, and
   `docker-compose.yaml` carries a committed `MONETA__API__SECRET_KEY`. Both are known and
   accepted for now — the deployment is private infrastructure.
-- `/analysis` reads real data throughout and `analysis_mock.ts` is gone. What is still open is
-  which views should offer a value-date/accrual-period toggle — everything analytical
-  follows transaction dates today, and `expenses.list` grew `valuedAfter`/`valuedBefore` for
-  exactly that axis.
+- The value-date/accrual-period toggle is done and this is where it stops. Monate, Kategorien,
+  the calendar and the dashboard donut share one `axisState`; the expense list picks one of the
+  three dates for its column, sort and period filter. `simulate_balances`, `analysis_statement`
+  and everything drawn from them — Kontostände, Vermögen, Kontoauszug — stay on the value date
+  on purpose, because an accrued share is a cost a month carried rather than money in an
+  account, and the *Fehler* column reconciles against recorded balances. Do not "finish the
+  job" by putting a toggle on those. See [docs/analysis-dashboard.md](docs/analysis-dashboard.md).
