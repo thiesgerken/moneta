@@ -180,13 +180,19 @@ re-checking against the export after touching this. And a periodic rule whose te
 the monthly drawdowns is dropped rather than kept: the mechanism it fed is gone, and left in place
 it would generate a copy of the whole merged expense every month.
 
-**Three things set an accrual period, in this order.** A chain derives it from its drawdowns, a
+**Four things set an accrual period, in this order.** A chain derives it from its drawdowns, a
 statement can name it outright (`accrual::statement_period`, which the automation rules call on
-the same text), and `widen_recurring` gives the rest of a recurring contract the month each
-payment buys. The last of those runs over the finished
-`Vec<Expense>` and only touches what still sits on a single day, so it cannot argue with the other
-two — keep it that way, and keep its gates strict. A regular cadence on its own also describes a
-fortnightly beer and a yearly pair of jeans, and widening those invents a period nobody recorded.
+the same text), a title can name one where the statement does not (`accrual::title_period`), and
+`widen_recurring` gives the rest of a recurring contract the month each payment buys. The last of
+those runs over the finished `Vec<Expense>` and only touches what still sits on a single day, so
+it cannot argue with the other three — keep it that way, and keep its gates strict. A regular
+cadence on its own also describes a fortnightly beer and a yearly pair of jeans, and widening
+those invents a period nobody recorded.
+
+Both title shapes are anchored on the day the money moved rather than read as absolute dates, and
+that anchoring is the whole guard: a month by name is the nearest such month, a bare year counts
+only at the very end of a title and only within a year either way. Loosen either and `Weltraumspiel
+2077` becomes a year of gaming, `Rechnung 2024-0042` a year of invoicing.
 
 **The imported 0,00 € balances are load-bearing — do not tidy them away.** 35 of the imported
 accounts open with one, dated the day moneydb was set up, and it looks like bookkeeping moneydb

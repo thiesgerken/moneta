@@ -82,6 +82,47 @@ pub fn statement_period(
     sane.then_some((start, end))
 }
 
+/// The period an expense names in its own title, where the statement names none.
+///
+/// A title is written by hand, so only two shapes are worth trusting, and both are anchored on
+/// the day the money moved rather than read as absolute dates.
+///
+/// A month by name is the nearest such month to that day — `Lohn Februar` paid on 15.03. is the
+/// February before it, `Urlaub im September` settled on 20.10. the September before that. Paid
+/// in advance or in arrears both come out right, since nothing here assumes a direction.
+///
+/// A bare year counts only at the very end of the title and only within a year either way.
+/// Anywhere else a four-digit number is an invoice — `Rechnung 2024-0042` — and further out it
+/// is part of a product name: `Weltraumspiel 2077`, `Zahnbürste Modell 2000`. Inside that
+/// window it is what the money was for: a tax year, a utility settlement, a licence.
+pub fn title_period(title: &str, moved: DateTime<Utc>) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
+    static MONTH: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?i)\b(Januar|Februar|M(?:ä|ae)rz|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\b",
+        )
+        .unwrap()
+    });
+    static TRAILING_YEAR: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?:^|\s)((?:19|20)\d{2})\s*$").unwrap());
+
+    let nearby = moved.year() - 1..=moved.year() + 1;
+
+    if let Some(c) = MONTH.captures(title) {
+        let month = named_month(&c[1])?;
+        let year = nearby
+            .filter_map(|y| month_start(y, month).map(|start| (start, y)))
+            .min_by_key(|(start, _)| (*start - moved).num_days().abs())
+            .map(|(_, y)| y)?;
+        return Some((month_start(year, month)?, month_end(year, month)?));
+    }
+
+    let year: i32 = TRAILING_YEAR.captures(title)?[1].parse().ok()?;
+    nearby
+        .contains(&year)
+        .then(|| Some((month_start(year, 1)?, month_end(year, 12)?)))
+        .flatten()
+}
+
 /// The number of whole months from `start` to an *inclusive* `end`, if it is a whole number of
 /// them: `01.06.` to `30.06.` is one, `15.02.` to `14.05.` is three.
 fn whole_months(start: DateTime<Utc>, end: DateTime<Utc>) -> Option<u32> {
