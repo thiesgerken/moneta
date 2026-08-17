@@ -82,6 +82,72 @@ pub fn statement_period(
     sane.then_some((start, end))
 }
 
+/// The period an expense names in its own title, where the statement names none.
+///
+/// A title is written by hand, so only two shapes are worth trusting, and both are anchored on
+/// the day the money moved rather than read as absolute dates.
+///
+/// A month by name is the nearest such month to that day — `Lohn Februar` paid on 15.03. is the
+/// February before it, `Urlaub im September` settled on 20.10. the September before that. Paid
+/// in advance or in arrears both come out right, since nothing here assumes a direction.
+///
+/// A bare year counts only at the very end of the title, only within a year either way, and only
+/// where the rest of the title says the money settles something. Position and window keep out an
+/// invoice number (`Rechnung 2024-0042`) and a product whose name happens to end in a number
+/// (`Weltraumspiel 2077`, `Zahnbürste Modell 2000`), but neither keeps out a product labelled
+/// with the year it is *for*: `Steuersoftware 2024` is tax software bought the November before, and
+/// `Fotobuch 2019` is a book of photographs, not twelve months of anything. Only [`SETTLED`] can
+/// tell those from `Steuerrückzahlung 2023`.
+pub fn title_period(title: &str, moved: DateTime<Utc>) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
+    static MONTH: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?i)\b(Januar|Februar|M(?:ä|ae)rz|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\b",
+        )
+        .unwrap()
+    });
+    static TRAILING_YEAR: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?:^|\s)((?:19|20)\d{2})\s*$").unwrap());
+
+    let nearby = moved.year() - 1..=moved.year() + 1;
+
+    if let Some(c) = MONTH.captures(title) {
+        let month = named_month(&c[1])?;
+        let year = nearby
+            .filter_map(|y| month_start(y, month).map(|start| (start, y)))
+            .min_by_key(|(start, _)| (*start - moved).num_days().abs())
+            .map(|(_, y)| y)?;
+        return Some((month_start(year, month)?, month_end(year, month)?));
+    }
+
+    let year: i32 = TRAILING_YEAR.captures(title)?[1].parse().ok()?;
+    let lower = title.to_lowercase();
+    let settles = SETTLED.iter().any(|word| lower.contains(word));
+    (settles && nearby.contains(&year))
+        .then(|| Some((month_start(year, 1)?, month_end(year, 12)?)))
+        .flatten()
+}
+
+/// What a title has to call itself before a year at the end of it is a period.
+///
+/// A year names the thing a purchase is *about* as readily as the span it settles, and nothing
+/// in the numbers separates the two: `Steuersoftware 2023` costs 12,90 € and `Beitragsnachforderung
+/// 2023` costs 12,85 €. The words do. These are the German nouns for reckoning up a span that
+/// has run — a bill, an arrears demand, a refund, a distribution, a provision released — plus
+/// the two that name a thing sold *by* the year. A title that says none of them keeps its single
+/// day, which is where every expense started.
+const SETTLED: &[&str] = &[
+    "abrechnung",
+    "nachzahlung",
+    "nachforderung",
+    "rückzahlung",
+    "rückstellung",
+    "ausschüttung",
+    "erklärung",
+    "versicherung",
+    "beitrag",
+    "gebühr",
+];
+
 /// The number of whole months from `start` to an *inclusive* `end`, if it is a whole number of
 /// them: `01.06.` to `30.06.` is one, `15.02.` to `14.05.` is three.
 fn whole_months(start: DateTime<Utc>, end: DateTime<Utc>) -> Option<u32> {
