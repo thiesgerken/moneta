@@ -26,7 +26,7 @@
 	import { priced } from '$lib/investments';
 	import { ANALYSIS_CARD, WEALTH_COLOR } from './cards';
 	import QueryError from '$lib/QueryError.svelte';
-	import { amountColor, euro } from '$lib/money';
+	import { amountColor, euro, signedEuro } from '$lib/money';
 
 	const DAY = 86400000;
 
@@ -187,10 +187,17 @@
 		return investments.find((i) => i.account.id === accountId)?.value ?? amount;
 	};
 
-	/// Of what is shown: a total that counts rows you cannot see is a total of nothing in
-	/// particular, and a closed account contributes the same figure for ever.
-	const total = $derived(
-		shownBalances.reduce((sum, b) => sum + shownAmount(b.account.id, b.amount), 0)
+	/// Everything, whatever the table is currently listing. The filter says which rows are
+	/// worth reading, not what you own -- a wealth that changes when you tick a box is a figure
+	/// nobody can quote.
+	const total = $derived(balances.reduce((sum, b) => sum + shownAmount(b.account.id, b.amount), 0));
+
+	/// So the difference has to be said out loud, or the rows visibly fail to add up to the
+	/// total above them. A closed account keeps its last balance for ever, so this is usually a
+	/// standing figure rather than a moving one -- and where it is zero there is nothing to say.
+	const hiddenBalances = $derived(balances.filter((b) => !shownBalances.includes(b)));
+	const hiddenTotal = $derived(
+		hiddenBalances.reduce((sum, b) => sum + shownAmount(b.account.id, b.amount), 0)
 	);
 
 	/// `ToggleGroup` binds a value; the preference outlives the tab, which flowbite unmounts.
@@ -546,6 +553,21 @@
 						<TableBodyCell class="px-4 py-3 font-semibold">{euro(total)}</TableBodyCell>
 						<TableBodyCell class="hidden px-4 py-3 sm:table-cell"></TableBodyCell>
 					</TableBodyRow>
+					<!-- What the rows below do not account for, in the two columns a phone also
+					     shows. Without it the total silently fails to add up to the column under it. -->
+					{#if hiddenTotal !== 0}
+						<TableBodyRow>
+							<TableBodyCell class="px-4 py-3 text-gray-500 italic dark:text-gray-400">
+								{hiddenBalances.length === 1
+									? 'ein ausgeblendetes Konto'
+									: `${hiddenBalances.length} ausgeblendete Konten`}
+							</TableBodyCell>
+							<TableBodyCell class="px-4 py-3 text-gray-500 italic dark:text-gray-400">
+								{signedEuro(hiddenTotal)}
+							</TableBodyCell>
+							<TableBodyCell class="hidden px-4 py-3 sm:table-cell"></TableBodyCell>
+						</TableBodyRow>
+					{/if}
 					{#each shownBalances as b (b.account.id)}
 						<TableBodyRow>
 							<!-- long account names wrap rather than widen the table; on a phone that is
