@@ -17,7 +17,6 @@
 	import { WEALTH_COLOR } from '$lib/analysis/cards';
 	import { shortDate } from '$lib/analysis/dates';
 	import QueryError from '$lib/QueryError.svelte';
-	import { signedEuro } from '$lib/money';
 	import { asOf as investmentsAsOf, priced, uncommittedGain } from '$lib/investments';
 
 	const euro = (cents: number) =>
@@ -214,8 +213,9 @@
 	const committed = $derived(
 		new Map((data?.analysis.current ?? []).map((b) => [b.account.id, b.amount]))
 	);
-	const gain = $derived(uncommittedGain(investments, committed));
-	const marketTotal = $derived(total + gain);
+	/// Not shown on its own: the difference between the two figures on the page is a subtraction
+	/// anybody can do, and the account it belongs to is where it is worth naming.
+	const marketTotal = $derived(total + uncommittedGain(investments, committed));
 	const marketAsOf = $derived(investmentsAsOf(investments));
 	const hasMarket = $derived(priced(investments));
 
@@ -418,8 +418,7 @@
 								<span class="font-semibold text-gray-700 tabular-nums dark:text-gray-200">
 									{euro(marketTotal)}
 								</span>
-								mit den Depots{marketAsOf ? ` zum Kurs vom ${shortDate(marketAsOf)}` : ''}, davon
-								{signedEuro(gain)} noch nicht gebucht
+								mit den Depots{marketAsOf ? ` zum Kurs vom ${shortDate(marketAsOf)}` : ''}
 							</p>
 						{/if}
 					{/if}
