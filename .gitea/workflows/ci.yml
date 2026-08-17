@@ -45,7 +45,7 @@ jobs:
 
       # a prebuilt binary; `cargo install cargo-llvm-cov` is a couple of minutes of compiling
       # a tool this job only calls once
-      - uses: taiki-e/install-action@288e746965032cfcc232e09af2daf5f23c14d780 # v2
+      - uses: taiki-e/install-action@b6b84cf49ebfe0176417bdce007c624f0db37f20 # v2
         with:
           tool: cargo-llvm-cov
 
