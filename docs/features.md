@@ -98,13 +98,18 @@ write:
   analysis payload, so a stockdb that is down costs one null rather than the dashboard
 - no *flow* is offered it — monthly totals, categories, the calendar, prepayments — not even
   behind a toggle. Only the start page and the Vermögen tab, which are a stock of wealth right
-  now, and there only for today's Stichtag: laying this afternoon's price over a balance
-  computed for a day in 2019 answers nothing
+  now, and on the Vermögen tab only for today's Stichtag: laying this afternoon's price over a
+  balance computed for a day in 2019 answers nothing
 
-The start page keeps the booked total in large type and puts the market figure under it, with
-how much of it is not booked yet and how old the price is; the toggle is remembered per browser.
-An expanded depot on the accounts page adds what went in, the IRR, a link over to stockdb, and
-the gain nobody has committed yet.
+The start page keeps the booked total in large type and puts the market figure under it as a
+smaller line, marked `LIVE`, with the date of the price and a way over to StockDB. No toggle:
+it only ever added a line, and a control that hides a number is one whose state you have to
+remember. The Vermögen tab does have one, because there the market value *replaces* the booked
+figure in the table and in the total, which is a choice rather than a disclosure.
+
+An expanded depot on the accounts page adds what went in, the IRR, a link over to StockDB, and
+the gain nobody has committed yet — the one figure the start page deliberately leaves out,
+since that is where it is a number to act on.
 
 The one path from a market value into the books is a button there that opens the ordinary
 balance dialog with the figure filled in. What gets saved is still typed by hand.
