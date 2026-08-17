@@ -24,6 +24,13 @@
       "matchUpdateTypes": ["patch"],
       "groupName": "npm patch dependencies",
       "automerge": true
+    },
+    {
+      "description": "The artifact actions stay on v4. From v7 and v8 they bundle an artifact client that refuses to talk to anything but github.com, and Gitea reads to it as a GHES instance, so every job uploading coverage fails after its tests have already passed. Digest updates within v4 are still wanted.",
+      "matchManagers": ["github-actions"],
+      "matchDepNames": ["actions/upload-artifact", "actions/download-artifact"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
     }
   ]
 }
