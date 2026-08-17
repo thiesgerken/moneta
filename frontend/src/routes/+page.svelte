@@ -4,6 +4,7 @@
 	import { Card, Spinner } from 'flowbite-svelte';
 	import {
 		ArrowRightOutline,
+		ArrowUpRightFromSquareOutline,
 		BellRingOutline,
 		CalendarMonthOutline,
 		PlusOutline
@@ -134,6 +135,8 @@
 			# beside the analysis payload rather than inside it: what a depot is worth today is
 			# read from stockdb, is never booked, and must not reach anything memoized there
 			investments {
+				# only for the link out of the line below; the backend url is not reachable here
+				url
 				list {
 					account {
 						id
@@ -218,6 +221,7 @@
 	const marketTotal = $derived(total + uncommittedGain(investments, committed));
 	const marketAsOf = $derived(investmentsAsOf(investments));
 	const hasMarket = $derived(priced(investments));
+	const stockdbUrl = $derived(data?.investments.url ?? null);
 
 	const spark = $derived.by(() => {
 		const history = data?.analysis.history;
@@ -419,6 +423,20 @@
 									{euro(marketTotal)}
 								</span>
 								mit den Depots{marketAsOf ? ` zum Kurs vom ${shortDate(marketAsOf)}` : ''}
+								{#if stockdbUrl}
+									<!-- eslint-disable svelte/no-navigation-without-resolve -- another app entirely -->
+									<a
+										href="{stockdbUrl}/accounts"
+										target="_blank"
+										rel="noreferrer"
+										title="In StockDB öffnen"
+										aria-label="In StockDB öffnen"
+										class="ml-0.5 inline-block align-[-0.15em] hover:text-gray-700 dark:hover:text-gray-200"
+									>
+										<ArrowUpRightFromSquareOutline class="h-3.5 w-3.5" />
+									</a>
+									<!-- eslint-enable svelte/no-navigation-without-resolve -->
+								{/if}
 							</p>
 						{/if}
 					{/if}
