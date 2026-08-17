@@ -4,6 +4,7 @@
 	import { Card, Spinner } from 'flowbite-svelte';
 	import {
 		ArrowRightOutline,
+		ArrowUpRightFromSquareOutline,
 		BellRingOutline,
 		CalendarMonthOutline,
 		PlusOutline
@@ -17,6 +18,7 @@
 	import { WEALTH_COLOR } from '$lib/analysis/cards';
 	import { shortDate } from '$lib/analysis/dates';
 	import QueryError from '$lib/QueryError.svelte';
+	import { asOf as investmentsAsOf, priced, uncommittedGain } from '$lib/investments';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', {
@@ -95,6 +97,10 @@
 				# the two ends of the delta, in one round trip
 				current: balances(date: $now) {
 					amount
+					# only to hold a linked depot's market value against what is booked for it
+					account {
+						id
+					}
 				}
 				earlier: balances(date: $monthAgo) {
 					amount
@@ -123,6 +129,20 @@
 							expenses
 						}
 					}
+				}
+			}
+
+			# beside the analysis payload rather than inside it: what a depot is worth today is
+			# read from stockdb, is never booked, and must not reach anything memoized there
+			investments {
+				# only for the link out of the line below; the backend url is not reachable here
+				url
+				list {
+					account {
+						id
+					}
+					value
+					asOf
 				}
 			}
 
@@ -188,6 +208,20 @@
 	const total = $derived((data?.analysis.current ?? []).reduce((sum, b) => sum + b.amount, 0));
 	const earlier = $derived((data?.analysis.earlier ?? []).reduce((sum, b) => sum + b.amount, 0));
 	const delta = $derived(total - earlier);
+
+	/// The depots at today's prices, beside the booked total rather than instead of it. The
+	/// booked figure stays the one in large type: it is the conservative record, and this is a
+	/// number that moves every minute the market is open.
+	const investments = $derived(data?.investments.list ?? []);
+	const committed = $derived(
+		new Map((data?.analysis.current ?? []).map((b) => [b.account.id, b.amount]))
+	);
+	/// Not shown on its own: the difference between the two figures on the page is a subtraction
+	/// anybody can do, and the account it belongs to is where it is worth naming.
+	const marketTotal = $derived(total + uncommittedGain(investments, committed));
+	const marketAsOf = $derived(investmentsAsOf(investments));
+	const hasMarket = $derived(priced(investments));
+	const stockdbUrl = $derived(data?.investments.url ?? null);
 
 	const spark = $derived.by(() => {
 		const history = data?.analysis.history;
@@ -373,6 +407,38 @@
 								})}
 							</span>
 						</p>
+						<!-- Both figures, and the booked one keeps the large type: what the depots are
+						     worth is the market's opinion and moves by the minute, where what has been
+						     booked is a decision somebody took, and this page is built on those. No
+						     toggle -- it only ever added a line, and a control that hides a number is a
+						     control you have to remember the state of. -->
+						{#if hasMarket}
+							<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+								<span
+									class="mr-1 rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium tracking-wide text-gray-600 uppercase dark:bg-gray-700 dark:text-gray-300"
+								>
+									live
+								</span>
+								<span class="font-semibold text-gray-700 tabular-nums dark:text-gray-200">
+									{euro(marketTotal)}
+								</span>
+								mit den Depots{marketAsOf ? ` zum Kurs vom ${shortDate(marketAsOf)}` : ''}
+								{#if stockdbUrl}
+									<!-- eslint-disable svelte/no-navigation-without-resolve -- another app entirely -->
+									<a
+										href="{stockdbUrl}/accounts"
+										target="_blank"
+										rel="noreferrer"
+										title="In StockDB öffnen"
+										aria-label="In StockDB öffnen"
+										class="ml-0.5 inline-block align-[-0.15em] hover:text-gray-700 dark:hover:text-gray-200"
+									>
+										<ArrowUpRightFromSquareOutline class="h-3.5 w-3.5" />
+									</a>
+									<!-- eslint-enable svelte/no-navigation-without-resolve -->
+								{/if}
+							</p>
+						{/if}
 					{/if}
 				</div>
 				<div class="min-w-0">

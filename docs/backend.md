@@ -24,7 +24,8 @@ src/
   accrual.rs        reading a period off a statement, and what one instance of a template covers
   rules.rs          periodic and automation rules. The pure parts are well covered by tests
   queries.rs        shared queries, including loading and writing the expense aggregate
-  graphql/          one module per domain; root.rs wires the schema and the auth
+  graphql/          one module per domain; root.rs wires the schema and the auth.
+                    investments.rs is the one that calls out, to stockdb, and writes nothing
   import.rs         the MoneyDB import
 tests/sql/          SQL assertions against a freshly migrated database
 ```
@@ -139,6 +140,7 @@ CI is strict: `clippy -D warnings` and `fmt --check` both fail the build, test c
 ```sh
 moneta serve                         # run the API
 moneta user --add|--update|--remove <name> | --list
+moneta user --stockdb-token <name>   # paste stockdb's API token on stdin; empty clears it
 moneta account --list x              # the flags take a dummy value, see below
 moneta account --sync <id1> <id2> [--invert x]
 moneta account --unsync <id>

@@ -15,6 +15,13 @@ itertools = "0.15"
 log = "0.4"
 prettytable-rs = "0.10"
 regex = "1.13"
+# The only thing moneta calls out to is stockdb, and that needs a GET with a bearer token and
+# nothing else: no cookies, no proxy handling, no forms. rustls rather than the system openssl,
+# so the runtime image stays as slim as it is.
+reqwest = { version = "0.13", default-features = false, features = [
+    "json",
+    "rustls",
+] }
 rocket = { version = "0.5.1", features = ["secrets", "json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }

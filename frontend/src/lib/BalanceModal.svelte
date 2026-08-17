@@ -16,6 +16,14 @@
 			readonly color: string | null;
 			readonly owner: { readonly name: string; readonly firstName: string | null };
 		}[];
+		/// A starting point for a *new* balance, which is how the depots offer to book what they
+		/// are worth today: the figure is filled in and everything about it stays editable,
+		/// because the number that gets committed is a decision and usually a smaller one.
+		prefill?: {
+			readonly amount: number;
+			readonly date: Date;
+			readonly accountId: string;
+		};
 		balance?: {
 			readonly id: string;
 			readonly comments: string;
@@ -26,14 +34,27 @@
 			};
 		};
 	}
-	let { open = $bindable(), accounts, userName: user_name, balance, onsubmit }: Props = $props();
+	let {
+		open = $bindable(),
+		accounts,
+		userName: user_name,
+		balance,
+		prefill,
+		onsubmit
+	}: Props = $props();
 
 	let comments = $derived(balance?.comments || '');
 	let amount: string | undefined = $derived(
-		balance?.amount ? (balance.amount / 100).toFixed(2) : undefined
+		balance?.amount
+			? (balance.amount / 100).toFixed(2)
+			: prefill
+				? (prefill.amount / 100).toFixed(2)
+				: undefined
 	);
-	let date: Date | undefined = $derived(balance?.date ? new Date(balance.date) : undefined);
-	let accountId = $derived(balance?.account.id.toString() || '');
+	let date: Date | undefined = $derived(
+		balance?.date ? new Date(balance.date) : prefill ? new Date(prefill.date) : undefined
+	);
+	let accountId = $derived(balance?.account.id.toString() || prefill?.accountId || '');
 
 	const commentsError = $derived(false);
 	const amountError = $derived(!amount || isNaN(Number(amount)));

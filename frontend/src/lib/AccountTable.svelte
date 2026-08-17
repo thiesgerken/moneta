@@ -32,6 +32,9 @@
 		TextSizeOutline
 	} from 'flowbite-svelte-icons';
 	import AccountModal from './AccountModal.svelte';
+	import BalanceModal from './BalanceModal.svelte';
+	import { shortDate } from './analysis/dates';
+	import { amountColor, euro, signedEuro } from './money';
 	import {
 		tableSearchClasses,
 		tableSearchTableClass,
@@ -53,6 +56,12 @@
 	const selectedAccountId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
 	/// A third click on a header comes back here.
 	const sort = new TableSort({ field: 'opened', direction: ASC });
+
+	/// The depot whose market value is being offered as a new balance, if any.
+	let balancePrefill = $state<{ amount: number; date: Date; accountId: string } | undefined>(
+		undefined
+	);
+	let showBalanceModal = $state(false);
 
 	let showNewAccountModal = $state(false);
 	let showEditAccountModal = $state(false);
@@ -91,6 +100,8 @@
 					color
 					owner {
 						name
+						# the balance dialog labels an account with its owner's first name
+						firstName
 					}
 					iban
 					kind
@@ -99,6 +110,7 @@
 					opened
 					closed
 					ownershipFraction
+					stockdbAccountId
 					synchronization {
 						account {
 							id
@@ -110,8 +122,52 @@
 		}
 	`);
 
+	/// What the linked depots are worth today, beside the balance booked for them. Read-only:
+	/// the only thing this page does with it is show it, and offer to open the ordinary balance
+	/// dialog with the figure filled in, which is still a decision taken by hand.
+	const investmentStore = graphql(`
+		query AccountTableInvestments($now: DateTime!) {
+			investments {
+				url
+				# what the account dialog offers instead of asking for a number
+				accounts {
+					id
+					name
+				}
+				list {
+					account {
+						id
+					}
+					stockdbAccountId
+					value
+					invested
+					irr
+					asOf
+				}
+			}
+
+			analysis {
+				balances(date: $now) {
+					amount
+					account {
+						id
+					}
+				}
+			}
+		}
+	`);
+
 	$effect(() => void basicStore.fetch());
 	$effect(() => void accountStore.fetch());
+	$effect(() => void investmentStore.fetch({ variables: { now: new Date() } }));
+
+	const investments = $derived($investmentStore.data?.investments.list ?? []);
+	const stockdbUrl = $derived($investmentStore.data?.investments.url ?? null);
+	const stockdbAccounts = $derived($investmentStore.data?.investments.accounts ?? []);
+	const committedBalances = $derived(
+		new Map(($investmentStore.data?.analysis.balances ?? []).map((b) => [b.account.id, b.amount]))
+	);
+	const investmentFor = (accountId: string) => investments.find((i) => i.account.id === accountId);
 
 	const currentUserName = $derived($basicStore.data?.users.me?.name || '');
 	const totalCount = $derived(
@@ -302,6 +358,7 @@
 <AccountModal
 	bind:open={showNewAccountModal}
 	onsubmit={handleAccountModalSubmit}
+	{stockdbAccounts}
 	accounts={allAccounts.map((a) => ({
 		id: a.id.toString(),
 		name: a.name,
@@ -315,6 +372,7 @@
 		opened: a.opened,
 		closed: a.closed,
 		ownershipFraction: a.ownershipFraction,
+		stockdbAccountId: a.stockdbAccountId,
 		synchronization: a.synchronization
 			? {
 					account: { id: a.synchronization.account.id.toString() },
@@ -327,6 +385,7 @@
 <AccountModal
 	bind:open={showEditAccountModal}
 	onsubmit={handleAccountModalSubmit}
+	{stockdbAccounts}
 	account={accountToEdit}
 	accounts={allAccounts.map((a) => ({
 		id: a.id.toString(),
@@ -341,6 +400,7 @@
 		opened: a.opened,
 		closed: a.closed,
 		ownershipFraction: a.ownershipFraction,
+		stockdbAccountId: a.stockdbAccountId,
 		synchronization: a.synchronization
 			? {
 					account: { id: a.synchronization.account.id.toString() },
@@ -348,6 +408,20 @@
 				}
 			: null
 	}))}
+/>
+
+<!-- The one way a market value ever reaches the books, and it goes through the same dialog as
+     every other reading: filled in, then edited down to whatever is worth committing. -->
+<BalanceModal
+	bind:open={showBalanceModal}
+	userName={currentUserName}
+	accounts={allAccounts}
+	prefill={balancePrefill}
+	onsubmit={async () => {
+		balancePrefill = undefined;
+		invalidate();
+		await investmentStore.fetch({ ...AFTER_WRITE, variables: { now: new Date() } });
+	}}
 />
 
 {#snippet newButton(cls: string)}
@@ -615,7 +689,83 @@
 									</div>
 								{/if}
 
+								<!-- What stockdb says the depot is worth today. Nothing here is booked, and
+								     nothing here books: the button below opens the ordinary balance dialog
+								     with the figure filled in, and what gets saved is still typed by hand. -->
+								{#if account.stockdbAccountId !== null}
+									{@const investment = investmentFor(account.id)}
+									{@const committed = committedBalances.get(account.id) ?? 0}
+									<div class="mt-1 border-t border-gray-200 pt-2 dark:border-gray-700">
+										<b>Depot in StockDB:</b>
+										{stockdbAccounts.find((a) => a.id === account.stockdbAccountId)?.name ??
+											`Nr. ${account.stockdbAccountId}`}
+										{#if stockdbUrl}
+											<!-- stockdb has no page per depot, so this lands on its list of them -->
+											<!-- eslint-disable svelte/no-navigation-without-resolve -- another app entirely -->
+											<a
+												href="{stockdbUrl}/accounts"
+												target="_blank"
+												rel="noreferrer"
+												class="text-primary-600 dark:text-primary-500 ml-1 hover:underline"
+											>
+												öffnen
+											</a>
+											<!-- eslint-enable svelte/no-navigation-without-resolve -->
+										{/if}
+									</div>
+									{#if investment?.value != null}
+										<div>
+											<b>Marktwert:</b>
+											{euro(investment.value)}
+											{#if investment.asOf}
+												<span class="text-gray-500 dark:text-gray-400">
+													(Kurs vom {shortDate(investment.asOf)})
+												</span>
+											{/if}
+										</div>
+										<div>
+											<b>Nicht gebucht:</b>
+											<span class={amountColor(investment.value - committed)}>
+												{signedEuro(investment.value - committed)}
+											</span>
+											<span class="text-gray-500 dark:text-gray-400">
+												gegenüber {euro(committed)} gebucht
+											</span>
+										</div>
+										{#if investment.invested != null}
+											<div>
+												<b>Eingezahlt:</b>
+												{euro(investment.invested)}
+												{#if investment.irr != null}
+													<span class="text-gray-500 dark:text-gray-400">
+														({(investment.irr * 100).toFixed(1).replace('.', ',')} % p.a.)
+													</span>
+												{/if}
+											</div>
+										{/if}
+									{:else}
+										<div class="text-gray-500 dark:text-gray-400">Marktwert nicht verfügbar</div>
+									{/if}
+								{/if}
+
 								<div class="flex gap-2">
+									{#if investmentFor(account.id)?.value != null}
+										<Button
+											color="alternative"
+											size="xs"
+											onclick={() => {
+												balancePrefill = {
+													amount: investmentFor(account.id)!.value!,
+													date: new Date(),
+													accountId: account.id.toString()
+												};
+												showBalanceModal = true;
+											}}
+										>
+											<ScaleBalancedOutline class="mr-2 h-3.5 w-3.5" />
+											Als Kontostand buchen
+										</Button>
+									{/if}
 									<Button
 										color="yellow"
 										size="xs"

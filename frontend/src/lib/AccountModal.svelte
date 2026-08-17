@@ -8,6 +8,10 @@
 
 	interface Props {
 		open?: boolean;
+		/// The depots this reader has in StockDB. Empty when there is no token, no StockDB or
+		/// nothing reachable — the field then goes disabled rather than disappearing, since a
+		/// missing control reads as a feature that does not exist.
+		stockdbAccounts?: { readonly id: number; readonly name: string }[];
 		onsubmit?: () => Promise<void>; // used to signal that the form has been successfully submitted, need to invalidate cached stuff
 		accounts: {
 			readonly id: string;
@@ -23,6 +27,7 @@
 			readonly opened: Date;
 			readonly closed: Date | null;
 			readonly ownershipFraction: number;
+			readonly stockdbAccountId: number | null;
 			readonly synchronization: {
 				readonly account: { readonly id: string };
 				readonly invert: boolean;
@@ -42,13 +47,14 @@
 			readonly opened: Date;
 			readonly closed: Date | null;
 			readonly ownershipFraction: number;
+			readonly stockdbAccountId: number | null;
 			readonly synchronization: {
 				readonly account: { readonly id: string };
 				readonly invert: boolean;
 			} | null;
 		};
 	}
-	let { open = $bindable(), accounts, account, onsubmit }: Props = $props();
+	let { open = $bindable(), accounts, stockdbAccounts = [], account, onsubmit }: Props = $props();
 
 	let name = $derived(account?.name || '');
 	let description = $derived(account?.description || '');
@@ -63,6 +69,11 @@
 	let closed = $derived(account?.closed ? new Date(account.closed) : undefined);
 	let ownershipFraction = $derived(
 		account?.ownershipFraction ? (account.ownershipFraction * 100).toFixed(0) : '100'
+	);
+	let stockdbAccountId = $derived(
+		account?.stockdbAccountId === null || account?.stockdbAccountId === undefined
+			? ''
+			: String(account.stockdbAccountId)
 	);
 	let synchronizationAccountId = $derived(account?.synchronization?.account.id.toString() || '');
 	let synchronizationInvert = $derived(account?.synchronization?.invert || false);
@@ -120,6 +131,12 @@
 		{ value: 'DECADES', name: 'Jahrzehnte' }
 	];
 
+	/// `''` is "not linked", and the ids are strings because that is what a `Select` binds.
+	const stockdbOptions = $derived([
+		{ value: '', name: 'Nicht verknüpft' },
+		...stockdbAccounts.map((a) => ({ value: String(a.id), name: a.name }))
+	]);
+
 	const riskOptions = [
 		{ value: 'NONE', name: 'Kein Risiko' },
 		{ value: 'SLIGHT', name: 'Geringes Risiko' },
@@ -160,7 +177,8 @@
 			risk,
 			opened,
 			closed,
-			ownershipFraction: Number(ownershipFraction) / 100
+			ownershipFraction: Number(ownershipFraction) / 100,
+			stockdbAccountId: stockdbAccountId.trim() ? Number(stockdbAccountId) : null
 		};
 
 		console.log('account', account);
@@ -219,6 +237,25 @@
 			<div>
 				<Label for="iban" class="mb-2">IBAN</Label>
 				<Input id="iban" placeholder="" bind:value={iban} color={ibanError ? 'red' : undefined} />
+			</div>
+			<div>
+				<!-- Which depot in StockDB this account stands for. Only the link is kept here;
+				     nothing is ever written back to this account from it. -->
+				<Label for="stockdbAccountId" class="mb-2">StockDB-Depot</Label>
+				<Select
+					id="stockdbAccountId"
+					items={stockdbOptions}
+					bind:value={stockdbAccountId}
+					disabled={stockdbAccounts.length === 0}
+					placeholder=""
+				/>
+				{#if stockdbAccounts.length === 0}
+					<!-- Disabled and said out loud, rather than hidden: which of the three reasons it
+					     is matters less than not looking like a feature that was never built. -->
+					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+						Keine StockDB-Depots verfügbar – Token hinterlegt?
+					</p>
+				{/if}
 			</div>
 			<div>
 				<Label for="kind" class="mb-2">Typ</Label>

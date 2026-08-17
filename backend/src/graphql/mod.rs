@@ -4,6 +4,7 @@ pub mod balances;
 pub mod cache;
 pub mod categories;
 pub mod expenses;
+pub mod investments;
 mod root;
 pub mod rules;
 pub mod scoped;

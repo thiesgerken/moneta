@@ -204,6 +204,23 @@ and 812 transactions, and `Depot` holds 487,30 € three years before it was ope
 anchor `simulate_balances` offers at `-infinity` does not save you here: it is by construction
 the furthest away, so a recorded balance always wins.
 
+**The market value of a depot is an overlay, and the rule is that it never becomes a
+balance.** `investments` reads stockdb at request time and writes nothing: not to `balances`,
+not to any other table, and not into the analysis payload. Keep it out of `analysis` — folding
+it in there would put it inside the memoized keys in `cache.rs`, tie the frontend toggle to a
+cache key, and make a stockdb that is down or slow into a dashboard that is down or slow. Keep
+it out of every *flow* as well (monthly totals, categories, the calendar, prepayments), toggle
+or no toggle: the balances are deliberately conservative and booked about once a year, and
+month-to-month spending is supposed to be about spending. On the frontend, the market figure is
+offered on the start page and the Vermögen tab only, and there only when the Stichtag is today
+— stockdb prices what a depot is worth now, and laying that over a balance computed for a day
+in 2019 answers nothing.
+
+**The resolver must not hold a pool connection across the HTTP call**, for the reason above
+about dataloaders, only more so: an outbound request is a far longer await than a loader batch.
+`investments::list` reads the linked accounts and the token inside a block that ends before the
+first request goes out; keep it that way.
+
 **`GRAPHQL_API_URL` is vestigial.** It fed the server-side houdini client, which no longer
 exists — the request url now comes from `houdini.config.js` and is relative. It is still set
 in `docker-compose.yaml` and read by the frontend `dev` script; neither has any effect.

@@ -75,6 +75,11 @@ cumulative reading back as the height of the stack; stacking cumulative ones wou
 liquid accounts once per level above them. MoneyDB returned the cumulative form because it drew
 overlapping lines rather than a stack.
 
+The **Gesamt** row counts every account, whichever ones the table is listing: the *Aktive
+Konten* / *Alle* filter says which rows are worth reading, not what you own, and a wealth that
+changed when you ticked a box would be a figure nobody could quote. What is left out therefore
+gets a row of its own directly under it, and only when it is not zero.
+
 `to` is always the last sample even when the step does not divide the range, otherwise the line
 stops short of the right edge. The point count is **capped at 400 server-side** —
 `from`/`to`/`stepDays` are user input and a decade at `stepDays: 1` is ~3650 simulations.

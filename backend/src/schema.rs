@@ -18,6 +18,7 @@ diesel::table! {
         ownership_fraction -> Float8,
         sync_account_id -> Nullable<Uuid>,
         sync_invert -> Nullable<Bool>,
+        stockdb_account_id -> Nullable<Int4>,
     }
 }
 
@@ -176,6 +177,7 @@ diesel::table! {
         password_hash -> Text,
         seen_at -> Nullable<Timestamptz>,
         seen_before -> Nullable<Timestamptz>,
+        stockdb_token -> Nullable<Text>,
     }
 }
 

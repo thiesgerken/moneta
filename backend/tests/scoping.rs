@@ -70,6 +70,7 @@ fn account(id: Uuid, user_id: Uuid, name: &str, ownership_fraction: f64) -> Acco
         ownership_fraction,
         sync_account_id: None,
         sync_invert: None,
+        stockdb_account_id: None,
     }
 }
 
