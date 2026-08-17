@@ -18,7 +18,6 @@
 	import { shortDate } from '$lib/analysis/dates';
 	import QueryError from '$lib/QueryError.svelte';
 	import { signedEuro } from '$lib/money';
-	import { marketState, showMarket } from '$lib/investments.svelte';
 	import { asOf as investmentsAsOf, priced, uncommittedGain } from '$lib/investments';
 
 	const euro = (cents: number) =>
@@ -220,11 +219,6 @@
 	const marketAsOf = $derived(investmentsAsOf(investments));
 	const hasMarket = $derived(priced(investments));
 
-	/// `ToggleGroup` binds a value, the preference outlives the page. This is the seam between
-	/// the two; writing straight into `marketState` from the binding would not persist it.
-	let marketMode = $state(marketState.show ? 'market' : 'booked');
-	$effect(() => showMarket(marketMode === 'market'));
-
 	const spark = $derived.by(() => {
 		const history = data?.analysis.history;
 		if (!history) return [];
@@ -409,28 +403,24 @@
 								})}
 							</span>
 						</p>
-						<!-- Both figures, and the booked one keeps the large type. What the depots are
-						     worth today is the market's opinion and moves by the minute; what has been
-						     booked is a decision somebody took, and this page is built on those. -->
+						<!-- Both figures, and the booked one keeps the large type: what the depots are
+						     worth is the market's opinion and moves by the minute, where what has been
+						     booked is a decision somebody took, and this page is built on those. No
+						     toggle -- it only ever added a line, and a control that hides a number is a
+						     control you have to remember the state of. -->
 						{#if hasMarket}
-							<div class="mt-3">
-								<ToggleGroup
-									bind:value={marketMode}
-									options={[
-										{ value: 'booked', label: 'Gebucht' },
-										{ value: 'market', label: 'Mit Kursen' }
-									]}
-								/>
-								{#if marketMode === 'market'}
-									<p class="mt-2 text-sm">
-										<span class="font-semibold tabular-nums">{euro(marketTotal)}</span>
-										<span class="text-gray-500 dark:text-gray-400">
-											mit den Depots zum Kurs{marketAsOf ? ` vom ${shortDate(marketAsOf)}` : ''},
-											davon {signedEuro(gain)} noch nicht gebucht
-										</span>
-									</p>
-								{/if}
-							</div>
+							<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+								<span
+									class="mr-1 rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium tracking-wide text-gray-600 uppercase dark:bg-gray-700 dark:text-gray-300"
+								>
+									live
+								</span>
+								<span class="font-semibold text-gray-700 tabular-nums dark:text-gray-200">
+									{euro(marketTotal)}
+								</span>
+								mit den Depots{marketAsOf ? ` zum Kurs vom ${shortDate(marketAsOf)}` : ''}, davon
+								{signedEuro(gain)} noch nicht gebucht
+							</p>
 						{/if}
 					{/if}
 				</div>
