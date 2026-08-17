@@ -5,6 +5,11 @@
     ":preserveSemverRanges",
     "group:allNonMajor"
   ],
+  "description": [
+    "pnpm 11 refuses a lockfile entry younger than a day, so anything that lands faster than that fails `pnpm install --frozen-lockfile` in CI until the version ages out. Three days keeps a margin over that and over a weekend of nobody looking.",
+    "Renovate does not apply this to lockFileMaintenance, lockfileUpdate, pin or replacement updates -- the package manager resolves those itself -- so a lock file maintenance run can still produce an entry pnpm will reject."
+  ],
+  "minimumReleaseAge": "3 days",
   "lockFileMaintenance": {
     "enabled": true,
     "automerge": true
