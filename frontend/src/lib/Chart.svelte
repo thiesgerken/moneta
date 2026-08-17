@@ -67,8 +67,17 @@
 			return;
 		}
 
+		// Nothing that replaces a chart already on screen animates its way in. Whoever is
+		// looking has the old picture in their head and is about to compare it with this one --
+		// the axis toggle over the analysis charts is exactly that -- and bars growing out of
+		// the floor is what makes the two hard to hold side by side. The first draw still
+		// animates, and the update path above never did.
+		const replacing = chart !== null;
 		chart?.destroy();
-		const created = new ApexCharts(el, next);
+		const created = new ApexCharts(
+			el,
+			replacing ? { ...next, chart: { ...next.chart, animations: { enabled: false } } } : next
+		);
 		chart = created;
 		built = shape;
 		collapsed = hiddenSignature(next);
