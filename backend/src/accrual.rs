@@ -91,10 +91,13 @@ pub fn statement_period(
 /// February before it, `Urlaub im September` settled on 20.10. the September before that. Paid
 /// in advance or in arrears both come out right, since nothing here assumes a direction.
 ///
-/// A bare year counts only at the very end of the title and only within a year either way.
-/// Anywhere else a four-digit number is an invoice — `Rechnung 2024-0042` — and further out it
-/// is part of a product name: `Weltraumspiel 2077`, `Zahnbürste Modell 2000`. Inside that
-/// window it is what the money was for: a tax year, a utility settlement, a licence.
+/// A bare year counts only at the very end of the title, only within a year either way, and only
+/// where the rest of the title says the money settles something. Position and window keep out an
+/// invoice number (`Rechnung 2024-0042`) and a product whose name happens to end in a number
+/// (`Weltraumspiel 2077`, `Zahnbürste Modell 2000`), but neither keeps out a product labelled
+/// with the year it is *for*: `Steuersoftware 2024` is tax software bought the November before, and
+/// `Fotobuch 2019` is a book of photographs, not twelve months of anything. Only [`SETTLED`] can
+/// tell those from `Steuerrückzahlung 2023`.
 pub fn title_period(title: &str, moved: DateTime<Utc>) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
     static MONTH: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(
@@ -117,11 +120,33 @@ pub fn title_period(title: &str, moved: DateTime<Utc>) -> Option<(DateTime<Utc>,
     }
 
     let year: i32 = TRAILING_YEAR.captures(title)?[1].parse().ok()?;
-    nearby
-        .contains(&year)
+    let lower = title.to_lowercase();
+    let settles = SETTLED.iter().any(|word| lower.contains(word));
+    (settles && nearby.contains(&year))
         .then(|| Some((month_start(year, 1)?, month_end(year, 12)?)))
         .flatten()
 }
+
+/// What a title has to call itself before a year at the end of it is a period.
+///
+/// A year names the thing a purchase is *about* as readily as the span it settles, and nothing
+/// in the numbers separates the two: `Steuersoftware 2023` costs 12,90 € and `Beitragsnachforderung
+/// 2023` costs 12,85 €. The words do. These are the German nouns for reckoning up a span that
+/// has run — a bill, an arrears demand, a refund, a distribution, a provision released — plus
+/// the two that name a thing sold *by* the year. A title that says none of them keeps its single
+/// day, which is where every expense started.
+const SETTLED: &[&str] = &[
+    "abrechnung",
+    "nachzahlung",
+    "nachforderung",
+    "rückzahlung",
+    "rückstellung",
+    "ausschüttung",
+    "erklärung",
+    "versicherung",
+    "beitrag",
+    "gebühr",
+];
 
 /// The number of whole months from `start` to an *inclusive* `end`, if it is a whole number of
 /// them: `01.06.` to `30.06.` is one, `15.02.` to `14.05.` is three.
