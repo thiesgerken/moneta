@@ -34,6 +34,19 @@
 	const hiddenSignature = (o: ApexOptions) =>
 		(o.series ?? []).map((s) => ((s as { hidden?: boolean }).hidden ? 1 : 0)).join('');
 
+	/// The same chart with its entry animation taken out.
+	///
+	/// `animate: false` on `updateOptions` is not enough, and the third argument is not the one
+	/// that decides this. Apex animates when `chart.animations.enabled && !globals.resized`, and
+	/// it only sets `resized` on the branch it takes when `redrawPaths` is false -- which is the
+	/// branch we do not want, because it morphs the old paths into the new ones. So the redraw
+	/// we ask for looks like a first draw to apex and replays the entry animation, and the only
+	/// way to say no is to hand it a config that has none.
+	const still = (o: ApexOptions): ApexOptions => ({
+		...o,
+		chart: { ...o.chart, animations: { enabled: false } }
+	});
+
 	let chart: ApexCharts | null = null;
 	let built = '';
 	let collapsed = '';
@@ -48,6 +61,7 @@
 			// draws it twice, once empty. Redraw the paths but skip the entry animation, or
 			// every refetch replays it.
 			const updating = chart;
+			const quiet = still(next);
 			const wanted = hiddenSignature(next);
 
 			// Both, in this order, and neither alone will do: `updateSeries` clears the
@@ -56,11 +70,11 @@
 			const cleared =
 				collapsed === wanted
 					? null
-					: updating.updateSeries(next.series ?? [], false).then(() => undefined);
+					: updating.updateSeries(quiet.series ?? [], false).then(() => undefined);
 			collapsed = wanted;
 
 			void Promise.resolve(cleared)
-				.then(() => updating.updateOptions(next, true, false))
+				.then(() => updating.updateOptions(quiet, true, false))
 				.then(() => {
 					if (chart === updating) onUpdated?.(updating);
 				});
@@ -70,14 +84,11 @@
 		// Nothing that replaces a chart already on screen animates its way in. Whoever is
 		// looking has the old picture in their head and is about to compare it with this one --
 		// the axis toggle over the analysis charts is exactly that -- and bars growing out of
-		// the floor is what makes the two hard to hold side by side. The first draw still
-		// animates, and the update path above never did.
+		// the floor is what makes the two hard to hold side by side. Only a chart drawn where
+		// there was none, which is a page load or a tab being opened, still animates.
 		const replacing = chart !== null;
 		chart?.destroy();
-		const created = new ApexCharts(
-			el,
-			replacing ? { ...next, chart: { ...next.chart, animations: { enabled: false } } } : next
-		);
+		const created = new ApexCharts(el, replacing ? still(next) : next);
 		chart = created;
 		built = shape;
 		collapsed = hiddenSignature(next);
