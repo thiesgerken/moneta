@@ -35,29 +35,27 @@ async fn visible_expense(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResul
         .optional()?)
 }
 
-async fn require_visible_expense(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<Uuid> {
-    visible_expense(conn, user_id, id)
-        .await?
-        .ok_or_else(|| "template expense not found".into())
-}
-
 /// A rule may only copy a template. Anything else is a real booking, and a rule pointing at one
 /// turns the rule dialog into a way of rewriting money that is already in the balances — which
 /// is how moneydb had it, and how 38 of the 50 imported rules arrived.
 async fn require_template_expense(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<Uuid> {
-    let upstream = require_visible_expense(conn, user_id, id).await?;
-
-    let is_template: bool = scoped::expenses(user_id)
+    let found: Option<(Uuid, bool)> = scoped::expenses(user_id)
         .filter(expenses_rendered::id.eq(id))
-        .select(expenses_rendered::is_template)
+        .select((
+            expenses_rendered::upstream_id,
+            expenses_rendered::is_template,
+        ))
         .first(conn)
-        .await?;
+        .await
+        .optional()?;
 
-    if !is_template {
-        return Err("a rule can only use an expense that is marked as a template".into());
+    match found {
+        None => Err("template expense not found".into()),
+        Some((_, false)) => {
+            Err("a rule can only use an expense that is marked as a template".into())
+        }
+        Some((upstream, true)) => Ok(upstream),
     }
-
-    Ok(upstream)
 }
 
 /// Both rule types are wrapped rather than derived so `templateId` can be handed back as the
@@ -109,8 +107,7 @@ impl GraphQLAutomationRule {
         visible_expense(conn, user_id, self.data.template_id).await
     }
 
-    /// null when the template is gone or pays with nothing, in which case the rule cannot fire
-    /// anyway
+    /// null when the template is gone, in which case the rule cannot fire anyway
     async fn accrual(&self, context: &Context) -> FieldResult<Option<AccrualShape>> {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
@@ -118,7 +115,6 @@ impl GraphQLAutomationRule {
             conn,
             user_id,
             self.data.template_id,
-            self.data.filter_account_id,
             self.data.last_delivery.unwrap_or_else(Utc::now),
         )
         .await
@@ -127,13 +123,12 @@ impl GraphQLAutomationRule {
 
 /// What a template would make of a payment on `at`, for whoever is allowed to see it.
 ///
-/// `None` for a template the caller cannot see, one that no longer exists, or one that pays with
-/// nothing — each of which is a rule that cannot fire.
+/// `None` for a template the caller cannot see or one that no longer exists — either of which is
+/// a rule that cannot fire.
 async fn accrual_shape(
     conn: &mut Conn,
     user_id: Uuid,
     template_id: Uuid,
-    account_id: Option<Uuid>,
     at: chrono::DateTime<Utc>,
 ) -> FieldResult<Option<AccrualShape>> {
     if visible_expense(conn, user_id, template_id).await?.is_none() {
@@ -143,11 +138,11 @@ async fn accrual_shape(
     let Some(template) = queries::load_expense(conn, template_id).await? else {
         return Ok(None);
     };
-    let Some(paid) = rules::template_booking(&template, account_id) else {
-        return Ok(None);
-    };
-
-    let shape = accrual::Shape::of(template.accrual_start, template.accrual_end, paid);
+    let shape = accrual::Shape::of(
+        template.accrual_start,
+        template.accrual_end,
+        rules::template_booking(&template),
+    );
     let (from, to) = shape.period(at);
 
     Ok(Some(AccrualShape {
@@ -262,19 +257,11 @@ impl AutomationRuleQuery {
     pub async fn preview(
         context: &Context,
         template_id: Uuid,
-        account_id: Option<Uuid>,
         at: Option<chrono::DateTime<Utc>>,
     ) -> FieldResult<Option<AccrualShape>> {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
-        accrual_shape(
-            conn,
-            user_id,
-            template_id,
-            account_id,
-            at.unwrap_or_else(Utc::now),
-        )
-        .await
+        accrual_shape(conn, user_id, template_id, at.unwrap_or_else(Utc::now)).await
     }
 
     pub async fn list(

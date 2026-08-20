@@ -147,7 +147,7 @@ pub fn impose(
     // The blank booking is a placeholder for a payment, not a payment, and its date is the only
     // thing read off it. Everything else the template holds is a counter-booking or a share,
     // which is what a delivery gets wrapped in.
-    let paid = template_booking(template, None).unwrap_or(template.accrual_start);
+    let paid = template_booking(template);
     e.transactions.retain(|t| t.amount != Some(0));
 
     let (start, end) = period(template, paid, delivery);
@@ -210,13 +210,15 @@ fn period(
 /// one, and kept because an expense with no transactions belongs to no user at all —
 /// `expense_users` derives ownership from the accounts its transactions touch, so a template
 /// without one would render in no view and could not be opened.
-pub fn template_booking(template: &Expense, _account_id: Option<Uuid>) -> Option<DateTime<Utc>> {
+///
+/// A template that has lost its blank booking falls back on the start of its own period, which
+/// is a phase of zero: paid on the first day of what it pays for.
+pub fn template_booking(template: &Expense) -> DateTime<Utc> {
     template
         .transactions
         .iter()
         .find(|t| t.amount == Some(0))
-        .map(|t| t.date)
-        .or(Some(template.accrual_start))
+        .map_or(template.accrual_start, |t| t.date)
 }
 
 /// What a transaction is worth, whichever way it is written down: the amount it carries, or
@@ -691,6 +693,12 @@ mod tests {
     }
 
     #[test]
+    fn a_rule_without_filters_matches_anything() {
+        let rule = automation("catch all", 1);
+        assert!(matches(&rule, &delivery(Uuid::now_v7(), -100, "whatever")));
+    }
+
+    #[test]
     fn statement_regex_must_match() {
         let mut rule = automation("Abfall", 1);
         rule.regex_statement = Some("Muster Stadtreinigung".into());
@@ -861,7 +869,7 @@ mod tests {
         ]);
         tpl.transactions[1].date = at(2025, 1, 9);
 
-        assert_eq!(template_booking(&tpl, None), Some(at(2025, 1, 9)));
+        assert_eq!(template_booking(&tpl), at(2025, 1, 9));
 
         let e = impose(&tpl, &delivery(giro, -4237, "x"), at(2025, 3, 5)).unwrap();
 
