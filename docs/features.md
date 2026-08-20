@@ -145,6 +145,24 @@ how far into the period it pays for a payment falls. That is what puts a Kita fe
 the 30th into the month it pays for rather than the next one, and it is the only thing about a
 payment neither the rule nor the delivery knows.
 
+Three accounts are in play and they do different jobs:
+
+| | |
+| --- | --- |
+| the **delivery's** account | decides where the generated expense books. Not a preference — `impose` writes it onto the booking. |
+| the **template booking's** account | a placeholder on an automation template, overwritten and read by nothing. On a *periodic* template the same field is authoritative: there is no delivery, and nothing else names an account. |
+| the rule's **`filterAccountId`** | filters — "only deliveries from this account" — and, separately, picks which of the template's transactions counts as the booking. Absent, that is the first one. |
+
+The accounts on counter-bookings and shares are real in both kinds: `Kreditkartenabrechnung`
+genuinely books Commerzbank Girokonto against Commerzbank Kreditkarte. Only the one transaction the delivery
+replaces is a placeholder.
+
+So a template that should serve deliveries on *any* account is written by setting its three
+dates and leaving the rule's account filter empty. `accrualStart` gives the grid — its day of
+the month is the anchor and its month puts a quarterly or half-yearly grid in phase — the span
+to `accrualEnd` gives the length, and the booking's date minus `accrualStart` gives the phase.
+Whichever account that booking names is overwritten.
+
 **A rule may only point at an expense flagged `isTemplate`**, enforced when a rule is saved.
 Anything else is a real booking: it is in the balances and in the Auswertung, and a rule
 pointing at one turns the rule dialog into a way of rewriting money that has already been

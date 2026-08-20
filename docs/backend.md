@@ -121,7 +121,9 @@ wrong by exactly one template.
 An automation template's own booking is written as `fraction = 1` of a reference amount of
 zero, because `impose` overwrites its account, amount and statement from the delivery. Only
 its **date** survives, and that date is load-bearing: it is the phase the accrual derivation
-measures against.
+measures against. `rules::booking_index` decides which transaction that is — the rule's account
+filter where it sets one, else the first — and `impose` and `template_booking` both go through
+it, so a rule's preview and the expense it generates cannot anchor on different legs.
 
 ## Tests
 
