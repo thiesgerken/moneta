@@ -118,12 +118,14 @@ nothing but `is_template` says it never happened. Every analysis function filter
 which the three totals functions all read from. Forgetting is invisible until a balance is
 wrong by exactly one template.
 
-An automation template's own booking is written as `fraction = 1` of a reference amount of
-zero, because `impose` overwrites its account, amount and statement from the delivery. Only
-its **date** survives, and that date is load-bearing: it is the phase the accrual derivation
-measures against. `rules::booking_index` decides which transaction that is — the rule's account
-filter where it sets one, else the first — and `impose` and `template_booking` both go through
-it, so a rule's preview and the expense it generates cannot anchor on different legs.
+An automation template keeps a **blank booking**: one transaction of exactly zero, which
+`impose` drops before adding the delivered line. Two things make it necessary rather than
+tidy. Its date is the phase the accrual derivation measures against, and a transactionless
+expense has no owner at all — `expense_users` is a union over transactions and their accounts,
+so an expense with none renders for nobody and cannot be listed or opened. The zero is what
+identifies it, not its position, so a template can be edited without changing what a rule
+books. Only the *import* has to choose which transaction to blank, and it warns when the one it
+left behind still carries a bank statement.
 
 ## Tests
 

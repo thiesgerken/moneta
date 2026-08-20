@@ -186,6 +186,12 @@ off a bank statement — 4817 of them. Anything asking what a transaction is wor
 `calculated_amount` in SQL or `rules::resolved_amount` in Rust. Summing `amount` gives zero for
 every shared expense, silently.
 
+**A template must keep at least one transaction.** `expense_users` derives ownership from the
+accounts an expense's transactions touch, so an expense with none belongs to nobody, renders in
+no view and cannot be opened — which is why an automation template keeps a *blank booking* of
+zero rather than dropping its payment line outright. The zero is what `impose` recognises;
+position decides nothing.
+
 **Every rule gets a copy of its template, and the original is left alone.** moneydb let a rule
 copy any expense and most of its rules copy a real booking — 38 of 50 in the current export. The
 import copies each one, flags the copy `is_template` and points the rule at that. Flagging the

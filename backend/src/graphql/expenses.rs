@@ -961,8 +961,7 @@ impl ExpenseMutation {
                 format!("Die Regel {:?} hat keine Vorlage.", rule.title).into()
             })?;
 
-        let mut sorted = rules::impose(&template, rule.filter_account_id, &delivery, now)
-            .map_err(|e| e.to_string())?;
+        let mut sorted = rules::impose(&template, &delivery, now).map_err(|e| e.to_string())?;
         sorted.validate().map_err(|e| e.to_string())?;
         sorted.id = upstream_id;
         sorted.created_at = old_state.created_at;

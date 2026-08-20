@@ -138,30 +138,39 @@ regex, date regex, exact amount and account. The highest `priority` match wins, 
 template is copied with the delivered data imposed on it. The rule editor highlights what a
 regex captures against real statement text as you type.
 
-The delivery decides which account the money moved on, so one `REWE` rule serves the card
-payment and the cash purchase alike. What the template contributes is the rest: the title, the
-categories, the counter-bookings, the shares — and the *date* of its own booking, which says
-how far into the period it pays for a payment falls. That is what puts a Kita fee debited on
-the 30th into the month it pays for rather than the next one, and it is the only thing about a
-payment neither the rule nor the delivery knows.
+An automation template holds a **blank booking**: one transaction of exactly zero, standing
+where a payment goes. `impose` drops it and puts the delivered line in its place, so one `REWE`
+rule serves the card payment and the cash purchase alike — the delivery decides the account and
+the amount, and nothing on the template competes with it. The placeholder is recognised by its
+zero rather than by position, so editing a template cannot quietly make a rule book a different
+line.
+
+It is kept rather than left out for two reasons. Its **date** is the phase — how far into the
+period it pays for a payment falls, which is what puts a Kita fee debited on the 30th into the
+month it pays for and is the one thing neither the rule nor the delivery knows. And an expense
+with no transactions belongs to no user at all: `expense_users` derives ownership from the
+accounts its transactions touch, so a template without one would render in no view and could
+not be opened.
+
+Everything else on the template is what the delivery gets wrapped in: the title, the categories,
+the counter-bookings and the shares.
 
 Three accounts are in play and they do different jobs:
 
 | | |
 | --- | --- |
-| the **delivery's** account | decides where the generated expense books. Not a preference — `impose` writes it onto the booking. |
-| the **template booking's** account | a placeholder on an automation template, overwritten and read by nothing. On a *periodic* template the same field is authoritative: there is no delivery, and nothing else names an account. |
-| the rule's **`filterAccountId`** | filters — "only deliveries from this account" — and, separately, picks which of the template's transactions counts as the booking. Absent, that is the first one. |
+| the **delivery's** account | decides where the generated expense books. Not a preference — the delivered line is added as it stands. |
+| the **blank booking's** account | read by nothing on an automation template; it is there because a transaction has to name one and because that is what makes the template belong to somebody. On a *periodic* template the booking is not blank and its account is authoritative: there is no delivery, and nothing else names one. |
+| the rule's **`filterAccountId`** | filters, and only filters: "only deliveries from this account". |
 
 The accounts on counter-bookings and shares are real in both kinds: `Kreditkartenabrechnung`
-genuinely books Commerzbank Girokonto against Commerzbank Kreditkarte. Only the one transaction the delivery
-replaces is a placeholder.
+genuinely books Commerzbank Girokonto against Commerzbank Kreditkarte. Only the blank booking is a placeholder.
 
-So a template that should serve deliveries on *any* account is written by setting its three
-dates and leaving the rule's account filter empty. `accrualStart` gives the grid — its day of
-the month is the anchor and its month puts a quarterly or half-yearly grid in phase — the span
-to `accrualEnd` gives the length, and the booking's date minus `accrualStart` gives the phase.
-Whichever account that booking names is overwritten.
+So a template that serves deliveries on *any* account is written by setting its three dates and
+leaving the rule's account filter empty. `accrualStart` gives the grid — its day of the month is
+the anchor and its month puts a quarterly or half-yearly grid in phase — the span to
+`accrualEnd` gives the length, and the blank booking's date minus `accrualStart` gives the
+phase. Whichever account it names does not matter.
 
 **A rule may only point at an expense flagged `isTemplate`**, enforced when a rule is saved.
 Anything else is a real booking: it is in the balances and in the Auswertung, and a rule
