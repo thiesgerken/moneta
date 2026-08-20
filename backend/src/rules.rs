@@ -15,8 +15,8 @@ use uuid::Uuid;
 
 use crate::accrual;
 use crate::models::{
-    AutomationRule, Expense, ExpenseChangelogEntry, ExpenseDelivery, Json, PeriodicRule,
-    SeenDelivery,
+    AutomationRule, Expense, ExpenseChangelogEntry, ExpenseDelivery, ExpenseTransaction, Json,
+    PeriodicRule, SeenDelivery,
 };
 use crate::queries;
 use crate::schema::{automation_rules, expense_changes, periodic_rules, seen_deliveries};
@@ -164,25 +164,29 @@ pub fn impose(
         t.date += shift;
     }
 
+    // Whether anything else is a share of this booking decides how it is written: beside shares
+    // it is the whole of the reference amount, and the money then lives in one place rather than
+    // in two that can be corrected apart. Alone -- or beside a fixed share, which is somebody's
+    // 9,99 € of the phone bill however big the bill -- it is simply what the bank said.
+    let shared = e
+        .transactions
+        .iter()
+        .enumerate()
+        .any(|(i, t)| i != idx && t.fraction.is_some());
+
     let t = &mut e.transactions[idx];
 
     // The delivery decides which account the money moved on, not the template. That is what
     // lets one REWE rule serve the card payment and the cash purchase alike: the template only
     // ever named the account it happened to be written against.
     t.account_id = delivery.account_id;
-    t.amount = Some(delivery.amount);
-    t.fraction = None;
+    t.amount = (!shared).then_some(delivery.amount);
+    t.fraction = shared.then_some(1.0);
     t.date = delivery.date;
     t.booking_date = delivery.booking_date;
     t.statement = delivery.statement.clone();
 
-    // the remaining fractional transactions are shares of the delivered amount; with none left
-    // the template's own reference amount describes nothing and would only be stale
-    e.reference_amount = e
-        .transactions
-        .iter()
-        .any(|t| t.fraction.is_some())
-        .then_some(delivery.amount);
+    e.reference_amount = shared.then_some(delivery.amount);
 
     Ok(e)
 }
@@ -234,23 +238,40 @@ pub fn template_booking(template: &Expense, account_id: Option<Uuid>) -> Option<
     booking_index(template, account_id).map(|i| template.transactions[i].date)
 }
 
+/// What a transaction is worth, whichever way it is written down: the amount it carries, or
+/// its share of what the expense as a whole came to.
+pub fn resolved_amount(expense: &Expense, t: &ExpenseTransaction) -> Option<i32> {
+    match (t.amount, t.fraction) {
+        (Some(amount), _) => Some(amount),
+        (None, Some(f)) => {
+            Some((f * f64::from(expense.reference_amount?)).round_ties_even() as i32)
+        }
+        (None, None) => None,
+    }
+}
+
 /// The bank line an expense came from, put back together so the rules can be run over it
 /// again. `None` for anything typed in by hand, which has nothing for a rule to match on.
 ///
 /// The transaction carrying a statement is the one the bank delivered; the others are the
 /// shares and counter-bookings the template added around it. Where an expense holds several --
 /// a split paid from two banks -- the first is taken, which is the one `impose` wrote.
+///
+/// A shared expense books that line as the whole of itself rather than as a figure of its own,
+/// so what it is worth has to be resolved rather than read off.
 pub fn delivery_of(expense: &Expense) -> Option<ExpenseDelivery> {
     expense
         .transactions
         .iter()
-        .find(|t| !t.statement.trim().is_empty() && t.amount.is_some())
-        .map(|t| ExpenseDelivery {
-            account_id: t.account_id,
-            date: t.date,
-            booking_date: t.booking_date,
-            amount: t.amount.expect("filtered on being Some just above"),
-            statement: t.statement.clone(),
+        .find(|t| !t.statement.trim().is_empty())
+        .and_then(|t| {
+            Some(ExpenseDelivery {
+                account_id: t.account_id,
+                date: t.date,
+                booking_date: t.booking_date,
+                amount: resolved_amount(expense, t)?,
+                statement: t.statement.clone(),
+            })
         })
 }
 
@@ -899,29 +920,35 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(e.transactions[0].amount, Some(-4237));
+        // beside a share the booking is the whole of the reference amount, so the money is
+        // written down once and a correction moves all of it at the same time
+        assert_eq!(e.transactions[0].fraction, Some(1.0));
+        assert_eq!(e.transactions[0].amount, None);
         assert_eq!(e.reference_amount, Some(-4237));
         assert_eq!(e.transactions[1].fraction, Some(-0.5));
-        assert_eq!(e.transactions[1].amount, None);
+        assert!(e.validate().is_ok());
+        assert_eq!(delivery_of(&e).map(|d| d.amount), Some(-4237));
     }
 
-    /// a template booking the delivered account fractionally becomes a fixed booking, and
-    /// the result still has to satisfy the expense invariants
+    /// with nothing taking a share of it, the booking is simply what the bank said and there is
+    /// no reference amount for anything to be a fraction of
     #[test]
-    fn imposing_a_delivery_onto_a_fractional_booking_stays_valid() {
+    fn imposing_a_delivery_nobody_shares_leaves_a_fixed_booking() {
         let account = Uuid::now_v7();
         let mut tpl = template(vec![
             transaction(account, None),
-            transaction(Uuid::now_v7(), None),
+            transaction(Uuid::now_v7(), Some(999)),
         ]);
         tpl.transactions[0].fraction = Some(1.0);
-        tpl.transactions[1].fraction = Some(-0.5);
         tpl.reference_amount = Some(-1000);
 
         let e = impose(&tpl, None, &delivery(account, -4237, "x"), at(2025, 3, 5)).unwrap();
 
         assert_eq!(e.transactions[0].amount, Some(-4237));
         assert_eq!(e.transactions[0].fraction, None);
+        assert_eq!(e.reference_amount, None);
+        // a fixed share is somebody's 9,99 EUR of the bill however big the bill
+        assert_eq!(e.transactions[1].amount, Some(999));
         assert!(e.validate().is_ok());
     }
 

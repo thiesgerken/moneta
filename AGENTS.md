@@ -180,6 +180,12 @@ re-checking against the export after touching this. And a periodic rule whose te
 the monthly drawdowns is dropped rather than kept: the mechanism it fed is gone, and left in place
 it would generate a copy of the whole merged expense every month.
 
+**A shared expense's bank line is a fraction, not an amount.** In a split the booking is
+`fraction = 1` of `reference_amount`, so `t.amount` is null on the very transaction that came
+off a bank statement — 4817 of them. Anything asking what a transaction is worth goes through
+`calculated_amount` in SQL or `rules::resolved_amount` in Rust. Summing `amount` gives zero for
+every shared expense, silently.
+
 **Every rule gets a copy of its template, and the original is left alone.** moneydb let a rule
 copy any expense and most of its rules copy a real booking — 38 of 50 in the current export. The
 import copies each one, flags the copy `is_template` and points the rule at that. Flagging the

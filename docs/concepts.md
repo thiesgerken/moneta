@@ -48,7 +48,12 @@ Three things, each of which would otherwise have to be redone at every call site
 - **Fractional transactions.** A transaction carries *either* an `amount` in cents *or* a
   `fraction`, never both (a CHECK enforces it). A fraction resolves against the expense's
   `reference_amount` — the way to say "we split this three ways" without doing the division by
-  hand.
+  hand. **In a split, the booking itself is a fraction too**, of 1: the money is then written
+  down once, and correcting it moves the booking and every share together. Left as a fixed
+  figure beside a reference amount that equals it, the two drift the moment either is edited.
+  So an expense with a `reference_amount` has no transaction carrying that same amount — read
+  what a transaction is worth from `calculatedAmount`, or `rules::resolved_amount` in Rust,
+  rather than from `amount`.
 - **Account synchronization.** Two accounts belonging to different users can be linked, so
   one person's entry appears in the other's books against *their* account. With `invert`, the
   sign flips on the way across, which is how a debt between the two users is modelled: what
