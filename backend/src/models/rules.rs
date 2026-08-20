@@ -52,8 +52,9 @@ pub struct PeriodicRule {
 
     pub title: String,
 
-    /// the expense this rule copies. Often but not always flagged `is_template` — moneydb
-    /// let ordinary past expenses double as prototypes, and the import preserves that.
+    /// the expense this rule copies, always flagged `is_template`. It carries the amount too:
+    /// an occurrence has no delivery to take one from, so the template is the only place the
+    /// amount can be written down.
     pub template_id: Uuid,
 
     pub period: PeriodicInterval,
@@ -61,9 +62,6 @@ pub struct PeriodicRule {
     /// replaces the template's title. `%d`, `%m` and `%y` are substituted with the day,
     /// month and year of the occurrence being generated.
     pub title_replacement: Option<String>,
-
-    /// replaces the template's reference amount, in cents
-    pub amount_replacement: Option<i32>,
 
     /// occurrences at or before this instant have already been generated
     pub last_creation: DateTime<Utc>,
@@ -79,7 +77,6 @@ pub struct PeriodicRuleInput {
     pub template_id: Uuid,
     pub period: PeriodicInterval,
     pub title_replacement: Option<String>,
-    pub amount_replacement: Option<i32>,
     pub last_creation: DateTime<Utc>,
 }
 
@@ -92,7 +89,6 @@ impl PeriodicRuleInput {
             template_id: self.template_id,
             period: self.period,
             title_replacement: self.title_replacement,
-            amount_replacement: self.amount_replacement,
             last_creation: self.last_creation,
             created_at: now,
             updated_at: now,
@@ -109,7 +105,8 @@ pub struct AutomationRule {
 
     pub title: String,
 
-    /// the expense this rule copies; see `PeriodicRule::template_id` on the `is_template` flag
+    /// the expense this rule copies, always flagged `is_template`. Its booking says *when* a
+    /// payment falls inside the period; the delivery says on which account and how much.
     pub template_id: Uuid,
 
     /// higher wins when several rules match the same delivery

@@ -14,7 +14,6 @@
 			readonly title: string;
 			readonly period: string;
 			readonly titleReplacement: string | null;
-			readonly amountReplacement: number | null;
 			readonly lastCreation: Date;
 			readonly templateId: string | null;
 		};
@@ -24,16 +23,12 @@
 	let title = $derived(rule?.title || '');
 	let period = $derived(rule?.period || 'MONTHLY');
 	let titleReplacement = $derived(rule?.titleReplacement || '');
-	let amountReplacement = $derived(
-		rule?.amountReplacement != null ? (rule.amountReplacement / 100).toFixed(2) : ''
-	);
 	let lastCreation = $derived((rule?.lastCreation ?? new Date()).toISOString().slice(0, 10));
 	let templateId = $derived(rule?.templateId || '');
 
 	const titleError = $derived(!title.trim());
 	const templateError = $derived(!templateId);
-	const amountError = $derived(!!amountReplacement && isNaN(Number(amountReplacement)));
-	const formHasErrors = $derived(titleError || templateError || amountError);
+	const formHasErrors = $derived(titleError || templateError);
 
 	const CreatePeriodicRule = graphql(`
 		mutation CreatePeriodicRule($input: PeriodicRuleInput!) {
@@ -65,7 +60,6 @@
 			templateId,
 			period: period as PeriodicRuleInput['period'],
 			titleReplacement: titleReplacement.trim() || null,
-			amountReplacement: amountReplacement ? Math.round(Number(amountReplacement) * 100) : null,
 			lastCreation: new Date(lastCreation)
 		};
 
@@ -93,6 +87,10 @@
 		</Label>
 
 		<TemplatePicker bind:templateId error={templateError} />
+		<Helper class="-mt-2">
+			Die Vorlage bestimmt Betrag, Konto und Aufteilung. Eine Preisänderung wird dort eingetragen,
+			nicht hier.
+		</Helper>
 
 		<Label class="space-y-2">
 			<span>Intervall</span>
@@ -111,17 +109,6 @@
 			<span>Titel-Ersetzung</span>
 			<Input type="text" bind:value={titleReplacement} placeholder="z.B. Miete %m/%y" />
 			<Helper>Leer lassen, um den Titel der Vorlage zu behalten. %d, %m, %y werden ersetzt.</Helper>
-		</Label>
-
-		<Label class="space-y-2">
-			<span>Betrags-Ersetzung (€)</span>
-			<Input
-				type="text"
-				bind:value={amountReplacement}
-				placeholder="z.B. -18.36"
-				color={amountError ? 'red' : undefined}
-			/>
-			<Helper>Ausgaben sind negativ. Leer lassen, um den Betrag der Vorlage zu behalten.</Helper>
 		</Label>
 
 		<Label class="space-y-2">

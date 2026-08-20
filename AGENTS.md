@@ -180,6 +180,14 @@ re-checking against the export after touching this. And a periodic rule whose te
 the monthly drawdowns is dropped rather than kept: the mechanism it fed is gone, and left in place
 it would generate a copy of the whole merged expense every month.
 
+**Every rule gets a copy of its template, and the original is left alone.** moneydb let a rule
+copy any expense and most of its rules copy a real booking — 38 of 50 in the current export. The
+import copies each one, flags the copy `is_template` and points the rule at that. Flagging the
+original instead would be the one-line version and it is wrong: it takes real money out of every
+balance and every total at once, and nothing reports it. The copies also come *before* the
+account-dropping pass, or a template booking to an otherwise unused account leaves a dangling
+reference.
+
 **Four things set an accrual period, in this order.** A chain derives it from its drawdowns, a
 statement can name it outright (`accrual::statement_period`, which the automation rules call on
 the same text), a title can name one where the statement does not (`accrual::title_period`), and

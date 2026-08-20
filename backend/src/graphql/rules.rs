@@ -41,6 +41,25 @@ async fn require_visible_expense(conn: &mut Conn, user_id: Uuid, id: Uuid) -> Fi
         .ok_or_else(|| "template expense not found".into())
 }
 
+/// A rule may only copy a template. Anything else is a real booking, and a rule pointing at one
+/// turns the rule dialog into a way of rewriting money that is already in the balances — which
+/// is how moneydb had it, and how 38 of the 50 imported rules arrived.
+async fn require_template_expense(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<Uuid> {
+    let upstream = require_visible_expense(conn, user_id, id).await?;
+
+    let is_template: bool = scoped::expenses(user_id)
+        .filter(expenses_rendered::id.eq(id))
+        .select(expenses_rendered::is_template)
+        .first(conn)
+        .await?;
+
+    if !is_template {
+        return Err("a rule can only use an expense that is marked as a template".into());
+    }
+
+    Ok(upstream)
+}
+
 /// Both rule types are wrapped rather than derived so `templateId` can be handed back as the
 /// caller's own rendered expense id — the same id they passed in, and the only one the rest
 /// of the API accepts.
@@ -189,9 +208,6 @@ impl GraphQLPeriodicRule {
     fn title_replacement(&self) -> Option<&str> {
         self.data.title_replacement.as_deref()
     }
-    fn amount_replacement(&self) -> Option<i32> {
-        self.data.amount_replacement
-    }
     fn last_creation(&self) -> chrono::DateTime<Utc> {
         self.data.last_creation
     }
@@ -334,7 +350,7 @@ impl AutomationRuleMutation {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let template_id = require_visible_expense(conn, user_id, rule.template_id).await?;
+        let template_id = require_template_expense(conn, user_id, rule.template_id).await?;
 
         let mut data = rule.upgrade(Uuid::now_v7(), user_id, None, Utc::now());
         data.template_id = template_id;
@@ -355,7 +371,7 @@ impl AutomationRuleMutation {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let template_id = require_visible_expense(conn, user_id, rule.template_id).await?;
+        let template_id = require_template_expense(conn, user_id, rule.template_id).await?;
 
         let existing = scoped::own_automation_rule(user_id, id)
             .select(AutomationRule::as_select())
@@ -467,7 +483,7 @@ impl PeriodicRuleMutation {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let template_id = require_visible_expense(conn, user_id, rule.template_id).await?;
+        let template_id = require_template_expense(conn, user_id, rule.template_id).await?;
 
         let mut data = rule.upgrade(Uuid::now_v7(), user_id, Utc::now());
         data.template_id = template_id;
@@ -488,7 +504,7 @@ impl PeriodicRuleMutation {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let template_id = require_visible_expense(conn, user_id, rule.template_id).await?;
+        let template_id = require_template_expense(conn, user_id, rule.template_id).await?;
 
         let existing = scoped::own_periodic_rule(user_id, id)
             .select(PeriodicRule::as_select())

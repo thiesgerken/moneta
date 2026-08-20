@@ -251,7 +251,6 @@ input PeriodicRuleInput {
   templateId: UUID!
   period: PeriodicInterval!
   titleReplacement: String
-  amountReplacement: Int
   lastCreation: DateTime!
 }
 
@@ -902,7 +901,6 @@ type PeriodicRule {
   title: String!
   period: PeriodicInterval!
   titleReplacement: String
-  amountReplacement: Int
   lastCreation: DateTime!
   createdAt: DateTime!
   updatedAt: DateTime!

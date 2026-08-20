@@ -21,13 +21,12 @@
 		readonly title: string;
 		readonly store: string;
 		readonly accrualStart: Date;
-		readonly effectiveAmount: number;
 	};
 
+	// no amount: a template's own booking is a placeholder for whatever the rule will put there,
+	// so the figure standing in the field would be a number that never gets used
 	const label = (c: Candidate) =>
-		`${c.title}${c.store ? ' · ' + c.store : ''} · ${shortDate(c.accrualStart)} · ${(
-			c.effectiveAmount / 100
-		).toFixed(2)}€`;
+		`${c.title}${c.store ? ' · ' + c.store : ''} · ${shortDate(c.accrualStart)}`;
 
 	/// What the input shows: the chosen expense, or what is being searched for. One field for
 	/// both, since searching is how you choose.
@@ -38,8 +37,9 @@
 	let selected = $state<Candidate | null>(null);
 	let inputRef = $state<HTMLInputElement | undefined>(undefined);
 
-	// Rules mostly point at ordinary past expenses rather than flagged templates, so the
-	// picker searches everything by title instead of listing templates only.
+	// Templates only, searched or not. A rule may point at nothing else: anything unflagged is a
+	// real booking, one that is in the balances and in the Auswertung, and a rule pointing at it
+	// turns this dialog into a way of rewriting money that has already been spent.
 	const templateStore = graphql(`
 		query TemplateCandidates($search: String, $flags: ExpenseFlagFilter) {
 			expenses {
@@ -50,7 +50,6 @@
 							title
 							store
 							accrualStart
-							effectiveAmount
 						}
 					}
 				}
@@ -68,29 +67,24 @@
 					title
 					store
 					accrualStart
-					effectiveAmount
 				}
 			}
 		}
 	`);
 
-	// with nothing typed the picker shows the flagged templates; a search widens it to every
-	// expense, because rules mostly point at ordinary past ones
-	const variables = $derived(
-		typed && query.trim()
-			? { search: query.trim(), flags: undefined }
-			: {
-					search: undefined,
-					flags: {
-						templates: true,
-						taxRelevant: false,
-						extraordinary: false,
-						unchecked: false,
-						incomplete: false,
-						normal: false
-					}
-				}
-	);
+	const TEMPLATES_ONLY = {
+		templates: true,
+		taxRelevant: false,
+		extraordinary: false,
+		unchecked: false,
+		incomplete: false,
+		normal: false
+	};
+
+	const variables = $derived({
+		search: typed && query.trim() ? query.trim() : undefined,
+		flags: TEMPLATES_ONLY
+	});
 
 	$effect(() => void templateStore.fetch({ variables }));
 
@@ -171,7 +165,7 @@
 		<Input
 			type="text"
 			bind:value={query}
-			placeholder="Ausgabe suchen (leer = nur Vorlagen)"
+			placeholder="Vorlage suchen"
 			color={error ? 'red' : undefined}
 			autocomplete="off"
 			class="ps-10 pe-16"
@@ -236,15 +230,15 @@
 						>
 							{c.title}
 							<span class="block text-xs text-gray-500 dark:text-gray-400">
-								{c.store ? c.store + ' · ' : ''}{shortDate(c.accrualStart)} · {(
-									c.effectiveAmount / 100
-								).toFixed(2)}€
+								{c.store ? c.store + ' · ' : ''}{shortDate(c.accrualStart)}
 							</span>
 						</button>
 					</li>
 				{:else}
 					<li class="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
-						{typed && query.trim() ? 'Nichts gefunden.' : 'Keine Vorlagen vorhanden.'}
+						{typed && query.trim()
+							? 'Keine Vorlage mit diesem Titel.'
+							: 'Keine Vorlagen. Eine Ausgabe wird zu einer, indem man sie dupliziert und im Editor als Vorlage markiert.'}
 					</li>
 				{/each}
 			</ul>

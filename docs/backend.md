@@ -113,8 +113,15 @@ Two performance traps live here:
   both copies name the same account.
 
 And one correctness trap: a **rule template carries a real account and a real date**, so
-nothing but `is_template` says it never happened. Every analysis function filters it out;
-forgetting is invisible until a balance is wrong by exactly one template.
+nothing but `is_template` says it never happened. Every analysis function filters it out —
+`simulate_balances`, `count_balance_expenses`, `analysis_statement` and `analysis_movements`,
+which the three totals functions all read from. Forgetting is invisible until a balance is
+wrong by exactly one template.
+
+An automation template's own booking is written as `fraction = 1` of a reference amount of
+zero, because `impose` overwrites its account, amount and statement from the delivery. Only
+its **date** survives, and that date is load-bearing: it is the phase the accrual derivation
+measures against.
 
 ## Tests
 

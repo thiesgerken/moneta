@@ -121,23 +121,36 @@ Two kinds, both of which create expenses by copying a **template** expense. Logi
 
 **Periodic rules** fire on a schedule (daily, weekly, monthly, yearly). Occurrences are
 anchored on the template's `accrualStart`, so a monthly rule keeps its day of month however
-long it lay dormant. `titleReplacement` substitutes `%d`/`%m`/`%y`; `amountReplacement`
-replaces the reference amount and, when the template has exactly one fixed transaction, that
-transaction too — which is the shape almost every shared expense has.
+long it lay dormant. `titleReplacement` substitutes `%d`/`%m`/`%y`. The amount is the
+template's own: nothing else supplies one, and a rent that goes up is written where the rest
+of the expense is written.
 
 Generation runs from `moneta periodic --run`, the `periodicRules.run` mutation, or the button
 on the page. In production it is a scheduled job (a k8s CronJob); the compose stack runs the
 same command from a `periodic` sidecar so both paths stay identical. Deliberately **not** an
 in-process timer: that would fire once per backend replica and hide its failures in the server
-log. It is idempotent — a rule's `lastCreation` only advances once its expenses are stored.
+log. It is idempotent — a rule's `lastCreation` only advances once its expenses are stored,
+and it stops at the first occurrence a template cannot produce rather than skipping past it,
+so repairing the template resumes where the run left off instead of losing that month.
 
 **Automation rules** match a delivered bank statement line on any combination of statement
 regex, date regex, exact amount and account. The highest `priority` match wins, and its
 template is copied with the delivered data imposed on it. The rule editor highlights what a
 regex captures against real statement text as you type.
 
-A template need not be flagged `isTemplate` — MoneyDB let ordinary past expenses double as
-prototypes and the import preserved that.
+The delivery decides which account the money moved on, so one `REWE` rule serves the card
+payment and the cash purchase alike. What the template contributes is the rest: the title, the
+categories, the counter-bookings, the shares — and the *date* of its own booking, which says
+how far into the period it pays for a payment falls. That is what puts a Kita fee debited on
+the 30th into the month it pays for rather than the next one, and it is the only thing about a
+payment neither the rule nor the delivery knows.
+
+**A rule may only point at an expense flagged `isTemplate`**, enforced when a rule is saved.
+Anything else is a real booking: it is in the balances and in the Auswertung, and a rule
+pointing at one turns the rule dialog into a way of rewriting money that has already been
+spent. MoneyDB allowed it and most of its rules did it, so the import gives each rule a copy of
+its own instead. A template counts in no balance, no total and no analysis, and the expense
+list hides them unless the *Vorlage* filter is switched on.
 
 ## Deliveries
 
