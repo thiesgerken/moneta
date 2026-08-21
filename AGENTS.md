@@ -200,6 +200,13 @@ balance and every total at once, and nothing reports it. The copies also come *b
 account-dropping pass, or a template booking to an otherwise unused account leaves a dangling
 reference.
 
+**A chain caught after one drawdown reads as a one-off, and must not be treated as one.** A
+spread's shares scale to the payment, a one-off's keep their amount, and one payment plus one
+drawdown is both shapes at once. The discriminator is the title's own history of being drawn in
+instalments, not anything inside the chain — read as a one-off, half a year of a newspaper says the
+other person owes 3,40 EUR of a 142,80 EUR bill. Exactly two chains in the current export hit
+this, one of each kind, so any change here wants both `import.rs` tests run.
+
 **Four things set an accrual period, in this order.** A chain derives it from its drawdowns, a
 statement can name it outright (`accrual::statement_period`, which the automation rules call on
 the same text), a title can name one where the statement does not (`accrual::title_period`), and
