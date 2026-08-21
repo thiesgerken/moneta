@@ -41,3 +41,33 @@ export function shiftMonth(at: number, n: number): number {
 	const d = new Date(at);
 	return new Date(d.getFullYear(), d.getMonth() + n, 1).getTime();
 }
+
+/// How much of an expense's cost falls inside a window, as a fraction of the whole.
+///
+/// The frontend's copy of what `analysis_movements` does in SQL: an equal share of the cost per
+/// day of the Leistungszeitraum, both ends inclusive, so a period of one day is one day rather
+/// than none. Kept in step by `dates.test.ts`, which uses the numbers the SQL test asserts.
+///
+/// It is here rather than asked of the backend because the caller already holds both dates:
+/// the expense list carries the period, and a list of ten rows is not worth a second query
+/// against a table the month page has already read.
+export function accrualShare(
+	period: { accrualStart: Date; accrualEnd: Date },
+	from: Date,
+	before: Date
+): number {
+	const DAY = 86400000;
+	// both ends inclusive, and `before` is exclusive, so the last day of the window is the day
+	// before it
+	const days = (a: number, b: number) => Math.round((b - a) / DAY) + 1;
+
+	const total = days(period.accrualStart.getTime(), period.accrualEnd.getTime());
+	if (total <= 0) return 0;
+
+	const inside = days(
+		Math.max(period.accrualStart.getTime(), from.getTime()),
+		Math.min(period.accrualEnd.getTime(), before.getTime() - DAY)
+	);
+
+	return Math.min(1, Math.max(0, inside / total));
+}

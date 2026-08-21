@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isoDate, monthsBefore, shiftMonth, shortDate, startOfMonth } from './dates';
+import { accrualShare, isoDate, monthsBefore, shiftMonth, shortDate, startOfMonth } from './dates';
 
 /// Local time throughout, deliberately — the ranges these build are what a reader typed into a
 /// date field, not instants on a wire.
@@ -70,5 +70,32 @@ describe('monthsBefore', () => {
 	it('overflows a day the shorter month does not have', () => {
 		expect(monthsBefore(local(2026, 3, 31), 1)).toBe(local(2026, 3, 3, 0));
 		expect(monthsBefore(local(2028, 2, 29), 12)).toBe(local(2027, 3, 1, 0));
+	});
+});
+
+describe('accrualShare', () => {
+	const utc = (iso: string) => new Date(`${iso}T00:00:00Z`);
+
+	// the quarter from tests/sql/analysis_accrual_axis.sql: 92 days over three months, chosen
+	// so that a wrong denominator is visible
+	const quarter = { accrualStart: utc('2025-06-01'), accrualEnd: utc('2025-08-31') };
+	const first = (m: number) =>
+		m > 12 ? utc('2026-01-01') : utc(`2025-${`${m}`.padStart(2, '0')}-01`);
+	const month = (m: number) => [first(m), first(m + 1)] as const;
+
+	it('splits a period by the days it spends in each month', () => {
+		expect(accrualShare(quarter, ...month(6))).toBeCloseTo(30 / 92);
+		expect(accrualShare(quarter, ...month(7))).toBeCloseTo(31 / 92);
+		expect(accrualShare(quarter, ...month(8))).toBeCloseTo(31 / 92);
+	});
+
+	it('counts a single day as a whole period', () => {
+		const point = { accrualStart: utc('2025-07-10'), accrualEnd: utc('2025-07-10') };
+		expect(accrualShare(point, ...month(7))).toBe(1);
+	});
+
+	it('is nothing outside the period', () => {
+		expect(accrualShare(quarter, ...month(5))).toBe(0);
+		expect(accrualShare(quarter, ...month(9))).toBe(0);
 	});
 });

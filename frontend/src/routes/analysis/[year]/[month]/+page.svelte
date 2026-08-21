@@ -22,6 +22,7 @@
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import { integrationError, errorClass, deltaColor, categoryColor } from '$lib/analysis/format';
 	import { DATE_AXES, accrued, axisState } from '$lib/analysis/state.svelte';
+	import { accrualShare } from '$lib/analysis/dates';
 	import QueryError from '$lib/QueryError.svelte';
 
 	const euro = (cents: number) =>
@@ -169,6 +170,7 @@
 			$valuedBefore: DateTime
 			$accruedAfter: DateTime
 			$accruedBefore: DateTime
+			$limit: Int
 		) {
 			expenses {
 				list(
@@ -186,7 +188,7 @@
 					}
 					sortBy: EFFECTIVE_AMOUNT
 					sortDir: ASC
-					limit: 10
+					limit: $limit
 				) {
 					edges {
 						node {
@@ -194,6 +196,8 @@
 							title
 							store
 							effectiveAmount
+							accrualStart
+							accrualEnd
 						}
 					}
 				}
@@ -211,18 +215,50 @@
 	// August is in one of the windows and not the other. On the accrual axis the amount shown
 	// is still the whole expense rather than the share this month carried -- what the list
 	// answers is which of the things the month was paying for were the big ones.
+	// ponytail: 60 rows to rank 10 by. The backend can only sort by the whole amount, and on
+	// the accrual axis the ranking is by the share that fell in this month -- a year-long
+	// contract outranks a weekly shop on the first and not on the second. 60 is a guess at how
+	// far down the list a month's biggest share can hide, not a bound anything derives; raise
+	// it if a month ever looks like it is missing one.
+	const BIGGEST_CANDIDATES = 60;
+
 	$effect(() => {
 		void biggestStore.fetch({
 			variables: accrued()
-				? { accruedAfter: start, accruedBefore: end }
-				: { valuedAfter: start, valuedBefore: end }
+				? { accruedAfter: start, accruedBefore: end, limit: BIGGEST_CANDIDATES }
+				: { valuedAfter: start, valuedBefore: end, limit: 10 }
 		});
 	});
 
 	const overviews = $derived($detailStore.data?.analysis.overviews);
 	const detail = $derived(overviews?.months[0]);
+
+	/// What the month booked, rather than what the balances did. The same figure on the value
+	/// axis, and the only one of the two that means anything on the accrual axis: filing a cost
+	/// under a different month does not move money between accounts.
+	const delta = $derived((detail?.income ?? 0) + (detail?.expenses ?? 0));
 	const breakdown = $derived(overviews?.byCategory ?? []);
-	const biggest = $derived($biggestStore.data?.expenses.list.edges.map((e) => e.node) ?? []);
+	/// The ten biggest, and what makes one big.
+	///
+	/// On the value axis that is the expense itself. On the accrual axis it is the part of it
+	/// this month carried, and the whole is worth saying next to it -- a hundred euros of a
+	/// twelve-hundred euro contract is a different fact from a hundred euro shop.
+	const biggest = $derived.by(() => {
+		const rows = $biggestStore.data?.expenses.list.edges.map((e) => e.node) ?? [];
+		if (!accrued()) return rows.map((e) => ({ ...e, amount: e.effectiveAmount, whole: null }));
+
+		return rows
+			.map((e) => {
+				const share = accrualShare(e, start, end);
+				return {
+					...e,
+					amount: e.effectiveAmount * share,
+					whole: share < 1 ? e.effectiveAmount : null
+				};
+			})
+			.sort((a, b) => a.amount - b.amount)
+			.slice(0, 10);
+	});
 
 	const name = (c: { name: string } | null) => c?.name ?? 'Ohne Kategorie';
 
@@ -326,9 +362,7 @@
 			</Card>
 			<Card class="max-w-none p-4">
 				<span class="text-sm text-gray-500 dark:text-gray-400">Delta</span>
-				<span class="text-2xl font-semibold {amountColor(detail.endTotal - detail.startTotal)}">
-					{euro(detail.endTotal - detail.startTotal)}
-				</span>
+				<span class="text-2xl font-semibold {amountColor(delta)}">{euro(delta)}</span>
 			</Card>
 			<Card class="max-w-none p-4">
 				<span class="text-sm text-gray-500 dark:text-gray-400">Vermögen am Ende</span>
@@ -430,8 +464,13 @@
 										<span class="text-gray-500 dark:text-gray-400"> · {e.store}</span>
 									{/if}
 								</TableBodyCell>
-								<TableBodyCell class="px-4 py-3 text-red-600 dark:text-red-400">
-									{euro(e.effectiveAmount)}
+								<TableBodyCell class="px-4 py-3 whitespace-nowrap text-red-600 dark:text-red-400">
+									{euro(e.amount)}
+									{#if e.whole !== null}
+										<span class="text-xs text-gray-500 dark:text-gray-400">
+											von {euro(e.whole)}
+										</span>
+									{/if}
 								</TableBodyCell>
 							</TableBodyRow>
 						{/each}
