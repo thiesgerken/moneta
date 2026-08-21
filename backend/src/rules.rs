@@ -15,8 +15,8 @@ use uuid::Uuid;
 
 use crate::accrual;
 use crate::models::{
-    AutomationRule, Expense, ExpenseChangelogEntry, ExpenseDelivery, Json, PeriodicRule,
-    SeenDelivery,
+    AutomationRule, Expense, ExpenseChangelogEntry, ExpenseDelivery, ExpenseTransaction, Json,
+    PeriodicRule, SeenDelivery,
 };
 use crate::queries;
 use crate::schema::{automation_rules, expense_changes, periodic_rules, seen_deliveries};
@@ -72,19 +72,6 @@ pub fn instantiate(rule: &PeriodicRule, template: &Expense, at: DateTime<Utc>) -
 
     if let Some(title) = &rule.title_replacement {
         e.title = substitute_date(title, at);
-    }
-
-    if let Some(amount) = rule.amount_replacement {
-        e.reference_amount = Some(amount);
-
-        // The reference amount only drives fractional transactions, so the fixed one — the
-        // actual booking, usually paired with fractional counter-bookings for the shares —
-        // has to be replaced too. With several fixed transactions there is no way to tell
-        // how to divide the new amount, so those are left to the reference amount alone.
-        let mut fixed = e.transactions.iter_mut().filter(|t| t.amount.is_some());
-        if let (Some(t), None) = (fixed.next(), fixed.next()) {
-            t.amount = Some(amount);
-        }
     }
 
     e
@@ -143,28 +130,12 @@ pub fn best_match<'a>(
 }
 
 /// Builds the expense an automation rule produces, imposing the delivered transaction's
-/// data onto the template.
+/// data onto the template's booking.
 pub fn impose(
     template: &Expense,
     delivery: &ExpenseDelivery,
     now: DateTime<Utc>,
 ) -> Result<Expense, Box<dyn Error>> {
-    // The delivered line replaces the template's own booking against that account. Without
-    // such a booking there is nowhere to put the delivered amount, and carrying on would
-    // produce an expense holding the template's amounts instead of the real ones — wrong
-    // money, silently. That means the rule is pointed at the wrong template, so refuse.
-    let Some(idx) = template
-        .transactions
-        .iter()
-        .position(|t| t.account_id == delivery.account_id)
-    else {
-        return Err(format!(
-            "template {:?} books nothing against account {:?}, so the delivered amount has nowhere to go",
-            template.id, delivery.account_id
-        )
-        .into());
-    };
-
     let mut e = template.clone();
     e.id = Uuid::now_v7();
     e.is_template = false;
@@ -173,29 +144,43 @@ pub fn impose(
     e.created_at = now;
     e.updated_at = now;
 
-    let (start, end) = period(template, template.transactions[idx].date, delivery);
+    // The blank booking is a placeholder for a payment, not a payment, and its date is the only
+    // thing read off it. Everything else the template holds is a counter-booking or a share,
+    // which is what a delivery gets wrapped in.
+    let paid = template_booking(template);
+    e.transactions.retain(|t| t.amount != Some(0));
+
+    let (start, end) = period(template, paid, delivery);
     e.accrual_start = start;
     e.accrual_end = end;
 
     // The rest of the template hangs off its booking, not off its period: a counter-booking a
     // day after the payment is a day after this payment too.
-    let shift = delivery.date - template.transactions[idx].date;
+    let shift = delivery.date - paid;
     for t in e.transactions.iter_mut() {
         t.date += shift;
     }
 
-    let t = &mut e.transactions[idx];
+    // Whether anything takes a share of this booking decides how it is written: beside shares it
+    // is the whole of the reference amount, so the money is written down once and a correction
+    // moves all of it together. Alone -- or beside a fixed share, which is somebody's 9,99 EUR
+    // of the phone bill however big the bill -- it is simply what the bank said.
+    let shared = e.transactions.iter().any(|t| t.fraction.is_some());
+    e.reference_amount = shared.then_some(delivery.amount);
 
-    t.amount = Some(delivery.amount);
-    t.fraction = None;
-    t.date = delivery.date;
-    t.booking_date = delivery.booking_date;
-    t.statement = delivery.statement.clone();
-
-    // the remaining fractional transactions are shares of the delivered amount
-    if e.transactions.iter().any(|t| t.fraction.is_some()) {
-        e.reference_amount = Some(delivery.amount);
-    }
+    // first, where the booking of an expense belongs and where the template kept its blank one
+    e.transactions.insert(
+        0,
+        ExpenseTransaction {
+            account_id: delivery.account_id,
+            date: delivery.date,
+            booking_date: delivery.booking_date,
+            amount: (!shared).then_some(delivery.amount),
+            fraction: shared.then_some(1.0),
+            comments: String::new(),
+            statement: delivery.statement.clone(),
+        },
+    );
 
     Ok(e)
 }
@@ -217,32 +202,35 @@ fn period(
     })
 }
 
-/// When a template was itself paid, which is what [`accrual::Shape`] measures its phase
-/// against. The rule's account filter names the booking where it has one; failing that the
-/// line the bank delivered, and failing that whatever the template actually pays with.
+/// The date a template says its own payment fell on, which is what [`accrual::Shape`] measures
+/// the phase against — how far into the period it pays for a payment lands.
 ///
-/// A guess, and only for showing a rule what it would do. [`impose`] does not use it: a real
-/// delivery names its account outright, so the booking it replaces is known rather than
-/// guessed. The two agree whenever a rule filters on an account, and where it does not this
-/// can pick a different leg than the delivery eventually will — which is worth knowing when
-/// the preview and the generated expense disagree.
-pub fn template_booking(template: &Expense, account_id: Option<Uuid>) -> Option<DateTime<Utc>> {
-    let of_account = account_id.and_then(|a| {
-        template
-            .transactions
-            .iter()
-            .find(|t| t.account_id == a && t.amount.is_some())
-    });
+/// It is the blank booking's: the transaction of exactly zero that an automation template keeps
+/// in place of a payment. Zero because there is no amount to state before a delivery brings
+/// one, and kept because an expense with no transactions belongs to no user at all —
+/// `expense_users` derives ownership from the accounts its transactions touch, so a template
+/// without one would render in no view and could not be opened.
+///
+/// A template that has lost its blank booking falls back on the start of its own period, which
+/// is a phase of zero: paid on the first day of what it pays for.
+pub fn template_booking(template: &Expense) -> DateTime<Utc> {
+    template
+        .transactions
+        .iter()
+        .find(|t| t.amount == Some(0))
+        .map_or(template.accrual_start, |t| t.date)
+}
 
-    of_account
-        .or_else(|| {
-            template
-                .transactions
-                .iter()
-                .find(|t| !t.statement.trim().is_empty() && t.amount.is_some())
-        })
-        .or_else(|| template.transactions.iter().find(|t| t.amount.is_some()))
-        .map(|t| t.date)
+/// What a transaction is worth, whichever way it is written down: the amount it carries, or
+/// its share of what the expense as a whole came to.
+pub fn resolved_amount(expense: &Expense, t: &ExpenseTransaction) -> Option<i32> {
+    match (t.amount, t.fraction) {
+        (Some(amount), _) => Some(amount),
+        (None, Some(f)) => {
+            Some((f * f64::from(expense.reference_amount?)).round_ties_even() as i32)
+        }
+        (None, None) => None,
+    }
 }
 
 /// The bank line an expense came from, put back together so the rules can be run over it
@@ -251,17 +239,22 @@ pub fn template_booking(template: &Expense, account_id: Option<Uuid>) -> Option<
 /// The transaction carrying a statement is the one the bank delivered; the others are the
 /// shares and counter-bookings the template added around it. Where an expense holds several --
 /// a split paid from two banks -- the first is taken, which is the one `impose` wrote.
+///
+/// A shared expense books that line as the whole of itself rather than as a figure of its own,
+/// so what it is worth has to be resolved rather than read off.
 pub fn delivery_of(expense: &Expense) -> Option<ExpenseDelivery> {
     expense
         .transactions
         .iter()
-        .find(|t| !t.statement.trim().is_empty() && t.amount.is_some())
-        .map(|t| ExpenseDelivery {
-            account_id: t.account_id,
-            date: t.date,
-            booking_date: t.booking_date,
-            amount: t.amount.expect("filtered on being Some just above"),
-            statement: t.statement.clone(),
+        .find(|t| !t.statement.trim().is_empty())
+        .and_then(|t| {
+            Some(ExpenseDelivery {
+                account_id: t.account_id,
+                date: t.date,
+                booking_date: t.booking_date,
+                amount: resolved_amount(expense, t)?,
+                statement: t.statement.clone(),
+            })
         })
 }
 
@@ -468,19 +461,31 @@ pub async fn generate_periodic_expenses(
                     continue;
                 }
 
+                let mut written = None;
                 for t in &times {
                     let expense = instantiate(rule, &template, *t);
                     if let Err(e) = expense.validate() {
+                        // Stop rather than skip on. `last_creation` may only move past
+                        // occurrences that were actually written: advancing past a bad one
+                        // loses that month for good while the rule goes on looking healthy.
+                        // Repairing the template and running again resumes here.
                         warn!(
-                            "periodic rule {} ({}) would produce an invalid expense, skipping: {}",
-                            rule.id, rule.title, e
+                            "periodic rule {} ({}) would produce an invalid expense for {}, \
+                             stopping there: {}",
+                            rule.id,
+                            rule.title,
+                            t.date_naive(),
+                            e
                         );
-                        continue;
+                        break;
                     }
                     generated.push((expense, rule.user_id));
+                    written = Some(*t);
                 }
 
-                advanced.push((rule.id, *times.last().unwrap()));
+                if let Some(last) = written {
+                    advanced.push((rule.id, last));
+                }
             }
 
             for (expense, owner) in &generated {
@@ -588,7 +593,6 @@ mod tests {
             template_id: Uuid::now_v7(),
             period,
             title_replacement: None,
-            amount_replacement: None,
             last_creation,
             created_at: at(2025, 1, 1),
             updated_at: at(2025, 1, 1),
@@ -686,63 +690,6 @@ mod tests {
 
         let e = instantiate(&rule, &template(vec![]), at(2025, 4, 15));
         assert_eq!(e.title, "Ausgleichszahlung 4/2025");
-    }
-
-    #[test]
-    fn amount_replacement_lands_on_a_single_fixed_transaction() {
-        let mut rule = periodic(PeriodicInterval::Monthly, at(2025, 3, 1));
-        rule.amount_replacement = Some(-1836);
-
-        let tpl = template(vec![transaction(Uuid::now_v7(), Some(-500))]);
-        let e = instantiate(&rule, &tpl, at(2025, 4, 15));
-
-        assert_eq!(e.transactions[0].amount, Some(-1836));
-        assert_eq!(e.reference_amount, Some(-1836));
-    }
-
-    /// the shape almost every shared expense imported from moneydb has: the real booking as
-    /// a fixed amount, plus a fractional counter-booking for the other person's share
-    #[test]
-    fn amount_replacement_reaches_the_fixed_transaction_of_a_shared_expense() {
-        let mut rule = periodic(PeriodicInterval::Monthly, at(2025, 3, 1));
-        rule.amount_replacement = Some(-1836);
-
-        let mut tpl = template(vec![
-            transaction(Uuid::now_v7(), Some(-1750)),
-            transaction(Uuid::now_v7(), None),
-        ]);
-        tpl.transactions[1].fraction = Some(-0.5);
-        tpl.reference_amount = Some(-1750);
-
-        let e = instantiate(&rule, &tpl, at(2025, 4, 15));
-
-        assert_eq!(e.reference_amount, Some(-1836));
-        assert_eq!(e.transactions[0].amount, Some(-1836));
-        // the share follows from the reference amount, so it must stay fractional
-        assert_eq!(e.transactions[1].amount, None);
-        assert_eq!(e.transactions[1].fraction, Some(-0.5));
-    }
-
-    /// with several fixed transactions there is no way to split the new amount, so only the
-    /// reference amount changes
-    #[test]
-    fn amount_replacement_leaves_split_transactions_alone() {
-        let mut rule = periodic(PeriodicInterval::Monthly, at(2025, 3, 1));
-        rule.amount_replacement = Some(-1000);
-
-        let mut tpl = template(vec![
-            transaction(Uuid::now_v7(), None),
-            transaction(Uuid::now_v7(), None),
-        ]);
-        tpl.transactions[0].fraction = Some(0.5);
-        tpl.transactions[1].fraction = Some(0.5);
-        tpl.reference_amount = Some(-600);
-
-        let e = instantiate(&rule, &tpl, at(2025, 4, 15));
-
-        assert_eq!(e.reference_amount, Some(-1000));
-        assert!(e.transactions.iter().all(|t| t.amount.is_none()));
-        assert_eq!(e.transactions[0].fraction, Some(0.5));
     }
 
     #[test]
@@ -895,13 +842,59 @@ mod tests {
         assert!(!is_duplicate(&[], &delivery(Uuid::now_v7(), -100, "x")));
     }
 
+    /// The delivery says which account the money moved on, so a template written against a
+    /// different one still books it. One REWE rule serves the card payment and the cash
+    /// purchase; before this, whichever account the template did not name simply failed.
     #[test]
-    fn imposing_a_delivery_for_an_unbooked_account_is_refused() {
-        let tpl = template(vec![transaction(Uuid::now_v7(), Some(-100))]);
+    fn a_delivery_is_booked_on_its_own_account() {
+        let cash = Uuid::now_v7();
+        let card = Uuid::now_v7();
+        let tpl = template(vec![transaction(cash, Some(0))]);
 
-        let err = impose(&tpl, &delivery(Uuid::now_v7(), -4237, "x"), at(2025, 3, 5));
+        let e = impose(&tpl, &delivery(card, -4237, "REWE"), at(2025, 3, 5)).unwrap();
 
-        assert!(err.is_err());
+        assert_eq!(e.transactions.len(), 1);
+        assert_eq!(e.transactions[0].account_id, card);
+        assert_eq!(e.transactions[0].amount, Some(-4237));
+    }
+
+    /// The placeholder is recognised by its zero, not by where it sits, so editing a template
+    /// afterwards cannot silently make a rule book a different line.
+    #[test]
+    fn the_blank_booking_is_found_wherever_it_sits() {
+        let giro = Uuid::now_v7();
+        let mut tpl = template(vec![
+            transaction(Uuid::now_v7(), Some(999)),
+            transaction(giro, Some(0)),
+        ]);
+        tpl.transactions[1].date = at(2025, 1, 9);
+
+        assert_eq!(template_booking(&tpl), at(2025, 1, 9));
+
+        let e = impose(&tpl, &delivery(giro, -4237, "x"), at(2025, 3, 5)).unwrap();
+
+        // the delivery goes first and the placeholder is gone; the fixed share survives
+        assert_eq!(e.transactions.len(), 2);
+        assert_eq!(e.transactions[0].amount, Some(-4237));
+        assert_eq!(e.transactions[1].amount, Some(999));
+    }
+
+    /// nothing to place it against is not a failure: the delivery is simply the whole of the
+    /// expense, which is what a rule with a bare template produces
+    #[test]
+    fn a_template_with_no_transactions_still_books_the_delivery() {
+        let account = Uuid::now_v7();
+
+        let e = impose(
+            &template(vec![]),
+            &delivery(account, -4237, "x"),
+            at(2025, 3, 5),
+        )
+        .unwrap();
+
+        assert_eq!(e.transactions.len(), 1);
+        assert_eq!(e.transactions[0].account_id, account);
+        assert_eq!(e.transactions[0].amount, Some(-4237));
     }
 
     /// the counter-bookings are shares of the delivered amount, so they must stay fractional
@@ -910,37 +903,41 @@ mod tests {
     fn imposing_a_delivery_rescales_the_shares() {
         let account = Uuid::now_v7();
         let mut tpl = template(vec![
-            transaction(account, Some(-1000)),
+            transaction(account, Some(0)),
             transaction(Uuid::now_v7(), None),
         ]);
         tpl.transactions[1].fraction = Some(-0.5);
-        tpl.reference_amount = Some(-1000);
+        tpl.reference_amount = Some(0);
 
         let e = impose(&tpl, &delivery(account, -4237, "REWE"), at(2025, 3, 5)).unwrap();
 
-        assert_eq!(e.transactions[0].amount, Some(-4237));
+        // beside a share the booking is the whole of the reference amount, so the money is
+        // written down once and a correction moves all of it at the same time
+        assert_eq!(e.transactions[0].fraction, Some(1.0));
+        assert_eq!(e.transactions[0].amount, None);
         assert_eq!(e.reference_amount, Some(-4237));
         assert_eq!(e.transactions[1].fraction, Some(-0.5));
-        assert_eq!(e.transactions[1].amount, None);
+        assert!(e.validate().is_ok());
+        assert_eq!(delivery_of(&e).map(|d| d.amount), Some(-4237));
     }
 
-    /// a template booking the delivered account fractionally becomes a fixed booking, and
-    /// the result still has to satisfy the expense invariants
+    /// with nothing taking a share of it, the booking is simply what the bank said and there is
+    /// no reference amount for anything to be a fraction of
     #[test]
-    fn imposing_a_delivery_onto_a_fractional_booking_stays_valid() {
+    fn imposing_a_delivery_nobody_shares_leaves_a_fixed_booking() {
         let account = Uuid::now_v7();
-        let mut tpl = template(vec![
-            transaction(account, None),
-            transaction(Uuid::now_v7(), None),
+        let tpl = template(vec![
+            transaction(account, Some(0)),
+            transaction(Uuid::now_v7(), Some(999)),
         ]);
-        tpl.transactions[0].fraction = Some(1.0);
-        tpl.transactions[1].fraction = Some(-0.5);
-        tpl.reference_amount = Some(-1000);
 
         let e = impose(&tpl, &delivery(account, -4237, "x"), at(2025, 3, 5)).unwrap();
 
         assert_eq!(e.transactions[0].amount, Some(-4237));
         assert_eq!(e.transactions[0].fraction, None);
+        assert_eq!(e.reference_amount, None);
+        // a fixed share is somebody's 9,99 EUR of the bill however big the bill
+        assert_eq!(e.transactions[1].amount, Some(999));
         assert!(e.validate().is_ok());
     }
 
@@ -949,7 +946,7 @@ mod tests {
     #[test]
     fn a_period_on_the_statement_wins() {
         let account = Uuid::now_v7();
-        let tpl = template(vec![transaction(account, Some(-5500))]);
+        let tpl = template(vec![transaction(account, Some(0))]);
 
         let d = ExpenseDelivery {
             date: at(2026, 8, 15),
@@ -966,7 +963,7 @@ mod tests {
     #[test]
     fn without_one_the_template_says_where_the_payment_sits() {
         let account = Uuid::now_v7();
-        let mut tpl = template(vec![transaction(account, Some(-95000))]);
+        let mut tpl = template(vec![transaction(account, Some(0))]);
         tpl.accrual_start = at(2018, 10, 1);
         tpl.accrual_end = at(2018, 10, 31);
         tpl.transactions[0].date = at(2018, 10, 1);
@@ -986,7 +983,7 @@ mod tests {
     #[test]
     fn a_payment_delayed_past_the_month_end_keeps_the_month_it_paid_for() {
         let account = Uuid::now_v7();
-        let mut tpl = template(vec![transaction(account, Some(-29000))]);
+        let mut tpl = template(vec![transaction(account, Some(0))]);
         tpl.accrual_start = at(2024, 8, 1);
         tpl.accrual_end = at(2024, 8, 31);
         tpl.transactions[0].date = at(2024, 8, 31);
@@ -1007,7 +1004,7 @@ mod tests {
     fn the_counter_bookings_follow_the_payment() {
         let account = Uuid::now_v7();
         let other = Uuid::now_v7();
-        let mut tpl = template(vec![transaction(account, Some(-8000)), {
+        let mut tpl = template(vec![transaction(account, Some(0)), {
             let mut t = transaction(other, Some(8000));
             t.date = at(2024, 8, 1);
             t

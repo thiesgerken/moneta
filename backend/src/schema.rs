@@ -145,7 +145,6 @@ diesel::table! {
         template_id -> Uuid,
         period -> Text,
         title_replacement -> Nullable<Text>,
-        amount_replacement -> Nullable<Int4>,
         last_creation -> Timestamptz,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,

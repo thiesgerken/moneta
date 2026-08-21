@@ -113,8 +113,19 @@ Two performance traps live here:
   both copies name the same account.
 
 And one correctness trap: a **rule template carries a real account and a real date**, so
-nothing but `is_template` says it never happened. Every analysis function filters it out;
-forgetting is invisible until a balance is wrong by exactly one template.
+nothing but `is_template` says it never happened. Every analysis function filters it out —
+`simulate_balances`, `count_balance_expenses`, `analysis_statement` and `analysis_movements`,
+which the three totals functions all read from. Forgetting is invisible until a balance is
+wrong by exactly one template.
+
+An automation template keeps a **blank booking**: one transaction of exactly zero, which
+`impose` drops before adding the delivered line. Two things make it necessary rather than
+tidy. Its date is the phase the accrual derivation measures against, and a transactionless
+expense has no owner at all — `expense_users` is a union over transactions and their accounts,
+so an expense with none renders for nobody and cannot be listed or opened. The zero is what
+identifies it, not its position, so a template can be edited without changing what a rule
+books. Only the *import* has to choose which transaction to blank, and it warns when the one it
+left behind still carries a bank statement.
 
 ## Tests
 

@@ -121,23 +121,63 @@ Two kinds, both of which create expenses by copying a **template** expense. Logi
 
 **Periodic rules** fire on a schedule (daily, weekly, monthly, yearly). Occurrences are
 anchored on the template's `accrualStart`, so a monthly rule keeps its day of month however
-long it lay dormant. `titleReplacement` substitutes `%d`/`%m`/`%y`; `amountReplacement`
-replaces the reference amount and, when the template has exactly one fixed transaction, that
-transaction too — which is the shape almost every shared expense has.
+long it lay dormant. `titleReplacement` substitutes `%d`/`%m`/`%y`. The amount is the
+template's own: nothing else supplies one, and a rent that goes up is written where the rest
+of the expense is written.
 
 Generation runs from `moneta periodic --run`, the `periodicRules.run` mutation, or the button
 on the page. In production it is a scheduled job (a k8s CronJob); the compose stack runs the
 same command from a `periodic` sidecar so both paths stay identical. Deliberately **not** an
 in-process timer: that would fire once per backend replica and hide its failures in the server
-log. It is idempotent — a rule's `lastCreation` only advances once its expenses are stored.
+log. It is idempotent — a rule's `lastCreation` only advances once its expenses are stored,
+and it stops at the first occurrence a template cannot produce rather than skipping past it,
+so repairing the template resumes where the run left off instead of losing that month.
 
 **Automation rules** match a delivered bank statement line on any combination of statement
 regex, date regex, exact amount and account. The highest `priority` match wins, and its
 template is copied with the delivered data imposed on it. The rule editor highlights what a
 regex captures against real statement text as you type.
 
-A template need not be flagged `isTemplate` — MoneyDB let ordinary past expenses double as
-prototypes and the import preserved that.
+An automation template holds a **blank booking**: one transaction of exactly zero, standing
+where a payment goes. `impose` drops it and puts the delivered line in its place, so one `REWE`
+rule serves the card payment and the cash purchase alike — the delivery decides the account and
+the amount, and nothing on the template competes with it. The placeholder is recognised by its
+zero rather than by position, so editing a template cannot quietly make a rule book a different
+line.
+
+It is kept rather than left out for two reasons. Its **date** is the phase — how far into the
+period it pays for a payment falls, which is what puts a Kita fee debited on the 30th into the
+month it pays for and is the one thing neither the rule nor the delivery knows. And an expense
+with no transactions belongs to no user at all: `expense_users` derives ownership from the
+accounts its transactions touch, so a template without one would render in no view and could
+not be opened.
+
+Everything else on the template is what the delivery gets wrapped in: the title, the categories,
+the counter-bookings and the shares.
+
+Three accounts are in play and they do different jobs:
+
+| | |
+| --- | --- |
+| the **delivery's** account | decides where the generated expense books. Not a preference — the delivered line is added as it stands. |
+| the **blank booking's** account | read by nothing on an automation template; it is there because a transaction has to name one and because that is what makes the template belong to somebody. On a *periodic* template the booking is not blank and its account is authoritative: there is no delivery, and nothing else names one. |
+| the rule's **`filterAccountId`** | filters, and only filters: "only deliveries from this account". |
+
+The accounts on counter-bookings and shares are real in both kinds: `Kreditkartenabrechnung`
+genuinely books Commerzbank Girokonto against Commerzbank Kreditkarte. Only the blank booking is a placeholder.
+
+So a template that serves deliveries on *any* account is written by setting its three dates and
+leaving the rule's account filter empty. `accrualStart` gives the grid — its day of the month is
+the anchor and its month puts a quarterly or half-yearly grid in phase — the span to
+`accrualEnd` gives the length, and the blank booking's date minus `accrualStart` gives the
+phase. Whichever account it names does not matter.
+
+**A rule may only point at an expense flagged `isTemplate`**, enforced when a rule is saved.
+Anything else is a real booking: it is in the balances and in the Auswertung, and a rule
+pointing at one turns the rule dialog into a way of rewriting money that has already been
+spent. MoneyDB allowed it and most of its rules did it, so the import gives each rule a copy of
+its own instead. A template counts in no balance, no total and no analysis, and the expense
+list hides them unless the *Vorlage* filter is switched on.
 
 ## Deliveries
 

@@ -627,6 +627,20 @@
 		onsubmit={handleSubmit}
 		class="grid min-w-0 gap-4 *:min-w-0 sm:grid-cols-2 lg:grid-cols-6"
 	>
+		{#if isTemplate}
+			<!-- The flag is a chip among five others further down, which is not where somebody
+			     wondering why this expense is missing from a total would look. -->
+			<div
+				class="col-span-full flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
+			>
+				<FileCloneOutline class="h-4 w-4 shrink-0" />
+				<span>
+					Vorlage: zählt in keinem Kontostand, keiner Auswertung und keiner Summe mit. Sie ist die
+					Form, die eine Regel kopiert.
+				</span>
+			</div>
+		{/if}
+
 		<div class="sm:col-span-2 lg:col-span-3">
 			<Label for="title" class="mb-2">Titel</Label>
 			<div class={ring(titleError)}>

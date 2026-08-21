@@ -54,9 +54,9 @@
 	/// What the picked template would make of a payment. Asked for by template rather than read
 	/// off the rule, so it follows the picker instead of showing what was saved last time.
 	const previewStore = graphql(`
-		query AccrualPreview($templateId: UUID!, $accountId: UUID, $at: DateTime) {
+		query AccrualPreview($templateId: UUID!, $at: DateTime) {
 			automationRules {
-				preview(templateId: $templateId, accountId: $accountId, at: $at) {
+				preview(templateId: $templateId, at: $at) {
 					months
 					days
 					anchorDay
@@ -72,14 +72,8 @@
 	$effect(() => {
 		if (!templateId) return;
 
-		// every variable every time: houdini merges them into the last fetch's, so an account
-		// cleared back to "beliebig" would otherwise keep filtering by the old one
 		void previewStore.fetch({
-			variables: {
-				templateId,
-				accountId: filterAccountId || null,
-				at: rule?.lastDelivery ?? null
-			}
+			variables: { templateId, at: rule?.lastDelivery ?? null }
 		});
 	});
 

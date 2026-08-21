@@ -97,7 +97,6 @@
 					title
 					period
 					titleReplacement
-					amountReplacement
 					lastCreation
 					templateId
 					pending
@@ -644,10 +643,6 @@
 									<div>
 										<b>Titel der erzeugten Ausgabe:</b>
 										{rule.titleReplacement || 'wie Vorlage'}
-									</div>
-									<div>
-										<b>Betrag, den sie bucht:</b>
-										{@render amount(rule.amountReplacement, 'wie Vorlage')}
 									</div>
 									<div>
 										<b>Fällig:</b>

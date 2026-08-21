@@ -180,6 +180,26 @@ re-checking against the export after touching this. And a periodic rule whose te
 the monthly drawdowns is dropped rather than kept: the mechanism it fed is gone, and left in place
 it would generate a copy of the whole merged expense every month.
 
+**A shared expense's bank line is a fraction, not an amount.** In a split the booking is
+`fraction = 1` of `reference_amount`, so `t.amount` is null on the very transaction that came
+off a bank statement — 4817 of them. Anything asking what a transaction is worth goes through
+`calculated_amount` in SQL or `rules::resolved_amount` in Rust. Summing `amount` gives zero for
+every shared expense, silently.
+
+**A template must keep at least one transaction.** `expense_users` derives ownership from the
+accounts an expense's transactions touch, so an expense with none belongs to nobody, renders in
+no view and cannot be opened — which is why an automation template keeps a *blank booking* of
+zero rather than dropping its payment line outright. The zero is what `impose` recognises;
+position decides nothing.
+
+**Every rule gets a copy of its template, and the original is left alone.** moneydb let a rule
+copy any expense and most of its rules copy a real booking — 38 of 50 in the current export. The
+import copies each one, flags the copy `is_template` and points the rule at that. Flagging the
+original instead would be the one-line version and it is wrong: it takes real money out of every
+balance and every total at once, and nothing reports it. The copies also come *before* the
+account-dropping pass, or a template booking to an otherwise unused account leaves a dangling
+reference.
+
 **Four things set an accrual period, in this order.** A chain derives it from its drawdowns, a
 statement can name it outright (`accrual::statement_period`, which the automation rules call on
 the same text), a title can name one where the statement does not (`accrual::title_period`), and

@@ -35,10 +35,27 @@ async fn visible_expense(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResul
         .optional()?)
 }
 
-async fn require_visible_expense(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<Uuid> {
-    visible_expense(conn, user_id, id)
-        .await?
-        .ok_or_else(|| "template expense not found".into())
+/// A rule may only copy a template. Anything else is a real booking, and a rule pointing at one
+/// turns the rule dialog into a way of rewriting money that is already in the balances — which
+/// is how moneydb had it, and how 38 of the 50 imported rules arrived.
+async fn require_template_expense(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<Uuid> {
+    let found: Option<(Uuid, bool)> = scoped::expenses(user_id)
+        .filter(expenses_rendered::id.eq(id))
+        .select((
+            expenses_rendered::upstream_id,
+            expenses_rendered::is_template,
+        ))
+        .first(conn)
+        .await
+        .optional()?;
+
+    match found {
+        None => Err("template expense not found".into()),
+        Some((_, false)) => {
+            Err("a rule can only use an expense that is marked as a template".into())
+        }
+        Some((upstream, true)) => Ok(upstream),
+    }
 }
 
 /// Both rule types are wrapped rather than derived so `templateId` can be handed back as the
@@ -90,8 +107,7 @@ impl GraphQLAutomationRule {
         visible_expense(conn, user_id, self.data.template_id).await
     }
 
-    /// null when the template is gone or pays with nothing, in which case the rule cannot fire
-    /// anyway
+    /// null when the template is gone, in which case the rule cannot fire anyway
     async fn accrual(&self, context: &Context) -> FieldResult<Option<AccrualShape>> {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
@@ -99,7 +115,6 @@ impl GraphQLAutomationRule {
             conn,
             user_id,
             self.data.template_id,
-            self.data.filter_account_id,
             self.data.last_delivery.unwrap_or_else(Utc::now),
         )
         .await
@@ -108,13 +123,12 @@ impl GraphQLAutomationRule {
 
 /// What a template would make of a payment on `at`, for whoever is allowed to see it.
 ///
-/// `None` for a template the caller cannot see, one that no longer exists, or one that pays with
-/// nothing — each of which is a rule that cannot fire.
+/// `None` for a template the caller cannot see or one that no longer exists — either of which is
+/// a rule that cannot fire.
 async fn accrual_shape(
     conn: &mut Conn,
     user_id: Uuid,
     template_id: Uuid,
-    account_id: Option<Uuid>,
     at: chrono::DateTime<Utc>,
 ) -> FieldResult<Option<AccrualShape>> {
     if visible_expense(conn, user_id, template_id).await?.is_none() {
@@ -124,11 +138,11 @@ async fn accrual_shape(
     let Some(template) = queries::load_expense(conn, template_id).await? else {
         return Ok(None);
     };
-    let Some(paid) = rules::template_booking(&template, account_id) else {
-        return Ok(None);
-    };
-
-    let shape = accrual::Shape::of(template.accrual_start, template.accrual_end, paid);
+    let shape = accrual::Shape::of(
+        template.accrual_start,
+        template.accrual_end,
+        rules::template_booking(&template),
+    );
     let (from, to) = shape.period(at);
 
     Ok(Some(AccrualShape {
@@ -189,9 +203,6 @@ impl GraphQLPeriodicRule {
     fn title_replacement(&self) -> Option<&str> {
         self.data.title_replacement.as_deref()
     }
-    fn amount_replacement(&self) -> Option<i32> {
-        self.data.amount_replacement
-    }
     fn last_creation(&self) -> chrono::DateTime<Utc> {
         self.data.last_creation
     }
@@ -246,19 +257,11 @@ impl AutomationRuleQuery {
     pub async fn preview(
         context: &Context,
         template_id: Uuid,
-        account_id: Option<Uuid>,
         at: Option<chrono::DateTime<Utc>>,
     ) -> FieldResult<Option<AccrualShape>> {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
-        accrual_shape(
-            conn,
-            user_id,
-            template_id,
-            account_id,
-            at.unwrap_or_else(Utc::now),
-        )
-        .await
+        accrual_shape(conn, user_id, template_id, at.unwrap_or_else(Utc::now)).await
     }
 
     pub async fn list(
@@ -334,7 +337,7 @@ impl AutomationRuleMutation {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let template_id = require_visible_expense(conn, user_id, rule.template_id).await?;
+        let template_id = require_template_expense(conn, user_id, rule.template_id).await?;
 
         let mut data = rule.upgrade(Uuid::now_v7(), user_id, None, Utc::now());
         data.template_id = template_id;
@@ -355,7 +358,7 @@ impl AutomationRuleMutation {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let template_id = require_visible_expense(conn, user_id, rule.template_id).await?;
+        let template_id = require_template_expense(conn, user_id, rule.template_id).await?;
 
         let existing = scoped::own_automation_rule(user_id, id)
             .select(AutomationRule::as_select())
@@ -467,7 +470,7 @@ impl PeriodicRuleMutation {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let template_id = require_visible_expense(conn, user_id, rule.template_id).await?;
+        let template_id = require_template_expense(conn, user_id, rule.template_id).await?;
 
         let mut data = rule.upgrade(Uuid::now_v7(), user_id, Utc::now());
         data.template_id = template_id;
@@ -488,7 +491,7 @@ impl PeriodicRuleMutation {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
 
-        let template_id = require_visible_expense(conn, user_id, rule.template_id).await?;
+        let template_id = require_template_expense(conn, user_id, rule.template_id).await?;
 
         let existing = scoped::own_periodic_rule(user_id, id)
             .select(PeriodicRule::as_select())

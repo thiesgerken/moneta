@@ -251,7 +251,6 @@ input PeriodicRuleInput {
   templateId: UUID!
   period: PeriodicInterval!
   titleReplacement: String
-  amountReplacement: Int
   lastCreation: DateTime!
 }
 
@@ -438,10 +437,7 @@ type AutomationRule {
     for them
   """
   templateId: UUID
-  """
-    null when the template is gone or pays with nothing, in which case the rule cannot fire
-    anyway
-  """
+  "null when the template is gone, in which case the rule cannot fire anyway"
   accrual: AccrualShape
 }
 
@@ -459,7 +455,7 @@ type AutomationRuleQuery {
 
     `at` is the payment to work the example from, and defaults to now.
   """
-  preview(templateId: UUID!, accountId: UUID, at: DateTime): AccrualShape
+  preview(templateId: UUID!, at: DateTime): AccrualShape
   list(limit: Int, skip: Int, search: String, sortBy: AutomationRuleSortField, sortDir: SortDirection): [AutomationRule!]!
   get(id: UUID!): AutomationRule!
 }
@@ -902,7 +898,6 @@ type PeriodicRule {
   title: String!
   period: PeriodicInterval!
   titleReplacement: String
-  amountReplacement: Int
   lastCreation: DateTime!
   createdAt: DateTime!
   updatedAt: DateTime!
