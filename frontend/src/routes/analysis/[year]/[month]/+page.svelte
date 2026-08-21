@@ -21,6 +21,7 @@
 	import Chart from '$lib/Chart.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import { integrationError, errorClass, deltaColor, categoryColor } from '$lib/analysis/format';
+	import { DATE_AXES, accrued, axisState } from '$lib/analysis/state.svelte';
 	import QueryError from '$lib/QueryError.svelte';
 
 	const euro = (cents: number) =>
@@ -119,9 +120,9 @@
 	}
 
 	const detailStore = graphql(`
-		query AnalysisMonthDetail($from: DateTime!, $to: DateTime!) {
+		query AnalysisMonthDetail($from: DateTime!, $to: DateTime!, $accrued: Boolean) {
 			analysis {
-				overviews(from: $from, to: $to) {
+				overviews(from: $from, to: $to, accrued: $accrued) {
 					months {
 						month
 						startTotal
@@ -163,11 +164,18 @@
 	`);
 
 	const biggestStore = graphql(`
-		query AnalysisMonthBiggest($after: DateTime!, $before: DateTime!) {
+		query AnalysisMonthBiggest(
+			$valuedAfter: DateTime
+			$valuedBefore: DateTime
+			$accruedAfter: DateTime
+			$accruedBefore: DateTime
+		) {
 			expenses {
 				list(
-					valuedAfter: $after
-					valuedBefore: $before
+					valuedAfter: $valuedAfter
+					valuedBefore: $valuedBefore
+					accruedAfter: $accruedAfter
+					accruedBefore: $accruedBefore
 					flags: {
 						templates: false
 						taxRelevant: true
@@ -194,11 +202,21 @@
 	`);
 
 	$effect(() => {
-		void detailStore.fetch({ variables: { from: start, to: new Date(end.getTime() - 1) } });
+		void detailStore.fetch({
+			variables: { from: start, to: new Date(end.getTime() - 1), accrued: accrued() }
+		});
 	});
 
+	// One pair of the two, never both: they would be ANDed, and an expense paid in June for
+	// August is in one of the windows and not the other. On the accrual axis the amount shown
+	// is still the whole expense rather than the share this month carried -- what the list
+	// answers is which of the things the month was paying for were the big ones.
 	$effect(() => {
-		void biggestStore.fetch({ variables: { after: start, before: end } });
+		void biggestStore.fetch({
+			variables: accrued()
+				? { accruedAfter: start, accruedBefore: end }
+				: { valuedAfter: start, valuedBefore: end }
+		});
 	});
 
 	const overviews = $derived($detailStore.data?.analysis.overviews);
@@ -281,6 +299,9 @@
 				<ChevronRightOutline class="h-4 w-4" />
 			</Button>
 		</div>
+		<!-- the whole page rather than one card: the totals, the treemap and the list below are
+		     all filed under whichever date this names -->
+		<ToggleGroup bind:value={axisState.axis} options={DATE_AXES} size="sm" />
 		{#if $detailStore.fetching}
 			<Spinner size="4" />
 		{/if}
@@ -354,7 +375,9 @@
 						</TableHead>
 						<TableBody class="divide-y">
 							{#each detail.byAccount as a (a.account.id)}
-								<!-- null only on the accrual axis, which this page never asks for -->
+								<!-- null on the accrual axis: a share of a subscription is a cost the month
+								     carried, not money that left this account, so there is nothing to
+								     reconcile it against -->
 								{@const error =
 									a.integratedEndAmount === null
 										? null
