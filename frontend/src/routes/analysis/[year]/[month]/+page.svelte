@@ -346,7 +346,9 @@
 	{#if $detailStore.errors}
 		<QueryError errors={$detailStore.errors} message="Der Monat konnte nicht geladen werden." />
 	{:else if detail}
-		<div class="grid gap-4 md:grid-cols-4">
+		<!-- three cards rather than four on the accrual axis, where the fourth is a balance:
+		     see the Konten table below, and the columns the overview drops for the same reason -->
+		<div class="grid gap-4 {accrued() ? 'md:grid-cols-3' : 'md:grid-cols-4'}">
 			<Card class="max-w-none p-4">
 				<span class="text-sm text-gray-500 dark:text-gray-400">Einnahmen</span>
 				<span class="text-2xl font-semibold text-green-700 dark:text-green-400"
@@ -364,18 +366,20 @@
 				<span class="text-sm text-gray-500 dark:text-gray-400">Delta</span>
 				<span class="text-2xl font-semibold {amountColor(delta)}">{euro(delta)}</span>
 			</Card>
-			<Card class="max-w-none p-4">
-				<span class="text-sm text-gray-500 dark:text-gray-400">Vermögen am Ende</span>
-				<span class="text-2xl font-semibold">{euro(detail.endTotal)}</span>
-				{@const error = integrationError(detail)}
-				{#if error !== null}
-					<span class="text-xs text-gray-500 dark:text-gray-400">
-						Integrationsfehler <span class={errorClass(error)}>
-							{euro(error)}
+			{#if !accrued()}
+				<Card class="max-w-none p-4">
+					<span class="text-sm text-gray-500 dark:text-gray-400">Vermögen am Ende</span>
+					<span class="text-2xl font-semibold">{euro(detail.endTotal)}</span>
+					{@const error = integrationError(detail)}
+					{#if error !== null}
+						<span class="text-xs text-gray-500 dark:text-gray-400">
+							Integrationsfehler <span class={errorClass(error)}>
+								{euro(error)}
+							</span>
 						</span>
-					</span>
-				{/if}
-			</Card>
+					{/if}
+				</Card>
+			{/if}
 		</div>
 
 		<Card class="max-w-none p-4">
@@ -392,56 +396,63 @@
 			<Chart options={treemapOptions} />
 		</Card>
 
-		<div class="grid gap-4 lg:grid-cols-2">
-			<!-- min-w-0 twice over: a grid track and a flex child both size to their content
-			     unless told otherwise, so without it the table widens the page rather than
-			     scrolling inside the card -->
-			<Card class="max-w-none min-w-0 p-4">
-				<h3 class="mb-2 text-lg font-semibold">Konten</h3>
-				<div class="min-w-0 overflow-x-auto">
-					<Table hoverable striped class="w-full text-left text-sm">
-						<TableHead>
-							<TableHeadCell class="px-4 py-3">Konto</TableHeadCell>
-							<TableHeadCell class="px-4 py-3">Beginn</TableHeadCell>
-							<TableHeadCell class="px-4 py-3">Ende</TableHeadCell>
-							<TableHeadCell class="px-4 py-3">Delta</TableHeadCell>
-							<TableHeadCell class="px-4 py-3">Fehler</TableHeadCell>
-						</TableHead>
-						<TableBody class="divide-y">
-							{#each detail.byAccount as a (a.account.id)}
-								<!-- null on the accrual axis: a share of a subscription is a cost the month
+		<!-- one column on the accrual axis, where the Konten table is not shown and the list
+		     beside it would otherwise keep half the page to itself -->
+		<div class="grid gap-4 {accrued() ? '' : 'lg:grid-cols-2'}">
+			<!-- Balances, so the accrual axis has nothing to say here: an account holds money,
+			     and money does not move between accounts because a cost was filed under
+			     another month. What that month cost is the three cards above. -->
+			{#if !accrued()}
+				<!-- min-w-0 twice over: a grid track and a flex child both size to their content
+				     unless told otherwise, so without it the table widens the page rather than
+				     scrolling inside the card -->
+				<Card class="max-w-none min-w-0 p-4">
+					<h3 class="mb-2 text-lg font-semibold">Konten</h3>
+					<div class="min-w-0 overflow-x-auto">
+						<Table hoverable striped class="w-full text-left text-sm">
+							<TableHead>
+								<TableHeadCell class="px-4 py-3">Konto</TableHeadCell>
+								<TableHeadCell class="px-4 py-3">Beginn</TableHeadCell>
+								<TableHeadCell class="px-4 py-3">Ende</TableHeadCell>
+								<TableHeadCell class="px-4 py-3">Delta</TableHeadCell>
+								<TableHeadCell class="px-4 py-3">Fehler</TableHeadCell>
+							</TableHead>
+							<TableBody class="divide-y">
+								{#each detail.byAccount as a (a.account.id)}
+									<!-- null on the accrual axis: a share of a subscription is a cost the month
 								     carried, not money that left this account, so there is nothing to
 								     reconcile it against -->
-								{@const error =
-									a.integratedEndAmount === null
-										? null
-										: Math.abs(a.endAmount - a.integratedEndAmount)}
-								<TableBodyRow>
-									<TableBodyCell class="px-4 py-3">
-										<span
-											class="mr-2 inline-block h-3 w-3 rounded-full align-middle"
-											style="background-color: {a.account.color ?? '#94a3b8'}"
-										></span>{a.account.name}
-									</TableBodyCell>
-									<TableBodyCell class="px-4 py-3">{euro(a.startAmount)}</TableBodyCell>
-									<TableBodyCell class="px-4 py-3">{euro(a.endAmount)}</TableBodyCell>
-									<TableBodyCell class="px-4 py-3">
-										<Badge
-											color={deltaColor(a.endAmount - a.startAmount)}
-											class="text-sm font-semibold"
-										>
-											{euro(a.endAmount - a.startAmount)}
-										</Badge>
-									</TableBodyCell>
-									<TableBodyCell class="px-4 py-3 {error === null ? '' : errorClass(error)}">
-										{error === null ? '—' : euro(error)}
-									</TableBodyCell>
-								</TableBodyRow>
-							{/each}
-						</TableBody>
-					</Table>
-				</div>
-			</Card>
+									{@const error =
+										a.integratedEndAmount === null
+											? null
+											: Math.abs(a.endAmount - a.integratedEndAmount)}
+									<TableBodyRow>
+										<TableBodyCell class="px-4 py-3">
+											<span
+												class="mr-2 inline-block h-3 w-3 rounded-full align-middle"
+												style="background-color: {a.account.color ?? '#94a3b8'}"
+											></span>{a.account.name}
+										</TableBodyCell>
+										<TableBodyCell class="px-4 py-3">{euro(a.startAmount)}</TableBodyCell>
+										<TableBodyCell class="px-4 py-3">{euro(a.endAmount)}</TableBodyCell>
+										<TableBodyCell class="px-4 py-3">
+											<Badge
+												color={deltaColor(a.endAmount - a.startAmount)}
+												class="text-sm font-semibold"
+											>
+												{euro(a.endAmount - a.startAmount)}
+											</Badge>
+										</TableBodyCell>
+										<TableBodyCell class="px-4 py-3 {error === null ? '' : errorClass(error)}">
+											{error === null ? '—' : euro(error)}
+										</TableBodyCell>
+									</TableBodyRow>
+								{/each}
+							</TableBody>
+						</Table>
+					</div>
+				</Card>
+			{/if}
 
 			<Card class="max-w-none min-w-0 p-4">
 				<h3 class="mb-2 text-lg font-semibold">Größte Ausgaben</h3>
