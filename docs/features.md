@@ -143,7 +143,11 @@ where a payment goes. `impose` drops it and puts the delivered line in its place
 rule serves the card payment and the cash purchase alike — the delivery decides the account and
 the amount, and nothing on the template competes with it. The placeholder is recognised by its
 zero rather than by position, so editing a template cannot quietly make a rule book a different
-line.
+line. A template made by hand has no such line — you duplicate an expense and tick *Vorlage*,
+and it keeps the booking it came from — so failing the placeholder the delivery replaces the
+line on its own account, and failing that the first. It always replaces exactly one, or the
+money would be booked twice: worst on a split, where a booking is written as `fraction = 1` and
+a second one of those comes to 200 % of the bill without breaking any invariant.
 
 It is kept rather than left out for two reasons. Its **date** is the phase — how far into the
 period it pays for a payment falls, which is what puts a Kita fee debited on the 30th into the
@@ -178,6 +182,11 @@ pointing at one turns the rule dialog into a way of rewriting money that has alr
 spent. MoneyDB allowed it and most of its rules did it, so the import gives each rule a copy of
 its own instead. A template counts in no balance, no total and no analysis, and the expense
 list hides them unless the *Vorlage* filter is switched on.
+
+The rule editor's picker asks for templates through `onlyTemplates` rather than through the flag
+filter. The flags are permissions — each one left off filters that flag *out* — so asking for
+templates that way returns only those carrying no other flag, which on the imported books is 37
+of 58 and leaves `REWE`, `KiTa-Gebühr` and every tax-relevant contract unpickable.
 
 ## Deliveries
 

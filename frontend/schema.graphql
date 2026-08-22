@@ -194,6 +194,10 @@ input ExpenseDelivery {
 """
   The flag checkboxes above the expense table. Each one being off means "hide the expenses
   that carry this flag"; `normal` off means "show only expenses that carry some flag".
+  Which flags an expense is allowed to carry and still be listed — an exclusion set, not a
+  whitelist. Every field left false filters that flag *out*, so the flags an expense has must
+  all be permitted for it to show. That cannot ask for "everything carrying this one flag";
+  `only_templates` on the list is there for the single case that needs it.
 """
 input ExpenseFlagFilter {
   templates: Boolean!
@@ -715,7 +719,7 @@ type ExpensePosition {
 }
 
 type ExpenseQuery {
-  list(limit: Int, skip: Int, search: String, ids: [UUID!], accountIds: [UUID!], categoryIds: [UUID!], flags: ExpenseFlagFilter, accruedAfter: DateTime, accruedBefore: DateTime, valuedAfter: DateTime, valuedBefore: DateTime, bookedAfter: DateTime, bookedBefore: DateTime, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
+  list(limit: Int, skip: Int, search: String, ids: [UUID!], accountIds: [UUID!], categoryIds: [UUID!], flags: ExpenseFlagFilter, onlyTemplates: Boolean, accruedAfter: DateTime, accruedBefore: DateTime, valuedAfter: DateTime, valuedBefore: DateTime, bookedAfter: DateTime, bookedBefore: DateTime, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
   get(id: UUID!): Expense!
   changelog(limit: Int, skip: Int, author: ChangelogAuthor, since: DateTime): ExpenseChangelogConnection!
 }
