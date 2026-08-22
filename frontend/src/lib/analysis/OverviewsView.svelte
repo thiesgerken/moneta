@@ -109,15 +109,23 @@
 					     columns behind Ausgaben are off the screen, and what is dropped there is
 					     what answers a question nobody asks on a phone -- how many expenses it
 					     took, where the month started, and how far the two ways of counting
-					     disagree. -->
+					     disagree.
+
+					     The balances are gone entirely on the accrual axis, along with the error
+					     that reconciles against them: they are money in an account, which does
+					     not move when a cost is filed under a different month, so a column that
+					     reads the same either way sitting next to four that do not is a column
+					     inviting the wrong subtraction. -->
 					<TableHead>
 						<TableHeadCell class="px-4 py-3">Monat</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Delta</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Einnahmen</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Ausgaben</TableHeadCell>
 						<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Anzahl</TableHeadCell>
-						<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Vermögen Beginn</TableHeadCell>
-						<TableHeadCell class="px-4 py-3">Vermögen Ende</TableHeadCell>
+						{#if !accrued()}
+							<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Vermögen Beginn</TableHeadCell>
+							<TableHeadCell class="px-4 py-3">Vermögen Ende</TableHeadCell>
+						{/if}
 						<!-- Only on the value axis. The error is the gap between the balances and what the
 						     month booked, and on the accrual axis those are answers to different
 						     questions: a sixth of a subscription is a cost the month carried, not money
@@ -151,12 +159,13 @@
 										})}
 									</a>
 								</TableBodyCell>
+								<!-- what the month booked, not what the balances did: on the accrual axis
+								     the balances stand still while the two columns beside this one move,
+								     and a delta that disagreed with the sum of them read as an error -->
+								{@const delta = o.income + o.expenses}
 								<TableBodyCell class="px-4 py-3">
-									<Badge
-										color={deltaColor(o.endTotal - o.startTotal)}
-										class="text-sm font-semibold"
-									>
-										{signedEuro(o.endTotal - o.startTotal)}
+									<Badge color={deltaColor(delta)} class="text-sm font-semibold">
+										{signedEuro(delta)}
 									</Badge>
 								</TableBodyCell>
 								<TableBodyCell class="px-4 py-3 text-green-700 dark:text-green-400"
@@ -168,10 +177,12 @@
 								<TableBodyCell class="hidden px-4 py-3 sm:table-cell"
 									>{o.expenseCount}</TableBodyCell
 								>
-								<TableBodyCell class="hidden px-4 py-3 sm:table-cell"
-									>{euro(o.startTotal)}</TableBodyCell
-								>
-								<TableBodyCell class="px-4 py-3">{euro(o.endTotal)}</TableBodyCell>
+								{#if !accrued()}
+									<TableBodyCell class="hidden px-4 py-3 sm:table-cell"
+										>{euro(o.startTotal)}</TableBodyCell
+									>
+									<TableBodyCell class="px-4 py-3">{euro(o.endTotal)}</TableBodyCell>
+								{/if}
 								{@const error = integrationError(o)}
 								{#if error !== null}
 									<TableBodyCell class="hidden px-4 py-3 sm:table-cell {errorClass(error)}">

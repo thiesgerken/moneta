@@ -6,3 +6,4 @@ moneydb-export.json
 /volumes
 backend-coverage.json
 frontend-coverage.json
+.claude/worktrees
