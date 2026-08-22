@@ -412,7 +412,11 @@
 		return expenseCategories.map((cat) => {
 			const errors: { categoryId?: boolean; weight?: boolean } = {};
 			if (!cat.categoryId) errors.categoryId = true;
-			if (cat.weight && (isNaN(Number(cat.weight)) || Number(cat.weight) < 1)) errors.weight = true;
+			// a weight is a share of the expense, so any positive number is one -- the same
+			// bound the column carries. A floor of 1 also refused to save the imported
+			// expenses, whose shares the importer writes below it.
+			if (cat.weight && (isNaN(Number(cat.weight)) || Number(cat.weight) <= 0))
+				errors.weight = true;
 			return errors;
 		});
 	});
@@ -984,9 +988,12 @@
 								</td>
 								<td class="px-2">
 									<div class={ring(categoryErrors[i]?.weight)}>
+										<!-- step: the default of 1 would reject a share like 0.5 before the
+										     validation ever sees it -->
 										<Input
 											type="number"
-											min="1"
+											min="0"
+											step="any"
 											class="no-spinner w-full"
 											bind:value={cat.weight}
 											placeholder="Gewicht"
