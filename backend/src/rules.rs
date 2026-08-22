@@ -144,11 +144,12 @@ pub fn impose(
     e.created_at = now;
     e.updated_at = now;
 
-    // The blank booking is a placeholder for a payment, not a payment, and its date is the only
-    // thing read off it. Everything else the template holds is a counter-booking or a share,
-    // which is what a delivery gets wrapped in.
+    // The delivery takes the place of exactly one line, and the rest of the template -- the
+    // counter-bookings and the shares -- is what it gets wrapped in.
     let paid = template_booking(template);
-    e.transactions.retain(|t| t.amount != Some(0));
+    if let Some(idx) = booking_of(template, delivery.account_id) {
+        e.transactions.remove(idx);
+    }
 
     let (start, end) = period(template, paid, delivery);
     e.accrual_start = start;
@@ -221,6 +222,32 @@ pub fn template_booking(template: &Expense) -> DateTime<Utc> {
         .map_or(template.accrual_start, |t| t.date)
 }
 
+/// The line a delivery takes the place of.
+///
+/// An imported template names it outright: `blank_booking` left one transaction of exactly zero
+/// where the payment goes, so nothing depends on order or on which account it happens to name.
+///
+/// A template made by hand has no such line — you duplicate an expense and tick *Vorlage*, and
+/// it keeps the booking it was duplicated from. Left in place that booking is kept *and* the
+/// delivery added beside it, which books the money twice: silently, since both spellings pass
+/// `validate`, and worst for a split, where the editor writes the booking as `fraction = 1` and
+/// two of those against one reference amount come to 200 % of the bill. So failing the
+/// placeholder it is the line on the account the money arrived on, and failing that the first,
+/// which is where a booking sits.
+fn booking_of(template: &Expense, delivered_to: Uuid) -> Option<usize> {
+    template
+        .transactions
+        .iter()
+        .position(|t| t.amount == Some(0))
+        .or_else(|| {
+            template
+                .transactions
+                .iter()
+                .position(|t| t.account_id == delivered_to)
+        })
+        .or_else(|| (!template.transactions.is_empty()).then_some(0))
+}
+
 /// What a transaction is worth, whichever way it is written down: the amount it carries, or
 /// its share of what the expense as a whole came to.
 pub fn resolved_amount(expense: &Expense, t: &ExpenseTransaction) -> Option<i32> {
@@ -243,19 +270,21 @@ pub fn resolved_amount(expense: &Expense, t: &ExpenseTransaction) -> Option<i32>
 /// A shared expense books that line as the whole of itself rather than as a figure of its own,
 /// so what it is worth has to be resolved rather than read off.
 pub fn delivery_of(expense: &Expense) -> Option<ExpenseDelivery> {
-    expense
-        .transactions
-        .iter()
-        .find(|t| !t.statement.trim().is_empty())
-        .and_then(|t| {
-            Some(ExpenseDelivery {
-                account_id: t.account_id,
-                date: t.date,
-                booking_date: t.booking_date,
-                amount: resolved_amount(expense, t)?,
-                statement: t.statement.clone(),
-            })
+    // find_map, not find: a line whose worth cannot be resolved is one to look past rather than
+    // to give up on, or an expense would report having no bank transaction at all while a
+    // perfectly good one sits below it
+    expense.transactions.iter().find_map(|t| {
+        if t.statement.trim().is_empty() {
+            return None;
+        }
+        Some(ExpenseDelivery {
+            account_id: t.account_id,
+            date: t.date,
+            booking_date: t.booking_date,
+            amount: resolved_amount(expense, t)?,
+            statement: t.statement.clone(),
         })
+    })
 }
 
 /// How far apart two otherwise identical bank lines have to be to count as separate
@@ -877,6 +906,54 @@ mod tests {
         assert_eq!(e.transactions.len(), 2);
         assert_eq!(e.transactions[0].amount, Some(-4237));
         assert_eq!(e.transactions[1].amount, Some(999));
+    }
+
+    /// A template made the documented way — duplicate an expense, tick *Vorlage* — keeps the
+    /// booking it was duplicated from, and there is no placeholder to recognise. The delivery
+    /// has to take that booking's place rather than land beside it.
+    #[test]
+    fn a_hand_made_template_does_not_book_its_own_amount_as_well() {
+        let account = Uuid::now_v7();
+        let tpl = template(vec![transaction(account, Some(-1750))]);
+
+        let e = impose(&tpl, &delivery(account, -4237, "x"), at(2025, 3, 5)).unwrap();
+
+        assert_eq!(e.transactions.len(), 1, "{:?}", e.transactions);
+        assert_eq!(e.transactions[0].amount, Some(-4237));
+    }
+
+    /// The same for a split, where it is worse: the editor writes a booking as `fraction = 1`,
+    /// so leaving it in place gives two whole shares of one reference amount — 200 % of the
+    /// bill, and `validate` has nothing to object to.
+    #[test]
+    fn a_hand_made_split_template_does_not_book_itself_twice() {
+        let account = Uuid::now_v7();
+        let mut tpl = template(vec![
+            transaction(account, None),
+            transaction(Uuid::now_v7(), None),
+        ]);
+        tpl.transactions[0].fraction = Some(1.0);
+        tpl.transactions[1].fraction = Some(-0.5);
+        tpl.reference_amount = Some(-1750);
+
+        let e = impose(&tpl, &delivery(account, -4237, "x"), at(2025, 3, 5)).unwrap();
+
+        assert_eq!(e.reference_amount, Some(-4237));
+        assert_eq!(
+            e.transactions
+                .iter()
+                .filter(|t| t.fraction == Some(1.0))
+                .count(),
+            1,
+            "one whole, not two: {:?}",
+            e.transactions
+        );
+        let total: i32 = e
+            .transactions
+            .iter()
+            .filter_map(|t| resolved_amount(&e, t))
+            .sum();
+        assert_eq!(total, -2119, "the payment less the half that is owed back");
     }
 
     /// nothing to place it against is not a failure: the delivery is simply the whole of the

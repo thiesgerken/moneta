@@ -200,6 +200,12 @@ balance and every total at once, and nothing reports it. The copies also come *b
 account-dropping pass, or a template booking to an otherwise unused account leaves a dangling
 reference.
 
+**`ExpenseFlagFilter` is an exclusion set, not a whitelist.** Each field is permission for that
+flag to appear, so an expense lists only when *every* flag it carries is permitted. It can ask
+for "templates and nothing else"; it cannot ask for "templates whatever else they are", and the
+combination that looks like it does silently drops 21 of the 58 imported templates. The rule
+picker uses the separate `onlyTemplates` argument for that reason.
+
 **A chain caught after one drawdown reads as a one-off, and must not be treated as one.** A
 spread's shares scale to the payment, a one-off's keep their amount, and one payment plus one
 drawdown is both shapes at once. The discriminator is the title's own history of being drawn in
