@@ -307,9 +307,15 @@ SELECT kind, entry_date, title, store, expense_id, amount, balance, drift
 FROM analysis_statement($1, $2, $3, $4)
 "#;
 
-/// How many expenses the treemap shows inside one category before the remainder collapses
-/// into a single slice. Past a dozen the labels stop fitting anyway.
-const TREEMAP_EXPENSES_PER_CATEGORY: i32 = 12;
+/// How many expenses the category charts hold inside one category before the remainder
+/// collapses into a single slice.
+///
+/// A dozen was what fitted when the treemap drew every expense at once. It zooms now, and a
+/// category that fills the canvas has room for its own long tail -- which is also the tail
+/// that makes the Rest slice honest rather than the largest thing in the picture. Fifty is
+/// well under what a month holds in one category, and the query is a lateral limit per
+/// category rather than a scan.
+const TREEMAP_EXPENSES_PER_CATEGORY: i32 = 50;
 
 /// Ceiling on how many months one `overviews` call may cover.
 ///

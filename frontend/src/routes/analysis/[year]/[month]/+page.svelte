@@ -11,7 +11,12 @@
 		TableHeadCell,
 		Spinner
 	} from 'flowbite-svelte';
-	import { ChevronLeftOutline, ChevronRightOutline, ArrowLeftOutline } from 'flowbite-svelte-icons';
+	import {
+		ChevronLeftOutline,
+		ChevronRightOutline,
+		ArrowLeftOutline,
+		ArrowUpRightFromSquareOutline
+	} from 'flowbite-svelte-icons';
 	import type { ApexOptions } from 'apexcharts';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
@@ -36,7 +41,7 @@
 	const start = $derived(new Date(Date.UTC(year, month - 1, 1)));
 	const end = $derived(new Date(Date.UTC(year, month, 1)));
 
-	let sign = $state('expenses');
+	let sign = $state<'expenses' | 'income'>('expenses');
 
 	const open = (y: number, m: number) => {
 		goto(resolve('/analysis/[year]/[month]', { year: `${y}`, month: `${m}` }));
@@ -333,88 +338,102 @@
 		{ value: 'treemap', label: 'Treemap' }
 	];
 
-	/// Categories as slices, the way the start page draws the running month.
+	/// The month as a tree: every category, and the expenses inside it.
 	///
-	/// One per sign, drawn side by side rather than behind a toggle: a circle is a share of a
-	/// whole, and the two wholes are different questions -- what the month cost and what it
-	/// brought in -- so there is nothing to switch between. The treemap keeps the toggle,
-	/// because two signs of area in one picture mean nothing.
-	const donutFor = (which: 'expenses' | 'income') => {
-		const slices = breakdown
-			.map((c) => ({
-				name: name(c.category),
-				color: categoryColor(c.category),
-				value: Math.abs(which === 'expenses' ? c.expenses : c.income) / 100
-			}))
-			.filter((s) => s.value > 0)
-			.sort((a, b) => b.value - a.value);
+	/// One shape for both pictures. Apex builds the hierarchy out of the series -- each series
+	/// is a parent, its data the leaves under it -- which is what a zoom and a second ring both
+	/// need, and it is also what gives every category its own colour rather than one palette
+	/// entry per tile.
+	const treeFor = (which: 'expenses' | 'income') =>
+		breakdown
+			.map((c) => {
+				const leaves = c.biggest
+					.filter((e) => (which === 'expenses' ? e.amount < 0 : e.amount > 0))
+					.map((e) => ({ x: e.title, y: Math.abs(e.amount) / 100 }));
 
-		const total = slices.reduce((sum, s) => sum + s.value, 0);
+				// what `biggest` left out, as one leaf, so the areas still add up to the category
+				const rest = Math.abs(which === 'expenses' ? c.restExpenses : c.restIncome);
+				if (rest > 0) leaves.push({ x: 'Rest', y: rest / 100 });
+
+				return { name: name(c.category), color: categoryColor(c.category), data: leaves };
+			})
+			.filter((s) => s.data.length > 0);
+
+	const total = (tree: ReturnType<typeof treeFor>) =>
+		tree.reduce((sum, s) => sum + s.data.reduce((inner, d) => inner + d.y, 0), 0);
+
+	/// Rings from the middle out: categories, then what is inside them.
+	///
+	/// One per sign, drawn side by side rather than behind a toggle -- a ring is a share of a
+	/// whole, and the two wholes are different questions. The treemap keeps the toggle, where
+	/// two signs of area in one picture would mean nothing.
+	const sunburstFor = (which: 'expenses' | 'income') => {
+		const tree = treeFor(which);
 
 		return {
-			chart: { type: 'donut', height: compact ? 320 : 380 },
-			series: slices.map((s) => s.value),
-			labels: slices.map((s) => s.name),
-			colors: slices.map((s) => s.color),
-			stroke: { width: 0 },
-			dataLabels: { enabled: false },
-			legend: { position: 'bottom', fontSize: '12px' },
-			tooltip: { y: { formatter: (v: number) => euro(v * 100) } },
+			chart: { type: 'sunburst', height: compact ? 320 : 420 },
+			// on the series as well as in `colors`: apex takes a group's colour from the series
+			// when it has one, and tints the ring outside it from there
+			series: tree.map((s) => ({ name: s.name, color: s.color, data: s.data })),
+			colors: tree.map((s) => s.color),
+			legend: { show: false },
 			plotOptions: {
-				pie: {
-					donut: {
-						size: '68%',
-						labels: {
-							show: true,
-							// apex hands the hovered slice's value to this one as a string off
-							// the DOM, which is why it is not the tooltip's formatter
-							value: { formatter: (v: string) => euro(Number(v) * 100) },
-							total: {
-								show: true,
-								label: which === 'expenses' ? 'Ausgegeben' : 'Eingenommen',
-								formatter: () => euro(total * 100)
-							}
-						}
-					}
+				sunburst: {
+					// the hole is where the total goes, above the chart rather than inside it:
+					// apex has no centre label for this type
+					innerSize: '18%',
+					// enough that the expenses read as belonging to their category rather than
+					// as a second set of colours
+					tint: 0.18,
+					spacing: 1,
+					borderRadius: 2,
+					// a category fills the circle on a click, and its middle takes you back out
+					zoomOnClick: true,
+					dataLabels: { show: true, minAngleToShow: 10, style: { fontSize: '11px' } }
 				}
-			}
+			},
+			tooltip: { y: { formatter: (v: number) => euro(v * 100) } }
 		} as ApexOptions;
 	};
 
-	const spentDonut = $derived(donutFor('expenses'));
-	const earnedDonut = $derived(donutFor('income'));
+	const spentTree = $derived(treeFor('expenses'));
+	const earnedTree = $derived(treeFor('income'));
+	const spentSunburst = $derived(sunburstFor('expenses'));
+	const earnedSunburst = $derived(sunburstFor('income'));
 
 	const treemapOptions = $derived.by(() => {
-		const series = breakdown
-			.map((c) => {
-				const children = c.biggest
-					.filter((e) => (sign === 'expenses' ? e.amount < 0 : e.amount > 0))
-					.map((e) => ({ x: e.title, y: Math.abs(e.amount) / 100 }));
-
-				const rest = Math.abs(sign === 'expenses' ? c.restExpenses : c.restIncome);
-				if (rest > 0) children.push({ x: 'Rest', y: rest / 100 });
-
-				return { name: name(c.category), color: categoryColor(c.category), data: children };
-			})
-			.filter((s) => s.data.length > 0);
+		const tree = treeFor(sign);
 
 		// `distributed` is what colours a single series per tile; with one series per category
 		// the colour comes from the series instead, and the two cannot be mixed.
 		const compactSeries = [
 			{
 				name: 'Kategorien',
-				data: series.map((s) => ({ x: s.name, y: s.data.reduce((sum, d) => sum + d.y, 0) }))
+				data: tree.map((s) => ({ x: s.name, y: s.data.reduce((sum, d) => sum + d.y, 0) }))
 			}
 		];
 
 		return {
-			chart: { type: 'treemap', height: compact ? 460 : 380, toolbar: { show: false } },
-			series: compact ? compactSeries : series.map((s) => ({ name: s.name, data: s.data })),
-			colors: series.map((s) => s.color),
-			// the tiles carry their own names when there is one per category
-			legend: { show: !compact, position: 'bottom' },
+			chart: { type: 'treemap', height: compact ? 460 : 440, toolbar: { show: false } },
+			series: compact
+				? compactSeries
+				: tree.map((s) => ({ name: s.name, color: s.color, data: s.data })),
+			colors: tree.map((s) => s.color),
+			// the categories carry their own names once they are drawn as containers
+			legend: { show: false },
 			dataLabels: { enabled: true, style: { fontSize: compact ? '13px' : '12px' } },
-			plotOptions: { treemap: { distributed: compact, enableShades: true } },
+			plotOptions: {
+				treemap: {
+					distributed: compact,
+					enableShades: true,
+					// A container per category, which is also what makes the zoom possible: apex
+					// only zooms a treemap that has parents to land on. Not on a phone, where the
+					// whole point of the compact shape is one tile per category and nothing to
+					// zoom into.
+					parents: { show: !compact },
+					zoom: { enabled: !compact }
+				}
+			},
 			tooltip: { y: { formatter: (v: number) => euro(v * 100) } }
 		} as ApexOptions;
 	});
@@ -464,7 +483,7 @@
 	{:else if detail}
 		<!-- three cards rather than four on the accrual axis, where the fourth is a balance:
 		     see the Konten table below, and the columns the overview drops for the same reason -->
-		<div class="grid gap-4 {accrued() ? 'md:grid-cols-3' : 'md:grid-cols-4'}">
+		<div class="grid gap-4 sm:grid-cols-2 {accrued() ? 'lg:grid-cols-4' : 'lg:grid-cols-5'}">
 			<Card class="max-w-none p-4">
 				<span class="text-sm text-gray-500 dark:text-gray-400">Einnahmen</span>
 				<span class="text-2xl font-semibold text-green-700 dark:text-green-400"
@@ -476,12 +495,27 @@
 				<span class="text-2xl font-semibold text-red-600 dark:text-red-400"
 					>{euro(detail.expenses)}</span
 				>
-				<span class="text-xs text-gray-500 dark:text-gray-400">{detail.expenseCount} Stück</span>
 			</Card>
 			<Card class="max-w-none p-4">
 				<span class="text-sm text-gray-500 dark:text-gray-400">Delta</span>
 				<span class="text-2xl font-semibold {amountColor(delta)}">{euro(delta)}</span>
 			</Card>
+			<!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() takes a route, not a query string -->
+			<a href={listHref} class="group">
+				<Card class="max-w-none p-4">
+					<span class="text-sm text-gray-500 dark:text-gray-400">Einträge</span>
+					<span class="flex items-center gap-2 text-2xl font-semibold">
+						{detail.expenseCount}
+						<ArrowUpRightFromSquareOutline
+							class="group-hover:text-primary-600 dark:group-hover:text-primary-500 h-4 w-4 text-gray-400 dark:text-gray-500"
+						/>
+					</span>
+					<span class="text-xs text-gray-500 group-hover:underline dark:text-gray-400">
+						in der Liste öffnen
+					</span>
+				</Card>
+			</a>
+			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 			{#if !accrued()}
 				<Card class="max-w-none p-4">
 					<span class="text-sm text-gray-500 dark:text-gray-400">Vermögen am Ende</span>
@@ -516,8 +550,8 @@
 			</div>
 			{#if view === 'donut'}
 				<div class="grid gap-4 md:grid-cols-2">
-					<Chart options={spentDonut} />
-					<Chart options={earnedDonut} />
+					{@render ring('Ausgegeben', total(spentTree), spentSunburst)}
+					{@render ring('Eingenommen', total(earnedTree), earnedSunburst)}
 				</div>
 			{:else}
 				<Chart options={treemapOptions} />
@@ -586,21 +620,18 @@
 			{@render extremes('Größte Ausgaben', biggest, 'text-red-600 dark:text-red-400')}
 			{@render extremes('Größte Einnahmen', earned, 'text-green-700 dark:text-green-400')}
 		</div>
-
-		<!-- ten of each is a shape, not the month: the list is where the rest of it is, and it
-		     opens already narrowed to this month on the axis this page is being read on -->
-		<div class="flex justify-end">
-			<!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() takes a route, not a query string -->
-			<a
-				href={listHref}
-				class="text-primary-600 dark:text-primary-500 text-sm font-medium hover:underline"
-			>
-				Alle Posten des Monats
-			</a>
-			<!-- eslint-enable svelte/no-navigation-without-resolve -->
-		</div>
 	{/if}
 </div>
+
+{#snippet ring(label: string, sum: number, options: ApexOptions)}
+	<div class="min-w-0">
+		<div class="mb-1 text-center">
+			<span class="text-sm text-gray-500 dark:text-gray-400">{label}</span>
+			<span class="ml-2 font-semibold">{euro(sum * 100)}</span>
+		</div>
+		<Chart {options} />
+	</div>
+{/snippet}
 
 {#snippet extremes(heading: string, rows: typeof biggest, color: string)}
 	<Card class="max-w-none min-w-0 p-4">
