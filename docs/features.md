@@ -47,9 +47,10 @@ The list is the workhorse. Server-side **search, filtering and sorting** through
 client names a column from a per-entity enum and a direction, and nothing on the wire is a
 query language.
 
-Filters: free-text search, accounts, categories, the five flags, and a period. The period
-filter and the date column both follow whichever of the three dates is selected —
-accrual, value or booking. Active filters show as removable chips.
+Filters: free-text search, accounts, categories, the five flags, and a period. The search
+covers the text fields, the positions, the bank's statement text on each transaction, and an
+amount in either sign. The period filter and the date column both follow whichever of the
+three dates is selected — accrual, value or booking. Active filters show as removable chips.
 
 Clicking a row opens the detail modal: the transactions with their per-account amounts, the
 categorizations and their weights, receipts, positions, and the **changelog** with a rendered

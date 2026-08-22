@@ -426,8 +426,12 @@ type ExpensePredicate =
     Box<dyn BoxableExpression<expenses_rendered::table, diesel::pg::Pg, SqlType = Bool>>; // scoped-ok: names the table as a type, builds no query
 
 /// Everything a search term can match: the free-text fields, the position titles inside the
-/// jsonb, and -- if the term reads as a number -- the total in either sign, since the table
-/// shows expenses and income in the same column.
+/// jsonb, the bank's own text on each transaction, and -- if the term reads as a number -- the
+/// total in either sign, since the table shows expenses and income in the same column.
+///
+/// The transactions are matched field by field rather than as `transactions::text`: that
+/// document also carries account ids and dates, which a term like a year would hit on every
+/// row.
 fn search_predicate(term: &str) -> ExpensePredicate {
     let pattern = util::ilike_pattern(term);
 
@@ -437,7 +441,15 @@ fn search_predicate(term: &str) -> ExpensePredicate {
             .or(expenses_rendered::store.ilike(pattern.clone()))
             .or(expenses_rendered::description.ilike(pattern.clone()))
             .or(expenses_rendered::comments.ilike(pattern.clone()))
-            .or(sql::<Bool>("positions::text ILIKE ").bind::<Text, _>(pattern)),
+            .or(sql::<Bool>("positions::text ILIKE ").bind::<Text, _>(pattern.clone()))
+            .or(sql::<Bool>(
+                "EXISTS (SELECT 1 FROM jsonb_array_elements(transactions) t \
+                 WHERE t ->> 'statement' ILIKE ",
+            )
+            .bind::<Text, _>(pattern.clone())
+            .sql(" OR t ->> 'comments' ILIKE ")
+            .bind::<Text, _>(pattern)
+            .sql(")")),
     );
 
     if let Ok(value) = term.replace(',', ".").parse::<f64>()
@@ -1203,7 +1215,11 @@ mod tests {
 
         let booking = expense("echte Buchung", false);
 
-        for e in [plain, taxed, half, seen, booking] {
+        // the bank's own text lives on the transaction, nowhere in the expense's own fields
+        let mut card = expense("Kartenzahlung", false);
+        card.transactions[0].statement = "REWE SAGT DANKE 12345//HAMBURG".into();
+
+        for e in [plain, taxed, half, seen, booking, card] {
             crate::queries::insert_expense(conn, &e)
                 .await
                 .expect("insert");
@@ -1248,15 +1264,17 @@ mod tests {
             .collect()
     }
 
+    /// One test over one seed: two would run at once, and both migrating the same database
+    /// trips a unique violation in postgres' catalog.
     #[tokio::test]
-    async fn only_templates_finds_the_ones_carrying_another_flag_too() {
+    async fn list_answers_the_picker_and_the_search_box() {
         let Ok(url) = std::env::var("TEST_DATABASE_URL") else {
             eprintln!("TEST_DATABASE_URL is not set -- skipping");
             return;
         };
 
         crate::migrate(&url).await.expect("migrations");
-        let pool = crate::pool(&url, "moneta-picker-test").expect("pool");
+        let pool = crate::pool(&url, "moneta-expense-test").expect("pool");
         seed(&mut pool.get().await.expect("connection")).await;
 
         let mut found = titles(
@@ -1288,5 +1306,26 @@ mod tests {
         .await;
 
         assert_eq!(filtered, vec!["schlichte Vorlage"]);
+
+        let found = titles(
+            &pool,
+            "{ expenses { list(limit: 25, search: \"sagt danke\") { edges { node { title } } } } }",
+        )
+        .await;
+
+        assert_eq!(found, vec!["Kartenzahlung"]);
+
+        // the ids and dates in the same jsonb document are not text to search: an account id
+        // pasted into the box would otherwise return every expense on that account
+        let by_id = titles(
+            &pool,
+            &format!(
+                "{{ expenses {{ list(limit: 25, search: \"{ACCOUNT}\") \
+                 {{ edges {{ node {{ title }} }} }} }} }}"
+            ),
+        )
+        .await;
+
+        assert!(by_id.is_empty(), "{by_id:?}");
     }
 }
