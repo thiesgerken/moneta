@@ -205,6 +205,14 @@
 							effectiveAmount
 							accrualStart
 							accrualEnd
+							categories {
+								weight
+								category {
+									id
+									name
+									color
+								}
+							}
 						}
 					}
 				}
@@ -233,6 +241,14 @@
 							effectiveAmount
 							accrualStart
 							accrualEnd
+							categories {
+								weight
+								category {
+									id
+									name
+									color
+								}
+							}
 						}
 					}
 				}
@@ -288,7 +304,13 @@
 	/// under a different month does not move money between accounts.
 	const delta = $derived((detail?.income ?? 0) + (detail?.expenses ?? 0));
 	const breakdown = $derived(overviews?.byCategory ?? []);
-	type Row = { id: string; title: string; store: string; effectiveAmount: number };
+	type Row = {
+		id: string;
+		title: string;
+		store: string;
+		effectiveAmount: number;
+		categories: readonly { category: { id: string; name: string; color: string | null } }[];
+	};
 
 	/// The ten biggest of one sign, and what makes one big.
 	///
@@ -666,6 +688,7 @@
 		<Table hoverable striped class="w-full text-left text-sm">
 			<TableHead>
 				<TableHeadCell class="px-4 py-3">Titel</TableHeadCell>
+				<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Kategorie</TableHeadCell>
 				<TableHeadCell class="px-4 py-3">Betrag</TableHeadCell>
 			</TableHead>
 			<TableBody class="divide-y">
@@ -676,6 +699,20 @@
 							{#if e.store}
 								<span class="text-gray-500 dark:text-gray-400"> · {e.store}</span>
 							{/if}
+						</TableBodyCell>
+						<!-- an expense can sit in several, which is why this is a list and not a
+						     word; the amount beside it is the whole expense either way -->
+						<TableBodyCell class="hidden px-4 py-3 sm:table-cell">
+							<div class="flex flex-wrap gap-x-2 gap-y-1">
+								{#each e.categories as c (c.category.id)}
+									<span class="inline-flex items-center gap-1 text-xs whitespace-nowrap">
+										<span
+											class="inline-block h-2 w-2 shrink-0 rounded-full"
+											style="background-color: {categoryColor(c.category)}"
+										></span>{c.category.name}
+									</span>
+								{/each}
+							</div>
 						</TableBodyCell>
 						<TableBodyCell class="px-4 py-3 whitespace-nowrap {color}">
 							{euro(e.amount)}
