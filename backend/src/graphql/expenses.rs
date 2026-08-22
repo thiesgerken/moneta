@@ -1077,3 +1077,216 @@ fn check_references(
 
     Ok(())
 }
+
+/// The rule picker's query, run through the schema against a real database.
+///
+/// The flag filter and `only_templates` answer different questions, and the difference only
+/// shows on a template that carries a second flag — which no unit test over the filter itself
+/// can produce, because the flags are combined in the query rather than in Rust. So this goes
+/// through `juniper::execute` with the document the picker actually sends.
+///
+/// Needs an empty database of its own in `TEST_DATABASE_URL`, like `tests/scoping.rs`.
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+
+    use chrono::{TimeZone, Utc};
+    use diesel_async::{AsyncPgConnection, RunQueryDsl};
+    use tokio::sync::RwLock;
+    use uuid::Uuid;
+
+    use crate::graphql::accounts::{get_account_loader, get_account_usage_loader};
+    use crate::graphql::cache::AnalysisCache;
+    use crate::graphql::categories::{get_category_loader, get_category_usage_loader};
+    use crate::graphql::root::{Context, Mutation, Query, Schema};
+    use crate::graphql::users::get_user_loader;
+    use crate::models::{
+        Account, AccountAvailability, AccountKind, AccountRisk, Expense, ExpenseTransaction, User,
+    };
+    use crate::schema::{accounts, users};
+
+    const OWNER: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0011);
+    const ACCOUNT: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00b1);
+
+    fn at(y: i32, m: u32, d: u32) -> chrono::DateTime<Utc> {
+        Utc.with_ymd_and_hms(y, m, d, 12, 0, 0).unwrap()
+    }
+
+    /// A template has to own a transaction or `expense_users` gives it no owner and it renders
+    /// for nobody, which would make this test pass for the wrong reason.
+    fn expense(title: &str, template: bool) -> Expense {
+        Expense {
+            id: Uuid::now_v7(),
+            title: title.into(),
+            store: String::new(),
+            description: String::new(),
+            comments: String::new(),
+            reference_amount: None,
+            accrual_start: at(2026, 6, 1),
+            accrual_end: at(2026, 6, 1),
+            is_template: template,
+            is_tax_relevant: false,
+            is_unchecked: false,
+            is_incomplete: false,
+            is_extraordinary: false,
+            receipts: Vec::new(),
+            categories: Vec::new(),
+            transactions: vec![ExpenseTransaction {
+                account_id: ACCOUNT,
+                date: at(2026, 6, 1),
+                booking_date: None,
+                amount: Some(-1000),
+                fraction: None,
+                comments: String::new(),
+                statement: String::new(),
+            }],
+            positions: Vec::new(),
+            created_at: at(2026, 6, 1),
+            updated_at: at(2026, 6, 1),
+        }
+    }
+
+    async fn seed(conn: &mut AsyncPgConnection) {
+        diesel::sql_query(
+            "TRUNCATE expense_changes, seen_deliveries, automation_rules, periodic_rules, \
+             expense_categorizations, expense_transactions, expenses, balances, accounts, \
+             categories, users CASCADE",
+        )
+        .execute(conn)
+        .await
+        .expect("clear");
+
+        diesel::insert_into(users::table)
+            .values(User {
+                id: OWNER,
+                name: "owner".into(),
+                full_name: "owner".into(),
+                password_hash: "x".into(),
+            })
+            .execute(conn)
+            .await
+            .expect("user");
+
+        diesel::insert_into(accounts::table)
+            .values(Account {
+                id: ACCOUNT,
+                user_id: OWNER,
+                name: "Giro".into(),
+                description: String::new(),
+                color: None,
+                iban: None,
+                kind: AccountKind::Debit,
+                availability: AccountAvailability::Immediately,
+                risk: AccountRisk::None,
+                opened: at(2025, 1, 1),
+                closed: None,
+                ownership_fraction: 1.0,
+                sync_account_id: None,
+                sync_invert: None,
+                stockdb_account_id: None,
+            })
+            .execute(conn)
+            .await
+            .expect("account");
+
+        let plain = expense("schlichte Vorlage", true);
+
+        let mut taxed = expense("Berufsunfähigkeit", true);
+        taxed.is_tax_relevant = true;
+
+        let mut half = expense("DKV Erstattung", true);
+        half.is_incomplete = true;
+
+        let mut seen = expense("Automatisch Generiert", true);
+        seen.is_unchecked = true;
+
+        let booking = expense("echte Buchung", false);
+
+        for e in [plain, taxed, half, seen, booking] {
+            crate::queries::insert_expense(conn, &e)
+                .await
+                .expect("insert");
+        }
+    }
+
+    async fn titles(pool: &crate::Pool, document: &str) -> Vec<String> {
+        let context = Context {
+            config: crate::config::Config::default(),
+            pool: pool.clone(),
+            user_id: Arc::new(RwLock::new(Some(OWNER))),
+            cache: Arc::new(AnalysisCache::default()),
+            wrote: AtomicBool::new(false),
+            account_loader: get_account_loader(pool.clone()),
+            category_loader: get_category_loader(pool.clone()),
+            account_usage_loader: get_account_usage_loader(pool.clone()),
+            category_usage_loader: get_category_usage_loader(pool.clone()),
+            user_loader: get_user_loader(pool.clone()),
+        };
+
+        let schema = Schema::new(Query, Mutation, juniper::EmptySubscription::new());
+        let (value, errors) = juniper::execute(
+            document,
+            None,
+            &schema,
+            &juniper::Variables::new(),
+            &context,
+        )
+        .await
+        .expect("query");
+        assert!(errors.is_empty(), "{errors:?}");
+
+        // juniper's value tree has no typed accessor, so this reads the titles back off the
+        // debug rendering rather than walking it field by field
+        let rendered = format!("{value:?}");
+        rendered
+            .match_indices("\"title\": Scalar(String(\"")
+            .map(|(i, m)| {
+                let rest = &rendered[i + m.len()..];
+                rest[..rest.find('"').expect("closing quote")].to_owned()
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn only_templates_finds_the_ones_carrying_another_flag_too() {
+        let Ok(url) = std::env::var("TEST_DATABASE_URL") else {
+            eprintln!("TEST_DATABASE_URL is not set -- skipping");
+            return;
+        };
+
+        crate::migrate(&url).await.expect("migrations");
+        let pool = crate::pool(&url, "moneta-picker-test").expect("pool");
+        seed(&mut pool.get().await.expect("connection")).await;
+
+        let mut found = titles(
+            &pool,
+            "{ expenses { list(limit: 25, onlyTemplates: true) { edges { node { title } } } } }",
+        )
+        .await;
+        found.sort();
+
+        assert_eq!(
+            found,
+            vec![
+                "Automatisch Generiert",
+                "Berufsunfähigkeit",
+                "DKV Erstattung",
+                "schlichte Vorlage",
+            ],
+            "every template, whatever else it is flagged as -- and no real booking"
+        );
+
+        // what the picker asked before, which is the same question the flag filter can answer:
+        // templates carrying no other flag. Three of the four disappear.
+        let filtered = titles(
+            &pool,
+            "{ expenses { list(limit: 25, flags: { templates: true, taxRelevant: false, \
+             extraordinary: false, unchecked: false, incomplete: false, normal: false }) \
+             { edges { node { title } } } } }",
+        )
+        .await;
+
+        assert_eq!(filtered, vec!["schlichte Vorlage"]);
+    }
+}
