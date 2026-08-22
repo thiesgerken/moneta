@@ -25,6 +25,8 @@
 	import { amountColor } from '$lib/money';
 	import Chart from '$lib/Chart.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
+	import ExpenseDetailModal from '$lib/ExpenseDetailModal.svelte';
+	import { invalidate, AFTER_WRITE } from '$lib/invalidate';
 	import { integrationError, errorClass, deltaColor, categoryColor } from '$lib/analysis/format';
 	import { DATE_AXES, accrued, axisState } from '$lib/analysis/state.svelte';
 	import { accrualShare, isoDate } from '$lib/analysis/dates';
@@ -310,13 +312,35 @@
 	// asked for, so that branch leaves the tables where they are.
 	const filteredBy = $derived(view === 'treemap' && zoomed?.id ? [zoomed.id] : undefined);
 
-	$effect(() => {
-		const window = accrued()
+	const biggestWindow = $derived(
+		accrued()
 			? { accruedAfter: start, accruedBefore: end, limit: BIGGEST_CANDIDATES }
-			: { valuedAfter: start, valuedBefore: end, limit: 10 };
+			: { valuedAfter: start, valuedBefore: end, limit: 10 }
+	);
 
-		void biggestStore.fetch({ variables: { ...window, categoryIds: filteredBy } });
+	$effect(() => {
+		void biggestStore.fetch({ variables: { ...biggestWindow, categoryIds: filteredBy } });
 	});
+
+	/// The expense a tile was clicked on, which is what the modal is bound to.
+	let opened = $state<string | undefined>(undefined);
+
+	/// An edit through the modal moves the figures this page is made of, and none of its
+	/// queries would notice on their own: the variables they were fetched with have not
+	/// changed.
+	async function reload() {
+		invalidate();
+		await Promise.all([
+			detailStore.fetch({
+				variables: { from: start, to: new Date(end.getTime() - 1), accrued: accrued() },
+				...AFTER_WRITE
+			}),
+			biggestStore.fetch({
+				variables: { ...biggestWindow, categoryIds: filteredBy },
+				...AFTER_WRITE
+			})
+		]);
+	}
 
 	/// The month in the expense list, on the axis it is being read on.
 	///
@@ -398,11 +422,17 @@
 			.map((c) => {
 				const leaves = c.biggest
 					.filter((e) => (which === 'expenses' ? e.amount < 0 : e.amount > 0))
-					.map((e) => ({ x: e.title, y: Math.abs(e.amount) / 100 }));
+					.map((e) => ({
+						x: e.title,
+						y: Math.abs(e.amount) / 100,
+						id: e.expenseId as string | null
+					}));
 
-				// what `biggest` left out, as one leaf, so the areas still add up to the category
+				// what `biggest` left out, as one leaf, so the areas still add up to the category.
+				// No id: it stands for a number of expenses rather than for one, so there is
+				// nothing for a click to open.
 				const rest = Math.abs(which === 'expenses' ? c.restExpenses : c.restIncome);
-				if (rest > 0) leaves.push({ x: 'Rest', y: rest / 100 });
+				if (rest > 0) leaves.push({ x: 'Rest', y: rest / 100, id: null });
 
 				return {
 					id: c.category?.id ?? null,
@@ -495,6 +525,16 @@
 				events: {
 					updated: (ctx: { w?: { globals?: { treemapFocusKey?: unknown } } }) => {
 						zoomed = focused(ctx?.w?.globals?.treemapFocusKey);
+					},
+					// A tile is one expense, and the thing anyone wants from it is the expense.
+					// The category headers are what zoom, so the two gestures do not collide.
+					dataPointSelection: (
+						_event: unknown,
+						_ctx: unknown,
+						opts: { seriesIndex?: number; dataPointIndex?: number }
+					) => {
+						const leaf = tree[opts?.seriesIndex ?? -1]?.data[opts?.dataPointIndex ?? -1];
+						if (leaf?.id) opened = leaf.id;
 					}
 				}
 			},
@@ -723,6 +763,8 @@
 		</div>
 	{/if}
 </div>
+
+<ExpenseDetailModal bind:expenseId={opened} onsubmit={reload} />
 
 {#snippet ring(label: string, sum: number, options: ApexOptions)}
 	<div class="min-w-0">
