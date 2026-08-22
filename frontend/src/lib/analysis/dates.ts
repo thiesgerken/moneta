@@ -51,22 +51,26 @@ export function shiftMonth(at: number, n: number): number {
 /// It is here rather than asked of the backend because the caller already holds both dates:
 /// the expense list carries the period, and a list of ten rows is not worth a second query
 /// against a table the month page has already read.
+/// Either end may be left out, for a window that is open on that side.
 export function accrualShare(
 	period: { accrualStart: Date; accrualEnd: Date },
-	from: Date,
-	before: Date
+	from?: Date,
+	before?: Date
 ): number {
 	const DAY = 86400000;
 	// both ends inclusive, and `before` is exclusive, so the last day of the window is the day
 	// before it
 	const days = (a: number, b: number) => Math.round((b - a) / DAY) + 1;
 
-	const total = days(period.accrualStart.getTime(), period.accrualEnd.getTime());
+	const start = period.accrualStart.getTime();
+	const end = period.accrualEnd.getTime();
+
+	const total = days(start, end);
 	if (total <= 0) return 0;
 
 	const inside = days(
-		Math.max(period.accrualStart.getTime(), from.getTime()),
-		Math.min(period.accrualEnd.getTime(), before.getTime() - DAY)
+		from ? Math.max(start, from.getTime()) : start,
+		before ? Math.min(end, before.getTime() - DAY) : end
 	);
 
 	return Math.min(1, Math.max(0, inside / total));

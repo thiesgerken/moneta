@@ -783,7 +783,7 @@
 						<TableBodyCell class="px-4 py-3 whitespace-nowrap {color}">
 							{euro(e.amount)}
 							{#if e.whole !== null}
-								<span class="text-xs text-gray-500 dark:text-gray-400">von {euro(e.whole)}</span>
+								<span class="text-xs text-gray-500 dark:text-gray-400">(von {euro(e.whole)})</span>
 							{/if}
 						</TableBodyCell>
 					</TableBodyRow>

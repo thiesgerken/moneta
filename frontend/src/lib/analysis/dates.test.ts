@@ -94,6 +94,12 @@ describe('accrualShare', () => {
 		expect(accrualShare(point, ...month(7))).toBe(1);
 	});
 
+	it('leaves an end open when it is not given', () => {
+		expect(accrualShare(quarter, first(7))).toBeCloseTo(62 / 92);
+		expect(accrualShare(quarter, undefined, first(7))).toBeCloseTo(30 / 92);
+		expect(accrualShare(quarter)).toBe(1);
+	});
+
 	it('is nothing outside the period', () => {
 		expect(accrualShare(quarter, ...month(5))).toBe(0);
 		expect(accrualShare(quarter, ...month(9))).toBe(0);

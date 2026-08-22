@@ -62,7 +62,7 @@
 	import ExpenseModal from './ExpenseModal.svelte';
 	import { tableSearchClasses, tableSearchTableClass, toolbarControl } from './table_styles';
 	import { page } from '$app/state';
-	import { shortDate } from './analysis/dates';
+	import { accrualShare, shortDate } from './analysis/dates';
 	import { signedEuro } from './money';
 	import QueryError from './QueryError.svelte';
 	import SortIcon from './SortIcon.svelte';
@@ -168,6 +168,29 @@
 			to: to ? new Date(to) : undefined
 		};
 	}
+
+	/// How much of an expense the filtered period actually holds, where that is less than all
+	/// of it.
+	///
+	/// Only on the accrual axis, and only with a period filter: those two together are the
+	/// reader asking what a stretch of time cost, and an expense whose Leistungszeitraum runs
+	/// past both ends of it did not cost that much inside it. The other two axes file an
+	/// expense on a single day, so there is never a part of one to show.
+	///
+	/// The sort still ranks by the whole amount -- the backend has no notion of this share --
+	/// so a column of parts is not in order. Worth it: the alternative is a figure that answers
+	/// a different question from the one the filter asks.
+	const accrualWindow = $derived.by(() => {
+		const { from, to } = filterDateRange;
+		if (dateAxis !== 'accrual' || (!from && !to)) return null;
+
+		// the picker's `to` is the last day the reader means, and the share wants the bound
+		// after it
+		return { from, before: to ? new Date(to.getTime() + 86400000) : undefined };
+	});
+
+	const partOf = (expense: { accrualStart: Date; accrualEnd: Date }) =>
+		accrualWindow ? accrualShare(expense, accrualWindow.from, accrualWindow.before) : 1;
 
 	/// The chosen period, spelled out. This is the control's own label as well as its chip, so
 	/// what the filter row says and what the button says cannot drift apart.
@@ -1221,11 +1244,18 @@
 						style={makeCategoryColor(expense.categories)}
 						>{formatCategories(expense.categories)}</TableBodyCell
 					>
+					{@const part = partOf(expense)}
 					<TableBodyCell
 						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' +
 							amountTint(expense.effectiveAmount)}
-						>{signedEuro(expense.effectiveAmount)}</TableBodyCell
 					>
+						{signedEuro(expense.effectiveAmount * part)}
+						{#if part < 1}
+							<span class="text-xs text-gray-500 dark:text-gray-400">
+								(von {signedEuro(expense.effectiveAmount)})
+							</span>
+						{/if}
+					</TableBodyCell>
 					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
 						>{expense.store}</TableBodyCell
 					>
