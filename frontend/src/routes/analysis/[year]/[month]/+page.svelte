@@ -176,11 +176,13 @@
 			$accruedAfter: DateTime
 			$accruedBefore: DateTime
 			$limit: Int
+			$categoryIds: [UUID!]
 		) {
 			expenses {
 				# the same window read from both ends, as two aliases of one field rather than
 				# two documents: one round trip, one store, one fetch to keep in step
 				spent: list(
+					categoryIds: $categoryIds
 					valuedAfter: $valuedAfter
 					valuedBefore: $valuedBefore
 					accruedAfter: $accruedAfter
@@ -217,6 +219,7 @@
 					}
 				}
 				earned: list(
+					categoryIds: $categoryIds
 					valuedAfter: $valuedAfter
 					valuedBefore: $valuedBefore
 					accruedAfter: $accruedAfter
@@ -273,12 +276,46 @@
 	// it if a month ever looks like it is missing one.
 	const BIGGEST_CANDIDATES = 60;
 
+	/// Which picture of the categories. The treemap goes a level deeper -- category, then the
+	/// expenses inside it -- and the circle answers the question that gets asked first, which
+	/// is what share of the month each category was.
+	let view = $state<'donut' | 'treemap'>('treemap');
+
+	const VIEWS = [
+		{ value: 'donut', label: 'Kreis' },
+		{ value: 'treemap', label: 'Treemap' }
+	];
+
+	/// The category the treemap is zoomed into, or null for the whole month.
+	///
+	/// Apex owns this: a click on a category header re-renders the chart around that branch and
+	/// keeps the key on its own globals, with no event of its own to say so. The `updated` event
+	/// fires for that re-render like any other, which is the one place the two can be brought
+	/// back into step. `_key` is `<series index>:<name>`, so the index is what resolves it.
+	///
+	/// Only the treemap: the sunburst keeps its focus on the chart instance rather than in
+	/// globals and re-lays-out without an update, so there is nothing to read there.
+	let zoomed = $state<{ id: string | null; name: string } | null>(null);
+
 	$effect(() => {
-		void biggestStore.fetch({
-			variables: accrued()
-				? { accruedAfter: start, accruedBefore: end, limit: BIGGEST_CANDIDATES }
-				: { valuedAfter: start, valuedBefore: end, limit: 10 }
-		});
+		// a new month, sign, axis or view redraws the chart from scratch, and apex's focus goes
+		// with it
+		void [view, sign, start, accrued()];
+		zoomed = null;
+	});
+
+	// The zoom is the filter: a treemap zoomed into one category is a reader asking about that
+	// category, and the two tables under it answering about the whole month is the answer to a
+	// question nobody asked. `Ohne Kategorie` is the absence of one, which the list cannot be
+	// asked for, so that branch leaves the tables where they are.
+	const filteredBy = $derived(view === 'treemap' && zoomed?.id ? [zoomed.id] : undefined);
+
+	$effect(() => {
+		const window = accrued()
+			? { accruedAfter: start, accruedBefore: end, limit: BIGGEST_CANDIDATES }
+			: { valuedAfter: start, valuedBefore: end, limit: 10 };
+
+		void biggestStore.fetch({ variables: { ...window, categoryIds: filteredBy } });
 	});
 
 	/// The month in the expense list, on the axis it is being read on.
@@ -350,16 +387,6 @@
 	let viewport = $state(0);
 	const compact = $derived(viewport > 0 && viewport < 640);
 
-	/// Which picture of the categories. The treemap goes a level deeper -- category, then the
-	/// expenses inside it -- and the circle answers the question that gets asked first, which
-	/// is what share of the month each category was.
-	let view = $state<'donut' | 'treemap'>('treemap');
-
-	const VIEWS = [
-		{ value: 'donut', label: 'Kreis' },
-		{ value: 'treemap', label: 'Treemap' }
-	];
-
 	/// The month as a tree: every category, and the expenses inside it.
 	///
 	/// One shape for both pictures. Apex builds the hierarchy out of the series -- each series
@@ -377,7 +404,12 @@
 				const rest = Math.abs(which === 'expenses' ? c.restExpenses : c.restIncome);
 				if (rest > 0) leaves.push({ x: 'Rest', y: rest / 100 });
 
-				return { name: name(c.category), color: categoryColor(c.category), data: leaves };
+				return {
+					id: c.category?.id ?? null,
+					name: name(c.category),
+					color: categoryColor(c.category),
+					data: leaves
+				};
 			})
 			.filter((s) => s.data.length > 0);
 
@@ -399,7 +431,16 @@
 			// category's expenses as the only ring and dropped the rest of the month.
 			series: [
 				{
-					data: tree.map((c) => ({ x: c.name, color: c.color, children: c.data }))
+					// `y` on the parent as well as the children: apex parses the series before it
+					// ever builds the hierarchy, and a datum without one contributes nothing to
+					// that pass -- every parent lacking it left the parser with no values at all,
+					// which is the "no data" branch, which is a blank canvas.
+					data: tree.map((c) => ({
+						x: c.name,
+						y: c.data.reduce((sum, d) => sum + d.y, 0),
+						color: c.color,
+						children: c.data
+					}))
 				}
 			],
 			legend: { show: false },
@@ -430,6 +471,13 @@
 	const treemapOptions = $derived.by(() => {
 		const tree = treeFor(sign);
 
+		const focused = (key: unknown) => {
+			if (typeof key !== 'string') return null;
+			const index = Number(key.split(':')[0]);
+			const category = Number.isInteger(index) ? tree[index] : undefined;
+			return category ? { id: category.id, name: category.name } : null;
+		};
+
 		// `distributed` is what colours a single series per tile; with one series per category
 		// the colour comes from the series instead, and the two cannot be mixed.
 		const compactSeries = [
@@ -440,7 +488,16 @@
 		];
 
 		return {
-			chart: { type: 'treemap', height: compact ? 460 : 440, toolbar: { show: false } },
+			chart: {
+				type: 'treemap',
+				height: compact ? 460 : 440,
+				toolbar: { show: false },
+				events: {
+					updated: (ctx: { w?: { globals?: { treemapFocusKey?: unknown } } }) => {
+						zoomed = focused(ctx?.w?.globals?.treemapFocusKey);
+					}
+				}
+			},
 			series: compact
 				? compactSeries
 				: tree.map((s) => ({ name: s.name, color: s.color, data: s.data })),
@@ -679,7 +736,16 @@
 
 {#snippet extremes(heading: string, rows: typeof biggest, color: string)}
 	<Card class="max-w-none min-w-0 p-4">
-		<h3 class="mb-2 text-lg font-semibold">{heading}</h3>
+		<h3 class="mb-2 text-lg font-semibold">
+			{heading}
+			<!-- what the treemap is zoomed into, said out loud: a shorter table is otherwise a
+			     month with less in it than it has -->
+			{#if filteredBy && zoomed}
+				<span class="text-base font-normal text-gray-500 dark:text-gray-400">
+					· {zoomed.name}
+				</span>
+			{/if}
+		</h3>
 		<QueryError
 			errors={$biggestStore.errors}
 			message="Die größten Posten konnten nicht geladen werden."
