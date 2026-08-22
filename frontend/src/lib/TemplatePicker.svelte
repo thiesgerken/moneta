@@ -21,12 +21,17 @@
 		readonly title: string;
 		readonly store: string;
 		readonly accrualStart: Date;
+		readonly effectiveAmount: number;
 	};
 
-	// no amount: a template's own booking is a placeholder for whatever the rule will put there,
-	// so the figure standing in the field would be a number that never gets used
+	// An automation template's booking is a placeholder, so its amount is 0,00 EUR and saying so
+	// is noise. A periodic one has no delivery to take an amount from and the template is the
+	// only place the price lives, which is exactly what you are picking between.
+	const amount = (c: Candidate) =>
+		c.effectiveAmount ? ` · ${(c.effectiveAmount / 100).toFixed(2)}€` : '';
+
 	const label = (c: Candidate) =>
-		`${c.title}${c.store ? ' · ' + c.store : ''} · ${shortDate(c.accrualStart)}`;
+		`${c.title}${c.store ? ' · ' + c.store : ''} · ${shortDate(c.accrualStart)}${amount(c)}`;
 
 	/// What the input shows: the chosen expense, or what is being searched for. One field for
 	/// both, since searching is how you choose.
@@ -41,15 +46,22 @@
 	// real booking, one that is in the balances and in the Auswertung, and a rule pointing at it
 	// turns this dialog into a way of rewriting money that has already been spent.
 	const templateStore = graphql(`
-		query TemplateCandidates($search: String, $flags: ExpenseFlagFilter) {
+		query TemplateCandidates($search: String) {
 			expenses {
-				list(limit: 25, search: $search, flags: $flags, sortBy: ACCRUAL_START, sortDir: DESC) {
+				list(
+					limit: 25
+					search: $search
+					onlyTemplates: true
+					sortBy: ACCRUAL_START
+					sortDir: DESC
+				) {
 					edges {
 						node {
 							id
 							title
 							store
 							accrualStart
+							effectiveAmount
 						}
 					}
 				}
@@ -67,23 +79,14 @@
 					title
 					store
 					accrualStart
+					effectiveAmount
 				}
 			}
 		}
 	`);
 
-	const TEMPLATES_ONLY = {
-		templates: true,
-		taxRelevant: false,
-		extraordinary: false,
-		unchecked: false,
-		incomplete: false,
-		normal: false
-	};
-
 	const variables = $derived({
-		search: typed && query.trim() ? query.trim() : undefined,
-		flags: TEMPLATES_ONLY
+		search: typed && query.trim() ? query.trim() : undefined
 	});
 
 	$effect(() => void templateStore.fetch({ variables }));
@@ -230,7 +233,7 @@
 						>
 							{c.title}
 							<span class="block text-xs text-gray-500 dark:text-gray-400">
-								{c.store ? c.store + ' · ' : ''}{shortDate(c.accrualStart)}
+								{c.store ? c.store + ' · ' : ''}{shortDate(c.accrualStart)}{amount(c)}
 							</span>
 						</button>
 					</li>

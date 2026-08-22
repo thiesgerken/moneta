@@ -396,6 +396,10 @@ pub enum ExpenseSortField {
 /// The flag checkboxes above the expense table. Each one being off means "hide the expenses
 /// that carry this flag"; `normal` off means "show only expenses that carry some flag".
 #[derive(Debug, Clone, Copy, juniper::GraphQLInputObject)]
+/// Which flags an expense is allowed to carry and still be listed — an exclusion set, not a
+/// whitelist. Every field left false filters that flag *out*, so the flags an expense has must
+/// all be permitted for it to show. That cannot ask for "everything carrying this one flag";
+/// `only_templates` on the list is there for the single case that needs it.
 pub struct ExpenseFlagFilter {
     pub templates: bool,
     pub tax_relevant: bool,
@@ -472,6 +476,7 @@ impl ExpenseQuery {
         account_ids: Option<Vec<Uuid>>,
         category_ids: Option<Vec<Uuid>>,
         flags: Option<ExpenseFlagFilter>,
+        only_templates: Option<bool>,
         accrued_after: Option<DateTime<Utc>>,
         accrued_before: Option<DateTime<Utc>>,
         valued_after: Option<DateTime<Utc>>,
@@ -527,6 +532,15 @@ impl ExpenseQuery {
                             .select(expense_categorizations::expense_id),
                     ),
                 );
+            }
+
+            // Not something `flags` can say. Each of those is permission for a flag to appear,
+            // so an expense shows only when every flag it carries was allowed -- "templates and
+            // nothing else", never "templates whatever else they are". A rule needs the second
+            // one: 21 of 58 imported templates are also tax-relevant, unchecked or incomplete,
+            // and asking through `flags` hides every one of them.
+            if only_templates.unwrap_or(false) {
+                query = query.filter(expenses_rendered::is_template.eq(true));
             }
 
             if !flags.templates {
