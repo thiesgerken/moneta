@@ -782,8 +782,12 @@
 						</TableBodyCell>
 						<TableBodyCell class="px-4 py-3 whitespace-nowrap {color}">
 							{euro(e.amount)}
+							<!-- under the figure, for the same reason as in the expense table: a second
+							     amount on the line is what the column has no room for -->
 							{#if e.whole !== null}
-								<span class="text-xs text-gray-500 dark:text-gray-400">(von {euro(e.whole)})</span>
+								<div class="text-xs font-normal text-gray-500 dark:text-gray-400">
+									von {euro(Math.abs(e.whole))}
+								</div>
 							{/if}
 						</TableBodyCell>
 					</TableBodyRow>

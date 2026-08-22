@@ -63,7 +63,7 @@
 	import { tableSearchClasses, tableSearchTableClass, toolbarControl } from './table_styles';
 	import { page } from '$app/state';
 	import { accrualShare, shortDate } from './analysis/dates';
-	import { signedEuro } from './money';
+	import { euro, signedEuro } from './money';
 	import QueryError from './QueryError.svelte';
 	import SortIcon from './SortIcon.svelte';
 	import { DESC, TableSort } from './table_sort.svelte';
@@ -1250,10 +1250,13 @@
 							amountTint(expense.effectiveAmount)}
 					>
 						{signedEuro(expense.effectiveAmount * part)}
+						<!-- under the figure rather than beside it: the column is as wide as an
+						     amount, and a second one on the same line was cut off by the one after
+						     it. Unsigned, because the sign is already above it. -->
 						{#if part < 1}
-							<span class="text-xs text-gray-500 dark:text-gray-400">
-								(von {signedEuro(expense.effectiveAmount)})
-							</span>
+							<div class="text-xs font-normal text-gray-500 dark:text-gray-400">
+								von {euro(Math.abs(expense.effectiveAmount))}
+							</div>
 						{/if}
 					</TableBodyCell>
 					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
