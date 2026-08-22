@@ -421,7 +421,17 @@
 			colors: tree.map((s) => s.color),
 			// the categories carry their own names once they are drawn as containers
 			legend: { show: false },
-			dataLabels: { enabled: true, style: { fontSize: compact ? '13px' : '12px' } },
+			// the amount on the tile: a treemap says which is bigger, not by how much, and the
+			// tooltip only answers for the one tile the pointer is on. Apex drops the label
+			// whole where it does not fit, so a tile too small for both stays as it was.
+			dataLabels: {
+				enabled: true,
+				style: { fontSize: compact ? '13px' : '12px' },
+				// `unknown` for the second argument: apex's own types declare one opts shape for
+				// every chart, and the treemap's `value` is not on it
+				formatter: (text: string | number | number[], op?: unknown) =>
+					`${text} (${euro(((op as { value?: number } | undefined)?.value ?? 0) * 100)})`
+			},
 			plotOptions: {
 				treemap: {
 					distributed: compact,
