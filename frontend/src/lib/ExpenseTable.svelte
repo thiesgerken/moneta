@@ -152,6 +152,12 @@
 	const category = page.url.searchParams.get('category');
 	if (category) filteredCategories = [category];
 
+	// Which date the period below is about. Without it a handover lands on whichever axis this
+	// table happens to default to, and a month of Wertstellung read as a month of
+	// Leistungszeitraum is a different set of expenses.
+	const handedAxis = page.url.searchParams.get('axis');
+	if (handedAxis && handedAxis in DATE_AXES) dateAxis = handedAxis as DateAxis;
+
 	// A period the caller worked out; the analysis pages snap theirs to whole months, and a
 	// list that quietly used different ends would not add up to the chart it came from.
 	const from = page.url.searchParams.get('from');

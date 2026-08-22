@@ -146,6 +146,8 @@
 		const end = new Date(to);
 		const params = new URLSearchParams({
 			category: id.toString(),
+			// the tile is filed under whichever axis the tab is reading, and so is the list
+			axis: accrued() ? 'accrual' : 'value',
 			from: isoDate(new Date(start.getFullYear(), start.getMonth(), 1)),
 			to: isoDate(new Date(end.getFullYear(), end.getMonth() + 1, 0))
 		});

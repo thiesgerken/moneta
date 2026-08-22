@@ -22,7 +22,7 @@
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import { integrationError, errorClass, deltaColor, categoryColor } from '$lib/analysis/format';
 	import { DATE_AXES, accrued, axisState } from '$lib/analysis/state.svelte';
-	import { accrualShare } from '$lib/analysis/dates';
+	import { accrualShare, isoDate } from '$lib/analysis/dates';
 	import QueryError from '$lib/QueryError.svelte';
 
 	const euro = (cents: number) =>
@@ -258,6 +258,21 @@
 				? { accruedAfter: start, accruedBefore: end, limit: BIGGEST_CANDIDATES }
 				: { valuedAfter: start, valuedBefore: end, limit: 10 }
 		});
+	});
+
+	/// The month in the expense list, on the axis it is being read on.
+	///
+	/// "Ausgaben" is what the list is called and not what it holds -- income is an expense with
+	/// the other sign -- so the link says Posten, which is what the two tables above it are
+	/// halves of.
+	const listHref = $derived.by(() => {
+		const params = new URLSearchParams({
+			from: isoDate(start),
+			to: isoDate(new Date(end.getTime() - 86400000)),
+			axis: accrued() ? 'accrual' : 'value'
+		});
+
+		return `${resolve('/expenses')}?${params}`;
 	});
 
 	const overviews = $derived($detailStore.data?.analysis.overviews);
@@ -570,6 +585,19 @@
 		<div class="grid gap-4 lg:grid-cols-2">
 			{@render extremes('Größte Ausgaben', biggest, 'text-red-600 dark:text-red-400')}
 			{@render extremes('Größte Einnahmen', earned, 'text-green-700 dark:text-green-400')}
+		</div>
+
+		<!-- ten of each is a shape, not the month: the list is where the rest of it is, and it
+		     opens already narrowed to this month on the axis this page is being read on -->
+		<div class="flex justify-end">
+			<!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() takes a route, not a query string -->
+			<a
+				href={listHref}
+				class="text-primary-600 dark:text-primary-500 text-sm font-medium hover:underline"
+			>
+				Alle Posten des Monats
+			</a>
+			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		</div>
 	{/if}
 </div>
