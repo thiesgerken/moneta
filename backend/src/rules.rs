@@ -270,10 +270,19 @@ pub fn resolved_amount(expense: &Expense, t: &ExpenseTransaction) -> Option<i32>
 /// A shared expense books that line as the whole of itself rather than as a figure of its own,
 /// so what it is worth has to be resolved rather than read off.
 pub fn delivery_of(expense: &Expense) -> Option<ExpenseDelivery> {
-    // find_map, not find: a line whose worth cannot be resolved is one to look past rather than
-    // to give up on, or an expense would report having no bank transaction at all while a
-    // perfectly good one sits below it
-    expense.transactions.iter().find_map(|t| {
+    deliveries_of(expense).next()
+}
+
+/// Every bank line an expense holds, in transaction order.
+///
+/// `delivery_of` wants the one a rule was built from and stops at the first; this is for
+/// asking what the bank has already handed over, where all of them count -- a purchase
+/// and the shop's refund arrive as two lines and end up in one expense.
+///
+/// A line whose worth cannot be resolved is skipped rather than ending the walk, or an expense
+/// would report having no bank transaction at all while a perfectly good one sits below it.
+pub fn deliveries_of(expense: &Expense) -> impl Iterator<Item = ExpenseDelivery> + '_ {
+    expense.transactions.iter().filter_map(|t| {
         if t.statement.trim().is_empty() {
             return None;
         }
@@ -294,6 +303,10 @@ pub fn delivery_of(expense: &Expense) -> Option<ExpenseDelivery> {
 /// Inherited from moneydb. It does mean a genuine second identical payment on the same day
 /// is treated as a duplicate, which is the safer way round to be wrong.
 pub const DELIVERY_DEDUP_WINDOW: TimeDelta = TimeDelta::hours(24);
+
+/// How far back a delivery is remembered. Beyond this nothing is compared, so it is also as
+/// far back as there is any point in seeding the table from an import.
+pub const DELIVERY_MEMORY: TimeDelta = TimeDelta::days(400);
 
 /// Whether this delivery has already been processed: the same amount on the same account,
 /// close enough in time. The statement text is deliberately not compared — banks reword it
@@ -346,7 +359,7 @@ pub async fn deliver_expenses(
     let mut seen = seen_deliveries::table
         .filter(seen_deliveries::user_id.eq(user_id))
         .filter(seen_deliveries::account_id.eq_any(&account_ids))
-        .filter(seen_deliveries::date.ge(now - TimeDelta::days(400)))
+        .filter(seen_deliveries::date.ge(now - DELIVERY_MEMORY))
         .select(SeenDelivery::as_select())
         .load(conn)
         .await?;
@@ -612,6 +625,29 @@ mod tests {
     fn an_expense_typed_in_by_hand_has_no_delivery_to_sort_by() {
         let expense = template(vec![transaction(Uuid::now_v7(), Some(-1849))]);
         assert!(delivery_of(&expense).is_none());
+    }
+
+    /// `delivery_of` wants the line a rule was built from and stops at the first; asking what
+    /// the bank has handed over needs all of them, and a refund is a second line on the same
+    /// expense
+    #[test]
+    fn an_expense_can_hold_more_than_one_bank_line() {
+        let bank = Uuid::now_v7();
+
+        let mut bill = transaction(bank, Some(-12000));
+        bill.statement = "MUSTERHANDEL".into();
+        let mut refund = transaction(bank, Some(4000));
+        refund.statement = "MUSTERHANDEL GUTSCHRIFT".into();
+
+        let expense = template(vec![bill, refund]);
+
+        assert_eq!(
+            deliveries_of(&expense)
+                .map(|d| d.amount)
+                .collect::<Vec<_>>(),
+            vec![-12000, 4000]
+        );
+        assert_eq!(delivery_of(&expense).map(|d| d.amount), Some(-12000));
     }
 
     fn periodic(period: PeriodicInterval, last_creation: DateTime<Utc>) -> PeriodicRule {

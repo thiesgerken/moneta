@@ -62,6 +62,13 @@ does not exist before 18.
 
 ## Traps
 
+**Delivery dedup never looks at the expenses that already exist.** `is_duplicate` compares a
+new line against `seen_deliveries` and nothing else — account, amount, date within 24 hours,
+statement text deliberately ignored. So anything that puts expenses into the database by another
+route has to record the bank lines it created, or the next statement upload delivers them all
+again. The moneydb import does this (`already_delivered`); if you add another way in, it has to
+as well.
+
 **Money is integer cents.** `amount: i32` everywhere upstream. Only fraction-derived values
 (`calculatedAmount`, `effectiveAmount`) are `f64`. Do not introduce floats into stored
 amounts.

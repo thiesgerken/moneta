@@ -210,6 +210,12 @@ Every line is remembered whether or not a rule matched, so re-uploading an overl
 statement is cheap. The page lists what has arrived with a **"Nur ohne Regel"** filter, and
 that filtered list is the queue of rules still to be written.
 
+**A delivery is judged against `seen_deliveries` alone, never against the expenses that are
+already there.** That is what makes the dedup cheap and predictable, and it means the table has
+to be told about anything that arrived by another route — which is why the moneydb import seeds
+it, see [moneydb.md](moneydb.md#the-import-says-what-the-bank-has-already-handed-over). Only the
+last 400 days are ever compared.
+
 **There is no upload client.** Nothing in this repository feeds `deliveries.submit` from a real
 bank export; that is deliberately someone else's program, since it is per-bank and needs
 credentials. The API, the matching and the seen-delivery tracking are done.
