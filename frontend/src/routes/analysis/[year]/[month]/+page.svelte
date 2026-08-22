@@ -173,7 +173,9 @@
 			$limit: Int
 		) {
 			expenses {
-				list(
+				# the same window read from both ends, as two aliases of one field rather than
+				# two documents: one round trip, one store, one fetch to keep in step
+				spent: list(
 					valuedAfter: $valuedAfter
 					valuedBefore: $valuedBefore
 					accruedAfter: $accruedAfter
@@ -188,6 +190,34 @@
 					}
 					sortBy: EFFECTIVE_AMOUNT
 					sortDir: ASC
+					limit: $limit
+				) {
+					edges {
+						node {
+							id
+							title
+							store
+							effectiveAmount
+							accrualStart
+							accrualEnd
+						}
+					}
+				}
+				earned: list(
+					valuedAfter: $valuedAfter
+					valuedBefore: $valuedBefore
+					accruedAfter: $accruedAfter
+					accruedBefore: $accruedBefore
+					flags: {
+						templates: false
+						taxRelevant: true
+						extraordinary: true
+						unchecked: true
+						incomplete: true
+						normal: true
+					}
+					sortBy: EFFECTIVE_AMOUNT
+					sortDir: DESC
 					limit: $limit
 				) {
 					edges {
@@ -238,27 +268,37 @@
 	/// under a different month does not move money between accounts.
 	const delta = $derived((detail?.income ?? 0) + (detail?.expenses ?? 0));
 	const breakdown = $derived(overviews?.byCategory ?? []);
-	/// The ten biggest, and what makes one big.
+	type Row = { id: string; title: string; store: string; effectiveAmount: number };
+
+	/// The ten biggest of one sign, and what makes one big.
 	///
 	/// On the value axis that is the expense itself. On the accrual axis it is the part of it
 	/// this month carried, and the whole is worth saying next to it -- a hundred euros of a
 	/// twelve-hundred euro contract is a different fact from a hundred euro shop.
-	const biggest = $derived.by(() => {
-		const rows = $biggestStore.data?.expenses.list.edges.map((e) => e.node) ?? [];
-		if (!accrued()) return rows.map((e) => ({ ...e, amount: e.effectiveAmount, whole: null }));
-
+	///
+	/// The sign filter is not redundant with the sort: a month with fewer than ten expenses
+	/// hands back income at the bottom of the spending list, and the other way round.
+	function rank(rows: (Row & { accrualStart: Date; accrualEnd: Date })[], want: -1 | 1) {
 		return rows
 			.map((e) => {
-				const share = accrualShare(e, start, end);
+				const share = accrued() ? accrualShare(e, start, end) : 1;
 				return {
 					...e,
 					amount: e.effectiveAmount * share,
 					whole: share < 1 ? e.effectiveAmount : null
 				};
 			})
-			.sort((a, b) => a.amount - b.amount)
+			.filter((e) => Math.sign(e.amount) === want)
+			.sort((a, b) => (b.amount - a.amount) * want)
 			.slice(0, 10);
-	});
+	}
+
+	const biggest = $derived(
+		rank($biggestStore.data?.expenses.spent.edges.map((e) => e.node) ?? [], -1)
+	);
+	const earned = $derived(
+		rank($biggestStore.data?.expenses.earned.edges.map((e) => e.node) ?? [], 1)
+	);
 
 	const name = (c: { name: string } | null) => c?.name ?? 'Ohne Kategorie';
 
@@ -267,6 +307,59 @@
 	/// the picture. The categories stay, and with them the sense of what the month went on.
 	let viewport = $state(0);
 	const compact = $derived(viewport > 0 && viewport < 640);
+
+	/// Which picture of the categories. The treemap goes a level deeper -- category, then the
+	/// expenses inside it -- and the circle answers the question that gets asked first, which
+	/// is what share of the month each category was.
+	let view = $state<'donut' | 'treemap'>('donut');
+
+	const VIEWS = [
+		{ value: 'donut', label: 'Kreis' },
+		{ value: 'treemap', label: 'Treemap' }
+	];
+
+	/// Categories as slices, the way the start page draws the running month.
+	const donutOptions = $derived.by(() => {
+		const slices = breakdown
+			.map((c) => ({
+				name: name(c.category),
+				color: categoryColor(c.category),
+				value: Math.abs(sign === 'expenses' ? c.expenses : c.income) / 100
+			}))
+			.filter((s) => s.value > 0)
+			.sort((a, b) => b.value - a.value);
+
+		const total = slices.reduce((sum, s) => sum + s.value, 0);
+
+		return {
+			chart: { type: 'donut', height: compact ? 340 : 420 },
+			series: slices.map((s) => s.value),
+			labels: slices.map((s) => s.name),
+			colors: slices.map((s) => s.color),
+			stroke: { width: 0 },
+			dataLabels: { enabled: false },
+			legend: { position: 'bottom', fontSize: '12px' },
+			tooltip: { y: { formatter: (v: number) => euro(v * 100) } },
+			plotOptions: {
+				pie: {
+					donut: {
+						size: '68%',
+						labels: {
+							show: true,
+							// apex hands the hovered slice's value to this one as a string off
+							// the DOM, which is why it is not the tooltip's formatter
+							value: { formatter: (v: string) => euro(Number(v) * 100) },
+							total: {
+								show: true,
+								label: sign === 'expenses' ? 'Ausgegeben' : 'Eingenommen',
+								formatter: () => euro(total * 100)
+							}
+						}
+					}
+				}
+			}
+		} as ApexOptions;
+	});
 
 	const treemapOptions = $derived.by(() => {
 		const series = breakdown
@@ -385,20 +478,21 @@
 		<Card class="max-w-none p-4">
 			<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
 				<h3 class="text-lg font-semibold">Nach Kategorie</h3>
-				<ToggleGroup
-					bind:value={sign}
-					options={[
-						{ value: 'expenses', label: 'Ausgaben' },
-						{ value: 'income', label: 'Einnahmen' }
-					]}
-				/>
+				<div class="flex flex-wrap items-center gap-2">
+					<ToggleGroup bind:value={view} options={VIEWS} size="sm" />
+					<ToggleGroup
+						bind:value={sign}
+						options={[
+							{ value: 'expenses', label: 'Ausgaben' },
+							{ value: 'income', label: 'Einnahmen' }
+						]}
+					/>
+				</div>
 			</div>
-			<Chart options={treemapOptions} />
+			<Chart options={view === 'donut' ? donutOptions : treemapOptions} />
 		</Card>
 
-		<!-- one column on the accrual axis, where the Konten table is not shown and the list
-		     beside it would otherwise keep half the page to itself -->
-		<div class="grid gap-4 {accrued() ? '' : 'lg:grid-cols-2'}">
+		<div class="grid gap-4 lg:grid-cols-2">
 			<!-- Balances, so the accrual axis has nothing to say here: an account holds money,
 			     and money does not move between accounts because a cost was filed under
 			     another month. What that month cost is the three cards above. -->
@@ -454,40 +548,43 @@
 				</Card>
 			{/if}
 
-			<Card class="max-w-none min-w-0 p-4">
-				<h3 class="mb-2 text-lg font-semibold">Größte Ausgaben</h3>
-				<QueryError
-					errors={$biggestStore.errors}
-					message="Die größten Ausgaben konnten nicht geladen werden."
-					class="mb-3"
-				/>
-				<Table hoverable striped class="w-full text-left text-sm">
-					<TableHead>
-						<TableHeadCell class="px-4 py-3">Titel</TableHeadCell>
-						<TableHeadCell class="px-4 py-3">Betrag</TableHeadCell>
-					</TableHead>
-					<TableBody class="divide-y">
-						{#each biggest as e (e.id)}
-							<TableBodyRow>
-								<TableBodyCell class="px-4 py-3">
-									{e.title}
-									{#if e.store}
-										<span class="text-gray-500 dark:text-gray-400"> · {e.store}</span>
-									{/if}
-								</TableBodyCell>
-								<TableBodyCell class="px-4 py-3 whitespace-nowrap text-red-600 dark:text-red-400">
-									{euro(e.amount)}
-									{#if e.whole !== null}
-										<span class="text-xs text-gray-500 dark:text-gray-400">
-											von {euro(e.whole)}
-										</span>
-									{/if}
-								</TableBodyCell>
-							</TableBodyRow>
-						{/each}
-					</TableBody>
-				</Table>
-			</Card>
+			{@render extremes('Größte Ausgaben', biggest, 'text-red-600 dark:text-red-400')}
+			{@render extremes('Größte Einnahmen', earned, 'text-green-700 dark:text-green-400')}
 		</div>
 	{/if}
 </div>
+
+{#snippet extremes(heading: string, rows: typeof biggest, color: string)}
+	<Card class="max-w-none min-w-0 p-4">
+		<h3 class="mb-2 text-lg font-semibold">{heading}</h3>
+		<QueryError
+			errors={$biggestStore.errors}
+			message="Die größten Posten konnten nicht geladen werden."
+			class="mb-3"
+		/>
+		<Table hoverable striped class="w-full text-left text-sm">
+			<TableHead>
+				<TableHeadCell class="px-4 py-3">Titel</TableHeadCell>
+				<TableHeadCell class="px-4 py-3">Betrag</TableHeadCell>
+			</TableHead>
+			<TableBody class="divide-y">
+				{#each rows as e (e.id)}
+					<TableBodyRow>
+						<TableBodyCell class="px-4 py-3">
+							{e.title}
+							{#if e.store}
+								<span class="text-gray-500 dark:text-gray-400"> · {e.store}</span>
+							{/if}
+						</TableBodyCell>
+						<TableBodyCell class="px-4 py-3 whitespace-nowrap {color}">
+							{euro(e.amount)}
+							{#if e.whole !== null}
+								<span class="text-xs text-gray-500 dark:text-gray-400">von {euro(e.whole)}</span>
+							{/if}
+						</TableBodyCell>
+					</TableBodyRow>
+				{/each}
+			</TableBody>
+		</Table>
+	</Card>
+{/snippet}
