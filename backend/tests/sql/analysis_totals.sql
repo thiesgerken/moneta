@@ -28,7 +28,8 @@ INSERT INTO expenses (id, title, store, description, comments, reference_amount,
     ('00000000-0000-7000-8000-0000000000e5', 'geteilt',     '', '', '', NULL, '2025-06-08Z', '2025-06-08Z', false),
     -- no categorization at all, so it lands under a null category rather than vanishing
     ('00000000-0000-7000-8000-0000000000e6', 'unsortiert',  '', '', '', NULL, '2025-06-09Z', '2025-06-09Z', false),
-    -- two transactions in one month on one account: one expense, not two
+    -- two transactions in one month on one account: one expense, not two. Also the case
+    -- for the weights below: two categories at the default weight of 1 each.
     ('00000000-0000-7000-8000-0000000000e7', 'zweiteilig',  '', '', '', NULL, '2025-06-10Z', '2025-06-10Z', false),
     -- entirely on someone else's account
     ('00000000-0000-7000-8000-0000000000e8', 'fremd',       '', '', '', NULL, '2025-06-11Z', '2025-06-11Z', false),
@@ -50,7 +51,12 @@ INSERT INTO expense_categorizations (expense_id, category_id, weight) VALUES
     ('00000000-0000-7000-8000-0000000000e1', '00000000-0000-7000-8000-0000000000c1', 1.0),
     ('00000000-0000-7000-8000-0000000000e2', '00000000-0000-7000-8000-0000000000c1', 1.0),
     ('00000000-0000-7000-8000-0000000000e5', '00000000-0000-7000-8000-0000000000c1', 0.75),
-    ('00000000-0000-7000-8000-0000000000e5', '00000000-0000-7000-8000-0000000000c2', 0.25);
+    ('00000000-0000-7000-8000-0000000000e5', '00000000-0000-7000-8000-0000000000c2', 0.25),
+    -- e5's weights already sum to one, so it says nothing about whether they are normalised.
+    -- e7's are the pair the modal hands out by default, and read as multipliers they would
+    -- file all -1000 of it under both categories.
+    ('00000000-0000-7000-8000-0000000000e7', '00000000-0000-7000-8000-0000000000c1', 1.0),
+    ('00000000-0000-7000-8000-0000000000e7', '00000000-0000-7000-8000-0000000000c2', 1.0);
 
 INSERT INTO expense_transactions (expense_id, account_id, idx, date, amount, fraction, comments, statement) VALUES
     ('00000000-0000-7000-8000-0000000000e1', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-03Z',  -1000, NULL, '', ''),
@@ -169,12 +175,19 @@ BEGIN
             UNION ALL SELECT 'no foreign account row',
                 (SELECT count(*) FROM m WHERE account_id = '00000000-0000-7000-8000-0000000000a9'), 0
 
-            -- categories: c1 gets e1 (-1000), e2 (-50000) and 0.75 of e5 (-3000)
+            -- categories: c1 gets e1 (-1000), e2 (-50000), 0.75 of e5 (-3000) and half of
+            -- e7 (-500)
             UNION ALL SELECT 'june spending in c1',
-                (SELECT expenses FROM c WHERE month = jun AND category_id = c1), -54000.0
-            -- c2 gets only the remaining quarter of e5
+                (SELECT expenses FROM c WHERE month = jun AND category_id = c1), -54500.0
+            -- c2 gets the remaining quarter of e5 and the other half of e7
             UNION ALL SELECT 'june spending in c2',
-                (SELECT expenses FROM c WHERE month = jun AND category_id = c2), -1000.0
+                (SELECT expenses FROM c WHERE month = jun AND category_id = c2), -1500.0
+            -- the treemap normalises on its own, and equal weights split the expense rather
+            -- than duplicating it: half of e7's -1000, not all of it. Only its c2 side is
+            -- here, since under c1 it ranks behind e2 and e5 and the limit is two.
+            UNION ALL SELECT 'equal weights are half each, not one each',
+                (SELECT amount FROM x WHERE category_id = c2
+                   AND expense_id = '00000000-0000-7000-8000-0000000000e7'), -500.0
             -- A transfer between two of your own accounts nets to zero across the expense, so
             -- it lands in neither bucket -- moving money is not spending it. That is why ec
             -- does not show up in the two figures below even though it is uncategorized.
@@ -182,9 +195,9 @@ BEGIN
                 (SELECT count(*) FROM x WHERE expense_id = '00000000-0000-7000-8000-0000000000ec'), 0
 
             -- uncategorized expenses land under a null category rather than being dropped:
-            -- e6 on a1, e7's two legs on a2, ea on a3 and eb's own leg
+            -- e6 on a1, ea on a3 and eb's own leg
             UNION ALL SELECT 'uncategorized spending is kept',
-                (SELECT expenses FROM c WHERE month = jun AND category_id IS NULL), -11700.0
+                (SELECT expenses FROM c WHERE month = jun AND category_id IS NULL), -10700.0
             -- income is split out from spending rather than netted against it
             UNION ALL SELECT 'income is not netted against spending',
                 (SELECT income FROM c WHERE month = jun AND category_id IS NULL), 200000.0

@@ -10,7 +10,8 @@ INSERT INTO accounts (id, user_id, name, description, kind, availability, risk, 
     ('00000000-0000-7000-8000-0000000000a1', '00000000-0000-7000-8000-000000000001', 'a1', '', 'debit', 'immediately', 'none', '2025-01-01Z', 1.0);
 
 INSERT INTO categories (id, name, description) VALUES
-    ('00000000-0000-7000-8000-0000000000c1', 'Abo', '');
+    ('00000000-0000-7000-8000-0000000000c1', 'Abo', ''),
+    ('00000000-0000-7000-8000-0000000000c2', 'Haushalt', '');
 
 INSERT INTO expenses (id, title, store, description, comments, reference_amount, accrual_start, accrual_end, is_template) VALUES
     -- paid once in June for June, July and August: 92 days, so 30/31/31 of -9200 is
@@ -22,8 +23,12 @@ INSERT INTO expenses (id, title, store, description, comments, reference_amount,
     -- September's, which a range ending at September does not reach.
     ('00000000-0000-7000-8000-0000000000f3', 'voraus',  '', '', '', NULL, '2025-09-01Z', '2025-09-30Z', false);
 
+-- Two categories at weight 1 each on the expense that spans three months: the weights have
+-- to be summed within a month, since the quarter is one row per month it runs through and
+-- summing across all three would leave each category a sixth of the month instead of a half.
 INSERT INTO expense_categorizations (expense_id, category_id, weight) VALUES
-    ('00000000-0000-7000-8000-0000000000f1', '00000000-0000-7000-8000-0000000000c1', 1.0);
+    ('00000000-0000-7000-8000-0000000000f1', '00000000-0000-7000-8000-0000000000c1', 1.0),
+    ('00000000-0000-7000-8000-0000000000f1', '00000000-0000-7000-8000-0000000000c2', 1.0);
 
 INSERT INTO expense_transactions (expense_id, account_id, idx, date, amount, fraction, comments, statement) VALUES
     ('00000000-0000-7000-8000-0000000000f1', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-15Z', -9200, NULL, '', ''),
@@ -36,6 +41,7 @@ DECLARE
     failures int := 0;
     mine uuid := '00000000-0000-7000-8000-000000000001';
     c1 uuid := '00000000-0000-7000-8000-0000000000c1';
+    c2 uuid := '00000000-0000-7000-8000-0000000000c2';
     f1 uuid := '00000000-0000-7000-8000-0000000000f1';
     jun timestamptz := '2025-06-01Z';
     jul timestamptz := '2025-07-01Z';
@@ -85,15 +91,27 @@ BEGIN
             UNION ALL SELECT 'the account row is spread too',
                 (SELECT round(expenses::numeric, 2) FROM a WHERE month = aug AND account_id IS NOT NULL), -3100.00
 
-            -- categories ride on the same movements
-            UNION ALL SELECT 'the category gets june share only',
-                (SELECT round(expenses::numeric, 2) FROM ca WHERE month = jun AND category_id = c1), -3000.00
-            UNION ALL SELECT 'and the whole quarter across the range',
-                (SELECT round(sum(expenses)::numeric, 2) FROM ca WHERE category_id = c1), -9200.00
+            -- categories ride on the same movements, and each of the two holds half of the
+            -- month's share of the quarter rather than all of it
+            UNION ALL SELECT 'the category gets half of june share only',
+                (SELECT round(expenses::numeric, 2) FROM ca WHERE month = jun AND category_id = c1), -1500.00
+            UNION ALL SELECT 'the other category gets the other half',
+                (SELECT round(expenses::numeric, 2) FROM ca WHERE month = jun AND category_id = c2), -1500.00
+            UNION ALL SELECT 'and half the quarter across the range',
+                (SELECT round(sum(expenses)::numeric, 2) FROM ca WHERE category_id = c1), -4600.00
+            -- weights summed across the months rather than within one would leave each
+            -- category a sixth of the month, and reading them as multipliers would give it
+            -- the whole month twice over. Both miss the month itself.
+            UNION ALL SELECT 'the categories of a month sum to that month',
+                (SELECT round(sum(expenses)::numeric, 2) FROM ca WHERE month = jun),
+                (SELECT round(expenses::numeric, 2) FROM a WHERE month = jun AND account_id IS NULL)
 
             -- the treemap sums an expense's in-range portions back up
             UNION ALL SELECT 'the treemap shows the part inside the range',
-                (SELECT round(amount::numeric, 2) FROM xa WHERE expense_id = f1), -9200.00
+                (SELECT round(sum(amount)::numeric, 2) FROM xa WHERE expense_id = f1), -9200.00
+            UNION ALL SELECT 'split between the two categories it is filed under',
+                (SELECT count(*) FROM xa WHERE expense_id = f1
+                   AND round(amount::numeric, 2) = -4600.00), 2
             UNION ALL SELECT 'and leaves out the one whose period is outside it',
                 (SELECT count(*) FROM xa WHERE expense_id = '00000000-0000-7000-8000-0000000000f3'), 0
 
