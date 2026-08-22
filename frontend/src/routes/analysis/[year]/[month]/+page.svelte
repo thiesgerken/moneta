@@ -372,10 +372,14 @@
 
 		return {
 			chart: { type: 'sunburst', height: compact ? 320 : 420 },
-			// on the series as well as in `colors`: apex takes a group's colour from the series
-			// when it has one, and tints the ring outside it from there
-			series: tree.map((s) => ({ name: s.name, color: s.color, data: s.data })),
-			colors: tree.map((s) => s.color),
+			// One series carrying the whole tree, unlike the treemap next door: the sunburst
+			// reads `series[0].data` and nothing else, so a series per category drew the first
+			// category's expenses as the only ring and dropped the rest of the month.
+			series: [
+				{
+					data: tree.map((c) => ({ x: c.name, color: c.color, children: c.data }))
+				}
+			],
 			legend: { show: false },
 			plotOptions: {
 				sunburst: {
@@ -440,7 +444,15 @@
 					// only zooms a treemap that has parents to land on. Not on a phone, where the
 					// whole point of the compact shape is one tile per category and nothing to
 					// zoom into.
-					parents: { show: !compact },
+					parents: {
+						show: !compact,
+						// the same figure the tiles inside it carry, so a category can be compared
+						// with its neighbour without adding up what is in it
+						header: {
+							formatter: (name: string, op: { value: number }) =>
+								`${name} (${euro(op.value * 100)})`
+						}
+					},
 					zoom: { enabled: !compact }
 				}
 			},
