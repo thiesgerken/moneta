@@ -311,7 +311,7 @@
 	/// Which picture of the categories. The treemap goes a level deeper -- category, then the
 	/// expenses inside it -- and the circle answers the question that gets asked first, which
 	/// is what share of the month each category was.
-	let view = $state<'donut' | 'treemap'>('donut');
+	let view = $state<'donut' | 'treemap'>('treemap');
 
 	const VIEWS = [
 		{ value: 'donut', label: 'Kreis' },
@@ -319,12 +319,17 @@
 	];
 
 	/// Categories as slices, the way the start page draws the running month.
-	const donutOptions = $derived.by(() => {
+	///
+	/// One per sign, drawn side by side rather than behind a toggle: a circle is a share of a
+	/// whole, and the two wholes are different questions -- what the month cost and what it
+	/// brought in -- so there is nothing to switch between. The treemap keeps the toggle,
+	/// because two signs of area in one picture mean nothing.
+	const donutFor = (which: 'expenses' | 'income') => {
 		const slices = breakdown
 			.map((c) => ({
 				name: name(c.category),
 				color: categoryColor(c.category),
-				value: Math.abs(sign === 'expenses' ? c.expenses : c.income) / 100
+				value: Math.abs(which === 'expenses' ? c.expenses : c.income) / 100
 			}))
 			.filter((s) => s.value > 0)
 			.sort((a, b) => b.value - a.value);
@@ -332,7 +337,7 @@
 		const total = slices.reduce((sum, s) => sum + s.value, 0);
 
 		return {
-			chart: { type: 'donut', height: compact ? 340 : 420 },
+			chart: { type: 'donut', height: compact ? 320 : 380 },
 			series: slices.map((s) => s.value),
 			labels: slices.map((s) => s.name),
 			colors: slices.map((s) => s.color),
@@ -351,7 +356,7 @@
 							value: { formatter: (v: string) => euro(Number(v) * 100) },
 							total: {
 								show: true,
-								label: sign === 'expenses' ? 'Ausgegeben' : 'Eingenommen',
+								label: which === 'expenses' ? 'Ausgegeben' : 'Eingenommen',
 								formatter: () => euro(total * 100)
 							}
 						}
@@ -359,7 +364,10 @@
 				}
 			}
 		} as ApexOptions;
-	});
+	};
+
+	const spentDonut = $derived(donutFor('expenses'));
+	const earnedDonut = $derived(donutFor('income'));
 
 	const treemapOptions = $derived.by(() => {
 		const series = breakdown
@@ -480,74 +488,86 @@
 				<h3 class="text-lg font-semibold">Nach Kategorie</h3>
 				<div class="flex flex-wrap items-center gap-2">
 					<ToggleGroup bind:value={view} options={VIEWS} size="sm" />
-					<ToggleGroup
-						bind:value={sign}
-						options={[
-							{ value: 'expenses', label: 'Ausgaben' },
-							{ value: 'income', label: 'Einnahmen' }
-						]}
-					/>
+					{#if view === 'treemap'}
+						<ToggleGroup
+							bind:value={sign}
+							options={[
+								{ value: 'expenses', label: 'Ausgaben' },
+								{ value: 'income', label: 'Einnahmen' }
+							]}
+						/>
+					{/if}
 				</div>
 			</div>
-			<Chart options={view === 'donut' ? donutOptions : treemapOptions} />
+			{#if view === 'donut'}
+				<div class="grid gap-4 md:grid-cols-2">
+					<Chart options={spentDonut} />
+					<Chart options={earnedDonut} />
+				</div>
+			{:else}
+				<Chart options={treemapOptions} />
+			{/if}
 		</Card>
 
-		<div class="grid gap-4 lg:grid-cols-2">
-			<!-- Balances, so the accrual axis has nothing to say here: an account holds money,
-			     and money does not move between accounts because a cost was filed under
-			     another month. What that month cost is the three cards above. -->
-			{#if !accrued()}
-				<!-- min-w-0 twice over: a grid track and a flex child both size to their content
-				     unless told otherwise, so without it the table widens the page rather than
-				     scrolling inside the card -->
-				<Card class="max-w-none min-w-0 p-4">
-					<h3 class="mb-2 text-lg font-semibold">Konten</h3>
-					<div class="min-w-0 overflow-x-auto">
-						<Table hoverable striped class="w-full text-left text-sm">
-							<TableHead>
-								<TableHeadCell class="px-4 py-3">Konto</TableHeadCell>
-								<TableHeadCell class="px-4 py-3">Beginn</TableHeadCell>
-								<TableHeadCell class="px-4 py-3">Ende</TableHeadCell>
-								<TableHeadCell class="px-4 py-3">Delta</TableHeadCell>
-								<TableHeadCell class="px-4 py-3">Fehler</TableHeadCell>
-							</TableHead>
-							<TableBody class="divide-y">
-								{#each detail.byAccount as a (a.account.id)}
-									<!-- null on the accrual axis: a share of a subscription is a cost the month
+		<!-- Balances, so the accrual axis has nothing to say here: an account holds money, and
+		     money does not move between accounts because a cost was filed under another month.
+		     What that month cost is the three cards above. -->
+		{#if !accrued()}
+			<!-- A row of its own rather than a column beside the two lists: it is as wide as the
+			     accounts make it, and sharing a row pushed the lists onto separate ones, where
+			     what a month took in and what it spent are meant to be read against each other. -->
+			<!-- min-w-0 twice over: a grid track and a flex child both size to their content
+			     unless told otherwise, so without it the table widens the page rather than
+			     scrolling inside the card -->
+			<Card class="max-w-none min-w-0 p-4">
+				<h3 class="mb-2 text-lg font-semibold">Konten</h3>
+				<div class="min-w-0 overflow-x-auto">
+					<Table hoverable striped class="w-full text-left text-sm">
+						<TableHead>
+							<TableHeadCell class="px-4 py-3">Konto</TableHeadCell>
+							<TableHeadCell class="px-4 py-3">Beginn</TableHeadCell>
+							<TableHeadCell class="px-4 py-3">Ende</TableHeadCell>
+							<TableHeadCell class="px-4 py-3">Delta</TableHeadCell>
+							<TableHeadCell class="px-4 py-3">Fehler</TableHeadCell>
+						</TableHead>
+						<TableBody class="divide-y">
+							{#each detail.byAccount as a (a.account.id)}
+								<!-- null on the accrual axis: a share of a subscription is a cost the month
 								     carried, not money that left this account, so there is nothing to
 								     reconcile it against -->
-									{@const error =
-										a.integratedEndAmount === null
-											? null
-											: Math.abs(a.endAmount - a.integratedEndAmount)}
-									<TableBodyRow>
-										<TableBodyCell class="px-4 py-3">
-											<span
-												class="mr-2 inline-block h-3 w-3 rounded-full align-middle"
-												style="background-color: {a.account.color ?? '#94a3b8'}"
-											></span>{a.account.name}
-										</TableBodyCell>
-										<TableBodyCell class="px-4 py-3">{euro(a.startAmount)}</TableBodyCell>
-										<TableBodyCell class="px-4 py-3">{euro(a.endAmount)}</TableBodyCell>
-										<TableBodyCell class="px-4 py-3">
-											<Badge
-												color={deltaColor(a.endAmount - a.startAmount)}
-												class="text-sm font-semibold"
-											>
-												{euro(a.endAmount - a.startAmount)}
-											</Badge>
-										</TableBodyCell>
-										<TableBodyCell class="px-4 py-3 {error === null ? '' : errorClass(error)}">
-											{error === null ? '—' : euro(error)}
-										</TableBodyCell>
-									</TableBodyRow>
-								{/each}
-							</TableBody>
-						</Table>
-					</div>
-				</Card>
-			{/if}
+								{@const error =
+									a.integratedEndAmount === null
+										? null
+										: Math.abs(a.endAmount - a.integratedEndAmount)}
+								<TableBodyRow>
+									<TableBodyCell class="px-4 py-3">
+										<span
+											class="mr-2 inline-block h-3 w-3 rounded-full align-middle"
+											style="background-color: {a.account.color ?? '#94a3b8'}"
+										></span>{a.account.name}
+									</TableBodyCell>
+									<TableBodyCell class="px-4 py-3">{euro(a.startAmount)}</TableBodyCell>
+									<TableBodyCell class="px-4 py-3">{euro(a.endAmount)}</TableBodyCell>
+									<TableBodyCell class="px-4 py-3">
+										<Badge
+											color={deltaColor(a.endAmount - a.startAmount)}
+											class="text-sm font-semibold"
+										>
+											{euro(a.endAmount - a.startAmount)}
+										</Badge>
+									</TableBodyCell>
+									<TableBodyCell class="px-4 py-3 {error === null ? '' : errorClass(error)}">
+										{error === null ? '—' : euro(error)}
+									</TableBodyCell>
+								</TableBodyRow>
+							{/each}
+						</TableBody>
+					</Table>
+				</div>
+			</Card>
+		{/if}
 
+		<div class="grid gap-4 lg:grid-cols-2">
 			{@render extremes('Größte Ausgaben', biggest, 'text-red-600 dark:text-red-400')}
 			{@render extremes('Größte Einnahmen', earned, 'text-green-700 dark:text-green-400')}
 		</div>
