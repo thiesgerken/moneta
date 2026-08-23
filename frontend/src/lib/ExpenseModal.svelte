@@ -121,8 +121,9 @@
 	let referenceAmount: string | undefined = $derived(
 		expense?.referenceAmount != null ? (expense.referenceAmount / 100).toFixed(2) : undefined
 	);
-	// An expense typed in by hand is nearly always one that just happened, and a transaction
-	// with no date of its own takes this one, so filling it fills the row below as well.
+	// An expense typed in by hand is nearly always one that just happened, and the first
+	// transaction with no date of its own takes this one, so filling it fills the row below as
+	// well. Only the first: once the expense books on a day, `bookedOn` is the better answer.
 	let accrualStart: Date | undefined = $derived(
 		expense?.accrualStart ? new Date(expense.accrualStart) : today()
 	);
@@ -226,8 +227,18 @@
 			expenseCategories = expenseCategories.slice(0, i).concat(expenseCategories.slice(i + 1));
 		}
 	}
+	/// The day a row added now belongs on: the one this expense already books on.
+	///
+	/// Splitting an expense or adding a leg is one event on one day, and the analysis nets the
+	/// legs of an expense *within* a month rather than across one — so a share that lands in
+	/// another month leaves the full amount standing in the month of the payment and the
+	/// correction in a month of its own. That is exactly what a blank date used to do here: it
+	/// fell through to `accrualStart`, which for a yearly bonus *for* last year is a
+	/// year before the money moved.
+	const bookedOn = $derived(transactions.find((t) => t.date)?.date);
+
 	function addTransaction() {
-		transactions = [...transactions, emptyTransaction()];
+		transactions = [...transactions, { ...emptyTransaction(), date: bookedOn }];
 	}
 
 	/// Where the other half of a shared expense goes: the debt account you use most, unless this
@@ -284,7 +295,7 @@
 
 		transactions = [
 			...transactions,
-			{ ...emptyTransaction(), isRelative: true, percentage, accountId }
+			{ ...emptyTransaction(), date: bookedOn, isRelative: true, percentage, accountId }
 		];
 	}
 	function removeTransaction(i: number) {
@@ -518,7 +529,9 @@
 				weight: cat.weight ? Number(cat.weight) : 1
 			})),
 			transactions: transactions.map((tx) => ({
-				date: tx.date || accrualStart!,
+				// Cleared by hand rather than never filled: the day the expense books on still
+				// beats the start of the period it is for, for the reason `bookedOn` gives.
+				date: tx.date || bookedOn || accrualStart!,
 				bookingDate: tx.bookingDate,
 				accountId: tx.accountId,
 				amount: !tx.isRelative ? Math.round(Number(tx.amount) * 100) : undefined,
