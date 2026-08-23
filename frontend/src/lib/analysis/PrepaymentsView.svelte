@@ -121,7 +121,7 @@
 			<Input type="date" bind:value={prepaymentsState.date} class="w-48" />
 		</Label>
 		{#if $prepaymentStore.fetching}
-			<Spinner size="5" />
+			<Spinner size="5" class="self-center" />
 		{/if}
 	</div>
 

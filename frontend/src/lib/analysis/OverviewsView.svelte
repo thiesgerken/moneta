@@ -77,7 +77,7 @@
 		<RangePicker bind:range={overviewsState.range} dates />
 		<ToggleGroup bind:value={axisState.axis} options={DATE_AXES} size="sm" />
 		{#if $overviewsStore.fetching}
-			<Spinner size="5" />
+			<Spinner size="5" class="self-center" />
 		{/if}
 	</div>
 
