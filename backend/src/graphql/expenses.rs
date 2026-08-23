@@ -949,6 +949,108 @@ impl ExpenseMutation {
         ))
     }
 
+    /// Absorbs other expenses into this one, as extra transactions on it.
+    ///
+    /// A refund, a partial repayment or a settlement in instalments arrives from the bank as an
+    /// expense of its own, because that is what a statement line looks like. It is not one: the
+    /// payment and what came back are two movements of a single purchase, which is exactly what
+    /// a list of transactions is for. `Chain` in `import.rs` says the same thing about the
+    /// moneydb legacy, and this is the button for doing it by hand afterwards.
+    ///
+    /// `rules::absorb` says what crosses over and what does not. The accrual period is one of
+    /// the things it leaves alone: a refund does not lengthen what a purchase was for,
+    /// instalments do, and nothing here can tell the two apart. The frontend opens the merged
+    /// expense for editing straight afterwards, where it is an ordinary field.
+    pub async fn merge(
+        context: &Context,
+        into: Uuid,
+        from: Vec<Uuid>,
+    ) -> FieldResult<GraphQLExpense> {
+        let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
+
+        // the rendering is what the reader was shown, so it is what they may act on; anything
+        // belonging to somebody else does not resolve here at all
+        let target_id = load_rendered(conn, user_id, into).await?.upstream_id;
+
+        let mut source_ids = Vec::new();
+        for id in from {
+            let upstream = load_rendered(conn, user_id, id).await?.upstream_id;
+            if upstream == target_id {
+                return Err(
+                    "Eine Ausgabe kann nicht mit sich selbst zusammengeführt werden.".into(),
+                );
+            }
+            if !source_ids.contains(&upstream) {
+                source_ids.push(upstream);
+            }
+        }
+
+        if source_ids.is_empty() {
+            return Err("Zum Zusammenführen braucht es mindestens zwei Ausgaben.".into());
+        }
+
+        conn.transaction::<_, Box<dyn Error + Send + Sync>, _>(async |conn| {
+            let old_state = queries::load_expense(conn, target_id)
+                .await?
+                .ok_or("entry to merge into disappeared")?;
+            let mut merged = old_state.clone();
+            let now = Utc::now();
+
+            for source_id in &source_ids {
+                let source = queries::load_expense(conn, *source_id)
+                    .await?
+                    .ok_or("entry to merge disappeared")?;
+
+                rules::absorb(&mut merged, &source)?;
+
+                diesel::delete(expenses::table.find(source_id))
+                    .execute(conn)
+                    .await?;
+                diesel::insert_into(expense_changes::table)
+                    .values(&ExpenseChangelogEntry {
+                        id: Uuid::now_v7(),
+                        user_id: Some(user_id),
+                        target_id: *source_id,
+                        date: now,
+                        old_state: Some(Json(source)),
+                        new_state: None,
+                        tool: None,
+                        automatic: false,
+                        confidence: 1.0,
+                    })
+                    .execute(conn)
+                    .await?;
+            }
+
+            merged.updated_at = now;
+            merged.validate().map_err(|e| e.to_string())?;
+            queries::replace_expense(conn, &merged).await?;
+
+            diesel::insert_into(expense_changes::table)
+                .values(&ExpenseChangelogEntry {
+                    id: Uuid::now_v7(),
+                    user_id: Some(user_id),
+                    target_id,
+                    date: now,
+                    old_state: Some(Json(old_state)),
+                    new_state: Some(Json(merged)),
+                    tool: None,
+                    automatic: false,
+                    confidence: 1.0,
+                })
+                .execute(conn)
+                .await?;
+
+            Ok(())
+        })
+        .await?;
+
+        Ok(GraphQLExpense::new(
+            load_rendered(conn, user_id, target_id).await?,
+        ))
+    }
+
     /// Runs the automation rules over an expense again, as though its bank line had only just
     /// arrived, and replaces it with what the matching rule produces.
     ///

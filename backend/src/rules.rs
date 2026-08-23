@@ -280,6 +280,57 @@ pub fn resolved_amount(expense: &Expense, t: &ExpenseTransaction) -> Option<i32>
     }
 }
 
+/// Absorbs `source` into `target`: what the source moved becomes transactions of the target.
+///
+/// A refund, a repayment or an instalment arrives from the bank as an expense of its own,
+/// because that is what a statement line looks like. It is not one — the payment and what came
+/// back are two movements of a single purchase, which is what a list of transactions is for.
+/// `Chain` in `import.rs` reaches the same conclusion for the moneydb legacy; this is the same
+/// thing done by hand afterwards.
+///
+/// What crosses over is only what the source moved or evidenced. The target keeps its own
+/// title, flags, categories and accrual period, because those say what the merged expense *is*
+/// and the source is only more of it.
+///
+/// **A fraction is resolved to cents on the way.** It is a share of the *source's*
+/// `reference_amount`, and left as a fraction it would silently become a share of the target's
+/// — a different amount of money, with nothing invalid about it to notice. Fixing the cents is
+/// the one thing that makes a merge unable to change what anything cost.
+/// Either all of the source lands or none of it does, so a caller that keeps going after an
+/// error is not left holding half an expense. The database transaction around the merge would
+/// roll back anyway; this is about the promise this function makes on its own.
+pub fn absorb(target: &mut Expense, source: &Expense) -> Result<(), String> {
+    let moved = source
+        .transactions
+        .iter()
+        .map(|t| {
+            let amount = resolved_amount(source, t).ok_or_else(|| {
+                format!(
+                    "Die Transaktion aus \"{}\" hat weder Betrag noch Anteil.",
+                    source.title
+                )
+            })?;
+
+            Ok(ExpenseTransaction {
+                amount: Some(amount),
+                fraction: None,
+                ..t.clone()
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    target.transactions.extend(moved);
+
+    // Evidence of the same purchase, and the source row is about to be gone: there is no way
+    // back for anything left behind. The categorizations are the exception -- two weighted sets
+    // do not add up to one without a rule for renormalizing them, and the target's already say
+    // what this is.
+    target.receipts.extend(source.receipts.iter().cloned());
+    target.positions.extend(source.positions.iter().cloned());
+
+    Ok(())
+}
+
 /// The bank line an expense came from, put back together so the rules can be run over it
 /// again. `None` for anything typed in by hand, which has nothing for a rule to match on.
 ///
@@ -578,7 +629,10 @@ pub async fn generate_periodic_expenses(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ExpenseTransaction, PeriodicInterval};
+    use crate::models::{
+        ExpenseCategorization, ExpensePosition, ExpenseReceipt, ExpenseTransaction,
+        PeriodicInterval,
+    };
     use chrono::TimeZone;
 
     fn at(y: i32, m: u32, d: u32) -> DateTime<Utc> {
@@ -619,6 +673,99 @@ mod tests {
             comments: String::new(),
             statement: String::new(),
         }
+    }
+
+    #[test]
+    fn absorbing_an_expense_moves_its_transactions_across() {
+        let bank = Uuid::now_v7();
+
+        let mut purchase = template(vec![transaction(bank, Some(-10000))]);
+        purchase.accrual_start = at(2024, 8, 20);
+        purchase.accrual_end = at(2024, 8, 20);
+
+        let mut refund = template(vec![transaction(bank, Some(8000))]);
+        refund.title = "Retoure Erstattung".into();
+        refund.transactions[0].date = at(2024, 9, 10);
+
+        absorb(&mut purchase, &refund).expect("both sides are worth something");
+
+        assert_eq!(purchase.transactions.len(), 2);
+        assert_eq!(purchase.transactions[1].amount, Some(8000));
+        assert_eq!(purchase.transactions[1].date, at(2024, 9, 10));
+        // the target says what the merged expense is; the source only says what moved
+        assert_eq!(purchase.title, "Rundfunkgebühr");
+        assert_eq!(purchase.accrual_end, at(2024, 8, 20));
+    }
+
+    /// The one thing a merge must not be able to do is change what something cost. A fraction
+    /// is a share of *its own* expense's reference amount, so carried across as a fraction it
+    /// would quietly become a share of the target's -- here 25,00 instead of 50,00.
+    #[test]
+    fn a_share_is_fixed_to_cents_before_it_is_absorbed() {
+        let mut target = template(vec![transaction(Uuid::now_v7(), Some(-5000))]);
+        target.reference_amount = Some(5000);
+
+        let mut share = transaction(Uuid::now_v7(), None);
+        share.fraction = Some(0.5);
+        let mut source = template(vec![share]);
+        source.reference_amount = Some(10000);
+
+        absorb(&mut target, &source).expect("the share resolves against its own reference");
+
+        assert_eq!(target.transactions[1].amount, Some(5000));
+        assert_eq!(target.transactions[1].fraction, None);
+        // and the target's own reference is untouched, so its shares still mean what they did
+        assert_eq!(target.reference_amount, Some(5000));
+    }
+
+    #[test]
+    fn evidence_comes_across_and_categories_do_not() {
+        let category = Uuid::now_v7();
+        let mut target = template(vec![transaction(Uuid::now_v7(), Some(-1000))]);
+        target.categories = vec![ExpenseCategorization {
+            category_id: category,
+            weight: 1.0,
+        }];
+
+        let mut source = template(vec![transaction(Uuid::now_v7(), Some(-500))]);
+        source.categories = vec![ExpenseCategorization {
+            category_id: Uuid::now_v7(),
+            weight: 1.0,
+        }];
+        source.receipts = vec![ExpenseReceipt {
+            uri: "belege/retoure.pdf".into(),
+            ocr: None,
+        }];
+        source.positions = vec![ExpensePosition {
+            title: "Jacke".into(),
+            amount: Some(-500),
+            quantity: None,
+            unit: None,
+            comments: String::new(),
+        }];
+
+        absorb(&mut target, &source).expect("nothing here is unresolvable");
+
+        assert_eq!(target.receipts.len(), 1);
+        assert_eq!(target.positions.len(), 1);
+        assert_eq!(target.categories.len(), 1);
+        assert_eq!(target.categories[0].category_id, category);
+    }
+
+    #[test]
+    fn a_transaction_worth_nothing_writable_stops_the_merge() {
+        let mut target = template(vec![transaction(Uuid::now_v7(), Some(-1000))]);
+
+        let mut share = transaction(Uuid::now_v7(), None);
+        share.fraction = Some(0.5);
+        // A good transaction ahead of the bad one, so the assertion below is about all-or-
+        // nothing rather than about the source happening to have only the one that fails.
+        // No reference amount to resolve the share against.
+        let source = template(vec![transaction(Uuid::now_v7(), Some(-250)), share]);
+
+        assert!(absorb(&mut target, &source).is_err());
+        // and nothing of it was left behind on the way out
+        assert_eq!(target.transactions.len(), 1);
     }
 
     #[test]

@@ -10,6 +10,3 @@
 ## would be nice
 
 - push notifications
-- ausgabe in transaktion umwandeln (zB Retoure mit original zusammenfassen, dann automatisch
-  buchungszeitraum anpassen?). Der Import macht das inzwischen für die moneydb-Altlasten
-  (`Chain` in `src/import.rs`); was fehlt, ist die Bedienung dafür im Frontend.
