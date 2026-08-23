@@ -158,7 +158,13 @@ accounts its transactions touch, so a template without one would render in no vi
 not be opened.
 
 Everything else on the template is what the delivery gets wrapped in: the title, the categories,
-the counter-bookings and the shares.
+the counter-bookings and the shares — **including `isUnchecked`**, the same way a periodic rule
+inherits it. That flag is the rule author's answer to "is a delivery enough to finish this?".
+For `Spotify` or the rent it is: the line resolves the whole expense and there is nothing to
+confirm. For a supermarket it is not — the amount is right and the positions still want typing
+in — so that template is ticked and every expense it produces arrives asking for attention.
+Marking all of them unchecked would make the flag mean "arrived" rather than "needs you", and
+then nobody reads it.
 
 Three accounts are in play and they do different jobs:
 

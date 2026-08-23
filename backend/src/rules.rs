@@ -139,8 +139,12 @@ pub fn impose(
     let mut e = template.clone();
     e.id = Uuid::now_v7();
     e.is_template = false;
-    // the delivery is a bank statement line, so it is worth a human look before it counts
-    e.is_unchecked = true;
+    // The template decides, the way it does for a periodic rule: a rule that resolves its
+    // deliveries completely -- Spotify, the rent -- has nothing left to confirm, and marking
+    // every one of those unchecked makes the flag mean "arrived" rather than "needs you", at
+    // which point nobody reads it. Tick the template where a delivery only starts the job:
+    // a supermarket line still wants its positions typed in.
+    e.is_unchecked = template.is_unchecked;
     e.created_at = now;
     e.updated_at = now;
 
@@ -1228,7 +1232,6 @@ mod tests {
         let e = impose(&tpl, &d, at(2025, 3, 5)).unwrap();
 
         assert!(!e.is_template);
-        assert!(e.is_unchecked);
         assert_eq!(e.accrual_start, d.date);
 
         let touched = e
@@ -1246,6 +1249,34 @@ mod tests {
             .find(|t| t.account_id == other)
             .unwrap();
         assert_eq!(untouched.amount, Some(-100));
+    }
+
+    /// the flag is a request for attention, and a rule that resolves its deliveries completely
+    /// has none to ask for
+    #[test]
+    fn a_confirmed_template_produces_a_confirmed_expense() {
+        let account = Uuid::now_v7();
+        let tpl = template(vec![transaction(account, Some(-100))]);
+        assert!(!tpl.is_unchecked, "the fixture starts confirmed");
+
+        let d = delivery(account, -4237, "LASTSCHRIFT SPOTIFY");
+        let e = impose(&tpl, &d, at(2025, 3, 5)).unwrap();
+
+        assert!(!e.is_unchecked);
+    }
+
+    /// a supermarket line is the whole of what the bank knows and half of what the expense
+    /// wants, so the template carries the request forward to each one it produces
+    #[test]
+    fn an_unchecked_template_produces_an_unchecked_expense() {
+        let account = Uuid::now_v7();
+        let mut tpl = template(vec![transaction(account, Some(-100))]);
+        tpl.is_unchecked = true;
+
+        let d = delivery(account, -4237, "LASTSCHRIFT REWE");
+        let e = impose(&tpl, &d, at(2025, 3, 5)).unwrap();
+
+        assert!(e.is_unchecked);
     }
 
     #[test]
