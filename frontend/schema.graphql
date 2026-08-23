@@ -382,6 +382,14 @@ type AnalysisQuery {
     `stepDays` comes from the chart's visible range rather than being fixed, so zoomed out
     it lands around 30 and zoomed all the way in on 1. `to` is always the last sample even
     when the step does not divide the range, otherwise the line stops short of it.
+
+    `accruedTotal` costs a second statement over the accrual periods, and the start page's
+    sparkline asks for this endpoint without being able to draw it. So the selection
+    decides: the correction is computed only for a query that names the field, and left
+    empty for one that does not. Not observable from a query that did not ask — except
+    through an alias, where an empty series at least reads as nothing rather than as a
+    wrong number. It is part of the cache key for the same reason: an entry filled in for
+    the sparkline must not answer the chart.
   """
   history(from: DateTime!, to: DateTime!, stepDays: Int): History!
   """

@@ -24,7 +24,7 @@ use diesel::prelude::*;
 use diesel::sql_types::{Array, BigInt, Bool, Double, Integer, Nullable, Text, Timestamptz};
 use diesel_async::RunQueryDsl;
 use itertools::Itertools;
-use juniper::{FieldResult, GraphQLObject, graphql_object};
+use juniper::{Executor, FieldResult, GraphQLObject, ScalarValue, graphql_object};
 
 use super::accounts::GraphQLAccount;
 use super::balances::GraphQLBalance;
@@ -410,23 +410,33 @@ impl AnalysisQuery {
     /// `stepDays` comes from the chart's visible range rather than being fixed, so zoomed out
     /// it lands around 30 and zoomed all the way in on 1. `to` is always the last sample even
     /// when the step does not divide the range, otherwise the line stops short of it.
-    pub async fn history(
+    ///
+    /// `accruedTotal` costs a second statement over the accrual periods, and the start page's
+    /// sparkline asks for this endpoint without being able to draw it. So the selection
+    /// decides: the correction is computed only for a query that names the field, and left
+    /// empty for one that does not. Not observable from a query that did not ask — except
+    /// through an alias, where an empty series at least reads as nothing rather than as a
+    /// wrong number. It is part of the cache key for the same reason: an entry filled in for
+    /// the sparkline must not answer the chart.
+    pub async fn history<S: ScalarValue>(
         context: &Context,
+        executor: &Executor<'_, '_, Context, S>,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
         step_days: Option<i32>,
     ) -> FieldResult<History> {
         let user_id = require_user(context).await?;
         let step_days = step_days.unwrap_or(30);
+        let accrued = executor.look_ahead().children().has_child("accruedTotal");
 
         cached(
             &context.cache,
             format!(
-                "history:{user_id}:{}:{}:{step_days}",
+                "history:{user_id}:{}:{}:{step_days}:{accrued}",
                 bucket(from),
                 bucket(to)
             ),
-            history_uncached(context, from, to, step_days),
+            history_uncached(context, from, to, step_days, accrued),
         )
         .await
     }
@@ -762,32 +772,39 @@ async fn history_uncached(
     from: DateTime<Utc>,
     to: DateTime<Utc>,
     step_days: i32,
+    accrued: bool,
 ) -> FieldResult<History> {
     let dates = sample_dates(from, to, step_days)?;
     let rows = simulate(context, &dates, None).await?;
 
     // Its own statement rather than a column on the simulation: the correction is not per
-    // account, and it reads the accrual periods where that one reads recorded balances. Scoped
-    // so the connection is back in the pool before the loader below asks for one of its own.
-    let adjustments: Vec<AdjustmentRow> = {
+    // account, and it reads the accrual periods where that one reads recorded balances.
+    let accrued_total = if accrued {
         let user_id = require_user(context).await?;
-        let conn = &mut context.conn().await?;
+        // Scoped so the connection is back in the pool before the loader below asks for one of
+        // its own.
+        let adjustments: Vec<AdjustmentRow> = {
+            let conn = &mut context.conn().await?;
 
-        diesel::sql_query(ACCRUAL_ADJUSTMENT)
-            .bind::<diesel::sql_types::Uuid, _>(user_id)
-            .bind::<Array<Timestamptz>, _>(dates.to_vec())
-            .load(conn)
-            .await?
+            diesel::sql_query(ACCRUAL_ADJUSTMENT)
+                .bind::<diesel::sql_types::Uuid, _>(user_id)
+                .bind::<Array<Timestamptz>, _>(dates.to_vec())
+                .load(conn)
+                .await?
+        };
+
+        let mut totals = vec![0.0; dates.len()];
+        for row in &rows {
+            // WITH ORDINALITY counts from one
+            totals[row.sample_idx as usize - 1] += row.amount;
+        }
+        for row in &adjustments {
+            totals[row.sample_idx as usize - 1] += row.amount;
+        }
+        totals
+    } else {
+        vec![]
     };
-
-    let mut accrued_total = vec![0.0; dates.len()];
-    for row in &rows {
-        // WITH ORDINALITY counts from one
-        accrued_total[row.sample_idx as usize - 1] += row.amount;
-    }
-    for row in &adjustments {
-        accrued_total[row.sample_idx as usize - 1] += row.amount;
-    }
 
     let accounts = context
         .account_loader

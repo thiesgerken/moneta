@@ -109,16 +109,24 @@ the money left, so it is gone before any account notices. Outside every open per
 terms agree, the correction is exactly zero, and the two curves are one line — which is what
 `tests/sql/accrual_wealth.sql` pins down, along with the convention that both sides change at
 the instant *after* the event and never on it. An expense consumed on the day it was paid
-cancels itself, and four transactions in five are that; they are dropped before the arithmetic
+cancels itself, and most transactions are that; they are dropped before the arithmetic
 rather than multiplied by every sample.
 
 `consumed` is the continuous form from [concepts.md](concepts.md#the-three-dates) — the one
 `prepayments` reports a remainder from — not the whole-day month weights of
 `analysis_movements`. This is sampled at instants, not bucketed into months.
 
-It rides along on every `history` call rather than sitting behind an argument of its own, so
-flipping the toggle costs no round trip and the memoized result stays one entry. On the real
-books it is ~55 ms on top of a ~275 ms simulation for a 120-point chart.
+**Only for a query that selects it.** The resolver looks at the selection rather than taking
+an argument, so the start page's sparkline — which asks `history` for `byAccount` alone and
+could not draw the other curve anyway — pays nothing, while the chart's own query always
+carries the field and the toggle stays a client-side flip with no round trip. The flag is part
+of the cache key, or an entry filled in for the sparkline would answer the chart with an empty
+series.
+
+What it costs when it is asked for, on the real books at 122 samples: ~50 ms over a two-year
+window and ~130 ms over the whole history, against a simulation of 300–400 ms for the same
+samples. The wider the window, the more accrual periods the range filter admits, so this grows
+with the range where the simulation grows with the sample count.
 
 ### Chart behaviour
 

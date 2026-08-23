@@ -59,9 +59,9 @@ AS $$
           AND t.calculated_amount <> 0
           AND NOT e.is_template
           -- An expense whose value was consumed on the day it was paid contributes `1 - 1` or
-          -- `0 - 0` at every sample. Four out of five rows are that, and dropping them here
-          -- rather than multiplying them by every sample is what keeps the join below to the
-          -- handful of rows that can actually say something.
+          -- `0 - 0` at every sample. Two rows in three are that -- most of them on the
+          -- real books -- and dropping them here rather than multiplying them by every sample
+          -- is what keeps the join below to the rows that can actually say something.
           AND NOT (e.accrual_start = e.accrual_end AND e.accrual_start = t.date)
           -- Likewise for a row whose period and payment both lie to one side of every sample:
           -- both terms are 0 below all of them and 1 above all of them. Written as an OR pair
