@@ -13,16 +13,6 @@
 
 ## would be nice
 
-- the date axis is done, and this is the record of where it stops. Monate, Kategorien, the
-  calendar and the dashboard donut share one toggle (`axisState`); the expense list picks one of
-  the three dates for its column, sort and period filter. `simulate_balances`,
-  `analysis_statement` and everything drawn from them *per account* -- Kontostände, Kontoauszug,
-  the per-account and per-availability curves -- stay on the value date on purpose, because an
-  accrued share is a cost a month carried rather than money in an account, and the *Fehler*
-  column reconciles against recorded balances. Do not "finish the job" by putting a toggle on
-  those. The Gesamt curve does carry one, as a correction added onto the value-date total
-  (`accrual_adjustment`), because summing every account leaves nothing recorded to contradict.
-  See [docs/analysis-dashboard.md](docs/analysis-dashboard.md).
 - push notifications
 - ausgabe in transaktion umwandeln (zB Retoure mit original zusammenfassen, dann automatisch
   buchungszeitraum anpassen?). Der Import macht das inzwischen für die moneydb-Altlasten
