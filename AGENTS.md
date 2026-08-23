@@ -123,6 +123,15 @@ route has to record the bank lines it created, or the next statement upload deli
 again. The moneydb import does this (`already_delivered`); if you add another way in, it has to
 as well.
 
+**A stored date is an instant, and calendar arithmetic on it needs the frame it was written
+in.** The editor writes midnight where the reader sits — 23:00 UTC the day before in winter,
+22:00 in summer — while the importer writes midday UTC. Read the day off such an instant in UTC
+and a period entered as starting on the 1st begins on the 31st of the month before, which threw
+a monthly rule's grid off by a day and made a span across the clock change stop counting as
+whole months. `accrual::on` converts to `accrual::ZONE` before anything reads a day or a month;
+`accrual::day` builds every grid point at midday UTC, which is the same date in either frame.
+Keep that split — reading names the zone, writing does not need to.
+
 **Money is integer cents.** `amount: i32` everywhere upstream. Only fraction-derived values
 (`calculatedAmount`, `effectiveAmount`) are `f64`. Do not introduce floats into stored
 amounts.

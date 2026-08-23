@@ -6,7 +6,25 @@
 
 use std::sync::LazyLock;
 
-use chrono::{DateTime, Datelike, Months, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Months, NaiveDate, TimeZone, Utc};
+
+/// The frame the stored dates were written in.
+///
+/// A date in this application is an instant, and the editor writes the one that is midnight
+/// where the reader sits -- 23:00 UTC the day before in winter, 22:00 in summer. Calendar
+/// arithmetic on such an instant is only right in the frame it was expressed in: read in UTC,
+/// a period a reader entered as starting on the 1st begins on the 31st of the month before,
+/// and a monthly rule then snaps its periods to the wrong day. Adding months across a DST
+/// boundary moves the day as well.
+///
+/// So the *reading* side names the zone. The writing side does not need it: `day` builds every
+/// grid point at midday UTC, which is the same date in any frame this will be read in.
+const ZONE: chrono_tz::Tz = chrono_tz::Europe::Berlin;
+
+/// The day an instant denotes, in the frame it was written in.
+fn on(t: DateTime<Utc>) -> NaiveDate {
+    t.with_timezone(&ZONE).date_naive()
+}
 use regex::Regex;
 
 /// The period the bank itself names on the line, where it names one.
@@ -50,7 +68,7 @@ pub fn statement_period(
         // `01.06.23-01.07.23` for the month of June, and a yearly policy reads
         // `13.08.2018-13.08.2019`. Nobody sells a month plus one day, so an end landing exactly
         // a whole number of months after the start is that convention rather than a period.
-        let end = match months_apart(start, end) {
+        let end = match months_apart(on(start), on(end)) {
             Some(_) => end - chrono::Duration::days(1),
             None => end,
         };
@@ -150,7 +168,7 @@ const SETTLED: &[&str] = &[
 
 /// The number of whole months from `start` to an *inclusive* `end`, if it is a whole number of
 /// them: `01.06.` to `30.06.` is one, `15.02.` to `14.05.` is three.
-fn whole_months(start: DateTime<Utc>, end: DateTime<Utc>) -> Option<u32> {
+fn whole_months(start: NaiveDate, end: NaiveDate) -> Option<u32> {
     months_apart(start, end + chrono::Duration::days(1))
 }
 
@@ -158,11 +176,11 @@ fn whole_months(start: DateTime<Utc>, end: DateTime<Utc>) -> Option<u32> {
 ///
 /// Month arithmetic clamps rather than overflowing, the way `PeriodicInterval::next` does, so a
 /// period starting on the 31st still counts as monthly in February.
-fn months_apart(start: DateTime<Utc>, end: DateTime<Utc>) -> Option<u32> {
+fn months_apart(start: NaiveDate, end: NaiveDate) -> Option<u32> {
     (1..=MAX_MONTHS).find(|&k| {
         start
             .checked_add_months(Months::new(k))
-            .is_some_and(|d| d.date_naive() == end.date_naive())
+            .is_some_and(|d| d == end)
     })
 }
 
@@ -200,14 +218,16 @@ pub enum Length {
 impl Shape {
     /// Reads the shape off a template and the date it was itself paid on.
     pub fn of(start: DateTime<Utc>, end: DateTime<Utc>, paid: DateTime<Utc>) -> Self {
+        let (from, to) = (on(start), on(end));
+
         Shape {
             phase: paid - start,
-            length: match whole_months(start, end) {
+            length: match whole_months(from, to) {
                 Some(k) => Length::Months(k),
-                None => Length::Days((end.date_naive() - start.date_naive()).num_days() + 1),
+                None => Length::Days((to - from).num_days() + 1),
             },
-            anchor_day: start.day(),
-            anchor_month: start.month(),
+            anchor_day: from.day(),
+            anchor_month: from.month(),
         }
     }
 
@@ -241,7 +261,8 @@ impl Shape {
     fn nearest_grid_point(&self, nominal: DateTime<Utc>, k: u32) -> DateTime<Utc> {
         // months since the anchor, floored to the grid, in a coordinate that stays monotonic
         // across year boundaries
-        let months = i64::from(nominal.year()) * 12 + i64::from(nominal.month0());
+        let at = on(nominal);
+        let months = i64::from(at.year()) * 12 + i64::from(at.month0());
         let anchor = i64::from(self.anchor_month) - 1;
         let steps = (months - anchor).div_euclid(i64::from(k));
 
@@ -345,15 +366,91 @@ mod tests {
 
     #[test]
     fn whole_months_counts_only_exact_spans() {
-        assert_eq!(whole_months(at(2023, 6, 1), at(2023, 6, 30)), Some(1));
-        assert_eq!(whole_months(at(2024, 2, 15), at(2024, 5, 14)), Some(3));
-        assert_eq!(whole_months(at(2023, 4, 18), at(2023, 10, 17)), Some(6));
-        assert_eq!(whole_months(at(2017, 9, 1), at(2018, 8, 31)), Some(12));
+        assert_eq!(
+            whole_months(on(at(2023, 6, 1)), on(at(2023, 6, 30))),
+            Some(1)
+        );
+        assert_eq!(
+            whole_months(on(at(2024, 2, 15)), on(at(2024, 5, 14))),
+            Some(3)
+        );
+        assert_eq!(
+            whole_months(on(at(2023, 4, 18)), on(at(2023, 10, 17))),
+            Some(6)
+        );
+        assert_eq!(
+            whole_months(on(at(2017, 9, 1)), on(at(2018, 8, 31))),
+            Some(12)
+        );
         // February, which is why this is not a day count
-        assert_eq!(whole_months(at(2017, 2, 1), at(2017, 2, 28)), Some(1));
+        assert_eq!(
+            whole_months(on(at(2017, 2, 1)), on(at(2017, 2, 28))),
+            Some(1)
+        );
         // the two templates that were off by a day
-        assert_eq!(whole_months(at(2023, 6, 1), at(2023, 7, 1)), None);
-        assert_eq!(whole_months(at(2023, 4, 18), at(2023, 10, 16)), None);
+        assert_eq!(whole_months(on(at(2023, 6, 1)), on(at(2023, 7, 1))), None);
+        assert_eq!(
+            whole_months(on(at(2023, 4, 18)), on(at(2023, 10, 16))),
+            None
+        );
+    }
+
+    /// Midnight where the reader sits, which is what the editor writes: 23:00 UTC the day
+    /// before in winter, 22:00 in summer.
+    fn entered(y: i32, m: u32, d: u32) -> DateTime<Utc> {
+        ZONE.with_ymd_and_hms(y, m, d, 0, 0, 0).unwrap().to_utc()
+    }
+
+    /// A monthly rule typed into the editor: read in UTC its period began on the 31st of the
+    /// month before, so every period it produced was a day out and February straddled two
+    /// months.
+    #[test]
+    fn a_period_entered_in_the_editor_keeps_the_days_it_was_entered_with() {
+        let shape = Shape::of(
+            entered(2023, 1, 1),
+            entered(2023, 1, 31),
+            entered(2023, 1, 30),
+        );
+
+        assert_eq!(shape.length, Length::Months(1));
+        assert_eq!(shape.anchor_day, 1);
+
+        assert_eq!(
+            shape.period(at(2026, 8, 30)),
+            (at(2026, 8, 1), at(2026, 8, 31))
+        );
+        // the short month, where a day-count would have run into March
+        assert_eq!(
+            shape.period(at(2027, 2, 26)),
+            (at(2027, 2, 1), at(2027, 2, 28))
+        );
+        // a payment that slips into the next month still buys the month it was due in
+        assert_eq!(
+            shape.period(at(2026, 9, 1)),
+            (at(2026, 8, 1), at(2026, 8, 31))
+        );
+    }
+
+    /// Summer and winter are written down two hours apart, so a span between them is a whole
+    /// number of months on the calendar and two hours off it as an instant.
+    #[test]
+    fn a_span_across_the_clock_change_is_still_whole_months() {
+        assert_eq!(
+            whole_months(on(entered(2023, 7, 1)), on(entered(2023, 12, 31))),
+            Some(6)
+        );
+
+        let shape = Shape::of(
+            entered(2023, 7, 1),
+            entered(2023, 12, 31),
+            entered(2023, 7, 1),
+        );
+        assert_eq!(shape.length, Length::Months(6));
+        assert_eq!(shape.anchor_day, 1);
+        assert_eq!(
+            shape.period(entered(2026, 1, 1)),
+            (at(2026, 1, 1), at(2026, 6, 30))
+        );
     }
 
     /// Rent: debited on the first day of the month it pays for.

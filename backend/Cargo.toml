@@ -53,6 +53,7 @@ juniper = { version = "0.17", features = ["chrono", "schema-language", "uuid"] }
 juniper_rocket = "0.10"
 dotenvy = "0.15"
 rocket_cors = "0.6.0"
+chrono-tz = "0.10.4"
 
 [profile.release]
 lto = true
