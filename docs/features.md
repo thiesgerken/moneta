@@ -126,6 +126,20 @@ long it lay dormant. `titleReplacement` substitutes `%d`/`%m`/`%y`. The amount i
 template's own: nothing else supplies one, and a rent that goes up is written where the rest
 of the expense is written.
 
+Everything an occurrence carries moves by whole periods rather than by the number of days
+between the two dates, and it moves in the frame the template was written in. A template
+spanning whole months therefore spans whole months wherever it lands — a rule written as
+`01.01.–31.01.` covers February to the 28th, not to a fixed count of days into March — and a
+booking keeps the day of the month it was written on instead of wandering with the length of
+the month, so it cannot walk out of its own period. A booking that sits *outside* the period
+does so on purpose: paying in advance or in arrears is a phase, and it survives the move. A
+template that does not span whole months keeps its span of days, which is what one booked
+across a handful of days wants.
+
+Occurrences are counted from the template rather than stepped one at a time, because a month
+end clamps: a rule anchored on the 31st has to fire on the 28th in February and on the 31st
+again in March, and stepping would leave it on the 28th for good.
+
 Generation runs from `moneta periodic --run`, the `periodicRules.run` mutation, or the button
 on the page. In production it is a scheduled job (a k8s CronJob); the compose stack runs the
 same command from a `periodic` sidecar so both paths stay identical. Deliberately **not** an

@@ -21,53 +21,64 @@ use crate::models::{
 use crate::queries;
 use crate::schema::{automation_rules, expense_changes, periodic_rules, seen_deliveries};
 
-/// The instants a rule is due for: stepping from the template's booking start by the rule's
-/// period, keeping those after `last_creation` and no later than `until`.
+/// The occurrences a rule is due for, as `(step, instant)` pairs counted from the template's
+/// own period start, keeping those after `last_creation` and no later than `until`.
 ///
 /// Anchoring on the template rather than on `last_creation` keeps occurrences on the day of
-/// the month the user picked, however long the rule has been dormant.
+/// the month the user picked, however long the rule has been dormant. The step comes back
+/// with the instant because [`instantiate`] needs it: everything an occurrence carries moves
+/// by that many periods, not by the number of days between the two instants.
 pub fn occurrences(
     rule: &PeriodicRule,
     template: &Expense,
     until: DateTime<Utc>,
-) -> Vec<DateTime<Utc>> {
+) -> Vec<(u32, DateTime<Utc>)> {
     let mut res = Vec::new();
-    let mut t = template.accrual_start;
 
-    // a template dated far in the past would otherwise iterate for a long time before
-    // reaching the window, but this is bounded by the period and stays cheap in practice
-    while t <= until {
+    // a template dated far in the past iterates for a while before reaching the window, but
+    // this is bounded by the period and stays cheap in practice
+    for step in 0u32.. {
+        let Some(t) = rule.period.advance(template.accrual_start, step) else {
+            break; // out of range, which no real rule reaches
+        };
+        if t > until {
+            break;
+        }
         if t > rule.last_creation {
-            res.push(t);
+            res.push((step, t));
         }
-
-        let next = rule.period.next(t);
-        if next <= t {
-            break; // defensive: a period that does not advance would loop forever
-        }
-        t = next;
     }
 
     res
 }
 
-/// Builds the expense a rule produces for one occurrence.
+/// Builds the expense a rule produces for the occurrence `step` periods after the template.
 ///
-/// The whole booking window and every transaction date shift by the same delta, so a
-/// template spanning several days keeps its shape.
-pub fn instantiate(rule: &PeriodicRule, template: &Expense, at: DateTime<Utc>) -> Expense {
+/// Everything dated moves by `step` periods rather than by the number of days between the two
+/// instants, and the accrual period is measured the way [`impose`] measures one. A template
+/// spanning whole months therefore spans whole months wherever it lands -- each month to its
+/// own last day rather than a fixed count of days into the next -- and a booking keeps the
+/// day of the month it was written on instead of wandering with the length of the month. A
+/// booking that sits outside its own period does so on purpose: paying in advance or in
+/// arrears is a phase, and it survives the move intact.
+pub fn instantiate(rule: &PeriodicRule, template: &Expense, step: u32) -> Expense {
+    let at = rule
+        .period
+        .advance(template.accrual_start, step)
+        .unwrap_or(template.accrual_start);
     let shift = at - template.accrual_start;
 
     let mut e = template.clone();
     e.id = Uuid::now_v7();
     e.is_template = false;
     e.accrual_start = at;
-    e.accrual_end = template.accrual_end + shift;
+    e.accrual_end = accrual::shifted_end(template.accrual_start, template.accrual_end, at)
+        .unwrap_or(template.accrual_end + shift);
     e.created_at = at;
     e.updated_at = at;
 
     for t in e.transactions.iter_mut() {
-        t.date += shift;
+        t.date = rule.period.advance(t.date, step).unwrap_or(t.date + shift);
     }
 
     if let Some(title) = &rule.title_replacement {
@@ -78,7 +89,12 @@ pub fn instantiate(rule: &PeriodicRule, template: &Expense, at: DateTime<Utc>) -
 }
 
 /// `%d`, `%m` and `%y` in a title replacement, as moneydb defined them: no zero padding.
+///
+/// Read in the frame the occurrence was written in, or a period the editor wrote as starting
+/// on the 1st would be titled with the month before it.
 fn substitute_date(title: &str, at: DateTime<Utc>) -> String {
+    let at = accrual::on(at);
+
     title
         .replace("%d", &at.day().to_string())
         .replace("%m", &at.month().to_string())
@@ -508,8 +524,8 @@ pub async fn generate_periodic_expenses(
                 }
 
                 let mut written = None;
-                for t in &times {
-                    let expense = instantiate(rule, &template, *t);
+                for (step, t) in &times {
+                    let expense = instantiate(rule, &template, *step);
                     if let Err(e) = expense.validate() {
                         // Stop rather than skip on. `last_creation` may only move past
                         // occurrences that were actually written: advancing past a bad one
@@ -701,7 +717,14 @@ mod tests {
         let ts = occurrences(&rule, &template(vec![]), at(2025, 6, 1));
 
         // march..may: june's occurrence is on the 15th, past the cutoff
-        assert_eq!(ts, vec![at(2025, 3, 15), at(2025, 4, 15), at(2025, 5, 15)]);
+        assert_eq!(
+            ts,
+            vec![
+                (2, at(2025, 3, 15)),
+                (3, at(2025, 4, 15)),
+                (4, at(2025, 5, 15))
+            ]
+        );
     }
 
     #[test]
@@ -716,7 +739,7 @@ mod tests {
         let rule = periodic(PeriodicInterval::Monthly, at(2025, 4, 3));
         let ts = occurrences(&rule, &template(vec![]), at(2025, 7, 1));
 
-        assert!(ts.iter().all(|t| t.day() == 15));
+        assert!(ts.iter().all(|(_, t)| t.day() == 15));
     }
 
     #[test]
@@ -724,14 +747,21 @@ mod tests {
         let rule = periodic(PeriodicInterval::Weekly, at(2025, 1, 20));
         let ts = occurrences(&rule, &template(vec![]), at(2025, 2, 10));
 
-        assert_eq!(ts, vec![at(2025, 1, 22), at(2025, 1, 29), at(2025, 2, 5)]);
+        assert_eq!(
+            ts,
+            vec![
+                (1, at(2025, 1, 22)),
+                (2, at(2025, 1, 29)),
+                (3, at(2025, 2, 5))
+            ]
+        );
     }
 
     #[test]
     fn instantiated_expense_is_not_itself_a_template() {
         let rule = periodic(PeriodicInterval::Monthly, at(2025, 3, 1));
         let tpl = template(vec![transaction(Uuid::now_v7(), Some(-1836))]);
-        let e = instantiate(&rule, &tpl, at(2025, 4, 15));
+        let e = instantiate(&rule, &tpl, 3);
 
         assert!(!e.is_template);
         assert_ne!(e.id, tpl.id);
@@ -745,11 +775,119 @@ mod tests {
         let mut tpl = template(vec![transaction(Uuid::now_v7(), Some(-500))]);
         tpl.accrual_end = at(2025, 1, 18);
 
-        let e = instantiate(&rule, &tpl, at(2025, 4, 15));
+        let e = instantiate(&rule, &tpl, 3);
 
         assert_eq!(e.accrual_start, at(2025, 4, 15));
         assert_eq!(e.accrual_end, at(2025, 4, 18));
         assert_eq!(e.transactions[0].date, at(2025, 4, 15));
+    }
+
+    /// the editor writes a date as local midnight, which is the day before in UTC
+    fn editor(y: i32, m: u32, d: u32) -> DateTime<Utc> {
+        chrono_tz::Europe::Berlin
+            .with_ymd_and_hms(y, m, d, 0, 0, 0)
+            .unwrap()
+            .to_utc()
+    }
+
+    /// a template written as a whole calendar month covers each month to its own last day,
+    /// however many days that month has
+    #[test]
+    fn a_monthly_template_keeps_whole_months() {
+        let rule = periodic(PeriodicInterval::Monthly, at(2025, 12, 1));
+        let mut tpl = template(vec![transaction(Uuid::now_v7(), Some(-60000))]);
+        tpl.accrual_start = at(2025, 1, 1);
+        tpl.accrual_end = at(2025, 1, 31);
+
+        for (step, start, end) in [
+            (13, at(2026, 2, 1), at(2026, 2, 28)),
+            (15, at(2026, 4, 1), at(2026, 4, 30)),
+            (18, at(2026, 7, 1), at(2026, 7, 31)),
+        ] {
+            let e = instantiate(&rule, &tpl, step);
+            assert_eq!(e.accrual_start, start);
+            assert_eq!(e.accrual_end, end);
+        }
+    }
+
+    /// the booking keeps the day of the month it was written on rather than a count of days
+    /// from the start of the period, so a short month cannot push it out of its own period
+    #[test]
+    fn a_monthly_template_keeps_its_booking_day() {
+        let rule = periodic(PeriodicInterval::Monthly, at(2025, 12, 1));
+        let mut tpl = template(vec![transaction(Uuid::now_v7(), Some(-60000))]);
+        tpl.accrual_start = at(2025, 1, 1);
+        tpl.accrual_end = at(2025, 1, 31);
+        tpl.transactions[0].date = at(2025, 1, 31);
+
+        let e = instantiate(&rule, &tpl, 13);
+
+        assert_eq!(e.accrual_end, at(2026, 2, 28));
+        assert_eq!(e.transactions[0].date, at(2026, 2, 28));
+    }
+
+    /// A period the editor wrote is stored as local midnight, which UTC reads as the day
+    /// before. Counting months on that instant walks off the day it was written with, and
+    /// once a short month has clamped it, it never comes back.
+    #[test]
+    fn occurrences_keep_the_day_a_period_was_written_with() {
+        let mut tpl = template(vec![transaction(Uuid::now_v7(), Some(-60000))]);
+        tpl.accrual_start = editor(2025, 2, 1);
+        tpl.accrual_end = editor(2025, 2, 28);
+        tpl.transactions[0].date = editor(2025, 2, 28);
+        let rule = periodic(PeriodicInterval::Monthly, editor(2025, 1, 1));
+
+        let due = occurrences(&rule, &tpl, editor(2025, 8, 1));
+        assert!(due.len() >= 6, "only {} occurrences", due.len());
+
+        for (step, t) in due {
+            let e = instantiate(&rule, &tpl, step);
+
+            assert_eq!(accrual::on(t).day(), 1, "occurrence {t} is not a first");
+            assert_eq!(accrual::on(e.accrual_start).day(), 1);
+            assert_eq!(
+                accrual::on(e.accrual_end).succ_opt().unwrap().day(),
+                1,
+                "period ending {} is not a whole month",
+                e.accrual_end
+            );
+            assert_eq!(accrual::on(e.transactions[0].date).day(), 28);
+        }
+    }
+
+    /// The clamp a short month applies belongs to the frame the date was written in. Read in
+    /// UTC, a period the editor wrote as starting on the 31st begins on the 30th, and January
+    /// plus a month lands on the 1st of March instead of the last day of February.
+    #[test]
+    fn a_month_end_period_clamps_in_the_frame_it_was_written_in() {
+        let mut tpl = template(vec![transaction(Uuid::now_v7(), Some(-1000))]);
+        tpl.accrual_start = editor(2025, 1, 31);
+        tpl.accrual_end = editor(2025, 1, 31);
+        let rule = periodic(PeriodicInterval::Monthly, editor(2025, 1, 1));
+
+        // February clamps, and March has to come back to the 31st: a rule that stepped from
+        // the occurrence before it would stay on the 28th from its first February onwards
+        for (step, day) in [(1, "2025-02-28"), (2, "2025-03-31"), (3, "2025-04-30")] {
+            let e = instantiate(&rule, &tpl, step);
+            assert_eq!(accrual::on(e.accrual_start).to_string(), day, "step {step}");
+        }
+    }
+
+    /// A template booked across a few days keeps that span wherever it lands. This one runs
+    /// across the spring clock change, so measuring it as an interval rather than as days
+    /// leaves the copy an hour short of the days it covers.
+    #[test]
+    fn a_template_spanning_days_keeps_its_span() {
+        let rule = periodic(PeriodicInterval::Monthly, editor(2025, 3, 1));
+        let mut tpl = template(vec![transaction(Uuid::now_v7(), Some(-1000))]);
+        tpl.accrual_start = editor(2025, 3, 25);
+        tpl.accrual_end = editor(2025, 4, 5);
+
+        let e = instantiate(&rule, &tpl, 2);
+
+        assert_eq!(e.accrual_start, at(2025, 5, 25));
+        assert_eq!(e.accrual_end, at(2025, 6, 5));
+        assert_eq!((e.accrual_end - e.accrual_start).num_hours() % 24, 0);
     }
 
     #[test]
@@ -757,7 +895,7 @@ mod tests {
         let mut rule = periodic(PeriodicInterval::Monthly, at(2025, 3, 1));
         rule.title_replacement = Some("Ausgleichszahlung %m/%y".into());
 
-        let e = instantiate(&rule, &template(vec![]), at(2025, 4, 15));
+        let e = instantiate(&rule, &template(vec![]), 3);
         assert_eq!(e.title, "Ausgleichszahlung 4/2025");
     }
 
@@ -1170,7 +1308,7 @@ mod tests {
         let rule = periodic(PeriodicInterval::Monthly, at(2025, 3, 1));
         let tpl = template(vec![transaction(Uuid::now_v7(), Some(-500))]);
 
-        let e = instantiate(&rule, &tpl, at(2025, 4, 15));
+        let e = instantiate(&rule, &tpl, 3);
 
         assert!(e.validate().is_ok());
     }
