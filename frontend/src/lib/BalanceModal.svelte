@@ -4,6 +4,7 @@
 	import { graphql } from '$houdini';
 	import type { BalanceInput } from '$houdini/graphql/inputs';
 	import { formatAccount, tint } from './expense_utils';
+	import { unclipped } from './unclipped';
 	import { EditOutline, PlusOutline } from 'flowbite-svelte-icons';
 
 	interface Props {
@@ -137,11 +138,13 @@
 			</div>
 			<div>
 				<Label class="mb-2 block">Datum</Label>
-				<Datepicker
-					bind:value={date}
-					placeholder="Datum"
-					inputClass={dateError ? 'border-red-600 bg-red-100 text-red-400' : ''}
-				/>
+				<div use:unclipped>
+					<Datepicker
+						bind:value={date}
+						placeholder="Datum"
+						inputClass={dateError ? 'border-red-600 bg-red-100 text-red-400' : ''}
+					/>
+				</div>
 			</div>
 			<div class="sm:col-span-2">
 				<Label for="account" class="mb-2">Konto</Label>

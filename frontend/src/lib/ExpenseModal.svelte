@@ -12,6 +12,7 @@
 		formatAccount,
 		referenceAmountMissing
 	} from './expense_utils';
+	import { unclipped } from './unclipped';
 	import ColorSelect from './ColorSelect.svelte';
 	import { amountColor, signedEuro } from './money';
 	import {
@@ -668,7 +669,7 @@
 					{@render textButton('Zeitraum', () => (isRange = true))}
 				{/if}
 			</div>
-			<div class={ring(accrualStartError)}>
+			<div class={ring(accrualStartError)} use:unclipped>
 				<Datepicker
 					bind:value={accrualStart}
 					placeholder="Datum"
@@ -687,7 +688,7 @@
 						accrualEnd = undefined;
 					})}
 				</div>
-				<div class={ring(accrualEndError)}>
+				<div class={ring(accrualEndError)} use:unclipped>
 					<Datepicker
 						bind:value={accrualEnd}
 						placeholder="Enddatum"
@@ -842,15 +843,17 @@
 										     rather than beside it, so in a 128px column it sat on top of the year
 										     and "05.08.2026" read as "05.08.202". The field still opens on click.
 										     The pickers with room for it keep theirs. -->
-									<Datepicker
-										bind:value={tx.date}
-										placeholder="wie Leistung"
-										locale="de-DE"
-										firstDayOfWeek={1}
-										dateFormat={DATE_FORMAT}
-										btnClass="hidden"
-										inputClass="px-2"
-									/>
+									<div use:unclipped>
+										<Datepicker
+											bind:value={tx.date}
+											placeholder="wie Leistung"
+											locale="de-DE"
+											firstDayOfWeek={1}
+											dateFormat={DATE_FORMAT}
+											btnClass="hidden"
+											inputClass="px-2"
+										/>
+									</div>
 								</td>
 								<td class="px-2">
 									<!-- Clearing it lives in the calendar rather than under the field: a link
@@ -858,30 +861,32 @@
 									     you pick one, and every other row jumps. flowbite's own action
 									     buttons say Today/Clear/Apply in English, so this is the one it
 									     offers a slot for. -->
-									<Datepicker
-										bind:value={tx.bookingDate}
-										placeholder="—"
-										locale="de-DE"
-										firstDayOfWeek={1}
-										dateFormat={DATE_FORMAT}
-										btnClass="hidden"
-										inputClass="px-2"
-									>
-										{#snippet actionSlot({ handleClear, close })}
-											<div class="flex justify-end px-3 pb-3">
-												<Button
-													size="xs"
-													color="light"
-													onclick={() => {
-														handleClear();
-														close();
-													}}
-												>
-													Datum entfernen
-												</Button>
-											</div>
-										{/snippet}
-									</Datepicker>
+									<div use:unclipped>
+										<Datepicker
+											bind:value={tx.bookingDate}
+											placeholder="—"
+											locale="de-DE"
+											firstDayOfWeek={1}
+											dateFormat={DATE_FORMAT}
+											btnClass="hidden"
+											inputClass="px-2"
+										>
+											{#snippet actionSlot({ handleClear, close })}
+												<div class="flex justify-end px-3 pb-3">
+													<Button
+														size="xs"
+														color="light"
+														onclick={() => {
+															handleClear();
+															close();
+														}}
+													>
+														Datum entfernen
+													</Button>
+												</div>
+											{/snippet}
+										</Datepicker>
+									</div>
 								</td>
 								<td class="px-2">
 									<div class={ring(transactionErrors[i]?.accountId)}>
