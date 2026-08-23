@@ -285,3 +285,35 @@ export function byUsageThen<T extends { usageCount: number }>(
 
 	return [...frequent, ...options.filter((option) => !frequent.includes(option)).toSorted(rest)];
 }
+
+/// What the bank writes where the free text should be when a card was used: that a card was
+/// used, and on which day. It says neither what was bought nor from whom, and it is all a
+/// column three hundred pixels wide ever got to show for a card payment. Two spellings of the
+/// same nothing, the same two `import.rs` reads the purchase date out of.
+///
+/// Only the empty ones. The older line also carries a cash withdrawal or an exchange rate on
+/// occasion, and that is a fact about the payment rather than about the card.
+const CARD_ONLY = [
+	/^(VISA )?(Debit|Giro)kartenumsatz( vom \d{2}\.\d{2}\.\d{4})?$/i,
+	/^\d{4}-\d{2}-\d{2}T[\d.]+\s*(Debitk|Karte)[\d.]*\s+\d{4}-\d{2}( Zahl\.System VISA Debit)?$/
+];
+
+/// One line of a statement worth reading.
+///
+/// A statement is a free text and then the block of `key: value` fields the bank fills in.
+/// The free text is the half a human wrote for a human, so that is the line -- except after
+/// a card payment, where it is boilerplate and the shop's name is down in `applicant_name`.
+/// Everything cut here is a scroll away in the expanded row, and in the cell's own tooltip.
+export const statementLine = (statement: string) => {
+	const lines = statement.split('\n');
+	const field = lines.findIndex((l) => /^[a-z_]+:\s/.test(l));
+	const meta = field === -1 ? [] : lines.slice(field);
+	const free = (field === -1 ? lines : lines.slice(0, field)).join(' ').replace(/\s+/g, ' ').trim();
+
+	if (free && !CARD_ONLY.some((r) => r.test(free))) return free;
+	const shop = meta
+		.find((l) => l.startsWith('applicant_name:'))
+		?.slice(15)
+		.trim();
+	return shop || free;
+};

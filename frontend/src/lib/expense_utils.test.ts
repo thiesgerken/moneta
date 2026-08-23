@@ -5,6 +5,7 @@ import {
 	byUsageThen,
 	categorySorter,
 	describeAccrual,
+	statementLine,
 	formatAccount,
 	formatAccrualPeriod,
 	formatCategories,
@@ -403,5 +404,49 @@ describe('referenceAmountMissing', () => {
 
 	it('rejects what is not a number', () => {
 		expect(referenceAmountMissing('keine Ahnung')).toBe(true);
+	});
+});
+
+describe('statementLine', () => {
+	const card = (head: string) =>
+		`${head}\n\napplicant_bin: TESTDE00XXX\napplicant_iban: DE00000000000000000000\napplicant_name: BEISPIELMARKT/TESTSTADT\nposting_text: KARTENZAHLUNG`;
+
+	it('names the shop where the bank only said a card was used', () => {
+		expect(statementLine(card('VISA Debitkartenumsatz'))).toBe('BEISPIELMARKT/TESTSTADT');
+		expect(statementLine(card('VISA Debitkartenumsatz vom 15.03.2026'))).toBe('BEISPIELMARKT/TESTSTADT');
+		expect(statementLine(card('Girokartenumsatz'))).toBe('BEISPIELMARKT/TESTSTADT');
+	});
+
+	it('names the shop behind the older spelling of the same nothing', () => {
+		expect(statementLine(card('2025-01-01T12.00Debitk.99 2099-12 Zahl.System VISA Debit'))).toBe(
+			'BEISPIELMARKT/TESTSTADT'
+		);
+		expect(statementLine(card('2019-01-01T12.00 Debitk.0 2099-12'))).toBe('BEISPIELMARKT/TESTSTADT');
+	});
+
+	it('keeps what the older line says beyond the card', () => {
+		const withdrawal = '2019-01-02T12.00 Debitk.0 2099-12 Bargeldausz. 100,00 EUR';
+		expect(statementLine(card(withdrawal))).toBe(withdrawal);
+	});
+
+	it('keeps a free text that says something of its own', () => {
+		expect(statementLine(card('304-1234567-1234567 AMZNMktplace'))).toBe(
+			'304-1234567-1234567 AMZNMktplace'
+		);
+		// the merchant on the boilerplate's own line is the free text, not boilerplate
+		expect(statementLine(card('VISA Debitkartenumsatz DR. MUSTERMANN'))).toBe(
+			'VISA Debitkartenumsatz DR. MUSTERMANN'
+		);
+	});
+
+	it('drops the field block a cell one line high cannot show', () => {
+		expect(statementLine('REWE TeststadtTeststadt\n\napplicant_bin: TESTDE00XXX')).toBe(
+			'REWE TeststadtTeststadt'
+		);
+	});
+
+	it('falls back to the boilerplate when there is nothing better', () => {
+		expect(statementLine('Girokartenumsatz')).toBe('Girokartenumsatz');
+		expect(statementLine('Dauerauftrag Beispiel')).toBe('Dauerauftrag Beispiel');
 	});
 });

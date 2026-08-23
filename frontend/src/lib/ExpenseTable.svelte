@@ -55,7 +55,8 @@
 		formatAccrualPeriod,
 		formatCategories,
 		makeAccountColor,
-		makeCategoryColor
+		makeCategoryColor,
+		statementLine
 	} from './expense_utils';
 	import ActionButton from './ActionButton.svelte';
 	import ChangeList from './ChangeList.svelte';
@@ -584,6 +585,13 @@
 	const transactionText = (transactions: { statement: string | null }[]) =>
 		transactions
 			.map((t) => t.statement?.replace(/\s+/g, ' ').trim())
+			.filter(Boolean)
+			.join(' · ');
+
+	/// The same, cut to the line of it worth reading in a cell one line high.
+	const transactionSummary = (transactions: { statement: string | null }[]) =>
+		transactions
+			.map((t) => (t.statement ? statementLine(t.statement) : ''))
 			.filter(Boolean)
 			.join(' · ');
 
@@ -1166,8 +1174,8 @@
 				/>Beschreibung
 				<SortIcon direction={sort.on('description')} />
 			</TableHeadCell>
-			<!-- What the bank wrote. No sort arrow: the backend names its sortable columns and this
-			     is not one of them. From 2xl only, and it shares what the fixed columns leave with
+			<!-- What the bank wrote, cut to the line of it that says something: see `statementLine`.
+			     No sort arrow: the backend names its sortable columns and this is not one of them. From 2xl only, and it shares what the fixed columns leave with
 			     the title: at 1280 the nine columns together are wider than the window, and both of
 			     them end up too narrow to read. Below that the expanded row still has it in full. -->
 			<TableHeadCell class="hidden px-4 py-3 2xl:table-cell" scope="col">
@@ -1279,7 +1287,7 @@
 						class="hidden truncate px-4 py-3 font-mono text-xs 2xl:table-cell"
 						title={transactionText(expense.transactions)}
 					>
-						{transactionText(expense.transactions)}
+						{transactionSummary(expense.transactions)}
 					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{@render statusBadges(expense)}
