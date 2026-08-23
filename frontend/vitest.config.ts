@@ -8,7 +8,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
 	plugins: [svelte()],
 	test: {
-		include: ['src/**/*.test.ts'],
+		include: ['src/**/*.test.ts', 'src/**/*.test.svelte.ts'],
 		coverage: {
 			reporter: ['text-summary', 'json-summary'],
 			// Everything under src, not just what a test happens to import, so the figure

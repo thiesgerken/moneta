@@ -44,6 +44,7 @@
 	import QueryError from './QueryError.svelte';
 	import SortIcon from './SortIcon.svelte';
 	import { DESC, TableSort } from './table_sort.svelte';
+	import { debounced } from './debounce.svelte';
 	import OptionFilter from './OptionFilter.svelte';
 	import FilterChips from './FilterChips.svelte';
 	import { toggleOption, type ActiveFilter } from './filters';
@@ -51,6 +52,7 @@
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
 	let searchTerm = $state('');
+	const search = debounced(() => searchTerm.trim());
 	let expandedRows = $state<string[]>([]);
 
 	/// What the toolbar acts on. An open row is this list's idea of "the one you mean", and
@@ -85,7 +87,7 @@
 	const balanceVariables = () => ({
 		limit: itemsPerPage || 10,
 		offset: ((currentPage || 1) - 1) * (itemsPerPage || 10),
-		search: searchTerm.trim() || undefined,
+		search: search.current || undefined,
 		accountIds: filteredAccounts.length > 0 ? filteredAccounts : undefined,
 		after: filterDateRange.from,
 		before: filterDateRange.to,

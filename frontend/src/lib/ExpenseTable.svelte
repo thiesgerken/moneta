@@ -67,6 +67,7 @@
 	import QueryError from './QueryError.svelte';
 	import SortIcon from './SortIcon.svelte';
 	import { DESC, TableSort } from './table_sort.svelte';
+	import { debounced } from './debounce.svelte';
 	import OptionFilter from './OptionFilter.svelte';
 	import FilterChips from './FilterChips.svelte';
 	import { toggleOption } from './filters';
@@ -74,6 +75,7 @@
 	let currentPage = $state(1);
 	let itemsPerPage = $derived(15);
 	let searchTerm = $state('');
+	const search = debounced(() => searchTerm.trim());
 	let expandedRows = $state<string[]>([]);
 	/// Unbestätigt and unvollständig first, which is the list somebody opens this page to work
 	/// through. A third click on a header comes back here.
@@ -321,7 +323,7 @@
 	const expenseVariables = () => ({
 		limit: itemsPerPage || 10,
 		offset: ((currentPage || 1) - 1) * (itemsPerPage || 10),
-		search: searchTerm.trim() || undefined,
+		search: search.current || undefined,
 		ids: handedOver ? [handedOver] : undefined,
 		accountIds: filteredAccounts.length > 0 ? filteredAccounts : undefined,
 		categoryIds: filteredCategories.length > 0 ? filteredCategories : undefined,
