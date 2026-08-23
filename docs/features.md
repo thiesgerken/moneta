@@ -60,6 +60,21 @@ Creating and editing happen in a modal too. A transaction takes either an amount
 of the expense's reference amount, which is how a shared purchase is entered without doing the
 division by hand.
 
+**An open row is the selection.** *Duplizieren* and *Bearbeiten* want exactly one; *Löschen*,
+*Einsortieren* and *Zusammenführen* act on all of them, and each confirms against a list of
+what it is about to touch, named rather than counted. Six statement lines filed by the wrong
+rule are six rows to open and one press.
+
+*Zusammenführen* is the one that needs more than one: a refund, a repayment or an instalment
+arrives from the bank as an expense of its own, because that is what a statement line looks
+like, and it is really a second movement of a purchase already in the books. The modal picks
+which expense absorbs the others — the oldest by default, since that is usually the purchase —
+and `expenses.merge` moves their transactions, receipts and positions across in one
+transaction. A fraction is resolved to cents on the way: it is a share of *its own* expense's
+reference amount, and against the target's it would silently be a different sum. The accrual
+period is deliberately not extended, because a refund does not lengthen what a purchase was
+for and instalments do, so the edit modal opens straight afterwards.
+
 ## Balances
 
 A balance is a reading somebody took, not a derived figure — see

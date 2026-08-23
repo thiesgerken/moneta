@@ -16,6 +16,7 @@
 		ButtonGroup,
 		Datepicker,
 		Modal,
+		Radio,
 		Select,
 		Spinner
 	} from 'flowbite-svelte';
@@ -27,6 +28,7 @@
 		ChevronLeftOutline,
 		ChevronDownOutline,
 		ArchiveArrowDownOutline,
+		ObjectsColumnOutline,
 		FileCopyAltOutline,
 		EditOutline,
 		TrashBinOutline,
@@ -64,7 +66,7 @@
 	import { tableSearchClasses, tableSearchTableClass, toolbarControl } from './table_styles';
 	import { page } from '$app/state';
 	import { accrualShare, shortDate } from './analysis/dates';
-	import { euro, signedEuro } from './money';
+	import { amountColor, euro, signedEuro } from './money';
 	import QueryError from './QueryError.svelte';
 	import SortIcon from './SortIcon.svelte';
 	import { DESC, TableSort } from './table_sort.svelte';
@@ -104,9 +106,11 @@
 	let showNewExpenseModal = $state(false);
 	let showEditExpenseModal = $state(false);
 	let showDeleteExpenseModal = $state(false);
+	let showMergeExpenseModal = $state(false);
 	let expenseIdToEdit: string | undefined = $state(undefined);
-	let expenseIdToDelete: string | undefined = $state(undefined);
-	let expenseIdToResort: string | undefined = $state(undefined);
+	/// Which of the selected expenses the others are merged into. Its own state rather than the
+	/// first of the selection: the picker in the modal is the whole point of that modal.
+	let mergeTargetId: string | undefined = $state(undefined);
 	/// The edit modal, filled from an expense but creating a second one. One instance rather
 	/// than two: the form is the same form, and only where it submits changes.
 	let duplicating = $state(false);
@@ -576,8 +580,12 @@
 		handoverOpened = true;
 		openEditModal(handedOver);
 	});
-	let expenseToDelete = $derived(expenses.find((e) => e.id === expenseIdToDelete) || undefined);
-	let expenseToResort = $derived(expenses.find((e) => e.id === expenseIdToResort) || undefined);
+	/// What the toolbar's three multi-row actions work on, in the order the table draws them.
+	///
+	/// Read off the rows rather than kept in a list of its own, so an expense that leaves the
+	/// page -- a filter, a refetch that no longer holds it -- leaves the selection with it
+	/// rather than being deleted from behind a row nobody can see.
+	const selectedExpenses = $derived(expenses.filter((e) => expandedRows.includes(e.id)));
 
 	/// The bank's own text for an expense, which is several strings when it is split over more
 	/// than one transaction. Newlines collapse: the cell is one line and the full text is in the
@@ -706,39 +714,83 @@
 		}
 	`);
 
-	let showResortExpenseModal = $state(false);
-	let resortError: string | undefined = $state(undefined);
-
-	async function handleResortExpense() {
-		if (!expenseToResort) return;
-		resortError = undefined;
-
-		const result = await ResortExpense.mutate({ id: expenseToResort.id });
-		// The two things that go wrong here are the reader's to fix -- no rule matches, or the
-		// expense never came from a bank -- so the modal says so and stays open rather than
-		// closing on a sentence nobody read.
-		if (result.errors?.length) {
-			resortError = result.errors.map((e) => e.message).join(' ');
-			return;
+	const MergeExpenses = graphql(`
+		mutation MergeExpenses($into: UUID!, $from: [UUID!]!) {
+			expenses {
+				merge(into: $into, from: $from) {
+					id
+				}
+			}
 		}
+	`);
 
-		showResortExpenseModal = false;
-		expenseIdToResort = undefined;
+	let showResortExpenseModal = $state(false);
+	let actionError: string | undefined = $state(undefined);
 
+	/// What every one of these three does once the writing is over: drop the selection, since
+	/// the rows it named have been rewritten, removed or absorbed, and ask for the page again.
+	async function afterAction() {
 		invalidate();
 		await expenseStore.fetch({ variables: expenseVariables(), ...AFTER_WRITE });
 		expandedRows = [];
 	}
 
-	async function handleDeleteExpense() {
-		if (!expenseToDelete) return;
-		await DeleteExpense.mutate({ id: expenseToDelete.id });
-		expenseIdToDelete = undefined;
-		showDeleteExpenseModal = false;
+	/// One call per expense rather than a bulk mutation: each is independent, and a loop is
+	/// less to build and less to get wrong than a second endpoint that does the same thing in a
+	/// transaction nothing here needs. What it costs is that a failure halfway leaves the ones
+	/// before it done -- which is why the message below names the expense that stopped it.
+	async function handleResortExpense() {
+		if (selectedExpenses.length === 0) return;
+		actionError = undefined;
 
-		invalidate();
-		await expenseStore.fetch({ variables: expenseVariables(), ...AFTER_WRITE });
-		expandedRows = [];
+		for (const expense of selectedExpenses) {
+			const result = await ResortExpense.mutate({ id: expense.id });
+			// The two things that go wrong here are the reader's to fix -- no rule matches, or
+			// the expense never came from a bank -- so the modal says so and stays open rather
+			// than closing on a sentence nobody read.
+			if (result.errors?.length) {
+				actionError = `${expense.title}: ${result.errors.map((e) => e.message).join(' ')}`;
+				await afterAction();
+				return;
+			}
+		}
+
+		showResortExpenseModal = false;
+		await afterAction();
+	}
+
+	async function handleDeleteExpense() {
+		for (const expense of selectedExpenses) {
+			await DeleteExpense.mutate({ id: expense.id });
+		}
+
+		showDeleteExpenseModal = false;
+		await afterAction();
+	}
+
+	/// One mutation, not a loop: the sources are deleted and their transactions written onto
+	/// the target, and half of that having happened would double an amount or lose one.
+	async function handleMergeExpenses() {
+		if (!mergeTargetId || selectedExpenses.length < 2) return;
+		actionError = undefined;
+
+		const result = await MergeExpenses.mutate({
+			into: mergeTargetId,
+			from: selectedExpenses.filter((e) => e.id !== mergeTargetId).map((e) => e.id)
+		});
+
+		if (result.errors?.length) {
+			actionError = result.errors.map((e) => e.message).join(' ');
+			return;
+		}
+
+		showMergeExpenseModal = false;
+		await afterAction();
+
+		// Straight into the form: the accrual period and the title are what a merge cannot
+		// decide, and this is the moment the reader still knows what they meant.
+		openEditModal(mergeTargetId);
+		mergeTargetId = undefined;
 	}
 </script>
 
@@ -803,21 +855,55 @@
 	{/if}
 {/snippet}
 
+<!-- Which expenses an action is about to touch, named rather than counted: "3 Ausgaben löschen"
+     is not something anyone can check before pressing it. -->
+{#snippet selection(pick: ((id: string) => void) | null = null)}
+	<ul class="mb-5 space-y-1 text-left text-sm">
+		{#each selectedExpenses as expense (expense.id)}
+			{@const [start] = axisPeriod(expense)}
+			<li
+				class="flex items-baseline gap-2 rounded-md px-2 py-1 {pick && expense.id === mergeTargetId
+					? 'bg-primary-50 dark:bg-primary-900/40'
+					: ''}"
+			>
+				{#if pick}
+					<Radio
+						name="merge-target"
+						value={expense.id}
+						checked={expense.id === mergeTargetId}
+						onchange={() => pick(expense.id)}
+						class="shrink-0"
+					/>
+				{/if}
+				<span class="grow truncate text-gray-700 dark:text-gray-200">{expense.title}</span>
+				<span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{shortDate(start)}</span>
+				<span class="shrink-0 tabular-nums {amountColor(expense.effectiveAmount)}">
+					{signedEuro(expense.effectiveAmount)}
+				</span>
+			</li>
+		{/each}
+	</ul>
+{/snippet}
+
 <Modal bind:open={showResortExpenseModal} size="sm">
 	<div class="text-center">
 		<ExclamationCircleOutline class="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-200" />
 		<h3 class="mb-3 text-lg font-normal text-gray-500 dark:text-gray-400">
-			Soll <b>{expenseToResort?.title}</b> neu einsortiert werden?
+			{selectedExpenses.length === 1
+				? 'Soll diese Ausgabe neu einsortiert werden?'
+				: `Sollen diese ${selectedExpenses.length} Ausgaben neu einsortiert werden?`}
 		</h3>
+		{@render selection()}
 		<!-- Said plainly because it cannot be undone from here: what the rule decides replaces
 		     what is there, including anything corrected by hand since. -->
 		<p class="mb-5 text-sm text-gray-500 dark:text-gray-400">
-			Die Automatisierungsregeln laufen erneut über die Ausgabe, als wäre ihre Bankzeile gerade erst
-			geliefert worden. Titel, Kategorien, Konten und Merkmale werden von der passenden Regel
-			überschrieben; Betrag, Datum und Transaktionstext bleiben.
+			Die Automatisierungsregeln laufen erneut darüber, als wäre die Bankzeile gerade erst geliefert
+			worden. Titel, Kategorien, Konten und Merkmale werden von der passenden Regel überschrieben;
+			Betrag, Datum und Transaktionstext bleiben.
 		</p>
-		{#if resortError}
-			<p class="mb-5 text-sm text-red-600 dark:text-red-400">{resortError}</p>
+		{#if actionError}
+			<!-- Named, not just reported: the ones before it in the list are already done. -->
+			<p class="mb-5 text-sm text-red-600 dark:text-red-400">{actionError}</p>
 		{/if}
 		<div class="space-x-2">
 			<Button type="submit" value="resort" onclick={handleResortExpense}>Einsortieren</Button>
@@ -827,8 +913,43 @@
 				color="alternative"
 				onclick={() => {
 					showResortExpenseModal = false;
-					expenseIdToResort = undefined;
-					resortError = undefined;
+					actionError = undefined;
+				}}
+			>
+				Abbrechen
+			</Button>
+		</div>
+	</div>
+</Modal>
+
+<Modal bind:open={showMergeExpenseModal} size="md">
+	<div class="text-center">
+		<ObjectsColumnOutline class="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-200" />
+		<h3 class="mb-3 text-lg font-normal text-gray-500 dark:text-gray-400">
+			Welche Ausgabe soll die anderen aufnehmen?
+		</h3>
+		{@render selection((id) => (mergeTargetId = id))}
+		<p class="mb-5 text-sm text-gray-500 dark:text-gray-400">
+			Die Transaktionen, Belege und Positionen der übrigen {selectedExpenses.length - 1}
+			{selectedExpenses.length === 2 ? 'Ausgabe wandert' : 'Ausgaben wandern'} in die gewählte, und danach
+			{selectedExpenses.length === 2 ? 'wird sie' : 'werden sie'} gelöscht. Titel, Kategorien, Merkmale
+			und Leistungszeitraum bleiben die der gewählten Ausgabe — der Leistungszeitraum wird
+			<b>nicht</b> automatisch ausgedehnt, weil eine Retoure ihn nicht verlängert und Raten schon. Das
+			Bearbeiten-Fenster geht direkt danach auf.
+		</p>
+		{#if actionError}
+			<p class="mb-5 text-sm text-red-600 dark:text-red-400">{actionError}</p>
+		{/if}
+		<div class="space-x-2">
+			<Button type="submit" value="merge" onclick={handleMergeExpenses}>Zusammenführen</Button>
+			<Button
+				type="submit"
+				value="cancel"
+				color="alternative"
+				onclick={() => {
+					showMergeExpenseModal = false;
+					mergeTargetId = undefined;
+					actionError = undefined;
 				}}
 			>
 				Abbrechen
@@ -840,9 +961,12 @@
 <Modal bind:open={showDeleteExpenseModal} size="xs">
 	<div class="text-center">
 		<ExclamationCircleOutline class="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-200" />
-		<h3 class="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
-			Soll die Ausgabe <b>{expenseToDelete?.title}</b> wirklich gelöscht werden?
+		<h3 class="mb-3 text-lg font-normal text-gray-500 dark:text-gray-400">
+			{selectedExpenses.length === 1
+				? 'Soll diese Ausgabe wirklich gelöscht werden?'
+				: `Sollen diese ${selectedExpenses.length} Ausgaben wirklich gelöscht werden?`}
 		</h3>
+		{@render selection()}
 		<div class="space-x-2">
 			<Button type="submit" value="delete" color="red" onclick={handleDeleteExpense}>Löschen</Button
 			>
@@ -850,10 +974,7 @@
 				type="submit"
 				value="cancel"
 				color="alternative"
-				onclick={() => {
-					showDeleteExpenseModal = false;
-					expenseIdToDelete = undefined;
-				}}
+				onclick={() => (showDeleteExpenseModal = false)}
 			>
 				Abbrechen
 			</Button>
@@ -945,28 +1066,46 @@
 						>
 							<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
 						</ActionButton>
+						<!-- The three below act on every open row rather than on one. Both read the
+						     same way for a single expense, and neither is a decision that has to be
+						     taken one at a time -- a statement upload that filed six lines wrong is
+						     six rows to open and one press. Duplizieren and Bearbeiten stay at
+						     exactly one: there is no such thing as editing six expenses at once. -->
 						<ActionButton
 							color="red"
 							class={toolbarControl}
-							disabled={!selectedExpenseId}
-							onclick={() => {
-								expenseIdToDelete = selectedExpenseId;
-								showDeleteExpenseModal = true;
-							}}
+							disabled={selectedExpenses.length === 0}
+							onclick={() => (showDeleteExpenseModal = true)}
 						>
 							<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
 						</ActionButton>
 						<ActionButton
 							color="gray"
 							class={toolbarControl}
-							disabled={!selectedExpenseId}
+							disabled={selectedExpenses.length === 0}
 							onclick={() => {
-								expenseIdToResort = selectedExpenseId;
-								resortError = undefined;
+								actionError = undefined;
 								showResortExpenseModal = true;
 							}}
 						>
 							<ArchiveArrowDownOutline class="mr-2 h-3.5 w-3.5" />Einsortieren
+						</ActionButton>
+						<ActionButton
+							color="blue"
+							class={toolbarControl}
+							disabled={selectedExpenses.length < 2}
+							onclick={() => {
+								// The oldest is the purchase and the newer ones are what came back
+								// from it, which is the way round it nearly always is; the modal is
+								// where that gets overruled.
+								mergeTargetId = selectedExpenses.reduce((oldest, e) =>
+									axisPeriod(e)[0] < axisPeriod(oldest)[0] ? e : oldest
+								).id;
+								actionError = undefined;
+								showMergeExpenseModal = true;
+							}}
+						>
+							<ObjectsColumnOutline class="mr-2 h-3.5 w-3.5" />Zusammenführen
 						</ActionButton>
 					</ButtonGroup>
 					<!-- Stacked, the filters filled a phone screen before a single expense appeared,
@@ -1552,10 +1691,13 @@
 										<EditOutline class="mr-2 h-3.5 w-3.5" />
 										Bearbeiten
 									</Button>
+									<!-- These sit inside the row they act on, and the modals act on the
+									     selection, so pressing one makes this row the selection. Otherwise
+									     a second row left open further up would be listed alongside it. -->
 									<Button
 										color="red"
 										onclick={() => {
-											expenseIdToDelete = expense.id.toString();
+											expandedRows = [expense.id.toString()];
 											showDeleteExpenseModal = true;
 										}}
 									>
@@ -1565,8 +1707,8 @@
 									<Button
 										color="gray"
 										onclick={() => {
-											expenseIdToResort = expense.id.toString();
-											resortError = undefined;
+											expandedRows = [expense.id.toString()];
+											actionError = undefined;
 											showResortExpenseModal = true;
 										}}
 									>
