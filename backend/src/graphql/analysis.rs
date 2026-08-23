@@ -24,7 +24,7 @@ use diesel::prelude::*;
 use diesel::sql_types::{Array, BigInt, Bool, Double, Integer, Nullable, Text, Timestamptz};
 use diesel_async::RunQueryDsl;
 use itertools::Itertools;
-use juniper::{FieldResult, GraphQLObject, graphql_object};
+use juniper::{Executor, FieldResult, GraphQLObject, ScalarValue, graphql_object};
 
 use super::accounts::GraphQLAccount;
 use super::balances::GraphQLBalance;
@@ -67,6 +67,14 @@ pub struct History {
     pub dates: Vec<DateTime<Utc>>,
     pub by_account: Vec<AccountSeries>,
     pub by_availability: Vec<AvailabilitySeries>,
+    /// Everything owned, read on the accrual axis instead: what had been paid for but not yet
+    /// used counts as wealth, and what had been used but not yet paid for is already gone.
+    ///
+    /// Only as a total. Per account it would be an amount no bank ever held, sitting beside
+    /// the recorded balances it is supposed to reconcile with — see `accrual_adjustment` in
+    /// the migrations. Outside every open accrual period it equals the sum of `byAccount`, so
+    /// the two curves are one line wherever nothing is in flight.
+    pub accrued_total: Vec<f64>,
 }
 
 /// What is left of an expense whose value is still being consumed at the requested date.
@@ -205,6 +213,14 @@ struct SimulatedRow {
 }
 
 #[derive(Debug, QueryableByName)]
+struct AdjustmentRow {
+    #[diesel(sql_type = BigInt)]
+    sample_idx: i64,
+    #[diesel(sql_type = Double)]
+    amount: f64,
+}
+
+#[derive(Debug, QueryableByName)]
 struct ExpenseCountRow {
     #[diesel(sql_type = diesel::sql_types::Uuid)]
     account_id: Uuid,
@@ -217,6 +233,13 @@ struct ExpenseCountRow {
 const SIMULATE: &str = r#"
 SELECT sample_idx, account_id, balance_id, amount
 FROM simulate_balances($1, $2::timestamptz[], $3::uuid)
+"#;
+
+/// What to add to the value-axis total at each sample to read it on the accrual axis instead;
+/// the arithmetic and the reasoning are in the migration that defines the function.
+const ACCRUAL_ADJUSTMENT: &str = r#"
+SELECT sample_idx, amount
+FROM accrual_adjustment($1, $2::timestamptz[])
 "#;
 
 /// Deliberately not part of `simulate_balances`: counting distinct expenses forces a sort of
@@ -387,23 +410,33 @@ impl AnalysisQuery {
     /// `stepDays` comes from the chart's visible range rather than being fixed, so zoomed out
     /// it lands around 30 and zoomed all the way in on 1. `to` is always the last sample even
     /// when the step does not divide the range, otherwise the line stops short of it.
-    pub async fn history(
+    ///
+    /// `accruedTotal` costs a second statement over the accrual periods, and the start page's
+    /// sparkline asks for this endpoint without being able to draw it. So the selection
+    /// decides: the correction is computed only for a query that names the field, and left
+    /// empty for one that does not. Not observable from a query that did not ask — except
+    /// through an alias, where an empty series at least reads as nothing rather than as a
+    /// wrong number. It is part of the cache key for the same reason: an entry filled in for
+    /// the sparkline must not answer the chart.
+    pub async fn history<S: ScalarValue>(
         context: &Context,
+        executor: &Executor<'_, '_, Context, S>,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
         step_days: Option<i32>,
     ) -> FieldResult<History> {
         let user_id = require_user(context).await?;
         let step_days = step_days.unwrap_or(30);
+        let accrued = executor.look_ahead().children().has_child("accruedTotal");
 
         cached(
             &context.cache,
             format!(
-                "history:{user_id}:{}:{}:{step_days}",
+                "history:{user_id}:{}:{}:{step_days}:{accrued}",
                 bucket(from),
                 bucket(to)
             ),
-            history_uncached(context, from, to, step_days),
+            history_uncached(context, from, to, step_days, accrued),
         )
         .await
     }
@@ -739,9 +772,39 @@ async fn history_uncached(
     from: DateTime<Utc>,
     to: DateTime<Utc>,
     step_days: i32,
+    accrued: bool,
 ) -> FieldResult<History> {
     let dates = sample_dates(from, to, step_days)?;
     let rows = simulate(context, &dates, None).await?;
+
+    // Its own statement rather than a column on the simulation: the correction is not per
+    // account, and it reads the accrual periods where that one reads recorded balances.
+    let accrued_total = if accrued {
+        let user_id = require_user(context).await?;
+        // Scoped so the connection is back in the pool before the loader below asks for one of
+        // its own.
+        let adjustments: Vec<AdjustmentRow> = {
+            let conn = &mut context.conn().await?;
+
+            diesel::sql_query(ACCRUAL_ADJUSTMENT)
+                .bind::<diesel::sql_types::Uuid, _>(user_id)
+                .bind::<Array<Timestamptz>, _>(dates.to_vec())
+                .load(conn)
+                .await?
+        };
+
+        let mut totals = vec![0.0; dates.len()];
+        for row in &rows {
+            // WITH ORDINALITY counts from one
+            totals[row.sample_idx as usize - 1] += row.amount;
+        }
+        for row in &adjustments {
+            totals[row.sample_idx as usize - 1] += row.amount;
+        }
+        totals
+    } else {
+        vec![]
+    };
 
     let accounts = context
         .account_loader
@@ -782,6 +845,7 @@ async fn history_uncached(
     Ok(History {
         dates,
         by_account: series,
+        accrued_total,
         // liquid first, so a stack reads from the money you can spend today upwards
         by_availability: AccountAvailability::ORDERED
             .iter()
