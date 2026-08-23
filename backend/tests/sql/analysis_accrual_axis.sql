@@ -4,10 +4,14 @@
 BEGIN;
 
 INSERT INTO users (id, name, full_name, password_hash) VALUES
-    ('00000000-0000-7000-8000-000000000001', 'mine', 'Mine', 'x');
+    ('00000000-0000-7000-8000-000000000001', 'mine', 'Mine', 'x'),
+    -- the periods that cross an edge of the range get their own user rather than joining the
+    -- fixtures above, so the arithmetic the other checks pin down stays where it is
+    ('00000000-0000-7000-8000-000000000002', 'edge', 'Edge', 'x');
 
 INSERT INTO accounts (id, user_id, name, description, kind, availability, risk, opened, ownership_fraction) VALUES
-    ('00000000-0000-7000-8000-0000000000a1', '00000000-0000-7000-8000-000000000001', 'a1', '', 'debit', 'immediately', 'none', '2025-01-01Z', 1.0);
+    ('00000000-0000-7000-8000-0000000000a1', '00000000-0000-7000-8000-000000000001', 'a1', '', 'debit', 'immediately', 'none', '2025-01-01Z', 1.0),
+    ('00000000-0000-7000-8000-0000000000a2', '00000000-0000-7000-8000-000000000002', 'a2', '', 'debit', 'immediately', 'none', '2025-01-01Z', 1.0);
 
 INSERT INTO categories (id, name, description) VALUES
     ('00000000-0000-7000-8000-0000000000c1', 'Abo', ''),
@@ -21,7 +25,14 @@ INSERT INTO expenses (id, title, store, description, comments, reference_amount,
     ('00000000-0000-7000-8000-0000000000f2', 'punkt',   '', '', '', NULL, '2025-07-10Z', '2025-07-10Z', false),
     -- paid in June for September. On the value axis it is June's; on the accrual axis it is
     -- September's, which a range ending at September does not reach.
-    ('00000000-0000-7000-8000-0000000000f3', 'voraus',  '', '', '', NULL, '2025-09-01Z', '2025-09-30Z', false);
+    ('00000000-0000-7000-8000-0000000000f3', 'voraus',  '', '', '', NULL, '2025-09-01Z', '2025-09-30Z', false),
+    -- The two that decide which way round the range filter is written. Each runs across one
+    -- edge of the range, so each contributes some of its months and not others: a filter that
+    -- demanded the whole period sit inside the range would drop both, and every check above
+    -- would still pass. 91 and 92 days at a round 100 cents a day, so a wrong denominator or
+    -- a wrong month shows up as a whole number rather than as rounding.
+    ('00000000-0000-7000-8000-0000000000f4', 'vorlauf', '', '', '', NULL, '2025-04-01Z', '2025-06-30Z', false),
+    ('00000000-0000-7000-8000-0000000000f5', 'nachlauf','', '', '', NULL, '2025-08-01Z', '2025-10-31Z', false);
 
 -- Two categories at weight 1 each on the expense that spans three months: the weights have
 -- to be summed within a month, since the quarter is one row per month it runs through and
@@ -33,13 +44,16 @@ INSERT INTO expense_categorizations (expense_id, category_id, weight) VALUES
 INSERT INTO expense_transactions (expense_id, account_id, idx, date, amount, fraction, comments, statement) VALUES
     ('00000000-0000-7000-8000-0000000000f1', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-15Z', -9200, NULL, '', ''),
     ('00000000-0000-7000-8000-0000000000f2', '00000000-0000-7000-8000-0000000000a1', 0, '2025-07-10Z',  -500, NULL, '', ''),
-    ('00000000-0000-7000-8000-0000000000f3', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-20Z',  -700, NULL, '', '');
+    ('00000000-0000-7000-8000-0000000000f3', '00000000-0000-7000-8000-0000000000a1', 0, '2025-06-20Z',  -700, NULL, '', ''),
+    ('00000000-0000-7000-8000-0000000000f4', '00000000-0000-7000-8000-0000000000a2', 0, '2025-04-05Z', -9100, NULL, '', ''),
+    ('00000000-0000-7000-8000-0000000000f5', '00000000-0000-7000-8000-0000000000a2', 0, '2025-08-15Z', -9200, NULL, '', '');
 
 DO $$
 DECLARE
     r record;
     failures int := 0;
     mine uuid := '00000000-0000-7000-8000-000000000001';
+    edge uuid := '00000000-0000-7000-8000-000000000002';
     c1 uuid := '00000000-0000-7000-8000-0000000000c1';
     c2 uuid := '00000000-0000-7000-8000-0000000000c2';
     f1 uuid := '00000000-0000-7000-8000-0000000000f1';
@@ -57,6 +71,7 @@ BEGIN
              a AS (SELECT * FROM analysis_month_totals(mine, jun, sep, true)),
              ca AS (SELECT * FROM analysis_category_totals(mine, jun, sep, true)),
              xa AS (SELECT * FROM analysis_category_expenses(mine, jun, sep, 5, true)),
+             ea AS (SELECT * FROM analysis_month_totals(edge, jun, sep, true)),
              yv AS (SELECT * FROM analysis_month_totals(mine, y_from, y_to, false)),
              ya AS (SELECT * FROM analysis_month_totals(mine, y_from, y_to, true)),
         checks(label, actual, expected) AS (
@@ -79,6 +94,18 @@ BEGIN
                 (SELECT round(expenses::numeric, 2) FROM a WHERE month = aug AND account_id IS NULL), -3100.00
             UNION ALL SELECT 'a period outside the range contributes nothing',
                 (SELECT count(*) FROM a WHERE round(expenses::numeric, 2) = -700.00), 0
+
+            -- A period that starts before the range or ends after it still owns the months of
+            -- it that are inside: April and May of the one, September and October of the
+            -- other, are outside and stay outside. Both directions, because a filter written
+            -- the wrong way round is symmetric and one of these alone would not see it.
+            UNION ALL SELECT 'a period reaching in from before keeps its june',
+                (SELECT round(expenses::numeric, 2) FROM ea WHERE month = jun AND account_id IS NULL), -3000.00
+            UNION ALL SELECT 'a period reaching out past the end keeps its august',
+                (SELECT round(expenses::numeric, 2) FROM ea WHERE month = aug AND account_id IS NULL), -3100.00
+            -- and nothing leaks into the month between them, which neither period covers
+            UNION ALL SELECT 'july lies between the two and stays empty',
+                (SELECT count(*) FROM ea WHERE month = jul), 0
 
             -- an expense counts in every month it runs through, because it is one of the
             -- things that month cost
