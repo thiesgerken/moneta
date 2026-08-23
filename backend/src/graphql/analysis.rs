@@ -449,8 +449,10 @@ impl AnalysisQuery {
                     expense: GraphQLExpense::new(expense),
                 }
             })
-            // biggest outstanding first; an expense is negative, so that is ascending
-            .sorted_by(|a, b| a.remaining.total_cmp(&b.remaining))
+            // most still tied up first, by size rather than by sign: an expense is negative and
+            // an income positive, and what is interesting about either is how much of it is
+            // still to come
+            .sorted_by(|a, b| b.remaining.abs().total_cmp(&a.remaining.abs()))
             .collect())
     }
 

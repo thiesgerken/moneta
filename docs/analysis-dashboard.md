@@ -219,6 +219,11 @@ Only expenses with a non-degenerate accrual period that has not run out at `at` 
 `remaining` follows `effectiveAmount`, so it is the reader's share and carries the expense's
 sign — negative for money that went out.
 
+Ordered by `abs(remaining)`, descending: most still tied up first, whichever way it points.
+The table does not show `remaining` in a column of its own — the bar beside the amount draws
+the same fact, and the sum of it is in the card above — so the order is the only place the
+figure is visible.
+
 It returns the whole rendered expense rather than a copy of a few of its fields, so the view
 can link to it and read its transactions: `paidOn` is `min(transaction.date)` and needs no
 column of its own.
