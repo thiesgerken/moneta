@@ -5,7 +5,13 @@
 	import { graphql } from '$houdini';
 	import ActionButton from './ActionButton.svelte';
 	import type { ExpenseInput } from '$houdini/graphql/inputs';
-	import { accountSorter, byUsageThen, categorySorter, formatAccount } from './expense_utils';
+	import {
+		accountSorter,
+		byUsageThen,
+		categorySorter,
+		formatAccount,
+		referenceAmountMissing
+	} from './expense_utils';
 	import ColorSelect from './ColorSelect.svelte';
 	import { amountColor, signedEuro } from './money';
 	import {
@@ -111,7 +117,7 @@
 	let isTaxRelevant = $derived(expense?.isTaxRelevant || false);
 	let isIncomplete = $derived(expense?.isIncomplete || false);
 	let referenceAmount: string | undefined = $derived(
-		expense?.referenceAmount ? (expense.referenceAmount / 100).toFixed(2) : undefined
+		expense?.referenceAmount != null ? (expense.referenceAmount / 100).toFixed(2) : undefined
 	);
 	let accrualStart: Date | undefined = $derived(
 		expense?.accrualStart ? new Date(expense.accrualStart) : undefined
@@ -399,7 +405,7 @@
 		if (!hasRelativeTransactions) return false;
 
 		// Must be provided when relative transactions exist
-		return !referenceAmount || !Number(referenceAmount);
+		return referenceAmountMissing(referenceAmount);
 	});
 	const accrualStartError = $derived(!accrualStart);
 	const accrualEndError = $derived.by(() => {
