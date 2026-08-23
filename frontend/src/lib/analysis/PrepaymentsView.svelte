@@ -19,7 +19,7 @@
 	import { shortDate } from './dates';
 	import QueryError from '$lib/QueryError.svelte';
 	import ExpenseDetailModal from '$lib/ExpenseDetailModal.svelte';
-	import { euro } from '$lib/money';
+	import { amountColor, euro, signedEuro } from '$lib/money';
 
 	// How much of a prepayment is laid out, used up or still to come is a quantity of it, not a
 	// movement on an account: 145 € were prepaid, not -145 €. Expense amounts stay signed the way
@@ -170,7 +170,6 @@
 					<TableHeadCell class="px-4 py-3">Zeitraum</TableHeadCell>
 					<TableHeadCell class="px-4 py-3">Betrag</TableHeadCell>
 					<TableHeadCell class="px-4 py-3">Verbraucht</TableHeadCell>
-					<TableHeadCell class="px-4 py-3">Rest</TableHeadCell>
 				</TableHead>
 				<TableBody class="divide-y">
 					{#each rows as p (p.expense.id)}
@@ -190,7 +189,10 @@
 							<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
 								{shortDate(p.expense.accrualStart)} – {shortDate(p.expense.accrualEnd)}
 							</TableBodyCell>
-							<TableBodyCell class="px-4 py-3">{euro(p.expense.effectiveAmount)}</TableBodyCell>
+							<TableBodyCell
+								class="px-4 py-3 whitespace-nowrap {amountColor(p.expense.effectiveAmount)}"
+								>{signedEuro(p.expense.effectiveAmount)}</TableBodyCell
+							>
 							<TableBodyCell class="px-4 py-3">
 								<div class="flex items-center gap-2">
 									<div class="h-2 w-24 rounded bg-gray-200 dark:bg-gray-700">
@@ -203,9 +205,6 @@
 										{Math.round(p.consumedFraction * 100)}%
 									</span>
 								</div>
-							</TableBodyCell>
-							<TableBodyCell class="px-4 py-3 font-medium text-orange-600 dark:text-orange-400">
-								{outstanding(p.remaining)}
 							</TableBodyCell>
 						</TableBodyRow>
 					{/each}
