@@ -813,13 +813,7 @@
 					</div>
 				{/if}
 			</div>
-			<!-- `lg:overflow-visible`: a scroll container clips what hangs out of it, and what hangs
-			     out of this one is the calendar, which was showing as a two-line sliver under the
-			     field. The table fits without scrolling at this width anyway; below it the phone
-			     needs the scroll more than it needs a calendar that escapes. -->
-			<div
-				class="relative z-20 overflow-x-auto rounded-lg border border-gray-200 lg:overflow-visible dark:border-gray-700"
-			>
+			<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
 				<table data-form class="w-full text-left text-sm">
 					<thead class="bg-gray-50 dark:bg-gray-700">
 						<tr>

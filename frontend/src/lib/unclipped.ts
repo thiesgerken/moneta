@@ -37,6 +37,11 @@ export function unclipped(wrapper: HTMLElement) {
 		// before measuring: an absolute box may have been squeezed by the column it sat in
 		calendar.style.position = 'fixed';
 		calendar.style.margin = '0';
+		// ponytail: a number rather than the top layer. flowbite gives the calendar `z-10`,
+		// which anything in the form with a stacking context of its own paints over. Nothing
+		// in this app goes past 20; a `popover` and `showPopover()` would settle it for good,
+		// at the cost of fighting the UA styles that come with them.
+		calendar.style.zIndex = '50';
 
 		const { top, left } = place(wrapper.getBoundingClientRect(), calendar.getBoundingClientRect(), {
 			width: innerWidth,
