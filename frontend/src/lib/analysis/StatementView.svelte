@@ -145,7 +145,7 @@
 			<DownloadOutline class="mr-2 h-4 w-4" />CSV
 		</Button>
 		{#if $statementStore.fetching}
-			<Spinner size="5" />
+			<Spinner size="5" class="self-center" />
 		{/if}
 	</div>
 

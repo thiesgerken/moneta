@@ -192,7 +192,7 @@
 		/>
 		<ToggleGroup bind:value={axisState.axis} options={DATE_AXES} />
 		{#if $overviewsStore.fetching}
-			<Spinner size="5" />
+			<Spinner size="5" class="self-center" />
 		{/if}
 	</div>
 
