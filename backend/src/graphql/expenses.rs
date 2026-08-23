@@ -431,7 +431,10 @@ type ExpensePredicate =
 ///
 /// The transactions are matched field by field rather than as `transactions::text`: that
 /// document also carries account ids and dates, which a term like a year would hit on every
-/// row.
+/// row. They are read from `expense_transactions_rendered` and not from this view's own
+/// `transactions` column, because a predicate over the latter makes postgres build the
+/// aggregated jsonb for every expense before it can discard one: 26s against 0.5s on a
+/// large dataset.
 fn search_predicate(term: &str) -> ExpensePredicate {
     let pattern = util::ilike_pattern(term);
 
@@ -443,13 +446,15 @@ fn search_predicate(term: &str) -> ExpensePredicate {
             .or(expenses_rendered::comments.ilike(pattern.clone()))
             .or(sql::<Bool>("positions::text ILIKE ").bind::<Text, _>(pattern.clone()))
             .or(sql::<Bool>(
-                "EXISTS (SELECT 1 FROM jsonb_array_elements(transactions) t \
-                 WHERE t ->> 'statement' ILIKE ",
+                "EXISTS (SELECT 1 FROM expense_transactions_rendered r \
+                 WHERE r.expense_id = expenses_rendered.upstream_id \
+                 AND r.user_id = expenses_rendered.user_id \
+                 AND (r.statement ILIKE ",
             )
             .bind::<Text, _>(pattern.clone())
-            .sql(" OR t ->> 'comments' ILIKE ")
+            .sql(" OR r.comments ILIKE ")
             .bind::<Text, _>(pattern)
-            .sql(")")),
+            .sql("))")),
     );
 
     if let Ok(value) = term.replace(',', ".").parse::<f64>()
