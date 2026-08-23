@@ -22,8 +22,33 @@ use chrono::{DateTime, Datelike, Months, NaiveDate, TimeZone, Utc};
 const ZONE: chrono_tz::Tz = chrono_tz::Europe::Berlin;
 
 /// The day an instant denotes, in the frame it was written in.
-fn on(t: DateTime<Utc>) -> NaiveDate {
+pub fn on(t: DateTime<Utc>) -> NaiveDate {
     t.with_timezone(&ZONE).date_naive()
+}
+
+/// Moves the day an instant denotes, reading it in the frame it was written in and writing
+/// the result back at midday, the way [`day`] does.
+///
+/// The time of day is not carried across. These instants stand for days, and a day that keeps
+/// its wall clock drifts an hour against UTC every time the clocks change -- which is exactly
+/// the kind of hour that turns a whole month into a month and thirteen hours.
+fn shift_local(
+    t: DateTime<Utc>,
+    f: impl FnOnce(NaiveDate) -> Option<NaiveDate>,
+) -> Option<DateTime<Utc>> {
+    let moved = f(on(t))?;
+    day(moved.year(), moved.month(), moved.day())
+}
+
+/// The same day of the month, `months` later, in the frame the instant was written in.
+///
+/// Counting in UTC would count the wrong day: a date the editor wrote as local midnight is
+/// the day before in UTC, so a period starting on the 1st steps from the 28th or the 31st,
+/// clamps in a short month, and never returns to the day it was written with. Clamping is
+/// still what a 31st does in February -- but only after the day has been read in the frame
+/// that named it.
+pub fn add_months(t: DateTime<Utc>, months: u32) -> Option<DateTime<Utc>> {
+    shift_local(t, |d| d.checked_add_months(Months::new(months)))
 }
 use regex::Regex;
 
@@ -298,13 +323,15 @@ pub fn shifted_end(
     to: DateTime<Utc>,
     start: DateTime<Utc>,
 ) -> Option<DateTime<Utc>> {
-    let months = match Shape::of(from, to, from).length {
-        Length::Months(k) => k,
-        Length::Days(_) => return Some(to + (start - from)),
-    };
-
-    let end = on(start).checked_add_months(Months::new(months))? - chrono::Duration::days(1);
-    day(end.year(), end.month(), end.day())
+    // built from `start` rather than from `to`, so both ends of the period carry the same time
+    // of day and its length stays a whole number of days
+    match Shape::of(from, to, from).length {
+        Length::Months(k) => shift_local(start, |d| {
+            d.checked_add_months(Months::new(k))
+                .map(|e| e - chrono::Duration::days(1))
+        }),
+        Length::Days(n) => shift_local(start, |d| Some(d + chrono::Duration::days(n - 1))),
+    }
 }
 
 /// Midday, so that nothing about a date depends on which side of midnight a timezone falls.

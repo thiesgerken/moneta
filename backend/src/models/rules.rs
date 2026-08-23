@@ -3,7 +3,7 @@
 //! Two kinds, both inherited from moneydb: periodic rules fire on a schedule, automation
 //! rules fire when a matching transaction is delivered from a bank statement.
 
-use chrono::{DateTime, Datelike, Months, TimeDelta, Timelike, Utc};
+use chrono::{DateTime, Datelike, TimeDelta, Timelike, Utc};
 use diesel::prelude::*;
 use diesel::{deserialize::FromSqlRow, expression::AsExpression};
 use juniper::{GraphQLEnum, GraphQLInputObject, GraphQLObject};
@@ -31,14 +31,20 @@ text_enum!(PeriodicInterval {
 });
 
 impl PeriodicInterval {
-    /// The next occurrence after `t`. Monthly and yearly clamp to the end of the month, so a
-    /// rule anchored on the 31st still fires in February.
-    pub fn next(&self, t: DateTime<Utc>) -> DateTime<Utc> {
+    /// The `n`th occurrence counted from `anchor`.
+    ///
+    /// Counted from the anchor rather than stepped one occurrence at a time. Monthly and
+    /// yearly clamp to the end of a short month, so a rule anchored on the 31st still fires in
+    /// February -- but stepping would carry that clamp forward for good, and the rule would go
+    /// on firing on the 28th once it had seen one February.
+    ///
+    /// `None` once the result leaves the range a timestamp can hold.
+    pub fn advance(&self, anchor: DateTime<Utc>, n: u32) -> Option<DateTime<Utc>> {
         match self {
-            Self::Daily => t + TimeDelta::days(1),
-            Self::Weekly => t + TimeDelta::weeks(1),
-            Self::Monthly => t + Months::new(1),
-            Self::Yearly => t + Months::new(12),
+            Self::Daily => anchor.checked_add_signed(TimeDelta::days(n.into())),
+            Self::Weekly => anchor.checked_add_signed(TimeDelta::weeks(n.into())),
+            Self::Monthly => crate::accrual::add_months(anchor, n),
+            Self::Yearly => crate::accrual::add_months(anchor, n.checked_mul(12)?),
         }
     }
 }
@@ -237,17 +243,22 @@ mod tests {
 
     #[test]
     fn each_interval_advances_by_its_own_step() {
-        assert_eq!(PeriodicInterval::Daily.next(at(2026, 3, 1)), at(2026, 3, 2));
         assert_eq!(
-            PeriodicInterval::Weekly.next(at(2026, 3, 1)),
+            PeriodicInterval::Daily.advance(at(2026, 3, 1), 1).unwrap(),
+            at(2026, 3, 2)
+        );
+        assert_eq!(
+            PeriodicInterval::Weekly.advance(at(2026, 3, 1), 1).unwrap(),
             at(2026, 3, 8)
         );
         assert_eq!(
-            PeriodicInterval::Monthly.next(at(2026, 3, 1)),
+            PeriodicInterval::Monthly
+                .advance(at(2026, 3, 1), 1)
+                .unwrap(),
             at(2026, 4, 1)
         );
         assert_eq!(
-            PeriodicInterval::Yearly.next(at(2026, 3, 1)),
+            PeriodicInterval::Yearly.advance(at(2026, 3, 1), 1).unwrap(),
             at(2027, 3, 1)
         );
     }
@@ -257,21 +268,29 @@ mod tests {
     #[test]
     fn a_month_end_anchor_clamps_instead_of_overflowing() {
         assert_eq!(
-            PeriodicInterval::Monthly.next(at(2026, 1, 31)),
+            PeriodicInterval::Monthly
+                .advance(at(2026, 1, 31), 1)
+                .unwrap(),
             at(2026, 2, 28)
         );
         assert_eq!(
-            PeriodicInterval::Monthly.next(at(2026, 3, 31)),
+            PeriodicInterval::Monthly
+                .advance(at(2026, 3, 31), 1)
+                .unwrap(),
             at(2026, 4, 30)
         );
         // a leap year still has a 29th to clamp onto
         assert_eq!(
-            PeriodicInterval::Monthly.next(at(2028, 1, 31)),
+            PeriodicInterval::Monthly
+                .advance(at(2028, 1, 31), 1)
+                .unwrap(),
             at(2028, 2, 29)
         );
         // and the same anchor a year later, which is the one that only bites every four years
         assert_eq!(
-            PeriodicInterval::Yearly.next(at(2028, 2, 29)),
+            PeriodicInterval::Yearly
+                .advance(at(2028, 2, 29), 1)
+                .unwrap(),
             at(2029, 2, 28)
         );
     }

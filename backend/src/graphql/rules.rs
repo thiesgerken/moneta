@@ -233,7 +233,10 @@ impl GraphQLPeriodicRule {
             &self.data,
             &template,
             Utc::now() + crate::rules::PERIODIC_ADVANCE,
-        ))
+        )
+        .into_iter()
+        .map(|(_, t)| t)
+        .collect())
     }
 }
 
