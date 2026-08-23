@@ -167,12 +167,6 @@
 
 	const balances = $derived($balanceStore.data?.analysis.balances ?? []);
 
-	const closedCount = $derived(balances.filter((b) => b.account.closed).length);
-
-	const shownBalances = $derived(
-		wealthState.balanceAccounts === 'all' ? balances : balances.filter((b) => !b.account.closed)
-	);
-
 	const investments = $derived($investmentStore.data?.investments.list ?? []);
 
 	/// Only on today's Stichtag. stockdb prices what a depot is worth *now*, and laying that
@@ -186,6 +180,22 @@
 		if (!useMarket) return amount;
 		return investments.find((i) => i.account.id === accountId)?.value ?? amount;
 	};
+
+	/// `used` is the reading list: an account at nought is one you are not currently keeping
+	/// money in, whether or not anybody ever closed it, and a page of those pushes the accounts
+	/// that do hold something off the screen. `open` still says something different -- an
+	/// account you have but are not using right now is a row worth seeing when you go looking
+	/// for it.
+	const shownBalances = $derived.by(() => {
+		if (wealthState.balanceAccounts === 'all') return balances;
+		if (wealthState.balanceAccounts === 'open') return balances.filter((b) => !b.account.closed);
+		return balances.filter((b) => shownAmount(b.account.id, b.amount) !== 0);
+	});
+
+	/// Nothing to choose between when all three modes list the same rows.
+	const filterable = $derived(
+		balances.some((b) => b.account.closed || shownAmount(b.account.id, b.amount) === 0)
+	);
 
 	/// Everything, whatever the table is currently listing. The filter says which rows are
 	/// worth reading, not what you own -- a wealth that changes when you tick a box is a figure
@@ -509,8 +519,9 @@
 					/>Berechnete Kontostände
 				</h3>
 				<!-- A closed account keeps its last balance for ever, so it sits in this table at
-			     whatever it held on the day it was closed and never moves again. Open ones only
-			     by default; the total follows whichever is shown. -->
+			     whatever it held on the day it was closed and never moves again, and an open one
+			     at zero says as little. Only the accounts holding something by default; the
+			     total stays the whole wealth whichever rows are shown. -->
 				<div class="flex flex-wrap items-center gap-2">
 					<!-- Only ever offered on today's Stichtag: a price from this afternoon laid over a
 					     balance computed for a day in 2019 would be an answer to no question at all. -->
@@ -524,11 +535,12 @@
 							]}
 						/>
 					{/if}
-					{#if closedCount > 0}
+					{#if filterable}
 						<ToggleGroup
 							bind:value={wealthState.balanceAccounts}
 							size="sm"
 							options={[
+								{ value: 'used', label: 'In Benutzung' },
 								{ value: 'open', label: 'Aktive Konten' },
 								{ value: 'all', label: 'Alle' }
 							]}

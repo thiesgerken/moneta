@@ -36,10 +36,12 @@ export const wealthState = $state({
 	split: 'total',
 	/// the Stichtag for the availability totals and the computed balances
 	date: todayIso(),
-	/// Which accounts the computed balances list: `open` or `all`. A closed account keeps its
-	/// last balance for ever, so it sits in the table at whatever it held on its final day and
-	/// never moves again -- a row that answers nothing.
-	balanceAccounts: 'open',
+	/// Which accounts the computed balances list: `used`, `open` or `all`. A closed account
+	/// keeps its last balance for ever, so it sits in the table at whatever it held on its
+	/// final day and never moves again -- a row that answers nothing. An open account standing
+	/// at zero answers just as little, which is why `used` rather than `open` is the default:
+	/// what is holding money is the shorter and more useful list.
+	balanceAccounts: 'used',
 	/// Series hidden from the chart, by name, remembered so a tab switch does not un-hide them.
 	///
 	/// One list per split rather than one shared: the toggle drops names the chart no longer
