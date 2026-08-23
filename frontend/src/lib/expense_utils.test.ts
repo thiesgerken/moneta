@@ -12,6 +12,7 @@ import {
 	makeAccountColor,
 	makeCategoryColor,
 	makeStripedBackground,
+	referenceAmountMissing,
 	readableTextOn,
 	tint,
 	type SortableAccount
@@ -382,5 +383,25 @@ describe('byUsageThen', () => {
 	it('keeps every option exactly once', () => {
 		const options = [option('b', 3), option('a', 0), option('c', 1)];
 		expect(byUsageThen(options, byName)).toHaveLength(3);
+	});
+});
+
+/// A rule template's booking is blanked to zero and its share stays beside it, so the dialog
+/// refusing a zero reference refused to save exactly the templates the importer had built.
+describe('referenceAmountMissing', () => {
+	it('treats zero as an answer, not as a gap', () => {
+		expect(referenceAmountMissing('0')).toBe(false);
+		expect(referenceAmountMissing('0.00')).toBe(false);
+		expect(referenceAmountMissing('-1234.56')).toBe(false);
+	});
+
+	it('is only unfilled when nothing was typed', () => {
+		expect(referenceAmountMissing(undefined)).toBe(true);
+		expect(referenceAmountMissing('')).toBe(true);
+		expect(referenceAmountMissing('   ')).toBe(true);
+	});
+
+	it('rejects what is not a number', () => {
+		expect(referenceAmountMissing('keine Ahnung')).toBe(true);
 	});
 });
