@@ -2,9 +2,7 @@
 
 ## must have
 
-- upload client that feeds `deliveries.submit` from a bank export; could just be a python script.
-  the api, matching rules and seen-delivery tracking are done (src/rules.rs).
-- the same for periodic rules: `instantiate` still shifts the template's span onto the occurrence,
+- periodic rules: `instantiate` still shifts the template's span onto the occurrence,
   the way `impose` used to. `accrual::Shape` is what an automation rule now uses instead and it
   applies unchanged — a periodic rule knows the date it is generating for, which is all `period`
   wants. Left out of that change to keep it to one mechanism at a time.

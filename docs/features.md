@@ -222,9 +222,10 @@ to be told about anything that arrived by another route — which is why the mon
 it, see [moneydb.md](moneydb.md#the-import-says-what-the-bank-has-already-handed-over). Only the
 last 400 days are ever compared.
 
-**There is no upload client.** Nothing in this repository feeds `deliveries.submit` from a real
-bank export; that is deliberately someone else's program, since it is per-bank and needs
-credentials. The API, the matching and the seen-delivery tracking are done.
+**There is no upload client here.** Nothing in this repository feeds `deliveries.submit` from a
+real bank export; that is deliberately someone else's program, since it is per-bank and needs
+credentials, and it lives outside this repo. The API, the matching and the seen-delivery
+tracking are done.
 
 ## Analysis
 
@@ -232,5 +233,5 @@ Seven tabs at `/analysis`, and its own document: **[analysis-dashboard.md](analy
 
 ## Not built
 
-Receipts in the UI, push notifications, the upload client above, and budget tracking for
-recurring expenses. `TODO.md` is the current list.
+Receipts in the UI, push notifications, and budget tracking for recurring expenses. `TODO.md`
+is the current list.
