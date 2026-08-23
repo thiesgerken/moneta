@@ -57,6 +57,60 @@ cargo run -- user --add thies    # every user in the export has to exist first
 cargo run -- import --clear < moneydb-export.json
 ```
 
+That reproduces the books as they stood at the cutover and nothing since. For anything that
+depends on how the data looks *today* — deliveries, confirmations, edits — restore the nightly
+dump described below instead.
+
+## The cluster runs the real thing, and its database is reachable
+
+`moneta.gerken.haus` is a live deployment in k3s, namespace `apps-moneta`, context
+`gerken-haus`. A merge to `main` deploys to it. Its postgres answers:
+
+```sh
+kubectl -n apps-moneta exec deploy/postgres -- psql -U moneta -d moneta -c 'select ...'
+```
+
+**That is the same personal financial data as `volumes/postgres`, and there is no other copy.**
+Reading it is fine and is often the fastest way to settle a question about real behaviour — do
+that rather than guess. Writing to it is not: any `UPDATE`, `DELETE`, `TRUNCATE`, any
+`moneta import`, any schema change applied by hand needs Thies to allow that specific change,
+each time it comes up. Permission for one write is not permission for the next. Hand him the
+command to run instead; that is the normal way this goes, not a fallback.
+
+A nightly CronJob `moneta-export` dumps it at 04:00 (`pg_dump --format=custom`) onto the
+`moneta-export` PVC, keeping one complete dump. That is the rollback, and it is up to 24 hours
+old — force a fresh one before anything irreversible:
+
+```sh
+kubectl -n apps-moneta create job --from=cronjob/moneta-export precutover
+```
+
+## The data model carries data now
+
+Until the cutover in August 2026 the answer to an awkward schema change was to re-run
+`moneta import --clear` from the moneydb export. That answer is gone. The export is a
+historical record rather than the source, and everything since — deliveries, edits,
+confirmations, the stockdb links — exists only in that database.
+
+So a migration has to carry the rows across rather than assume they can be rebuilt. Dropping a
+column, tightening a constraint or renaming an enum value needs the `up.sql` that moves the data
+with it, and it runs unattended against the real database on the next merge to `main`. Where
+that cannot be done in one step, plan two releases and say so, rather than guessing that the
+table is empty enough to get away with it.
+
+Test a migration against real data before merging it — restore the nightly dump into a
+throwaway container and let the binary migrate it:
+
+```sh
+docker run -d --name restore-test -e POSTGRES_USER=moneta -e POSTGRES_PASSWORD=moneta \
+    -e POSTGRES_DB=moneta -p 127.0.0.1:5497:5432 postgres:18-alpine
+docker exec -i restore-test pg_restore --clean --if-exists --no-owner --no-privileges \
+    -U moneta -d moneta < moneta.dump
+MONETA__DATABASE__URL=postgres://moneta:moneta@localhost:5497/moneta cargo run -- account --list all
+```
+
+Migrations run before every subcommand except `schema`, so any command applies them.
+
 **Postgres 18 is a hard requirement**: the tables default their ids with `uuidv7()`, which
 does not exist before 18.
 
