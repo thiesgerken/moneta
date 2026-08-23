@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { Modal, Label, Input, Textarea, Button, Datepicker, Select } from 'flowbite-svelte';
+	import { Modal, Label, Input, Textarea, Button, Select } from 'flowbite-svelte';
 
 	import { graphql } from '$houdini';
 	import type { BalanceInput } from '$houdini/graphql/inputs';
 	import { formatAccount, tint } from './expense_utils';
-	import { unclipped } from './unclipped';
+	import DateField from './DateField.svelte';
 	import { EditOutline, PlusOutline } from 'flowbite-svelte-icons';
 
 	interface Props {
@@ -138,13 +138,10 @@
 			</div>
 			<div>
 				<Label class="mb-2 block">Datum</Label>
-				<div use:unclipped>
-					<Datepicker
-						bind:value={date}
-						placeholder="Datum"
-						inputClass={dateError ? 'border-red-600 bg-red-100 text-red-400' : ''}
-					/>
-				</div>
+				<DateField
+					bind:value={date}
+					inputClass={dateError ? 'border-red-600 bg-red-100 text-red-400' : ''}
+				/>
 			</div>
 			<div class="sm:col-span-2">
 				<Label for="account" class="mb-2">Konto</Label>

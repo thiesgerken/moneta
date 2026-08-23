@@ -1,4 +1,4 @@
-/// Date helpers for the analysis views.
+/// Date helpers. Named for the analysis views it started in; half the app writes dates now.
 ///
 /// A plain module rather than `.svelte.ts` on purpose: `svelte/prefer-svelte-reactivity` flags
 /// every `new Date` in a rune module, since one held in reactive state would need to be a
@@ -12,6 +12,11 @@ export function isoDate(d: Date): string {
 }
 
 export const todayIso = () => isoDate(new Date());
+
+/// Today at midnight, which is the Date clicking a day in a `DateField` gives: date-fns builds
+/// the calendar grid out of local midnights. A `new Date()` with the time still on it would be
+/// the same day written differently, and only in the fields that were filled by a button.
+export const today = () => new Date(new Date().setHours(0, 0, 0, 0));
 
 /// A date the way it is written down: `08.08.2026`.
 ///

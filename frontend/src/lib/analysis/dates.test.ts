@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { accrualShare, isoDate, monthsBefore, shiftMonth, shortDate, startOfMonth } from './dates';
+import {
+	accrualShare,
+	isoDate,
+	monthsBefore,
+	shiftMonth,
+	shortDate,
+	startOfMonth,
+	today
+} from './dates';
 
 /// Local time throughout, deliberately — the ranges these build are what a reader typed into a
 /// date field, not instants on a wire.
@@ -103,5 +111,15 @@ describe('accrualShare', () => {
 	it('is nothing outside the period', () => {
 		expect(accrualShare(quarter, ...month(5))).toBe(0);
 		expect(accrualShare(quarter, ...month(9))).toBe(0);
+	});
+});
+
+describe('today', () => {
+	it('is midnight, the way a day clicked in the calendar is', () => {
+		const d = today();
+		expect([d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds()]).toEqual([
+			0, 0, 0, 0
+		]);
+		expect(isoDate(d)).toBe(isoDate(new Date()));
 	});
 });

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Modal, Label, Input, Textarea, Button, Select, Datepicker } from 'flowbite-svelte';
+	import { Modal, Label, Input, Textarea, Button, Select } from 'flowbite-svelte';
 	import ColorPicker from 'svelte-awesome-color-picker';
-	import { unclipped } from './unclipped';
+	import DateField from './DateField.svelte';
 
 	import { graphql } from '$houdini';
 	import type { AccountInput } from '$houdini/graphql/inputs';
@@ -309,23 +309,20 @@
 			</div>
 			<div>
 				<Label class="mb-2 block">Eröffnet</Label>
-				<div use:unclipped>
-					<Datepicker
-						bind:value={opened}
-						placeholder=""
-						inputClass={openedError ? 'border-red-600 bg-red-100 text-red-400' : ''}
-					/>
-				</div>
+				<DateField
+					bind:value={opened}
+					placeholder=""
+					inputClass={openedError ? 'border-red-600 bg-red-100 text-red-400' : ''}
+				/>
 			</div>
 			<div>
 				<Label class="mb-2 block">Geschlossen</Label>
-				<div use:unclipped>
-					<Datepicker
-						bind:value={closed}
-						placeholder=""
-						inputClass={closedError ? 'border-red-600 bg-red-100 text-red-400' : ''}
-					/>
-				</div>
+				<DateField
+					bind:value={closed}
+					placeholder=""
+					inputClass={closedError ? 'border-red-600 bg-red-100 text-red-400' : ''}
+					clearable
+				/>
 			</div>
 			<div class="sm:col-span-2">
 				<Label for="synchronization" class="mb-2">Synchronisierung</Label>
