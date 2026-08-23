@@ -108,8 +108,16 @@
 	const expense = $derived(loaded?.id === expenseId ? loaded : undefined);
 
 	// `ExpenseModal` with no expense is the form for creating one, so the modal may not open
-	// before the query has answered. Writable, since the modal closes itself.
-	let open = $derived(expense !== undefined);
+	// before the query has answered.
+	//
+	// State rather than `$derived(expense !== undefined)`: the modal closes itself by writing
+	// `false` in here, and a derived is recomputed straight back to `true` from a store that
+	// still holds the expense — so the modal reopened instead of closing. Clearing the id is
+	// what makes the close stick, since `expense` is only the one that was asked for.
+	let open = $state(false);
+	$effect(() => {
+		if (expense) open = true;
+	});
 	$effect(() => {
 		if (!open) expenseId = undefined;
 	});

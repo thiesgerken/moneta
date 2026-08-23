@@ -551,8 +551,11 @@
 		if (isEdit) await UpdateExpense.mutate({ id: expense!.id, input });
 		else await CreateExpense.mutate({ input });
 
-		if (onsubmit) await onsubmit();
+		// Closed before the caller reloads, not after. `onsubmit` refetches, which writes a new
+		// `expense` into the props, and every field here is derived from it — so waiting first
+		// meant the form visibly rebuilt itself from the answer while still on screen.
 		open = false;
+		if (onsubmit) await onsubmit();
 	};
 </script>
 
