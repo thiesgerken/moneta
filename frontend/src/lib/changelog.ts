@@ -176,3 +176,39 @@ export function stateAmount(state: {
 		0
 	);
 }
+
+/// One entry of the changelog, as much of it as the grouping below has to look at.
+interface Entry {
+	id: string;
+	expenseId: string;
+	automatic: boolean;
+	user?: { name: string } | null;
+}
+
+/// Consecutive changes to one expense by one person, as one row. Newest first, like the
+/// feed they came from.
+///
+/// Saving an expense and then correcting it twice is three entries in the log and one
+/// thing that happened; three of them in a row filled half a feed that shows six. What
+/// each of them did is still in Details, in the order it was done.
+///
+/// Adjacent only, and only where the badge would say the same thing: something else in
+/// between means the reader was going to see both rows anyway, and merging across it would
+/// put the run where neither of its entries belongs.
+export function runs<T extends Entry>(list: T[]): { key: string; entries: T[] }[] {
+	const out: { key: string; entries: T[] }[] = [];
+
+	for (const entry of list) {
+		const open = out.at(-1);
+		const same =
+			open &&
+			open.entries[0].expenseId === entry.expenseId &&
+			open.entries[0].user?.name === entry.user?.name &&
+			open.entries[0].automatic === entry.automatic;
+
+		if (same) open.entries.push(entry);
+		else out.push({ key: entry.id.toString(), entries: [entry] });
+	}
+
+	return out;
+}

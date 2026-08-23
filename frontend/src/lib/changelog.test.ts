@@ -3,6 +3,7 @@ import {
 	ABSENT,
 	changedFields,
 	describeChanges,
+	runs,
 	stateAmount,
 	summarizeFields,
 	type Change
@@ -174,5 +175,58 @@ describe('stateAmount', () => {
 	// claim that it cost nothing
 	it('has no answer for an expense with no transactions', () => {
 		expect(stateAmount({ transactions: [] })).toBeNull();
+	});
+});
+
+describe('runs', () => {
+	const entry = (id: string, expenseId: string, name = 'Thies', automatic = false) => ({
+		id,
+		expenseId,
+		automatic,
+		user: { name }
+	});
+
+	const shape = (list: ReturnType<typeof runs>) => list.map((r) => r.entries.map((e) => e.id));
+
+	it('merges the changes one person made to one expense back to back', () => {
+		expect(
+			shape(runs([entry('3', 'snickers'), entry('2', 'snickers'), entry('1', 'snickers')]))
+		).toEqual([['3', '2', '1']]);
+	});
+
+	it('keys the run by its newest entry, so the row does not jump when one is added', () => {
+		expect(runs([entry('3', 'snickers'), entry('2', 'snickers')])[0].key).toBe('3');
+	});
+
+	it('leaves changes to different expenses alone', () => {
+		expect(shape(runs([entry('2', 'snickers'), entry('1', 'wasser')]))).toEqual([['2'], ['1']]);
+	});
+
+	// otherwise the row would name one of them and silently swallow the other's edit
+	it('does not merge across authors', () => {
+		expect(shape(runs([entry('2', 'snickers'), entry('1', 'snickers', 'Krösus')]))).toEqual([
+			['2'],
+			['1']
+		]);
+	});
+
+	// the badge says "automatisch" for the whole row, so it has to be true of the whole row
+	it('does not merge an automatic change with a hand-made one', () => {
+		expect(shape(runs([entry('2', 'snickers'), entry('1', 'snickers', 'Thies', true)]))).toEqual([
+			['2'],
+			['1']
+		]);
+	});
+
+	// something else in between means both rows were going to be read anyway, and a merged run
+	// would sit at the newer one's place with the older one's siblings out of order around it
+	it('only merges what is adjacent', () => {
+		expect(
+			shape(runs([entry('3', 'snickers'), entry('2', 'wasser'), entry('1', 'snickers')]))
+		).toEqual([['3'], ['2'], ['1']]);
+	});
+
+	it('has nothing to say about an empty feed', () => {
+		expect(runs([])).toEqual([]);
 	});
 });

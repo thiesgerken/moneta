@@ -9,7 +9,7 @@
 	} from 'flowbite-svelte-icons';
 	import ToggleGroup from './ToggleGroup.svelte';
 	import ExpenseModal from './ExpenseModal.svelte';
-	import { changedFields, summarizeFields, stateAmount } from './changelog';
+	import { changedFields, runs, summarizeFields, stateAmount } from './changelog';
 	import ChangeList from './ChangeList.svelte';
 	import { invalidate } from './invalidate';
 	import { formatAccount } from './expense_utils';
@@ -248,6 +248,7 @@
 	}
 
 	type Entry = (typeof entries)[number];
+	type Run = { key: string; entries: Entry[] };
 
 	const entries = $derived(
 		(feed?.expenses.changelog.edges ?? [])
@@ -266,20 +267,45 @@
 			out.at(-1)?.entries.push(entry);
 		}
 
-		return out;
+		return out.map(({ key, label, entries }) => ({ key, label, runs: runs(entries) }));
 	});
+
+	/// When a run happened, for the tooltip on its author: one time, or the span of the edits
+	/// that were merged into the row.
+	function when(run: Run): string {
+		const at = (d: Date) => d.toLocaleString('de-DE', { dateStyle: 'full', timeStyle: 'short' });
+		const newest = run.entries[0].date;
+		const oldest = run.entries.at(-1)!.date;
+
+		if (run.entries.length === 1) return at(newest);
+		return `${run.entries.length} Änderungen, ${at(oldest)} bis ${newest.toLocaleTimeString('de-DE', { timeStyle: 'short' })}`;
+	}
 
 	/// Dative, since it always follows "von": "von dir", "von Krösus".
 	const actor = (entry: Entry) =>
 		entry.user?.name === me ? 'dir' : (entry.user?.firstName ?? entry.user?.name ?? 'jemandem');
 
-	/// What the entry did, in one phrase. Naming the fields that moved beats "geändert" on
-	/// every single row. Capitalized because it opens the line, and the field names it is
-	/// built from are nouns anyway.
-	function action(entry: Entry): string {
-		if (!entry.oldState) return 'Angelegt';
+	/// Every change a run made after the expense existed, oldest first, which is the order they
+	/// were made in. A creation is left out: its diff is every field of a new expense against
+	/// nothing, which is the row itself written out longhand.
+	const changesOf = (run: Run) =>
+		run.entries
+			.toReversed()
+			.filter((e) => e.oldState)
+			.flatMap((e) => e.changes);
 
-		const fields = summarizeFields(changedFields(entry.changes));
+	/// What the run did, in one phrase. Naming the fields that moved beats "geändert" on every
+	/// single row. Capitalized because it opens the line, and the field names it is built from
+	/// are nouns anyway.
+	///
+	/// A run that begins with a creation is one expense arriving, corrections and all: what a
+	/// field was set to on the way to what it is now is a detail of that, not a second event.
+	function action(run: Run): string {
+		if (run.entries.some((e) => !e.oldState)) {
+			return run.entries.length > 1 ? 'Angelegt und geändert' : 'Angelegt';
+		}
+
+		const fields = summarizeFields(changedFields(changesOf(run)));
 		return fields ? `${fields} geändert` : 'Geändert';
 	}
 
@@ -400,8 +426,14 @@
 				A badge over a `border-s` is the whole component at this size.
 			-->
 			<ol class="relative ms-3.5 border-s border-gray-300 dark:border-gray-600">
-				{#each group.entries as entry (entry.id)}
-					{@const created = !entry.oldState}
+				{#each group.runs as run (run.key)}
+					<!-- The newest of a run is what the row is: the title, the amount and the chips
+					     are what the expense is now, and the older entries in it are how it got
+					     there. `created` covers the whole run -- a creation corrected twice is one
+					     expense arriving, and a pencil over it would say otherwise. -->
+					{@const entry = run.entries[0]}
+					{@const created = run.entries.some((e) => !e.oldState)}
+					{@const changes = changesOf(run)}
 					{@const amount = entry.newState ? stateAmount(entry.newState) : null}
 					<li class="relative py-2.5 ps-6">
 						<!-- centred on the rule by its own half-width, so the badge can change size
@@ -451,13 +483,10 @@
 								     The clock hangs on the name rather than sitting in the row: the day header
 								     already places the entry, so the exact minute is only worth asking for -->
 								<span>
-									{action(entry)} von
+									{action(run)} von
 									<span
 										class="underline decoration-gray-300 decoration-dotted dark:decoration-gray-600"
-										title={entry.date.toLocaleString('de-DE', {
-											dateStyle: 'full',
-											timeStyle: 'short'
-										})}>{actor(entry)}</span
+										title={when(run)}>{actor(entry)}</span
 									>
 								</span>
 								{#if entry.newState}
@@ -490,12 +519,15 @@
 								{#if entry.automatic}
 									<Badge color="gray" class="px-1.5 py-0">automatisch</Badge>
 								{/if}
-								{#if entry.changes.length > 0 && !created}
+								<!-- Not for a creation on its own: its changes are the expense itself. A
+								     creation that was then corrected has both, and the corrections are the
+								     part that is worth opening. -->
+								{#if changes.length > 0}
 									<button
 										class="ml-auto flex items-center gap-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-										onclick={() => toggleDiff(entry.id.toString())}
+										onclick={() => toggleDiff(run.key)}
 									>
-										{#if expandedDiffs.includes(entry.id.toString())}
+										{#if expandedDiffs.includes(run.key)}
 											<ChevronDownOutline class="h-3 w-3" />
 										{:else}
 											<ChevronRightOutline class="h-3 w-3" />
@@ -505,9 +537,9 @@
 								{/if}
 							</div>
 
-							{#if entry.changes.length > 0 && expandedDiffs.includes(entry.id.toString())}
+							{#if changes.length > 0 && expandedDiffs.includes(run.key)}
 								<ChangeList
-									changes={entry.changes}
+									{changes}
 									names={changeNames}
 									class="mt-2 rounded-md bg-gray-50 p-2 dark:bg-gray-800/60"
 								/>
