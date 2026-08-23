@@ -42,6 +42,11 @@ export const wealthState = $state({
 	/// at zero answers just as little, which is why `used` rather than `open` is the default:
 	/// what is holding money is the shorter and more useful list.
 	balanceAccounts: 'used',
+	/// Which date the *curve* is read on: `value` or `accrued`, the same two words the monthly
+	/// figures use. Its own field rather than the shared `axisState`, because only the Gesamt
+	/// split can answer on the accrual axis — a toggle in the page-wide bar that silently does
+	/// nothing in two of three splits is worse than one that appears when it applies.
+	axis: 'value',
 	/// Series hidden from the chart, by name, remembered so a tab switch does not un-hide them.
 	///
 	/// One list per split rather than one shared: the toggle drops names the chart no longer

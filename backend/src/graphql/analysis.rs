@@ -67,6 +67,14 @@ pub struct History {
     pub dates: Vec<DateTime<Utc>>,
     pub by_account: Vec<AccountSeries>,
     pub by_availability: Vec<AvailabilitySeries>,
+    /// Everything owned, read on the accrual axis instead: what had been paid for but not yet
+    /// used counts as wealth, and what had been used but not yet paid for is already gone.
+    ///
+    /// Only as a total. Per account it would be an amount no bank ever held, sitting beside
+    /// the recorded balances it is supposed to reconcile with — see `accrual_adjustment` in
+    /// the migrations. Outside every open accrual period it equals the sum of `byAccount`, so
+    /// the two curves are one line wherever nothing is in flight.
+    pub accrued_total: Vec<f64>,
 }
 
 /// What is left of an expense whose value is still being consumed at the requested date.
@@ -205,6 +213,14 @@ struct SimulatedRow {
 }
 
 #[derive(Debug, QueryableByName)]
+struct AdjustmentRow {
+    #[diesel(sql_type = BigInt)]
+    sample_idx: i64,
+    #[diesel(sql_type = Double)]
+    amount: f64,
+}
+
+#[derive(Debug, QueryableByName)]
 struct ExpenseCountRow {
     #[diesel(sql_type = diesel::sql_types::Uuid)]
     account_id: Uuid,
@@ -217,6 +233,13 @@ struct ExpenseCountRow {
 const SIMULATE: &str = r#"
 SELECT sample_idx, account_id, balance_id, amount
 FROM simulate_balances($1, $2::timestamptz[], $3::uuid)
+"#;
+
+/// What to add to the value-axis total at each sample to read it on the accrual axis instead;
+/// the arithmetic and the reasoning are in the migration that defines the function.
+const ACCRUAL_ADJUSTMENT: &str = r#"
+SELECT sample_idx, amount
+FROM accrual_adjustment($1, $2::timestamptz[])
 "#;
 
 /// Deliberately not part of `simulate_balances`: counting distinct expenses forces a sort of
@@ -743,6 +766,29 @@ async fn history_uncached(
     let dates = sample_dates(from, to, step_days)?;
     let rows = simulate(context, &dates, None).await?;
 
+    // Its own statement rather than a column on the simulation: the correction is not per
+    // account, and it reads the accrual periods where that one reads recorded balances. Scoped
+    // so the connection is back in the pool before the loader below asks for one of its own.
+    let adjustments: Vec<AdjustmentRow> = {
+        let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
+
+        diesel::sql_query(ACCRUAL_ADJUSTMENT)
+            .bind::<diesel::sql_types::Uuid, _>(user_id)
+            .bind::<Array<Timestamptz>, _>(dates.to_vec())
+            .load(conn)
+            .await?
+    };
+
+    let mut accrued_total = vec![0.0; dates.len()];
+    for row in &rows {
+        // WITH ORDINALITY counts from one
+        accrued_total[row.sample_idx as usize - 1] += row.amount;
+    }
+    for row in &adjustments {
+        accrued_total[row.sample_idx as usize - 1] += row.amount;
+    }
+
     let accounts = context
         .account_loader
         .load_many(rows.iter().map(|r| r.account_id).unique().collect())
@@ -782,6 +828,7 @@ async fn history_uncached(
     Ok(History {
         dates,
         by_account: series,
+        accrued_total,
         // liquid first, so a stack reads from the money you can spend today upwards
         by_availability: AccountAvailability::ORDERED
             .iter()

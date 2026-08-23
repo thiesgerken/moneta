@@ -45,10 +45,15 @@ Months are the grain on both axes. A range ending mid-month keeps that month who
 accrual side, where the value side would cut it off at the day.
 
 **`simulate_balances` and `analysis_statement` deliberately do not move**, and neither does
-anything drawn from them — Kontostände, Vermögen, Kontoauszug. An accrued share is a cost a
-month carried, not money sitting in an account, and the *Fehler* column reconciles totals
-against balances somebody recorded: there is nothing to reconcile a sixth of a payment against.
-Do not "finish the job" by putting a toggle on those.
+anything per account — Kontostände, the per-account and per-availability curves, Kontoauszug.
+An accrued share is a cost a month carried, not money sitting in an account, and the *Fehler*
+column reconciles totals against balances somebody recorded: there is nothing to reconcile a
+sixth of a payment against. Do not "finish the job" by putting a toggle on those.
+
+The **Gesamt** curve is the exception, and only because summing every account leaves no
+recorded reading to contradict. It is not a second simulation either: `accrual_adjustment`
+returns what to add to the value-date total at each sample, and the toggle picks which of the
+two the one series draws. See [Vermögen](#vermögen) below.
 
 ## Vermögen
 
@@ -60,6 +65,7 @@ type History {
   dates: [DateTime!]!
   byAccount: [AccountSeries!]!       # account + amounts, one per date
   byAvailability: [AvailabilitySeries!]!
+  accruedTotal: [Float!]!            # everything, on the accrual axis
 }
 ```
 
@@ -85,6 +91,34 @@ stops short of the right edge. The point count is **capped at 400 server-side** 
 `from`/`to`/`stepDays` are user input and a decade at `stepDays: 1` is ~3650 simulations.
 Exceeding the cap is an error rather than a coarser answer, because a series quietly returned
 at a resolution nobody asked for is indistinguishable from one that was.
+
+### The accrual axis, over everything
+
+`accruedTotal` is the same curve read on the accrual period instead of the value date, and it
+exists only as a total — the toggle appears in the **Gesamt** split and nowhere else. What it
+adds is one term per transaction:
+
+```
+amount * (consumed(t) - [date < t])
+```
+
+the difference between what the accrual axis says the transaction contributes at *t* and what
+the value axis says. A year paid in January is bought and not yet used, so the unconsumed part
+comes back as wealth and melts away over the year; a half-year billed in July was used before
+the money left, so it is gone before any account notices. Outside every open period the two
+terms agree, the correction is exactly zero, and the two curves are one line — which is what
+`tests/sql/accrual_wealth.sql` pins down, along with the convention that both sides change at
+the instant *after* the event and never on it. An expense consumed on the day it was paid
+cancels itself, and four transactions in five are that; they are dropped before the arithmetic
+rather than multiplied by every sample.
+
+`consumed` is the continuous form from [concepts.md](concepts.md#the-three-dates) — the one
+`prepayments` reports a remainder from — not the whole-day month weights of
+`analysis_movements`. This is sampled at instants, not bucketed into months.
+
+It rides along on every `history` call rather than sitting behind an argument of its own, so
+flipping the toggle costs no round trip and the memoized result stays one entry. On the real
+books it is ~55 ms on top of a ~275 ms simulation for a 120-point chart.
 
 ### Chart behaviour
 
@@ -249,8 +283,8 @@ is how a calendar ends up showing a rent payment on every day of the month.
 
 All of the resolvers live in `backend/src/graphql/analysis.rs`, with the arithmetic in SQL
 functions the migrations define so `tests/sql` can reach it: `analysis_movements`,
-`simulate_balances`, `analysis_statement`, `analysis_month_totals`, `analysis_category_totals`
-and `analysis_category_expenses`.
+`simulate_balances`, `accrual_adjustment`, `analysis_statement`, `analysis_month_totals`,
+`analysis_category_totals` and `analysis_category_expenses`.
 
 **Do the work in SQL, not by folding in Rust.** That advice was written for mongo, where the
 only alternative was an aggregation pipeline per sample date; postgres does the whole thing

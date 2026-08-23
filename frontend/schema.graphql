@@ -803,6 +803,16 @@ type History {
   dates: [DateTime!]!
   byAccount: [AccountSeries!]!
   byAvailability: [AvailabilitySeries!]!
+  """
+    Everything owned, read on the accrual axis instead: what had been paid for but not yet
+    used counts as wealth, and what had been used but not yet paid for is already gone.
+
+    Only as a total. Per account it would be an amount no bank ever held, sitting beside
+    the recorded balances it is supposed to reconcile with — see `accrual_adjustment` in
+    the migrations. Outside every open accrual period it equals the sum of `byAccount`, so
+    the two curves are one line wherever nothing is in flight.
+  """
+  accruedTotal: [Float!]!
 }
 
 """

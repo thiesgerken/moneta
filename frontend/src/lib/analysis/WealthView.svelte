@@ -20,7 +20,7 @@
 	import RangePicker from './RangePicker.svelte';
 	import SeriesToggle from './SeriesToggle.svelte';
 	import { AVAILABILITY_LABELS, availabilityColor } from './availability';
-	import { CUSTOM_SPAN, wealthState } from './state.svelte';
+	import { CUSTOM_SPAN, DATE_AXES, wealthState } from './state.svelte';
 	import { shortDate, todayIso } from './dates';
 	import { marketState, showMarket } from '$lib/investments.svelte';
 	import { priced } from '$lib/investments';
@@ -70,6 +70,7 @@
 						availability
 						amounts
 					}
+					accruedTotal
 				}
 			}
 		}
@@ -236,7 +237,10 @@
 			{
 				name: 'Gesamt',
 				color: WEALTH_COLOR,
-				amounts: dates.map((_, i) => loaded.byAccount.reduce((sum, s) => sum + s.amounts[i], 0))
+				amounts:
+					wealthState.axis === 'accrued'
+						? loaded.accruedTotal
+						: dates.map((_, i) => loaded.byAccount.reduce((sum, s) => sum + s.amounts[i], 0))
 			}
 		];
 	});
@@ -473,6 +477,12 @@
 					<SeriesToggle names={seriesNames} bind:hidden={wealthState.hiddenAccounts} />
 				{:else if wealthState.split === 'availability'}
 					<SeriesToggle names={seriesNames} bind:hidden={wealthState.hiddenAvailability} />
+				{/if}
+				<!-- Only over everything: a single account's curve has to reconcile with the
+				     balances somebody recorded for it, and a share of a payment is not something
+				     that account ever held. -->
+				{#if wealthState.split === 'total'}
+					<ToggleGroup bind:value={wealthState.axis} options={DATE_AXES} />
 				{/if}
 				<RangePicker bind:range={wealthState.range} />
 				<ToggleGroup

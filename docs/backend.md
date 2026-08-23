@@ -92,7 +92,7 @@ fixed ones, which is what keeps pre-2026 argonautica hashes working alongside ne
 ## Migrations and SQL
 
 Migrations are more than the schema: **the rendered views and every analysis function live in
-them**. `simulate_balances`, `analysis_movements`, `analysis_statement`,
+them**. `simulate_balances`, `accrual_adjustment`, `analysis_movements`, `analysis_statement`,
 `analysis_month_totals`, `analysis_category_totals` and `analysis_category_expenses` are
 PostgreSQL functions defined by their own migrations.
 

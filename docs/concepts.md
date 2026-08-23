@@ -118,10 +118,18 @@ starts. This is what [MoneyDB needed a clearing account for](moneydb.md).
 
 Most analysis views carry a **toggle** between the two axes (`axisState` in
 `frontend/src/lib/analysis/state.svelte.ts`). The value date and the accrual period give two
-defensible answers to "what did I spend in March", so the reader picks. Balances and anything
-derived from them stay on the value date and have no toggle — an accrued share is a cost a
-month carried, not money that sat in an account, and the statement's *Fehler* column has to
-reconcile against readings someone actually took.
+defensible answers to "what did I spend in March", so the reader picks. Balances stay on the
+value date and have no toggle — an accrued share is a cost a month carried, not money that sat
+in an account, and the statement's *Fehler* column has to reconcile against readings someone
+actually took.
+
+The wealth *total* is the one thing derived from balances that does carry the toggle, because
+over all accounts at once there is no recorded reading left to contradict. What it answers is
+a different question: not what the accounts held, but what you were worth counting what you
+had already paid for and not yet used, and what you had already used and not yet paid for. It
+is computed as a correction added onto the value-date curve rather than as a second simulation
+— `accrual_adjustment` in the migrations — so `simulate_balances` itself still knows only one
+date. Per account, and per availability, there is no toggle.
 
 ## Flags on an expense
 
