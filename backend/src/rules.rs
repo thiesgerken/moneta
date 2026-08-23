@@ -280,21 +280,30 @@ pub fn resolved_amount(expense: &Expense, t: &ExpenseTransaction) -> Option<i32>
 /// `reference_amount`, and left as a fraction it would silently become a share of the target's
 /// — a different amount of money, with nothing invalid about it to notice. Fixing the cents is
 /// the one thing that makes a merge unable to change what anything cost.
+/// Either all of the source lands or none of it does, so a caller that keeps going after an
+/// error is not left holding half an expense. The database transaction around the merge would
+/// roll back anyway; this is about the promise this function makes on its own.
 pub fn absorb(target: &mut Expense, source: &Expense) -> Result<(), String> {
-    for t in &source.transactions {
-        let amount = resolved_amount(source, t).ok_or_else(|| {
-            format!(
-                "Die Transaktion aus \"{}\" hat weder Betrag noch Anteil.",
-                source.title
-            )
-        })?;
+    let moved = source
+        .transactions
+        .iter()
+        .map(|t| {
+            let amount = resolved_amount(source, t).ok_or_else(|| {
+                format!(
+                    "Die Transaktion aus \"{}\" hat weder Betrag noch Anteil.",
+                    source.title
+                )
+            })?;
 
-        target.transactions.push(ExpenseTransaction {
-            amount: Some(amount),
-            fraction: None,
-            ..t.clone()
-        });
-    }
+            Ok(ExpenseTransaction {
+                amount: Some(amount),
+                fraction: None,
+                ..t.clone()
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    target.transactions.extend(moved);
 
     // Evidence of the same purchase, and the source row is about to be gone: there is no way
     // back for anything left behind. The categorizations are the exception -- two weighted sets
@@ -733,8 +742,10 @@ mod tests {
 
         let mut share = transaction(Uuid::now_v7(), None);
         share.fraction = Some(0.5);
-        // no reference amount to resolve the share against
-        let source = template(vec![share]);
+        // A good transaction ahead of the bad one, so the assertion below is about all-or-
+        // nothing rather than about the source happening to have only the one that fails.
+        // No reference amount to resolve the share against.
+        let source = template(vec![transaction(Uuid::now_v7(), Some(-250)), share]);
 
         assert!(absorb(&mut target, &source).is_err());
         // and nothing of it was left behind on the way out

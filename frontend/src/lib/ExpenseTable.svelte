@@ -727,12 +727,16 @@
 	let showResortExpenseModal = $state(false);
 	let actionError: string | undefined = $state(undefined);
 
-	/// What every one of these three does once the writing is over: drop the selection, since
-	/// the rows it named have been rewritten, removed or absorbed, and ask for the page again.
-	async function afterAction() {
+	/// What every one of these three does once the writing is over: ask for the page again, and
+	/// drop the selection, since the rows it named have been rewritten, removed or absorbed.
+	///
+	/// `keepSelection` is for the modal that stays open on an error. The rows it lists are what
+	/// it is still offering to act on, and clearing them under it leaves it asking about none
+	/// while its button does nothing.
+	async function afterAction(keepSelection = false) {
 		invalidate();
 		await expenseStore.fetch({ variables: expenseVariables(), ...AFTER_WRITE });
-		expandedRows = [];
+		if (!keepSelection) expandedRows = [];
 	}
 
 	/// One call per expense rather than a bulk mutation: each is independent, and a loop is
@@ -750,7 +754,7 @@
 			// than closing on a sentence nobody read.
 			if (result.errors?.length) {
 				actionError = `${expense.title}: ${result.errors.map((e) => e.message).join(' ')}`;
-				await afterAction();
+				await afterAction(true);
 				return;
 			}
 		}
@@ -759,9 +763,20 @@
 		await afterAction();
 	}
 
+	/// The errors are the reader's to see, not to swallow. A rule's template is referenced
+	/// `ON DELETE RESTRICT`, so deleting one fails in the database -- and the row coming back on
+	/// the next refetch is not an explanation.
 	async function handleDeleteExpense() {
+		if (selectedExpenses.length === 0) return;
+		actionError = undefined;
+
 		for (const expense of selectedExpenses) {
-			await DeleteExpense.mutate({ id: expense.id });
+			const result = await DeleteExpense.mutate({ id: expense.id });
+			if (result.errors?.length) {
+				actionError = `${expense.title}: ${result.errors.map((e) => e.message).join(' ')}`;
+				await afterAction(true);
+				return;
+			}
 		}
 
 		showDeleteExpenseModal = false;
@@ -774,23 +789,29 @@
 		if (!mergeTargetId || selectedExpenses.length < 2) return;
 		actionError = undefined;
 
+		const merged = mergeTargetId;
 		const result = await MergeExpenses.mutate({
-			into: mergeTargetId,
-			from: selectedExpenses.filter((e) => e.id !== mergeTargetId).map((e) => e.id)
+			into: merged,
+			from: selectedExpenses.filter((e) => e.id !== merged).map((e) => e.id)
 		});
 
 		if (result.errors?.length) {
 			actionError = result.errors.map((e) => e.message).join(' ');
+			await afterAction(true);
 			return;
 		}
 
 		showMergeExpenseModal = false;
+		mergeTargetId = undefined;
 		await afterAction();
 
 		// Straight into the form: the accrual period and the title are what a merge cannot
 		// decide, and this is the moment the reader still knows what they meant.
-		openEditModal(mergeTargetId);
-		mergeTargetId = undefined;
+		//
+		// Only if the refetched page still holds it. `ExpenseModal` with no expense is the form
+		// for creating one, and losing the sources shifts the pages -- so a target that has
+		// moved off this one would open a blank form that saves a second expense.
+		if (expenses.some((e) => e.id === merged)) openEditModal(merged);
 	}
 </script>
 
@@ -857,21 +878,24 @@
 
 <!-- Which expenses an action is about to touch, named rather than counted: "3 Ausgaben löschen"
      is not something anyone can check before pressing it. -->
-{#snippet selection(pick: ((id: string) => void) | null = null)}
+{#snippet selection(picker = false)}
 	<ul class="mb-5 space-y-1 text-left text-sm">
 		{#each selectedExpenses as expense (expense.id)}
 			{@const [start] = axisPeriod(expense)}
 			<li
-				class="flex items-baseline gap-2 rounded-md px-2 py-1 {pick && expense.id === mergeTargetId
+				class="flex items-baseline gap-2 rounded-md px-2 py-1 {picker &&
+				expense.id === mergeTargetId
 					? 'bg-primary-50 dark:bg-primary-900/40'
 					: ''}"
 			>
-				{#if pick}
+				{#if picker}
+					<!-- `bind:group` and nothing else: flowbite's Radio binds `group` to the input
+					     itself, and a `checked` handed in beside it is overwritten by that binding
+					     the moment it runs — the row would highlight while no radio filled in. -->
 					<Radio
 						name="merge-target"
 						value={expense.id}
-						checked={expense.id === mergeTargetId}
-						onchange={() => pick(expense.id)}
+						bind:group={mergeTargetId}
 						class="shrink-0"
 					/>
 				{/if}
@@ -928,7 +952,7 @@
 		<h3 class="mb-3 text-lg font-normal text-gray-500 dark:text-gray-400">
 			Welche Ausgabe soll die anderen aufnehmen?
 		</h3>
-		{@render selection((id) => (mergeTargetId = id))}
+		{@render selection(true)}
 		<p class="mb-5 text-sm text-gray-500 dark:text-gray-400">
 			Die Transaktionen, Belege und Positionen der übrigen {selectedExpenses.length - 1}
 			{selectedExpenses.length === 2 ? 'Ausgabe wandert' : 'Ausgaben wandern'} in die gewählte, und danach
@@ -967,6 +991,11 @@
 				: `Sollen diese ${selectedExpenses.length} Ausgaben wirklich gelöscht werden?`}
 		</h3>
 		{@render selection()}
+		{#if actionError}
+			<!-- A rule's template cannot be deleted, and the row simply reappearing on the next
+			     refetch is not an explanation. The ones before it in the list are already gone. -->
+			<p class="mb-5 text-sm text-red-600 dark:text-red-400">{actionError}</p>
+		{/if}
 		<div class="space-x-2">
 			<Button type="submit" value="delete" color="red" onclick={handleDeleteExpense}>Löschen</Button
 			>
@@ -974,7 +1003,10 @@
 				type="submit"
 				value="cancel"
 				color="alternative"
-				onclick={() => (showDeleteExpenseModal = false)}
+				onclick={() => {
+					showDeleteExpenseModal = false;
+					actionError = undefined;
+				}}
 			>
 				Abbrechen
 			</Button>
@@ -1075,7 +1107,10 @@
 							color="red"
 							class={toolbarControl}
 							disabled={selectedExpenses.length === 0}
-							onclick={() => (showDeleteExpenseModal = true)}
+							onclick={() => {
+								actionError = undefined;
+								showDeleteExpenseModal = true;
+							}}
 						>
 							<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
 						</ActionButton>
@@ -1698,6 +1733,7 @@
 										color="red"
 										onclick={() => {
 											expandedRows = [expense.id.toString()];
+											actionError = undefined;
 											showDeleteExpenseModal = true;
 										}}
 									>
