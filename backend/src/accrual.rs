@@ -287,6 +287,26 @@ impl Shape {
     }
 }
 
+/// Where a period ends that starts at `start` and is as long as `from`..`to`.
+///
+/// A template spanning whole months keeps whole months rather than a count of days: a monthly
+/// rule written as `01.01.-31.01.` covers February to the 28th, not to the 2nd of March. Only
+/// a length that is not whole months moves rigidly, which is what a template booked across a
+/// handful of days wants.
+pub fn shifted_end(
+    from: DateTime<Utc>,
+    to: DateTime<Utc>,
+    start: DateTime<Utc>,
+) -> Option<DateTime<Utc>> {
+    let months = match Shape::of(from, to, from).length {
+        Length::Months(k) => k,
+        Length::Days(_) => return Some(to + (start - from)),
+    };
+
+    let end = on(start).checked_add_months(Months::new(months))? - chrono::Duration::days(1);
+    day(end.year(), end.month(), end.day())
+}
+
 /// Midday, so that nothing about a date depends on which side of midnight a timezone falls.
 fn day(year: i32, month: u32, day: u32) -> Option<DateTime<Utc>> {
     Utc.with_ymd_and_hms(year, month, day, 12, 0, 0).single()

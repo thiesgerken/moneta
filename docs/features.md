@@ -126,6 +126,12 @@ long it lay dormant. `titleReplacement` substitutes `%d`/`%m`/`%y`. The amount i
 template's own: nothing else supplies one, and a rent that goes up is written where the rest
 of the expense is written.
 
+The accrual period is measured, not shifted. A template spanning whole months spans whole
+months wherever it lands, so a rule written as `01.01.–31.01.` covers February to the 28th
+rather than to a fixed number of days into March; anything else keeps its span of days, which
+is what a template booked across a handful of days wants. The booking itself does shift
+rigidly, so a settlement booked on the 28th stays on the 28th.
+
 Generation runs from `moneta periodic --run`, the `periodicRules.run` mutation, or the button
 on the page. In production it is a scheduled job (a k8s CronJob); the compose stack runs the
 same command from a `periodic` sidecar so both paths stay identical. Deliberately **not** an

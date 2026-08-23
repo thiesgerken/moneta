@@ -53,8 +53,11 @@ pub fn occurrences(
 
 /// Builds the expense a rule produces for one occurrence.
 ///
-/// The whole booking window and every transaction date shift by the same delta, so a
-/// template spanning several days keeps its shape.
+/// Every transaction date shifts by the same delta, so a template booked across several days
+/// keeps its shape. The accrual period does not shift that way but is measured the way
+/// [`impose`] measures one: a template spanning whole months spans whole months wherever it
+/// lands, so a monthly rule covers each month to its own last day rather than a fixed count
+/// of days into the next.
 pub fn instantiate(rule: &PeriodicRule, template: &Expense, at: DateTime<Utc>) -> Expense {
     let shift = at - template.accrual_start;
 
@@ -62,7 +65,8 @@ pub fn instantiate(rule: &PeriodicRule, template: &Expense, at: DateTime<Utc>) -
     e.id = Uuid::now_v7();
     e.is_template = false;
     e.accrual_start = at;
-    e.accrual_end = template.accrual_end + shift;
+    e.accrual_end = accrual::shifted_end(template.accrual_start, template.accrual_end, at)
+        .unwrap_or(template.accrual_end + shift);
     e.created_at = at;
     e.updated_at = at;
 
@@ -750,6 +754,40 @@ mod tests {
         assert_eq!(e.accrual_start, at(2025, 4, 15));
         assert_eq!(e.accrual_end, at(2025, 4, 18));
         assert_eq!(e.transactions[0].date, at(2025, 4, 15));
+    }
+
+    /// a template written as a whole calendar month covers each month to its own last day,
+    /// however many days that month has
+    #[test]
+    fn a_monthly_template_keeps_whole_months() {
+        let rule = periodic(PeriodicInterval::Monthly, at(2025, 12, 1));
+        let mut tpl = template(vec![transaction(Uuid::now_v7(), Some(-60000))]);
+        tpl.accrual_start = at(2025, 1, 1);
+        tpl.accrual_end = at(2025, 1, 31);
+
+        for (start, end) in [
+            (at(2026, 2, 1), at(2026, 2, 28)),
+            (at(2026, 4, 1), at(2026, 4, 30)),
+            (at(2026, 7, 1), at(2026, 7, 31)),
+        ] {
+            let e = instantiate(&rule, &tpl, start);
+            assert_eq!(e.accrual_start, start);
+            assert_eq!(e.accrual_end, end);
+        }
+    }
+
+    /// the booking keeps its distance from the start of the period rather than following the
+    /// month's length, so a settlement booked on the 28th stays on the 28th
+    #[test]
+    fn a_monthly_template_carries_its_booking_day_along() {
+        let rule = periodic(PeriodicInterval::Monthly, at(2025, 12, 1));
+        let mut tpl = template(vec![transaction(Uuid::now_v7(), Some(-60000))]);
+        tpl.accrual_start = at(2025, 1, 1);
+        tpl.accrual_end = at(2025, 1, 31);
+        tpl.transactions[0].date = at(2025, 1, 28);
+
+        let e = instantiate(&rule, &tpl, at(2026, 4, 1));
+        assert_eq!(e.transactions[0].date, at(2026, 4, 28));
     }
 
     #[test]
