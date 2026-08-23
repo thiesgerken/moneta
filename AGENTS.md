@@ -132,6 +132,11 @@ whole months. `accrual::on` converts to `accrual::ZONE` before anything reads a 
 `accrual::day` builds every grid point at midday UTC, which is the same date in either frame.
 Keep that split — reading names the zone, writing does not need to.
 
+**The date axis stops where it stops.** Balances, the statement and every per-account series
+stay on the value date on purpose, and the Gesamt wealth curve is the one exception — see
+[docs/analysis-dashboard.md](docs/analysis-dashboard.md#the-date-axis) before extending the
+toggle anywhere.
+
 **Money is integer cents.** `amount: i32` everywhere upstream. Only fraction-derived values
 (`calculatedAmount`, `effectiveAmount`) are `f64`. Do not introduce floats into stored
 amounts.
