@@ -12,10 +12,13 @@
 -- `jit_optimize_above_cost`. LLVM then spent over a second optimising a query that runs in
 -- 120 ms. Cutting the input cuts the estimate with it.
 --
--- The predicate is written on `date_trunc` rather than on the raw dates because that is
--- exactly when the `generate_series` above is non-empty, for any range. Comparing the raw
--- dates would be equivalent only for ranges that are whole months, which is all `month_starts`
--- ever passes but not a promise the function itself makes.
+-- The bounds are the `generate_series`' own, so the filter admits a row exactly when that
+-- series has a month to give it -- for any range, not only for the whole-month ones
+-- `month_starts` passes. They are compared against the raw columns rather than against
+-- `date_trunc` of them: both sides are month boundaries, so the two read the same rows, but
+-- only this form can range-scan `expenses_accrual_period_idx` and estimate from the column's
+-- statistics instead of the planner's default guess for an inequality. Wrapping the column
+-- would trade one bad estimate for a smaller one, which is not what this migration is for.
 CREATE OR REPLACE FUNCTION analysis_movements(
     p_user_id uuid,
     p_from timestamptz,
@@ -80,6 +83,6 @@ AS $$
       AND a.user_id = p_user_id
       AND t.calculated_amount <> 0
       AND NOT e.is_template
-      AND date_trunc('month', e.accrual_end) >= date_trunc('month', p_from)
-      AND date_trunc('month', e.accrual_start) <= date_trunc('month', p_to - interval '1 microsecond')
+      AND e.accrual_end >= date_trunc('month', p_from)
+      AND e.accrual_start < date_trunc('month', p_to - interval '1 microsecond') + interval '1 month'
 $$;
