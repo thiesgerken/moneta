@@ -4,9 +4,8 @@
 /// own `$state` is gone by the time you come back — you would land on the default range again
 /// every time. Module-level runes outlive the components that read them.
 ///
-/// Each view keeps its own range on purpose. `Monate` and `Kategorien` share one query store,
-/// which only works because a single tab is mounted at a time; giving them one shared range
-/// as well would mean changing the period in one silently changed the other.
+/// Each view keeps its own range on purpose: a range is which window you are looking at, and
+/// two views looking at different windows is the normal case rather than a bug.
 
 import { daysAgoIso, startOfMonth, todayIso } from './dates';
 
@@ -57,28 +56,34 @@ export const wealthState = $state({
 	accountsSeeded: false
 });
 
-/// Which date the monthly and category figures are filed under: `value` for the day the money
-/// moved, `accrued` for the period the cost was for, spread evenly over its days.
+/// Which date the figures are filed under: `value` for the day the money moved, `accrued` for
+/// the period the cost was for, spread evenly over its days.
 ///
-/// Shared between Monate and Kategorien rather than kept per tab, unlike their ranges. A range
-/// is which window you are looking at; this is what the numbers in it mean, and one figure
-/// meaning two different things on two tabs of the same page is the confusion it exists to
-/// remove.
+/// Its own state rather than a field of the view that shows it, unlike the range: a range is
+/// which window you are looking at, this is what the numbers in it mean, and one figure meaning
+/// two different things in two places on the same page is the confusion it exists to remove.
 export const axisState = $state({ axis: 'value' });
 
 export const accrued = () => axisState.axis === 'accrued';
 
-/// The two axes as the toggle above Monate and Kategorien names them, in one place so both
-/// tabs offer the same words for the same thing.
+/// The two axes as the toggle above Verlauf and the month pages names them, in one place so
+/// both offer the same words for the same thing.
 export const DATE_AXES = [
 	{ value: 'value', label: 'Wertstellung' },
 	{ value: 'accrued', label: 'Leistungszeitraum' }
 ];
 
-export const overviewsState = $state({ range: range('1y') });
-
-export const categoriesState = $state({
+/// Verlauf: the months of a range, as totals or broken into categories.
+///
+/// One state for what were two tabs drawing the same bars off the same query, one stacked by
+/// side and one by category. They kept a range each, which had to be set twice to ask the same
+/// question twice -- there is one range now because there is one view.
+export const historyState = $state({
 	range: range('1y'),
+	/// `total` stacks income against expenses; `categories` stacks one of them by category
+	breakdown: 'total',
+	/// which side the categories are of, and which the treemap shows. Only read while the
+	/// breakdown is by category: the totals chart draws both sides at once.
 	sign: 'expenses',
 	hiddenSeries: [] as string[]
 });

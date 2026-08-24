@@ -6,15 +6,13 @@
 		ObjectsColumnOutline,
 		ClockArrowOutline,
 		FileLinesOutline,
-		HourglassOutline,
-		TagOutline
+		HourglassOutline
 	} from 'flowbite-svelte-icons';
 	import { page } from '$app/state';
 	import { replaceState } from '$app/navigation';
 	import ExpenseChangelog from '$lib/ExpenseChangelog.svelte';
 	import WealthView from '$lib/analysis/WealthView.svelte';
-	import OverviewsView from '$lib/analysis/OverviewsView.svelte';
-	import CategoriesView from '$lib/analysis/CategoriesView.svelte';
+	import HistoryView from '$lib/analysis/HistoryView.svelte';
 	import CalendarView from '$lib/analysis/CalendarView.svelte';
 	import PrepaymentsView from '$lib/analysis/PrepaymentsView.svelte';
 	import StatementView from '$lib/analysis/StatementView.svelte';
@@ -23,8 +21,7 @@
 	/// like the rest of the code; only `title` is what a reader sees.
 	const TABS = [
 		{ slug: 'wealth', title: 'Vermögen', icon: ChartLineUpOutline },
-		{ slug: 'months', title: 'Monate', icon: ObjectsColumnOutline },
-		{ slug: 'categories', title: 'Kategorien', icon: TagOutline },
+		{ slug: 'history', title: 'Verlauf', icon: ObjectsColumnOutline },
 		{ slug: 'prepayments', title: 'Vorauszahlungen', icon: HourglassOutline },
 		{ slug: 'statement', title: 'Kontoauszug', icon: FileLinesOutline },
 		{ slug: 'calendar', title: 'Kalender', icon: CalendarMonthOutline },
@@ -51,8 +48,8 @@
 </script>
 
 <div class="space-y-4 px-4 sm:px-8">
-	<!-- Seven tabs do not fit a phone, and without a scroller of their own they widen the page
-	     instead: the last four were only reachable by dragging the whole layout sideways. -->
+	<!-- Six tabs do not fit a phone, and without a scroller of their own they widen the page
+	     instead: the last three were only reachable by dragging the whole layout sideways. -->
 	<Tabs
 		tabStyle="underline"
 		class="flex-nowrap overflow-x-auto whitespace-nowrap"
@@ -66,10 +63,8 @@
 				{/snippet}
 				{#if tab.slug === 'wealth'}
 					<WealthView />
-				{:else if tab.slug === 'months'}
-					<OverviewsView />
-				{:else if tab.slug === 'categories'}
-					<CategoriesView />
+				{:else if tab.slug === 'history'}
+					<HistoryView />
 				{:else if tab.slug === 'prepayments'}
 					<PrepaymentsView />
 				{:else if tab.slug === 'statement'}
