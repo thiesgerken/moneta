@@ -36,7 +36,7 @@
 	import { DATE_AXES, accrued, axisState, historyState } from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
 	import { isoDate } from './dates';
-	import QueryError from './../QueryError.svelte';
+	import QueryError from '$lib/QueryError.svelte';
 	import { euro, signedEuro } from '$lib/money';
 
 	// Kept here rather than read off the store so the chart never sees an empty intermediate
