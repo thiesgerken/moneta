@@ -387,7 +387,7 @@ data is therefore client-side only; there is no SSR of query results.
 - CORS is `AllowedOrigins::all()` with `allow_credentials(true)` in `graphql/mod.rs`, and
   `docker-compose.yaml` carries a committed `MONETA__API__SECRET_KEY`. Both are known and
   accepted for now — the deployment is private infrastructure.
-- The value-date/accrual-period toggle is done and this is where it stops. Monate, Kategorien,
+- The value-date/accrual-period toggle is done and this is where it stops. Verlauf,
   the calendar and the dashboard donut share one `axisState`; the expense list picks one of the
   three dates for its column, sort and period filter. `simulate_balances`, `analysis_statement`
   and everything drawn from them — Kontostände, Vermögen, Kontoauszug — stay on the value date

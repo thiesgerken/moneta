@@ -5,16 +5,15 @@ covers what each shows, the queries behind them, and the decisions that shaped b
 
 ## The tabs
 
-MoneyDB had seven. Six survive the port, because two of them were different views of the same
-numbers. A seventh, **Aktivität**, is not from MoneyDB at all — it is the expense changelog,
+MoneyDB had seven. Five survive the port, because four of them were different views of the same
+numbers. A sixth, **Aktivität**, is not from MoneyDB at all — it is the expense changelog,
 which used to be the whole dashboard and now sits here, last, while the start page carries the
 part of the feed worth arriving at.
 
 | Tab | MoneyDB origin | Shows |
 | --- | --- | --- |
 | **Vermögen** | `computed_balances` + `history` | net worth over time (total, per account, or per availability), availability totals, per-account computed balances |
-| **Monate** | `monthly_overviews` | income/expenses bar chart and a table per month, each row linking to its own page |
-| **Kategorien** | `categories` + `sunburst` | stacked bars per category per month, and a treemap of the whole period; toggle between expenses and income |
+| **Verlauf** | `monthly_overviews` + `categories` + `sunburst` | bars per month — income against expenses, or one of the two split by category — a table per month with each row linking to its own page, and a treemap of the whole period |
 | **Kontoauszug** | `statements` | one account's ledger over a range: opening balance, expenses and recorded balances interleaved, running total, CSV export |
 | **Kalender** | `calendar` | month grid, expenses per day with a daily sum |
 | **Vorauszahlungen** | `prepayments` | what is still unconsumed at a chosen date, plus the separate list of incomplete expenses |
@@ -25,11 +24,14 @@ Merged away:
 - **history** into **Vermögen** — the line chart and the balance table are the same simulation,
   once sampled over a range and once at a single date. Splitting them meant picking a date
   twice.
-- **sunburst** into **Kategorien** — it was already a component of that tab, not a tab itself.
+- **sunburst** into **Verlauf** — it was already a component of a tab, not a tab itself.
+- **categories** into **Verlauf** — its bars were the Monate bars stacked by category instead
+  of by side: same query, same x axis, same drilldown. A toggle says which, and the two tabs
+  stop keeping a range each that had to be set twice to ask one question.
 
 ## The date axis
 
-**Monate**, **Kategorien**, the calendar and the start page's donut share one toggle
+**Verlauf**, the calendar and the start page's donut share one toggle
 (`axisState` in `src/lib/analysis/state.svelte.ts`) between the **value date** — when the money
 moved — and the **accrual period** — when the cost was incurred. The expense list picks one of
 the three dates for its column, its sort and its period filter.
@@ -144,9 +146,9 @@ Faint dashed verticals mark month starts, falling back to year starts beyond ~18
 stay subtle rather than becoming a second grid. Tooltips carry their own formatter — by default
 apex reuses the axis one, which rounds to `40k €`.
 
-## Monate and Kategorien
+## Verlauf
 
-Both read `analysis.overviews(from, to)`.
+Reads `analysis.overviews(from, to)`.
 
 ```graphql
 type Overviews {
@@ -164,10 +166,14 @@ the balances, and those are account balances rather than ownership-weighted shar
 Mixing the two would make the integration error meaningless. It also means a half-owned account
 contributes its whole movement here, which is the convention **Vermögen** already uses.
 
-Per-month category totals live on `MonthOverview` and feed the stacked bars, so **Kategorien
-needs no endpoint of its own** — it is a second reading of this one. Its treemap comes from
-`byCategory`, which is the whole range at once rather than a sum of the months: the biggest
-expenses of a year are not the biggest of each of its months.
+Per-month category totals live on `MonthOverview` and feed the stacked bars, so **the category
+breakdown needs no endpoint of its own** — it is a second reading of this one, which is why it
+is a toggle rather than a tab. Its treemap comes from `byCategory`, which is the whole range at
+once rather than a sum of the months: the biggest expenses of a year are not the biggest of
+each of its months.
+
+The table is the same table under either breakdown. A balance and an integration error are
+facts about a month; a category has neither, so there is nothing to split there.
 
 An expense split across categories contributes its weighted share to each, and one with no
 categorization at all comes back under a null category. Dropping those would make the parts add
@@ -218,7 +224,7 @@ distinguish it:
 - **Recorded balances re-anchor the running total.** Where one disagrees with the total carried
   into it, the ledger jumps, and that jump is the signal that an expense is missing. It is
   surfaced explicitly as `drift` rather than being allowed to pass silently — the same idea as
-  the Integrationsfehler in **Monate**.
+  the Integrationsfehler in **Verlauf**.
 - The amount shown is the **account's own share**, not the expense total. Moneta gets this for
   free where MoneyDB did not: rendering already flattens sharing into per-account transactions,
   so the figure is just the sum of `calculatedAmount` over transactions naming the account.

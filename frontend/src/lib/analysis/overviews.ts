@@ -2,8 +2,8 @@ import { graphql, type AnalysisOverviews$result } from '$houdini';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 
-/// The Monate and Kategorien tabs are two readings of the same query, so they share it: the
-/// bars come from the monthly totals and the treemap from the whole-period breakdown.
+/// Everything Verlauf draws, in one query: the bars and the table come from the monthly
+/// totals, and the treemap from the whole-period breakdown.
 export const overviewsStore = graphql(`
 	query AnalysisOverviews($from: DateTime!, $to: DateTime!, $accrued: Boolean) {
 		analysis {
