@@ -42,6 +42,21 @@ export const periodLabel = (d: Date, granularity: Granularity) =>
 /// the first and last always survive.
 export const periodTicks = (count: number) => Math.min(count, 12);
 
+/// The value cell apex writes for a sunburst slice: a bare number, then the two percentages.
+///
+/// It is a bare number because apexcharts 6.10.0 interpolates `e.value` into the markup there
+/// -- see `_showTooltip` -- where the treemap's branch calls `_formatValue` and honours
+/// `tooltip.y.formatter`. A sum of euros arrives as `1234.5600000000001`.
+const RAW_SUNBURST_VALUE = /^(-?\d+(?:\.\d+)?)( \(.*)$/;
+
+/// That cell rewritten as money, or null where there is nothing to rewrite -- which is both
+/// "this is some other tooltip" and "this one has been done already", and is what keeps a
+/// rewrite from setting off another.
+export function asMoney(text: string, money: (cents: number) => string): string | null {
+	const found = RAW_SUNBURST_VALUE.exec(text.trim());
+	return found ? `${money(Number(found[1]) * 100)}${found[2]}` : null;
+}
+
 /// A colour for a category that has none set, and for the "no category" bucket. Derived from
 /// the name so it at least stays the same between renders.
 export function categoryColor(category: { name: string; color?: string | null } | null): string {

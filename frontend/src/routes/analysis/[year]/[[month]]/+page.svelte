@@ -15,7 +15,8 @@
 		ChevronLeftOutline,
 		ChevronRightOutline,
 		ArrowLeftOutline,
-		ArrowUpRightFromSquareOutline
+		ArrowUpRightFromSquareOutline,
+		ChevronDownOutline
 	} from 'flowbite-svelte-icons';
 	import type { ApexOptions } from 'apexcharts';
 	import { page } from '$app/state';
@@ -27,7 +28,13 @@
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
 	import ExpenseDetailModal from '$lib/ExpenseDetailModal.svelte';
 	import { invalidate, AFTER_WRITE } from '$lib/invalidate';
-	import { integrationError, errorClass, deltaColor, categoryColor } from '$lib/analysis/format';
+	import {
+		integrationError,
+		errorClass,
+		deltaColor,
+		categoryColor,
+		asMoney
+	} from '$lib/analysis/format';
 	import { DATE_AXES, accrued, axisState } from '$lib/analysis/state.svelte';
 	import { accrualShare, isoDate } from '$lib/analysis/dates';
 	import QueryError from '$lib/QueryError.svelte';
@@ -504,11 +511,47 @@
 	/// One per sign, drawn side by side rather than behind a toggle -- a ring is a share of a
 	/// whole, and the two wholes are different questions. The treemap keeps the toggle, where
 	/// two signs of area in one picture would mean nothing.
+	/// Money in the sunburst's tooltip, where apex writes a bare number -- see `asMoney`.
+	///
+	/// ponytail: one observer over the element apex writes into, rather than a fork of the
+	/// chart library. Once apex formats it there itself the pattern stops matching and this
+	/// quietly does nothing.
+	const formatTooltip = (root: HTMLElement) => {
+		const tooltip = root.querySelector('.apexcharts-tooltip');
+		// only once per chart, however many times apex says it has been mounted or updated
+		if (!tooltip || tooltip.hasAttribute('data-money')) return;
+		tooltip.setAttribute('data-money', '');
+
+		const rewrite = () => {
+			for (const cell of tooltip.querySelectorAll('.apexcharts-tooltip-text-y-value')) {
+				const money = asMoney(cell.textContent ?? '', euro);
+				// the null is what makes this converge: the second pass finds nothing to do
+				if (money !== null) cell.textContent = money;
+			}
+		};
+
+		new MutationObserver(rewrite).observe(tooltip, {
+			childList: true,
+			subtree: true,
+			characterData: true
+		});
+	};
+
 	const sunburstFor = (which: 'expenses' | 'income') => {
 		const tree = treeFor(which);
 
 		return {
-			chart: { type: 'sunburst', height: compact ? 320 : 420 },
+			chart: {
+				type: 'sunburst',
+				height: compact ? 320 : 420,
+				// `el` is on the instance and not in apex's own types for it
+				events: {
+					mounted: (chart: ApexCharts) =>
+						formatTooltip((chart as unknown as { el: HTMLElement }).el),
+					updated: (chart: ApexCharts) =>
+						formatTooltip((chart as unknown as { el: HTMLElement }).el)
+				}
+			},
 			// One series carrying the whole tree, unlike the treemap next door: the sunburst
 			// reads `series[0].data` and nothing else, so a series per category drew the first
 			// category's expenses as the only ring and dropped the rest of the month.
@@ -647,17 +690,23 @@
 				<ChevronLeftOutline class="h-4 w-4" />
 			</Button>
 			<h2 class="text-xl font-semibold">
-				<label>
+				<!-- `appearance-none` and a chevron of our own: the native indicator is drawn
+				     inside the control's own box, and over a label as short as a year it landed
+				     on the last digit. Ours has the padding to itself. -->
+				<label class="relative block">
 					<span class="sr-only">{byYear ? 'Jahr' : 'Monat'}</span>
 					<select
 						value={picked}
 						onchange={(e) => pick((e.target as HTMLSelectElement).value)}
-						class="focus:border-primary-500 cursor-pointer rounded-lg border border-transparent bg-transparent px-2 py-1 text-xl font-semibold hover:border-gray-300 focus:ring-0 dark:hover:border-gray-600"
+						class="focus:border-primary-500 cursor-pointer appearance-none rounded-lg border border-transparent bg-transparent py-1 ps-2 pe-8 text-xl font-semibold hover:border-gray-300 focus:ring-0 dark:hover:border-gray-600"
 					>
 						{#each choices as choice (choice.value)}
 							<option value={choice.value}>{choice.label}</option>
 						{/each}
 					</select>
+					<ChevronDownOutline
+						class="pointer-events-none absolute end-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+					/>
 				</label>
 			</h2>
 			<Button color="alternative" size="sm" onclick={() => shift(1)}>

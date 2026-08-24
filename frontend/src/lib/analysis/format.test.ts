@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	asMoney,
 	categoryColor,
 	deltaColor,
 	errorClass,
@@ -145,5 +146,37 @@ describe('categoryColor', () => {
 	// an empty name still has to produce something drawable rather than undefined
 	it('answers for a category with no name', () => {
 		expect(categoryColor({ name: '' })).toMatch(/^#[0-9a-f]{6}$/);
+	});
+});
+
+describe('asMoney', () => {
+	const money = (cents: number) => `${(cents / 100).toFixed(2)} EUR`;
+
+	it('rewrites the bare number apex leaves in a sunburst tooltip', () => {
+		expect(asMoney('1234.5600000000001 (28.2% of parent, 28.2% of total)', money)).toBe(
+			'1234.56 EUR (28.2% of parent, 28.2% of total)'
+		);
+	});
+
+	it('keeps what follows the number exactly as it was', () => {
+		expect(asMoney('5 (100.0% of parent, 3.0% of total)', money)).toBe(
+			'5.00 EUR (100.0% of parent, 3.0% of total)'
+		);
+	});
+
+	it('reads a negative the same way', () => {
+		expect(asMoney('-42.5 (1.0% of parent, 1.0% of total)', money)).toBe(
+			'-42.50 EUR (1.0% of parent, 1.0% of total)'
+		);
+	});
+
+	// which is what stops a rewrite from setting off the next one
+	it('has nothing to say about a cell that is already money', () => {
+		expect(asMoney('1234.56 EUR (28.2% of parent, 28.2% of total)', money)).toBeNull();
+	});
+
+	it("or about some other chart's tooltip", () => {
+		expect(asMoney('1.412,90 €', money)).toBeNull();
+		expect(asMoney('', money)).toBeNull();
 	});
 });
