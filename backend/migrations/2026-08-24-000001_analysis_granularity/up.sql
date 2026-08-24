@@ -10,7 +10,15 @@
 -- length of the window a period's share is measured against. `p_grain` is the argument to
 -- `date_trunc`, so it is the same word in all three places.
 --
--- It defaults to 'month', which is what every existing caller and the SQL tests pass.
+-- It defaults to 'month', which is what the SQL tests pass where they are not about the grain.
+--
+-- `analysis_category_expenses` is deliberately not recreated and so keeps calling
+-- `analysis_movements` with four arguments, taking that default. It groups the periods away
+-- before it does anything else, so the grain cannot reach its answer -- but only because
+-- `period_starts` snaps the range to whole periods first. On a range that stopped mid-year,
+-- 'year' would pull in a whole year of an accrual period's weight where 'month' pulls in the
+-- months inside the window, and the treemap would stop agreeing with the bars above it.
+-- Anyone changing that snapping has to give this function the grain as well.
 
 DROP FUNCTION analysis_movements(uuid, timestamptz, timestamptz, boolean);
 

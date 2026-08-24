@@ -10,6 +10,12 @@ set -eu
 PGURL="${PGURL:-postgres://moneta:moneta@localhost:5433/moneta}"
 cd "$(dirname "$0")/.."
 
+# The backend sets this on every pooled connection (see `lib.rs`), and the analysis functions
+# depend on it: `date_trunc` buckets in the session's zone while `period_starts` builds UTC
+# midnights for Rust to match them against. psql takes the server default instead, so without
+# this the tests pass or fail on how the server happens to be configured.
+export PGTZ=UTC
+
 for migration in migrations/*/up.sql; do
     echo "== applying $migration"
     psql -v ON_ERROR_STOP=1 -q "$PGURL" -f "$migration"

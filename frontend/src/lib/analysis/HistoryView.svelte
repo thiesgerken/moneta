@@ -97,12 +97,18 @@
 	/// A year opens into its own months rather than jumping to a month page: the bar stands for
 	/// twelve of them and there is no one month it means. The range picker follows, so what
 	/// happened is visible in the control that did it.
+	///
+	/// Local midnights, because that is what the picker's own date fields read back: they
+	/// render through `isoDate`, which is local so that nobody is shown the day before the one
+	/// they typed. A `Date.UTC` here would put 31.12. in the field for anyone west of UTC.
 	const intoYear = (start: Date) => {
+		// the backend dates a period at midnight UTC; reading it locally can land in the year
+		// before
 		const year = start.getUTCFullYear();
 		historyState.range = {
 			span: CUSTOM_SPAN,
-			from: Date.UTC(year, 0, 1),
-			to: Date.UTC(year, 11, 31)
+			from: new Date(year, 0, 1).getTime(),
+			to: new Date(year, 11, 31).getTime()
 		};
 		historyState.granularity = 'MONTH';
 		// the range is twelve months now, so the rule above would land on MONTH as well --

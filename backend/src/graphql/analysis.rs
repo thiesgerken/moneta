@@ -897,7 +897,8 @@ async fn history_uncached(
 ///
 /// These are also the boundaries the SQL is told to assume: `analysis_movements` files an
 /// accrued cost into whole periods, so a range that ended mid-period would have its last one
-/// counted whole on one axis and cut off at the day on the other.
+/// counted whole on one axis and cut off at the day on the other. `analysis_category_expenses`
+/// leans on the same snapping to stay grain-free -- see the migration.
 fn period_starts(
     from: DateTime<Utc>,
     to: DateTime<Utc>,
@@ -1077,6 +1078,101 @@ mod tests {
 
     fn t(s: &str) -> DateTime<Utc> {
         DateTime::parse_from_rfc3339(s).unwrap().into()
+    }
+
+    /// A range inside one month is that month, and the boundary after it.
+    #[test]
+    fn a_month_range_is_two_boundaries() {
+        let starts = period_starts(
+            t("2026-03-14T09:00:00Z"),
+            t("2026-03-20T09:00:00Z"),
+            Granularity::Month,
+        )
+        .unwrap();
+
+        assert_eq!(
+            starts,
+            vec![t("2026-03-01T00:00:00Z"), t("2026-04-01T00:00:00Z")]
+        );
+    }
+
+    /// The same range at the coarser grain is one year, not one month of it: both ends snap
+    /// outwards to the 1st of a January, which is what lets the SQL file a whole accrued year
+    /// into it.
+    #[test]
+    fn a_year_range_snaps_out_to_januaries() {
+        let starts = period_starts(
+            t("2026-03-14T09:00:00Z"),
+            t("2026-11-20T09:00:00Z"),
+            Granularity::Year,
+        )
+        .unwrap();
+
+        assert_eq!(
+            starts,
+            vec![t("2026-01-01T00:00:00Z"), t("2027-01-01T00:00:00Z")]
+        );
+    }
+
+    /// A period `to` falls inside is wanted whole, so a range crossing New Year is two years
+    /// rather than the fortnight it names.
+    #[test]
+    fn a_year_range_crossing_new_year_holds_both_of_them() {
+        let starts = period_starts(
+            t("2025-12-28T00:00:00Z"),
+            t("2026-01-04T00:00:00Z"),
+            Granularity::Year,
+        )
+        .unwrap();
+
+        assert_eq!(
+            starts,
+            vec![
+                t("2025-01-01T00:00:00Z"),
+                t("2026-01-01T00:00:00Z"),
+                t("2027-01-01T00:00:00Z")
+            ]
+        );
+    }
+
+    /// December has to roll the year over, and it is the one month that does.
+    #[test]
+    fn a_month_range_rolls_the_year_over() {
+        let starts = period_starts(
+            t("2026-12-05T00:00:00Z"),
+            t("2026-12-06T00:00:00Z"),
+            Granularity::Month,
+        )
+        .unwrap();
+
+        assert_eq!(
+            starts,
+            vec![t("2026-12-01T00:00:00Z"), t("2027-01-01T00:00:00Z")]
+        );
+    }
+
+    /// The grain decides how much a range costs to answer: the decade that is 121 boundaries
+    /// of months is 11 of years, which is the point of having it.
+    #[test]
+    fn the_grain_decides_how_many_boundaries_a_decade_is() {
+        let (from, to) = (t("2016-01-01T00:00:00Z"), t("2025-12-31T00:00:00Z"));
+
+        assert_eq!(
+            period_starts(from, to, Granularity::Month).unwrap().len(),
+            121
+        );
+        assert_eq!(
+            period_starts(from, to, Granularity::Year).unwrap().len(),
+            11
+        );
+    }
+
+    #[test]
+    fn a_backwards_range_is_refused_at_either_grain() {
+        let (from, to) = (t("2026-06-01T00:00:00Z"), t("2026-01-01T00:00:00Z"));
+
+        assert!(period_starts(from, to, Granularity::Month).is_err());
+        assert!(period_starts(from, to, Granularity::Year).is_err());
     }
 
     #[test]
