@@ -30,15 +30,9 @@
 		{ slug: 'activity', title: 'Aktivität', icon: ClockArrowOutline }
 	];
 
-	/// What Verlauf used to be two of, so a link written before they were one still lands
-	/// somewhere. The breakdown it opens on is the tab's own, not the link's -- which of the
-	/// two charts you were looking at is a preference, and it outlives the URL that named it.
-	const RENAMED: Record<string, string> = { months: 'history', categories: 'history' };
-
 	/// Which tab a link may ask for. Read once: from here on the tabs own their own state, and
 	/// re-deriving this would fight them for it.
-	const asked = page.url.searchParams.get('tab');
-	const initial = (asked && (RENAMED[asked] ?? asked)) || TABS[0].slug;
+	const initial = page.url.searchParams.get('tab') ?? TABS[0].slug;
 
 	/// So that the tab survives a reload and can be linked to -- the start page sends "alle
 	/// anzeigen" straight to the feed. `replaceState` rather than `goto`, since switching tabs
