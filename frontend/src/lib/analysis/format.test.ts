@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+	asMoney,
 	categoryColor,
 	deltaColor,
 	errorClass,
 	integrationError,
-	monthLabel,
-	monthTicks
+	periodLabel,
+	periodTicks
 } from './format';
+import { grainFor, tooShortForYears } from './state.svelte';
 
 describe('integrationError', () => {
 	// the gap is what says an expense is missing, and it is a distance rather than a direction
@@ -49,22 +51,72 @@ describe('deltaColor', () => {
 	});
 });
 
-describe('monthLabel', () => {
+describe('periodLabel', () => {
+	// the backend dates a period at midnight UTC, so the label has to read it there: an hour
+	// behind, "1. Januar" is the 31st of December and the year under the bar is the wrong one
+	const start = (y: number, m: number) => new Date(Date.UTC(y, m - 1, 1));
+
 	it('is short enough to sit under a bar', () => {
-		expect(monthLabel(new Date(2026, 7, 1))).toBe('Aug. 26');
+		expect(periodLabel(start(2026, 8), 'MONTH')).toBe('Aug. 26');
+	});
+
+	// `26` under a bar a year wide reads as a day of the month
+	it('spells a year out in full', () => {
+		expect(periodLabel(start(2026, 1), 'YEAR')).toBe('2026');
+	});
+
+	it('names the year a period starts in, not the one the reader is standing in', () => {
+		expect(periodLabel(start(2019, 1), 'YEAR')).toBe('2019');
+		expect(periodLabel(start(2019, 12), 'MONTH')).toBe('Dez. 19');
 	});
 });
 
-describe('monthTicks', () => {
-	/// A category axis draws one label per bar unless told otherwise, which at ten years is 120
-	/// of them.
+describe('periodTicks', () => {
+	/// A category axis draws one label per bar unless told otherwise, which at ten years of
+	/// months is 120 of them.
 	it('stops the labels turning into a smear', () => {
-		expect(monthTicks(120)).toBe(12);
+		expect(periodTicks(120)).toBe(12);
 	});
 
 	it('leaves a short range alone rather than inventing ticks', () => {
-		expect(monthTicks(3)).toBe(3);
-		expect(monthTicks(0)).toBe(0);
+		expect(periodTicks(3)).toBe(3);
+		expect(periodTicks(0)).toBe(0);
+	});
+});
+
+describe('tooShortForYears', () => {
+	// two bars is not a chart anybody switches the grain to see, and one is not a chart
+	it('is what a window with fewer than two years in it is', () => {
+		expect(tooShortForYears(1)).toBe(true);
+		expect(tooShortForYears(12)).toBe(true);
+		expect(tooShortForYears(23)).toBe(true);
+	});
+
+	it('and two years is enough to draw', () => {
+		expect(tooShortForYears(24)).toBe(false);
+		expect(tooShortForYears(120)).toBe(false);
+	});
+
+	// the range that asks for years on its own is never one that needs widening for them,
+	// which is what keeps the toggle from fighting the rule
+	it('never overlaps the range that picks years by itself', () => {
+		for (let months = 1; months <= 240; months++) {
+			expect(grainFor(months) === 'YEAR' && tooShortForYears(months)).toBe(false);
+		}
+	});
+});
+
+describe('grainFor', () => {
+	// a range asks for the grain it can be drawn at; the toggle only has to override it
+	it('draws a few years as the months they are made of', () => {
+		expect(grainFor(1)).toBe('MONTH');
+		expect(grainFor(12)).toBe('MONTH');
+		expect(grainFor(36)).toBe('MONTH');
+	});
+
+	it('and anything longer as years, where the months stop being labelable', () => {
+		expect(grainFor(37)).toBe('YEAR');
+		expect(grainFor(120)).toBe('YEAR');
 	});
 });
 
@@ -94,5 +146,37 @@ describe('categoryColor', () => {
 	// an empty name still has to produce something drawable rather than undefined
 	it('answers for a category with no name', () => {
 		expect(categoryColor({ name: '' })).toMatch(/^#[0-9a-f]{6}$/);
+	});
+});
+
+describe('asMoney', () => {
+	const money = (cents: number) => `${(cents / 100).toFixed(2)} EUR`;
+
+	it('rewrites the bare number apex leaves in a sunburst tooltip', () => {
+		expect(asMoney('1234.5600000000001 (28.2% of parent, 28.2% of total)', money)).toBe(
+			'1234.56 EUR (28.2% of parent, 28.2% of total)'
+		);
+	});
+
+	it('keeps what follows the number exactly as it was', () => {
+		expect(asMoney('5 (100.0% of parent, 3.0% of total)', money)).toBe(
+			'5.00 EUR (100.0% of parent, 3.0% of total)'
+		);
+	});
+
+	it('reads a negative the same way', () => {
+		expect(asMoney('-42.5 (1.0% of parent, 1.0% of total)', money)).toBe(
+			'-42.50 EUR (1.0% of parent, 1.0% of total)'
+		);
+	});
+
+	// which is what stops a rewrite from setting off the next one
+	it('has nothing to say about a cell that is already money', () => {
+		expect(asMoney('1234.56 EUR (28.2% of parent, 28.2% of total)', money)).toBeNull();
+	});
+
+	it("or about some other chart's tooltip", () => {
+		expect(asMoney('1.412,90 €', money)).toBeNull();
+		expect(asMoney('', money)).toBeNull();
 	});
 });

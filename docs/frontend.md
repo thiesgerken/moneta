@@ -18,7 +18,7 @@ src/routes/
   login/
   expenses/  balances/  categories/  accounts/  rules/  deliveries/
   analysis/                 the tabbed dashboard
-  analysis/[year]/[month]/  one month
+  analysis/[year]/[[month]]/  one month, or one year without it
 src/lib/
   *Table.svelte             one per list page
   *Modal.svelte             create/edit, one per entity

@@ -67,31 +67,31 @@ DECLARE
     y_to timestamptz := '2026-01-01Z';
 BEGIN
     FOR r IN
-        WITH v AS (SELECT * FROM analysis_month_totals(mine, jun, sep, false)),
-             a AS (SELECT * FROM analysis_month_totals(mine, jun, sep, true)),
+        WITH v AS (SELECT * FROM analysis_period_totals(mine, jun, sep, false)),
+             a AS (SELECT * FROM analysis_period_totals(mine, jun, sep, true)),
              ca AS (SELECT * FROM analysis_category_totals(mine, jun, sep, true)),
              xa AS (SELECT * FROM analysis_category_expenses(mine, jun, sep, 5, true)),
-             ea AS (SELECT * FROM analysis_month_totals(edge, jun, sep, true)),
-             yv AS (SELECT * FROM analysis_month_totals(mine, y_from, y_to, false)),
-             ya AS (SELECT * FROM analysis_month_totals(mine, y_from, y_to, true)),
+             ea AS (SELECT * FROM analysis_period_totals(edge, jun, sep, true)),
+             yv AS (SELECT * FROM analysis_period_totals(mine, y_from, y_to, false)),
+             ya AS (SELECT * FROM analysis_period_totals(mine, y_from, y_to, true)),
         checks(label, actual, expected) AS (
             -- the value axis is unchanged: the quarterly payment and the prepayment both land
             -- in the month the money left, and August holds nothing at all
             SELECT 'value axis files june by payment',
-                (SELECT round(expenses::numeric, 2) FROM v WHERE month = jun AND account_id IS NULL), -9900.00
+                (SELECT round(expenses::numeric, 2) FROM v WHERE period = jun AND account_id IS NULL), -9900.00
             UNION ALL SELECT 'value axis july',
-                (SELECT round(expenses::numeric, 2) FROM v WHERE month = jul AND account_id IS NULL), -500.00
+                (SELECT round(expenses::numeric, 2) FROM v WHERE period = jul AND account_id IS NULL), -500.00
             UNION ALL SELECT 'value axis has no august',
-                (SELECT count(*) FROM v WHERE month = aug), 0
+                (SELECT count(*) FROM v WHERE period = aug), 0
 
             -- the accrual axis spreads the quarter by days, and September's prepayment is out
             -- of a range that stops at September
             UNION ALL SELECT 'accrual axis june is 30 days of the quarter',
-                (SELECT round(expenses::numeric, 2) FROM a WHERE month = jun AND account_id IS NULL), -3000.00
+                (SELECT round(expenses::numeric, 2) FROM a WHERE period = jun AND account_id IS NULL), -3000.00
             UNION ALL SELECT 'accrual axis july adds the one-day expense',
-                (SELECT round(expenses::numeric, 2) FROM a WHERE month = jul AND account_id IS NULL), -3600.00
+                (SELECT round(expenses::numeric, 2) FROM a WHERE period = jul AND account_id IS NULL), -3600.00
             UNION ALL SELECT 'accrual axis reaches august, which the payment never did',
-                (SELECT round(expenses::numeric, 2) FROM a WHERE month = aug AND account_id IS NULL), -3100.00
+                (SELECT round(expenses::numeric, 2) FROM a WHERE period = aug AND account_id IS NULL), -3100.00
             UNION ALL SELECT 'a period outside the range contributes nothing',
                 (SELECT count(*) FROM a WHERE round(expenses::numeric, 2) = -700.00), 0
 
@@ -100,38 +100,38 @@ BEGIN
             -- other, are outside and stay outside. Both directions, because a filter written
             -- the wrong way round is symmetric and one of these alone would not see it.
             UNION ALL SELECT 'a period reaching in from before keeps its june',
-                (SELECT round(expenses::numeric, 2) FROM ea WHERE month = jun AND account_id IS NULL), -3000.00
+                (SELECT round(expenses::numeric, 2) FROM ea WHERE period = jun AND account_id IS NULL), -3000.00
             UNION ALL SELECT 'a period reaching out past the end keeps its august',
-                (SELECT round(expenses::numeric, 2) FROM ea WHERE month = aug AND account_id IS NULL), -3100.00
+                (SELECT round(expenses::numeric, 2) FROM ea WHERE period = aug AND account_id IS NULL), -3100.00
             -- and nothing leaks into the month between them, which neither period covers
             UNION ALL SELECT 'july lies between the two and stays empty',
-                (SELECT count(*) FROM ea WHERE month = jul), 0
+                (SELECT count(*) FROM ea WHERE period = jul), 0
 
             -- an expense counts in every month it runs through, because it is one of the
             -- things that month cost
             UNION ALL SELECT 'the quarter counts in each of its months',
                 (SELECT count(*) FROM a WHERE account_id IS NULL AND expense_count >= 1), 3
             UNION ALL SELECT 'july holds two of them',
-                (SELECT expense_count FROM a WHERE month = jul AND account_id IS NULL), 2
+                (SELECT expense_count FROM a WHERE period = jul AND account_id IS NULL), 2
 
             -- the per-account rows are spread the same way as the roll-up
             UNION ALL SELECT 'the account row is spread too',
-                (SELECT round(expenses::numeric, 2) FROM a WHERE month = aug AND account_id IS NOT NULL), -3100.00
+                (SELECT round(expenses::numeric, 2) FROM a WHERE period = aug AND account_id IS NOT NULL), -3100.00
 
             -- categories ride on the same movements, and each of the two holds half of the
             -- month's share of the quarter rather than all of it
             UNION ALL SELECT 'the category gets half of june share only',
-                (SELECT round(expenses::numeric, 2) FROM ca WHERE month = jun AND category_id = c1), -1500.00
+                (SELECT round(expenses::numeric, 2) FROM ca WHERE period = jun AND category_id = c1), -1500.00
             UNION ALL SELECT 'the other category gets the other half',
-                (SELECT round(expenses::numeric, 2) FROM ca WHERE month = jun AND category_id = c2), -1500.00
+                (SELECT round(expenses::numeric, 2) FROM ca WHERE period = jun AND category_id = c2), -1500.00
             UNION ALL SELECT 'and half the quarter across the range',
                 (SELECT round(sum(expenses)::numeric, 2) FROM ca WHERE category_id = c1), -4600.00
             -- weights summed across the months rather than within one would leave each
             -- category a sixth of the month, and reading them as multipliers would give it
             -- the whole month twice over. Both miss the month itself.
             UNION ALL SELECT 'the categories of a month sum to that month',
-                (SELECT round(sum(expenses)::numeric, 2) FROM ca WHERE month = jun),
-                (SELECT round(expenses::numeric, 2) FROM a WHERE month = jun AND account_id IS NULL)
+                (SELECT round(sum(expenses)::numeric, 2) FROM ca WHERE period = jun),
+                (SELECT round(expenses::numeric, 2) FROM a WHERE period = jun AND account_id IS NULL)
 
             -- the treemap sums an expense's in-range portions back up
             UNION ALL SELECT 'the treemap shows the part inside the range',
@@ -152,9 +152,9 @@ BEGIN
                 (SELECT round(sum(income + expenses)::numeric, 2) FROM ya WHERE account_id IS NULL), -10400.00
             -- and they really are different months, or the check above proves nothing
             UNION ALL SELECT 'the axes disagree about june',
-                (SELECT count(*) FROM ya y JOIN yv w USING (month)
+                (SELECT count(*) FROM ya y JOIN yv w USING (period)
                  WHERE y.account_id IS NULL AND w.account_id IS NULL
-                   AND y.month = jun AND round(y.expenses::numeric, 2) = round(w.expenses::numeric, 2)), 0
+                   AND y.period = jun AND round(y.expenses::numeric, 2) = round(w.expenses::numeric, 2)), 0
         )
         SELECT * FROM checks WHERE actual IS DISTINCT FROM expected
     LOOP

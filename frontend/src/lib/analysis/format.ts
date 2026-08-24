@@ -1,8 +1,10 @@
-/// How the monthly and category figures are read: what a number means, and what colour says so.
+/// How the figures of a period are read: what a number means, and what colour says so.
 ///
 /// Apart from `overviews.ts` because none of it needs the query or the router, and that module
 /// cannot be loaded without them — which left this arithmetic untestable for want of a database
 /// and a browser it never touches.
+
+import type { Granularity } from './state.svelte';
 
 /// How far the integrated end balance drifts from the one the recorded balances give.
 ///
@@ -26,15 +28,34 @@ export const errorClass = (e: number) =>
 /// What a month or an account came to, which is what a reader is here for.
 export const deltaColor = (cents: number) => (cents < 0 ? 'red' : cents > 0 ? 'green' : 'gray');
 
-export const monthLabel = (d: Date) =>
-	d.toLocaleDateString('de-DE', { month: 'short', year: '2-digit' });
+/// What one bar of an overview is called. A year needs all four digits: `26` under a bar a
+/// year wide reads as a day of the month.
+export const periodLabel = (d: Date, granularity: Granularity) =>
+	granularity === 'YEAR'
+		? d.toLocaleDateString('de-DE', { year: 'numeric', timeZone: 'UTC' })
+		: d.toLocaleDateString('de-DE', { month: 'short', year: '2-digit', timeZone: 'UTC' });
 
-/// How many labels a month axis can carry before they turn into a smear.
+/// How many labels the axis can carry before they turn into a smear.
 ///
-/// A category axis draws one label per bar unless told otherwise, which at ten years is 120
-/// of them. `tickAmount` thins them to every nth; apex picks which ones, and the first and
-/// last always survive.
-export const monthTicks = (count: number) => Math.min(count, 12);
+/// A category axis draws one label per bar unless told otherwise, which at ten years of
+/// months is 120 of them. `tickAmount` thins them to every nth; apex picks which ones, and
+/// the first and last always survive.
+export const periodTicks = (count: number) => Math.min(count, 12);
+
+/// The value cell apex writes for a sunburst slice: a bare number, then the two percentages.
+///
+/// It is a bare number because apexcharts 6.10.0 interpolates `e.value` into the markup there
+/// -- see `_showTooltip` -- where the treemap's branch calls `_formatValue` and honours
+/// `tooltip.y.formatter`. A sum of euros arrives as `1234.5600000000001`.
+const RAW_SUNBURST_VALUE = /^(-?\d+(?:\.\d+)?)( \(.*)$/;
+
+/// That cell rewritten as money, or null where there is nothing to rewrite -- which is both
+/// "this is some other tooltip" and "this one has been done already", and is what keeps a
+/// rewrite from setting off another.
+export function asMoney(text: string, money: (cents: number) => string): string | null {
+	const found = RAW_SUNBURST_VALUE.exec(text.trim());
+	return found ? `${money(Number(found[1]) * 100)}${found[2]}` : null;
+}
 
 /// A colour for a category that has none set, and for the "no category" bucket. Derived from
 /// the name so it at least stays the same between renders.
