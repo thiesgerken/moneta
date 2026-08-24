@@ -130,9 +130,10 @@
 	const detailStore = graphql(`
 		query AnalysisMonthDetail($from: DateTime!, $to: DateTime!, $accrued: Boolean) {
 			analysis {
+				# the range is one month, so the default MONTH grain gives exactly one period
 				overviews(from: $from, to: $to, accrued: $accrued) {
-					months {
-						month
+					periods {
+						start
 						startTotal
 						endTotal
 						integratedEndTotal
@@ -358,7 +359,7 @@
 	});
 
 	const overviews = $derived($detailStore.data?.analysis.overviews);
-	const detail = $derived(overviews?.months[0]);
+	const detail = $derived(overviews?.periods[0]);
 
 	/// What the month booked, rather than what the balances did. The same figure on the value
 	/// axis, and the only one of the two that means anything on the accrual axis: filing a cost

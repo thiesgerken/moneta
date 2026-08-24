@@ -73,13 +73,36 @@ export const DATE_AXES = [
 	{ value: 'accrued', label: 'Leistungszeitraum' }
 ];
 
-/// Verlauf: the months of a range, as totals or broken into categories.
+/// How wide one bar of an overview is, spelled the way the schema's enum is.
+export type Granularity = 'MONTH' | 'YEAR';
+
+/// Where the grain goes over from months to years when nobody has said.
+///
+/// Three years is 36 bars, which is about as many as the axis can label before apex starts
+/// thinning them; ten years of months is 120 and unreadable. Asking for a long window is
+/// itself the request for a coarser grain, so the toggle only has to override this, and
+/// mostly does not have to be found at all.
+const YEARS_ABOVE_MONTHS = 3;
+
+/// The grain a range asks for on its own, in months.
+export const grainFor = (months: number): Granularity =>
+	months > YEARS_ABOVE_MONTHS * 12 ? 'YEAR' : 'MONTH';
+
+/// Verlauf: the periods of a range, as totals or broken into categories.
 ///
 /// One state for what were two tabs drawing the same bars off the same query, one stacked by
 /// side and one by category. They kept a range each, which had to be set twice to ask the same
 /// question twice -- there is one range now because there is one view.
 export const historyState = $state({
 	range: range('1y'),
+	/// Empty until the range has resolved and chosen for it -- see `grainFor`. The toggle
+	/// writes over that and it stays until the range changes length again. A string rather
+	/// than a nullable one because `ToggleGroup` binds a string.
+	granularity: '' as '' | Granularity,
+	/// The range, in months, that `granularity` was last decided for. Here rather than in the
+	/// view because the tab is unmounted when you leave it, and a grain you picked by hand
+	/// should not be re-decided by coming back to it.
+	grainDecidedFor: 0,
 	/// `total` stacks income against expenses; `categories` stacks one of them by category
 	breakdown: 'total',
 	/// which side the categories are of, and which the treemap shows. Only read while the

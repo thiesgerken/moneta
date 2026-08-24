@@ -4,9 +4,10 @@ import {
 	deltaColor,
 	errorClass,
 	integrationError,
-	monthLabel,
-	monthTicks
+	periodLabel,
+	periodTicks
 } from './format';
+import { grainFor } from './state.svelte';
 
 describe('integrationError', () => {
 	// the gap is what says an expense is missing, and it is a distance rather than a direction
@@ -49,22 +50,50 @@ describe('deltaColor', () => {
 	});
 });
 
-describe('monthLabel', () => {
+describe('periodLabel', () => {
+	// the backend dates a period at midnight UTC, so the label has to read it there: an hour
+	// behind, "1. Januar" is the 31st of December and the year under the bar is the wrong one
+	const start = (y: number, m: number) => new Date(Date.UTC(y, m - 1, 1));
+
 	it('is short enough to sit under a bar', () => {
-		expect(monthLabel(new Date(2026, 7, 1))).toBe('Aug. 26');
+		expect(periodLabel(start(2026, 8), 'MONTH')).toBe('Aug. 26');
+	});
+
+	// `26` under a bar a year wide reads as a day of the month
+	it('spells a year out in full', () => {
+		expect(periodLabel(start(2026, 1), 'YEAR')).toBe('2026');
+	});
+
+	it('names the year a period starts in, not the one the reader is standing in', () => {
+		expect(periodLabel(start(2019, 1), 'YEAR')).toBe('2019');
+		expect(periodLabel(start(2019, 12), 'MONTH')).toBe('Dez. 19');
 	});
 });
 
-describe('monthTicks', () => {
-	/// A category axis draws one label per bar unless told otherwise, which at ten years is 120
-	/// of them.
+describe('periodTicks', () => {
+	/// A category axis draws one label per bar unless told otherwise, which at ten years of
+	/// months is 120 of them.
 	it('stops the labels turning into a smear', () => {
-		expect(monthTicks(120)).toBe(12);
+		expect(periodTicks(120)).toBe(12);
 	});
 
 	it('leaves a short range alone rather than inventing ticks', () => {
-		expect(monthTicks(3)).toBe(3);
-		expect(monthTicks(0)).toBe(0);
+		expect(periodTicks(3)).toBe(3);
+		expect(periodTicks(0)).toBe(0);
+	});
+});
+
+describe('grainFor', () => {
+	// a range asks for the grain it can be drawn at; the toggle only has to override it
+	it('draws a few years as the months they are made of', () => {
+		expect(grainFor(1)).toBe('MONTH');
+		expect(grainFor(12)).toBe('MONTH');
+		expect(grainFor(36)).toBe('MONTH');
+	});
+
+	it('and anything longer as years, where the months stop being labelable', () => {
+		expect(grainFor(37)).toBe('YEAR');
+		expect(grainFor(120)).toBe('YEAR');
 	});
 });
 

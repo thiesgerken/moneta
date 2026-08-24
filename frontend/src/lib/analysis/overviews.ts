@@ -1,15 +1,21 @@
 import { graphql, type AnalysisOverviews$result } from '$houdini';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
+import type { Granularity } from './state.svelte';
 
 /// Everything Verlauf draws, in one query: the bars and the table come from the monthly
 /// totals, and the treemap from the whole-period breakdown.
 export const overviewsStore = graphql(`
-	query AnalysisOverviews($from: DateTime!, $to: DateTime!, $accrued: Boolean) {
+	query AnalysisOverviews(
+		$from: DateTime!
+		$to: DateTime!
+		$accrued: Boolean
+		$granularity: Granularity
+	) {
 		analysis {
-			overviews(from: $from, to: $to, accrued: $accrued) {
-				months {
-					month
+			overviews(from: $from, to: $to, accrued: $accrued, granularity: $granularity) {
+				periods {
+					start
 					startTotal
 					endTotal
 					integratedEndTotal
@@ -49,26 +55,37 @@ export const overviewsStore = graphql(`
 
 export type OverviewsData = AnalysisOverviews$result['analysis']['overviews'];
 
-/// Chart events that open a month's own page.
+/// Chart events that open what a bar is made of: a year into its months, a month into its own
+/// page.
 ///
 /// The month pages are the least discoverable thing in the app: the only way in was the month
 /// name in the overview table, which is a link that does not look like one until you are on
-/// top of it. A bar and its label are the obvious thing to click on a chart of months.
+/// top of it. A bar and its label are the obvious thing to click on a chart of periods, and a
+/// year answers the same gesture one level up rather than jumping past its months.
 ///
 /// `labelIndex` is the category index even where `tickAmount` has thinned the labels — apex
 /// blanks the text of the ones it drops rather than skipping them, so the count still lines
-/// up with the months.
-export function monthDrilldown(months: { month: Date }[]) {
+/// up with the periods.
+export function periodDrilldown(
+	periods: { start: Date }[],
+	granularity: Granularity,
+	intoYear: (start: Date) => void
+) {
 	const open = (index: number) => {
-		const month = months[index]?.month;
-		if (!month) return;
+		const start = periods[index]?.start;
+		if (!start) return;
+
+		if (granularity === 'YEAR') {
+			intoYear(start);
+			return;
+		}
 
 		void goto(
 			resolve('/analysis/[year]/[month]', {
-				// the backend dates a month at midnight UTC; reading it locally can land in the
+				// the backend dates a period at midnight UTC; reading it locally can land in the
 				// month before
-				year: `${month.getUTCFullYear()}`,
-				month: `${month.getUTCMonth() + 1}`
+				year: `${start.getUTCFullYear()}`,
+				month: `${start.getUTCMonth() + 1}`
 			})
 		);
 	};

@@ -13,7 +13,7 @@ part of the feed worth arriving at.
 | Tab | MoneyDB origin | Shows |
 | --- | --- | --- |
 | **Vermögen** | `computed_balances` + `history` | net worth over time (total, per account, or per availability), availability totals, per-account computed balances |
-| **Verlauf** | `monthly_overviews` + `categories` + `sunburst` | bars per month — income against expenses, or one of the two split by category — a table per month with each row linking to its own page, and a treemap of the whole period |
+| **Verlauf** | `monthly_overviews` + `categories` + `sunburst` | bars per month or per year — income against expenses, or one of the two split by category — a table per period with each month linking to its own page, and a treemap of the whole range |
 | **Kontoauszug** | `statements` | one account's ledger over a range: opening balance, expenses and recorded balances interleaved, running total, CSV export |
 | **Kalender** | `calendar` | month grid, expenses per day with a daily sum |
 | **Vorauszahlungen** | `prepayments` | what is still unconsumed at a chosen date, plus the separate list of incomplete expenses |
@@ -148,32 +148,51 @@ apex reuses the axis one, which rounds to `40k €`.
 
 ## Verlauf
 
-Reads `analysis.overviews(from, to)`.
+Reads `analysis.overviews(from, to, accrued, granularity)`.
 
 ```graphql
 type Overviews {
-  months: [MonthOverview!]!          # per-month totals, per account and per category
+  periods: [PeriodOverview!]!        # per-period totals, per account and per category
   byCategory: [CategoryBreakdown!]!  # whole range, with its expenses, for the treemap
 }
+
+enum Granularity { MONTH, YEAR }
 ```
 
-`from` and `to` **snap outwards to whole months**, so asking for the middle of one gives you
-that whole month. The balances at every month boundary are one `simulate_balances` call over an
-array of month starts — a year costs one simulation, not thirteen.
+`from` and `to` **snap outwards to whole periods**, so asking for the middle of one gives you
+that whole period. The balances at every period boundary are one `simulate_balances` call over
+an array of period starts — a year of months costs one simulation, not thirteen.
+
+**The grain is one parameter, not a second endpoint.** Bucketing happens in exactly one place,
+`analysis_movements`, where `p_grain` is the word `date_trunc` takes. On the accrual axis it is
+also the step of the `generate_series` that walks a cost across the periods it covers *and* the
+length of the window each period's share is measured against — leave one of the three at a
+month and a cost crossing New Year is measured against January. `tests/sql/analysis_granularity.sql`
+is where that is pinned down.
+
+Everything downstream already worked on whatever periods it was handed: `period_starts` in
+Rust builds the boundaries, and the balance simulation samples them without caring how far
+apart they are.
+
+**The frontend picks the grain from the range and lets the toggle override it.** Above three
+years it draws years — 120 monthly bars are more than the axis can label, so asking for a long
+window is itself the request for a coarser grain. The toggle overrides that until the range
+changes length again. A year bar opens into its own months rather than jumping to a month page:
+it stands for twelve of them and there is no one month it means.
 
 **Amounts are `calculatedAmount`, not `effectiveAmount`.** The totals have to reconcile with
 the balances, and those are account balances rather than ownership-weighted shares of them.
 Mixing the two would make the integration error meaningless. It also means a half-owned account
 contributes its whole movement here, which is the convention **Vermögen** already uses.
 
-Per-month category totals live on `MonthOverview` and feed the stacked bars, so **the category
-breakdown needs no endpoint of its own** — it is a second reading of this one, which is why it
-is a toggle rather than a tab. Its treemap comes from `byCategory`, which is the whole range at
-once rather than a sum of the months: the biggest expenses of a year are not the biggest of
-each of its months.
+Per-period category totals live on `PeriodOverview` and feed the stacked bars, so **the
+category breakdown needs no endpoint of its own** — it is a second reading of this one, which
+is why it is a toggle rather than a tab. Its treemap comes from `byCategory`, which is the
+whole range at once rather than a sum of the periods: the biggest expenses of a decade are not
+the biggest of each of its years.
 
 The table is the same table under either breakdown. A balance and an integration error are
-facts about a month; a category has neither, so there is nothing to split there.
+facts about a period; a category has neither, so there is nothing to split there.
 
 An expense split across categories contributes its weighted share to each, and one with no
 categorization at all comes back under a null category. Dropping those would make the parts add
@@ -181,7 +200,7 @@ up to less than the whole, which is worse than a slice labelled "Ohne Kategorie"
 
 ### Integrationsfehler
 
-`MonthOverview` reports both `endTotal` (what the recorded balances say at the end of the
+`PeriodOverview` reports both `endTotal` (what the recorded balances say at the end of the
 month) and the total reached by integrating expenses forward from the month's start. The gap
 between them is MoneyDB's *Integrationsfehler*, and it is kept.
 
@@ -191,7 +210,7 @@ the whole point of the view.
 ### Month pages
 
 `/analysis/[year]/[month]` is the same `overviews` query over a one-month range, plus an
-expense list for the biggest few. `MonthOverview` carries `byAccount`, which is the only thing
+expense list for the biggest few. `PeriodOverview` carries `byAccount`, which is the only thing
 the month page needs beyond what the table shows, so there is no endpoint of its own.
 
 Each month gets a route rather than an expandable row: summary cards, the category treemap, a
@@ -297,7 +316,7 @@ is how a calendar ends up showing a rent payment on every day of the month.
 
 All of the resolvers live in `backend/src/graphql/analysis.rs`, with the arithmetic in SQL
 functions the migrations define so `tests/sql` can reach it: `analysis_movements`,
-`simulate_balances`, `accrual_adjustment`, `analysis_statement`, `analysis_month_totals`,
+`simulate_balances`, `accrual_adjustment`, `analysis_statement`, `analysis_period_totals`,
 `analysis_category_totals` and `analysis_category_expenses`.
 
 **Do the work in SQL, not by folding in Rust.** That advice was written for mongo, where the

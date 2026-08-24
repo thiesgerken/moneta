@@ -24,16 +24,24 @@
 	import RangePicker from './RangePicker.svelte';
 	import SeriesToggle from './SeriesToggle.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
-	import { overviewsStore, monthDrilldown, type OverviewsData } from './overviews';
+	import { overviewsStore, periodDrilldown, type OverviewsData } from './overviews';
 	import {
 		integrationError,
 		errorClass,
 		deltaColor,
-		monthLabel,
-		monthTicks,
+		periodLabel,
+		periodTicks,
 		categoryColor
 	} from './format';
-	import { DATE_AXES, accrued, axisState, historyState } from './state.svelte';
+	import {
+		CUSTOM_SPAN,
+		DATE_AXES,
+		accrued,
+		axisState,
+		grainFor,
+		historyState,
+		type Granularity
+	} from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
 	import { isoDate } from './dates';
 	import QueryError from './../QueryError.svelte';
@@ -45,21 +53,62 @@
 	let latestRequest = 0;
 	let overviews = $state<OverviewsData | null>(null);
 
+	/// How many months the range covers, both ends inclusive -- the backend snaps it outwards
+	/// to whole periods anyway, so a fragment of a month counts as one.
+	const span = $derived.by(() => {
+		const { from, to } = historyState.range;
+		if (!from || !to) return 0;
+
+		const a = new Date(from);
+		const b = new Date(to);
+		return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + 1;
+	});
+
+	/// The length of the range picks the grain, and the toggle overrides it until the length
+	/// changes again. Asking for ten years is itself the request for years, and a grain chosen
+	/// for one window is not an answer about the next one.
+	$effect(() => {
+		if (span === 0 || historyState.grainDecidedFor === span) return;
+		historyState.grainDecidedFor = span;
+		historyState.granularity = grainFor(span);
+	});
+
+	const granularity = $derived((historyState.granularity || 'MONTH') as Granularity);
+	const byYear = $derived(granularity === 'YEAR');
+
 	$effect(() => {
 		// undefined until the picker has resolved its preset
 		const { from, to } = historyState.range;
-		if (!from || !to) return;
+		if (!from || !to || !historyState.granularity) return;
 
 		const request = ++latestRequest;
 		void overviewsStore
-			.fetch({ variables: { from: new Date(from), to: new Date(to), accrued: accrued() } })
+			.fetch({
+				variables: { from: new Date(from), to: new Date(to), accrued: accrued(), granularity }
+			})
 			.then((result) => {
 				if (request !== latestRequest) return;
 				overviews = result.data?.analysis.overviews ?? null;
 			});
 	});
 
-	const months = $derived(overviews?.months ?? []);
+	const periods = $derived(overviews?.periods ?? []);
+
+	/// A year opens into its own months rather than jumping to a month page: the bar stands for
+	/// twelve of them and there is no one month it means. The range picker follows, so what
+	/// happened is visible in the control that did it.
+	const intoYear = (start: Date) => {
+		const year = start.getUTCFullYear();
+		historyState.range = {
+			span: CUSTOM_SPAN,
+			from: Date.UTC(year, 0, 1),
+			to: Date.UTC(year, 11, 31)
+		};
+		historyState.granularity = 'MONTH';
+		// the range is twelve months now, so the rule above would land on MONTH as well --
+		// this only saves it a redraw
+		historyState.grainDecidedFor = 12;
+	};
 
 	/// Whether the chart splits a month into categories instead of into its two sides. The
 	/// table below is the same table either way -- a balance and an integration error are facts
@@ -78,18 +127,20 @@
 	const bars = $derived.by(() => {
 		if (!split) return [];
 
-		const keys = [...new Set(months.flatMap((m) => m.byCategory.map((c) => c.category?.id ?? '')))];
+		const keys = [
+			...new Set(periods.flatMap((p) => p.byCategory.map((c) => c.category?.id ?? '')))
+		];
 
 		return keys.map((key) => {
-			const anywhere = months
-				.flatMap((m) => m.byCategory)
+			const anywhere = periods
+				.flatMap((p) => p.byCategory)
 				.find((c) => (c.category?.id ?? '') === key);
 
 			return {
 				name: name(anywhere?.category ?? null),
 				color: categoryColor(anywhere?.category ?? null),
-				data: months.map((m) => {
-					const found = m.byCategory.find((c) => (c.category?.id ?? '') === key);
+				data: periods.map((p) => {
+					const found = p.byCategory.find((c) => (c.category?.id ?? '') === key);
 					return found ? pick(found) / 100 : 0;
 				})
 			};
@@ -98,7 +149,7 @@
 
 	const barNames = $derived(bars.map((c) => c.name));
 
-	/// One chart, two readings of the same months: the totals of each, or one of the two sides
+	/// One chart, two readings of the same periods: the totals of each, or one of the two sides
 	/// of each broken into what it was spent on. Same bars, same x axis, same drilldown -- the
 	/// toggle above it says which question is being asked, not which chart is being drawn.
 	const chartOptions = $derived({
@@ -108,7 +159,7 @@
 			toolbar: { show: false },
 			stacked: true,
 			events: {
-				...monthDrilldown(months),
+				...periodDrilldown(periods, granularity, intoYear),
 				// apex toggles the series itself; this only keeps our list in step with it
 				legendClick: (_c: unknown, index: number) => {
 					const clicked = bars[index]?.name;
@@ -127,14 +178,14 @@
 					data: c.data
 				}))
 			: [
-					{ name: 'Einnahmen', data: months.map((o) => o.income / 100) },
-					{ name: 'Ausgaben', data: months.map((o) => o.expenses / 100) }
+					{ name: 'Einnahmen', data: periods.map((o) => o.income / 100) },
+					{ name: 'Ausgaben', data: periods.map((o) => o.expenses / 100) }
 				],
 		colors: split ? bars.map((c) => c.color) : ['#16a34a', '#dc2626'],
 		dataLabels: { enabled: false },
 		xaxis: {
-			categories: months.map((o) => monthLabel(o.month)),
-			tickAmount: monthTicks(months.length),
+			categories: periods.map((o) => periodLabel(o.start, granularity)),
+			tickAmount: periodTicks(periods.length),
 			labels: { rotate: -45, hideOverlappingLabels: true }
 		},
 		yaxis: { labels: { formatter: (v: number) => Math.round(v) + ' €' } },
@@ -176,7 +227,8 @@
 	/// Which is what the "Rest" tile is for: it stands for everything the treemap had no room
 	/// to name, and there is no bound on how much that is, so it belongs in a list rather than
 	/// in a tooltip. The ends are snapped to whole months, which is what the backend does to
-	/// the range before it answers -- a list ending mid-month would not add up to the tile.
+	/// the range before it answers -- a list ending mid-month would not add up to the tile. A
+	/// year is twelve of them, so the same snapping covers both grains.
 	function openCategory(seriesIndex: number) {
 		const id = treemapSeries[seriesIndex]?.categoryId;
 		const { from, to } = historyState.range;
@@ -222,6 +274,7 @@
 	});
 
 	const sideLabel = $derived(historyState.sign === 'expenses' ? 'Ausgaben' : 'Einnahmen');
+	const periodWord = $derived(byYear ? 'Jahr' : 'Monat');
 </script>
 
 <div class="space-y-4">
@@ -250,6 +303,17 @@
 				]}
 			/>
 		{/if}
+		<!-- The range picks this and the toggle overrides it, so it mostly does not have to be
+		     found at all: it is here for the ten-year window you want the months of, and the
+		     two-year one you want summed. -->
+		<ToggleGroup
+			bind:value={historyState.granularity}
+			size="sm"
+			options={[
+				{ value: 'MONTH', label: 'Monate' },
+				{ value: 'YEAR', label: 'Jahre' }
+			]}
+		/>
 		<ToggleGroup bind:value={axisState.axis} options={DATE_AXES} size="sm" />
 		{#if $overviewsStore.fetching}
 			<Spinner size="5" class="self-center" />
@@ -268,11 +332,11 @@
 					{#if split}
 						<ChartMixedOutline
 							class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
-						/>{sideLabel} nach Kategorie je Monat
+						/>{sideLabel} nach Kategorie je {periodWord}
 					{:else}
 						<ChartOutline
 							class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
-						/>Einnahmen und Ausgaben je Monat
+						/>Einnahmen und Ausgaben je {periodWord}
 					{/if}
 				</h3>
 				{#if split}
@@ -305,15 +369,15 @@
 			<h3 class="mb-2 text-lg font-semibold">
 				<TableColumnOutline
 					class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
-				/>Monatliche Übersichten
+				/>Übersichten je {periodWord}
 			</h3>
 			<div class="overflow-x-auto">
 				<Table hoverable striped class="w-full text-left text-sm">
-					<!-- What the month did comes before what it left behind: delta, then the two
+					<!-- What the period did comes before what it left behind: delta, then the two
 					     sides it is made of, then the balances they moved between. On a phone the
 					     columns behind Ausgaben are off the screen, and what is dropped there is
 					     what answers a question nobody asks on a phone -- how many expenses it
-					     took, where the month started, and how far the two ways of counting
+					     took, where the period started, and how far the two ways of counting
 					     disagree.
 
 					     The balances are gone entirely on the accrual axis, along with the error
@@ -322,7 +386,7 @@
 					     reads the same either way sitting next to four that do not is a column
 					     inviting the wrong subtraction. -->
 					<TableHead>
-						<TableHeadCell class="px-4 py-3">Monat</TableHeadCell>
+						<TableHeadCell class="px-4 py-3">{periodWord}</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Delta</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Einnahmen</TableHeadCell>
 						<TableHeadCell class="px-4 py-3">Ausgaben</TableHeadCell>
@@ -332,8 +396,8 @@
 							<TableHeadCell class="px-4 py-3">Vermögen Ende</TableHeadCell>
 						{/if}
 						<!-- Only on the value axis. The error is the gap between the balances and what the
-						     month booked, and on the accrual axis those are answers to different
-						     questions: a sixth of a subscription is a cost the month carried, not money
+						     period booked, and on the accrual axis those are answers to different
+						     questions: a sixth of a subscription is a cost the period carried, not money
 						     that left an account, so there is nothing to reconcile. -->
 						{#if !accrued()}
 							<TableHeadCell class="hidden px-4 py-3 sm:table-cell">
@@ -347,24 +411,37 @@
 						{/if}
 					</TableHead>
 					<TableBody class="divide-y">
-						{#each months.toReversed() as o (o.month.getTime())}
+						{#each periods.toReversed() as o (o.start.getTime())}
 							<TableBodyRow>
+								<!-- A year has no page of its own, so it opens into its own months the
+								     way its bar does. A month keeps its link, which is what made the
+								     month pages reachable in the first place. -->
 								<TableBodyCell class="px-4 py-3 whitespace-nowrap">
-									<a
-										class="text-primary-600 dark:text-primary-500 font-medium hover:underline"
-										href={resolve('/analysis/[year]/[month]', {
-											year: `${o.month.getUTCFullYear()}`,
-											month: `${o.month.getUTCMonth() + 1}`
-										})}
-									>
-										{o.month.toLocaleDateString('de-DE', {
-											month: 'long',
-											year: 'numeric',
-											timeZone: 'UTC'
-										})}
-									</a>
+									{#if byYear}
+										<button
+											type="button"
+											class="text-primary-600 dark:text-primary-500 font-medium hover:underline"
+											onclick={() => intoYear(o.start)}
+										>
+											{o.start.getUTCFullYear()}
+										</button>
+									{:else}
+										<a
+											class="text-primary-600 dark:text-primary-500 font-medium hover:underline"
+											href={resolve('/analysis/[year]/[month]', {
+												year: `${o.start.getUTCFullYear()}`,
+												month: `${o.start.getUTCMonth() + 1}`
+											})}
+										>
+											{o.start.toLocaleDateString('de-DE', {
+												month: 'long',
+												year: 'numeric',
+												timeZone: 'UTC'
+											})}
+										</a>
+									{/if}
 								</TableBodyCell>
-								<!-- what the month booked, not what the balances did: on the accrual axis
+								<!-- what the period booked, not what the balances did: on the accrual axis
 								     the balances stand still while the two columns beside this one move,
 								     and a delta that disagreed with the sum of them read as an error -->
 								{@const delta = o.income + o.expenses}

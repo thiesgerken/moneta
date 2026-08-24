@@ -114,9 +114,10 @@
 					}
 				}
 
+				# no granularity: the donut and its comparison are about this month and the last
 				overviews(from: $monthsFrom, to: $now, accrued: $accrued) {
-					months {
-						month
+					periods {
+						start
 						income
 						expenses
 						byCategory {
@@ -251,7 +252,7 @@
 		}
 	} as ApexOptions);
 
-	const months = $derived(data?.analysis.overviews.months ?? []);
+	const months = $derived(data?.analysis.overviews.periods ?? []);
 
 	/// The running month, which is the last one the range covers, and the one before it.
 	const thisMonth = $derived(months.at(-1));

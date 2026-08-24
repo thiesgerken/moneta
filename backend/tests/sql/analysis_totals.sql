@@ -1,4 +1,4 @@
--- Covers analysis_month_totals, analysis_category_totals and analysis_category_expenses:
+-- Covers analysis_period_totals, analysis_category_totals and analysis_category_expenses:
 -- which movements count, how they split across months, and how a categorization weight
 -- divides one expense between categories without losing or inventing any of it.
 BEGIN;
@@ -94,18 +94,18 @@ DECLARE
     aug timestamptz := '2025-08-01Z';
 BEGIN
     FOR r IN
-        WITH m AS (SELECT * FROM analysis_month_totals(mine, jun, aug)),
+        WITH m AS (SELECT * FROM analysis_period_totals(mine, jun, aug)),
              c AS (SELECT * FROM analysis_category_totals(mine, jun, aug)),
              x AS (SELECT * FROM analysis_category_expenses(mine, jun, aug, 2)),
         checks(label, actual, expected) AS (
             -- June on a1: -1000, -50000, +200000, -4000 (split), -2000 (uncategorized).
             -- The template and the other accounts are elsewhere.
             SELECT 'june income on a1',
-                (SELECT income FROM m WHERE month = jun AND account_id = a1), 200000.0
+                (SELECT income FROM m WHERE period = jun AND account_id = a1), 200000.0
             UNION ALL SELECT 'june spending on a1',
-                (SELECT expenses FROM m WHERE month = jun AND account_id = a1), -62700.0
+                (SELECT expenses FROM m WHERE period = jun AND account_id = a1), -62700.0
             UNION ALL SELECT 'june expense count on a1',
-                (SELECT expense_count FROM m WHERE month = jun AND account_id = a1), 7
+                (SELECT expense_count FROM m WHERE period = jun AND account_id = a1), 7
             -- the shared expense contributes only its own leg; the other user's -1300 is
             -- rendered into this user's copy but never moved this user's money
             UNION ALL SELECT 'a shared expense contributes only this side',
@@ -113,19 +113,19 @@ BEGIN
 
             -- one expense with two transactions in the month is counted once
             UNION ALL SELECT 'two transactions of one expense count once',
-                (SELECT expense_count FROM m WHERE month = jun AND account_id = a2), 2
+                (SELECT expense_count FROM m WHERE period = jun AND account_id = a2), 2
             UNION ALL SELECT 'but both amounts are summed',
-                (SELECT expenses FROM m WHERE month = jun AND account_id = a2), -1000.0
+                (SELECT expenses FROM m WHERE period = jun AND account_id = a2), -1000.0
 
             -- what moved on the account, not the reader's half of it: these totals have to
             -- reconcile with the balances, which are account balances
             UNION ALL SELECT 'a half-owned account reports the whole movement',
-                (SELECT expenses FROM m WHERE month = jun AND account_id = a3), -8000.0
+                (SELECT expenses FROM m WHERE period = jun AND account_id = a3), -8000.0
 
             -- July is its own row, and only holds July: -3000 of its own, plus the two
             -- transfers below
             UNION ALL SELECT 'july is separated out',
-                (SELECT expenses FROM m WHERE month = jul AND account_id = a1), -16000.0
+                (SELECT expenses FROM m WHERE period = jul AND account_id = a1), -16000.0
             UNION ALL SELECT 'three account rows in june, two in july',
                 (SELECT count(*) FROM m WHERE account_id IS NOT NULL), 5
             -- plus one roll-up row per month
@@ -136,38 +136,38 @@ BEGIN
             -- ec is a transfer booking against both a1 and a2, so the per-account rows add up
             -- to one more than the month actually holds.
             UNION ALL SELECT 'the month counts each expense once',
-                (SELECT expense_count FROM m WHERE month = jun AND account_id IS NULL), 9
+                (SELECT expense_count FROM m WHERE period = jun AND account_id IS NULL), 9
             UNION ALL SELECT 'which is fewer than the per-account counts summed',
-                (SELECT sum(expense_count) FROM m WHERE month = jun AND account_id IS NOT NULL), 10
+                (SELECT sum(expense_count) FROM m WHERE period = jun AND account_id IS NOT NULL), 10
             -- What an expense cost is what it did across your accounts together, so ec's two
             -- halves cancel in the roll-up: -1000, -50000, -4000, -2000, -1000, -8000, -700.
             UNION ALL SELECT 'a transfer costs nothing',
-                (SELECT expenses FROM m WHERE month = jun AND account_id IS NULL), -66700.0
+                (SELECT expenses FROM m WHERE period = jun AND account_id IS NULL), -66700.0
             UNION ALL SELECT 'and is no income either',
-                (SELECT income FROM m WHERE month = jun AND account_id IS NULL), 200000.0
+                (SELECT income FROM m WHERE period = jun AND account_id IS NULL), 200000.0
             -- but the accounts it moved between each keep their side of it, which is why they
             -- no longer add up to the month
             UNION ALL SELECT 'the account it left still shows it',
-                (SELECT expenses FROM m WHERE month = jun AND account_id = a1), -62700.0
+                (SELECT expenses FROM m WHERE period = jun AND account_id = a1), -62700.0
             UNION ALL SELECT 'the account it arrived on still shows it',
-                (SELECT income FROM m WHERE month = jun AND account_id = a2), 5000.0
+                (SELECT income FROM m WHERE period = jun AND account_id = a2), 5000.0
             -- netting moves money between the two columns without inventing or losing any
             UNION ALL SELECT 'the month still nets out the same',
-                (SELECT income + expenses FROM m WHERE month = jun AND account_id IS NULL),
-                (SELECT sum(income + expenses) FROM m WHERE month = jun AND account_id IS NOT NULL)
+                (SELECT income + expenses FROM m WHERE period = jun AND account_id IS NULL),
+                (SELECT sum(income + expenses) FROM m WHERE period = jun AND account_id IS NOT NULL)
 
             -- July holds the two cases the roll-up has to tell apart: ed moves 10000 and pays
             -- 100 to do it, ee moves 3000 somewhere this user does not own. -3000 -100 -3000.
             UNION ALL SELECT 'a transfer costs its fee',
-                (SELECT expenses FROM m WHERE month = jul AND account_id IS NULL), -6100.0
+                (SELECT expenses FROM m WHERE period = jul AND account_id IS NULL), -6100.0
             UNION ALL SELECT 'and brings in nothing',
-                (SELECT income FROM m WHERE month = jul AND account_id IS NULL), 0.0
+                (SELECT income FROM m WHERE period = jul AND account_id IS NULL), 0.0
             -- the far side of ee is not this user's account, so nothing nets against it: the
             -- whole 3000 left. Were it counted, the month would read -3100.
             UNION ALL SELECT 'money moved off your accounts is gone in full',
-                (SELECT count(*) FROM m WHERE month = jul AND account_id IS NULL AND expenses = -3100.0), 0
+                (SELECT count(*) FROM m WHERE period = jul AND account_id IS NULL AND expenses = -3100.0), 0
             UNION ALL SELECT 'the fee is not mistaken for the sum moved',
-                (SELECT count(*) FROM m WHERE month = jul AND account_id IS NULL AND expenses = -16000.0), 0
+                (SELECT count(*) FROM m WHERE period = jul AND account_id IS NULL AND expenses = -16000.0), 0
 
             -- a template never happened, and someone else's account is not this user's money
             UNION ALL SELECT 'no template anywhere',
@@ -178,10 +178,10 @@ BEGIN
             -- categories: c1 gets e1 (-1000), e2 (-50000), 0.75 of e5 (-3000) and half of
             -- e7 (-500)
             UNION ALL SELECT 'june spending in c1',
-                (SELECT expenses FROM c WHERE month = jun AND category_id = c1), -54500.0
+                (SELECT expenses FROM c WHERE period = jun AND category_id = c1), -54500.0
             -- c2 gets the remaining quarter of e5 and the other half of e7
             UNION ALL SELECT 'june spending in c2',
-                (SELECT expenses FROM c WHERE month = jun AND category_id = c2), -1500.0
+                (SELECT expenses FROM c WHERE period = jun AND category_id = c2), -1500.0
             -- the treemap normalises on its own, and equal weights split the expense rather
             -- than duplicating it: half of e7's -1000, not all of it. Only its c2 side is
             -- here, since under c1 it ranks behind e2 and e5 and the limit is two.
@@ -197,16 +197,16 @@ BEGIN
             -- uncategorized expenses land under a null category rather than being dropped:
             -- e6 on a1, ea on a3 and eb's own leg
             UNION ALL SELECT 'uncategorized spending is kept',
-                (SELECT expenses FROM c WHERE month = jun AND category_id IS NULL), -10700.0
+                (SELECT expenses FROM c WHERE period = jun AND category_id IS NULL), -10700.0
             -- income is split out from spending rather than netted against it
             UNION ALL SELECT 'income is not netted against spending',
-                (SELECT income FROM c WHERE month = jun AND category_id IS NULL), 200000.0
+                (SELECT income FROM c WHERE period = jun AND category_id IS NULL), 200000.0
 
             -- and the categories add back up to the accounts
             UNION ALL SELECT 'every category share sums to the month',
                 (SELECT round((
-                    (SELECT sum(income + expenses) FROM c WHERE month = jun)
-                  - (SELECT income + expenses FROM m WHERE month = jun AND account_id IS NULL)
+                    (SELECT sum(income + expenses) FROM c WHERE period = jun)
+                  - (SELECT income + expenses FROM m WHERE period = jun AND account_id IS NULL)
                 )::numeric)), 0
 
             -- the treemap's inner level: the two biggest of c1 by absolute amount, so the

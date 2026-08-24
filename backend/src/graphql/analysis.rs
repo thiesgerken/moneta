@@ -125,14 +125,14 @@ pub struct CategoryExpense {
     pub amount: f64,
 }
 
-/// One account's movement across a month.
+/// One account's movement across a period.
 #[derive(Debug, Clone, GraphQLObject)]
 #[graphql(context = Context)]
 pub struct AccountOverview {
     pub account: GraphQLAccount,
     pub start_amount: f64,
     pub end_amount: f64,
-    /// `startAmount` plus the month's transactions — see [`MonthOverview::integrated_end_total`]
+    /// `startAmount` plus the period's transactions — see [`PeriodOverview::integrated_end_total`]
     pub integrated_end_amount: Option<f64>,
     pub income: f64,
     pub expenses: f64,
@@ -141,21 +141,21 @@ pub struct AccountOverview {
 
 #[derive(Debug, Clone, GraphQLObject)]
 #[graphql(context = Context)]
-pub struct MonthOverview {
-    /// midnight on the first of the month, UTC
-    pub month: DateTime<Utc>,
+pub struct PeriodOverview {
+    /// midnight on the first day of the period, UTC — the 1st of a month or of a January
+    pub start: DateTime<Utc>,
     pub start_total: f64,
     /// what the recorded balances say at the end of the month
     pub end_total: f64,
-    /// `startTotal` plus everything booked during the month.
+    /// `startTotal` plus everything booked during the period.
     ///
     /// The gap to `endTotal` is MoneyDB's *Integrationsfehler*. It does not mean the
     /// arithmetic drifted — it means an expense is missing, which is the whole point of
     /// showing it.
     ///
     /// Null when the totals are read on the accrual axis: a sixth of a subscription is a cost
-    /// the month carried, not money that left an account, so there is nothing for the recorded
-    /// balances to disagree with.
+    /// the period carried, not money that left an account, so there is nothing for the
+    /// recorded balances to disagree with.
     pub integrated_end_total: Option<f64>,
     pub income: f64,
     pub expenses: f64,
@@ -167,9 +167,29 @@ pub struct MonthOverview {
 #[derive(Debug, Clone, GraphQLObject)]
 #[graphql(context = Context)]
 pub struct Overviews {
-    pub months: Vec<MonthOverview>,
+    pub periods: Vec<PeriodOverview>,
     /// the whole range at once, for the treemap
     pub by_category: Vec<CategoryBreakdown>,
+}
+
+/// How wide one bar of an overview is.
+///
+/// It is also the word `date_trunc` and `generate_series` take, which is why there are two of
+/// them and not a number of days: a month is not a fixed length and neither is a year.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, juniper::GraphQLEnum)]
+pub enum Granularity {
+    Month,
+    Year,
+}
+
+impl Granularity {
+    /// what postgres calls it
+    fn grain(self) -> &'static str {
+        match self {
+            Self::Month => "month",
+            Self::Year => "year",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, juniper::GraphQLEnum)]
@@ -251,10 +271,10 @@ FROM count_balance_expenses($1, $2, $3::uuid)
 "#;
 
 #[derive(Debug, QueryableByName)]
-struct MonthTotalRow {
+struct PeriodTotalRow {
     #[diesel(sql_type = Timestamptz)]
-    month: DateTime<Utc>,
-    /// null on the month's roll-up row, which is the only place the expense count is a
+    period: DateTime<Utc>,
+    /// null on the period's roll-up row, which is the only place the expense count is a
     /// distinct count across accounts rather than within one
     #[diesel(sql_type = Nullable<diesel::sql_types::Uuid>)]
     account_id: Option<Uuid>,
@@ -269,7 +289,7 @@ struct MonthTotalRow {
 #[derive(Debug, QueryableByName)]
 struct CategoryTotalRow {
     #[diesel(sql_type = Timestamptz)]
-    month: DateTime<Utc>,
+    period: DateTime<Utc>,
     #[diesel(sql_type = Nullable<diesel::sql_types::Uuid>)]
     category_id: Option<Uuid>,
     #[diesel(sql_type = Double)]
@@ -310,14 +330,14 @@ struct StatementRow {
     drift: Option<f64>,
 }
 
-const MONTH_TOTALS: &str = r#"
-SELECT month, account_id, income, expenses, expense_count
-FROM analysis_month_totals($1, $2, $3, $4)
+const PERIOD_TOTALS: &str = r#"
+SELECT period, account_id, income, expenses, expense_count
+FROM analysis_period_totals($1, $2, $3, $4, $5)
 "#;
 
 const CATEGORY_TOTALS: &str = r#"
-SELECT month, category_id, income, expenses
-FROM analysis_category_totals($1, $2, $3, $4)
+SELECT period, category_id, income, expenses
+FROM analysis_category_totals($1, $2, $3, $4, $5)
 "#;
 
 const CATEGORY_EXPENSES: &str = r#"
@@ -340,11 +360,12 @@ FROM analysis_statement($1, $2, $3, $4)
 /// category rather than a scan.
 const TREEMAP_EXPENSES_PER_CATEGORY: i32 = 50;
 
-/// Ceiling on how many months one `overviews` call may cover.
+/// Ceiling on how many periods one `overviews` call may cover.
 ///
-/// Each month costs a balance simulation at its start plus one at the range end, and the
-/// table is read a month at a time; a request for a century is a caller that has lost track.
-const MAX_MONTHS: usize = 600;
+/// Each one costs a balance simulation at its start plus one at the range end, and the table
+/// is read a period at a time; a request for six hundred of them is a caller that has lost
+/// track, whether that is fifty years of months or six centuries of years.
+const MAX_PERIODS: usize = 600;
 
 /// Ceiling on how many dates one request may ask to be simulated.
 ///
@@ -489,17 +510,18 @@ impl AnalysisQuery {
             .collect())
     }
 
-    /// Month-by-month income, spending and wealth across a range.
+    /// Period-by-period income, spending and wealth across a range, a month or a year at a
+    /// time.
     ///
-    /// `from` and `to` are snapped outwards to whole months, so asking for the middle of a
-    /// month gives you that whole month rather than a fragment of one.
+    /// `from` and `to` are snapped outwards to whole periods, so asking for the middle of one
+    /// gives you that whole period rather than a fragment of it.
     ///
     /// Amounts are `calculatedAmount` — the movement on the account — rather than
     /// `effectiveAmount`. The totals have to reconcile with the balances, and those are
     /// account balances rather than ownership-weighted shares of them; mixing the two would
     /// make the integration error meaningless.
-    /// `accrued` files each cost in the months it was *for* rather than the month it was
-    /// paid, spread evenly over the days of its Leistungszeitraum. The balances stay where
+    /// `accrued` files each cost in the periods it was *for* rather than the one it was
+    /// paid in, spread evenly over the days of its Leistungszeitraum. The balances stay where
     /// they are either way -- they are money in an account, which an accrued share is not --
     /// so `integratedEndTotal` comes back null and there is no integration error to report.
     pub async fn overviews(
@@ -507,18 +529,21 @@ impl AnalysisQuery {
         from: DateTime<Utc>,
         to: DateTime<Utc>,
         accrued: Option<bool>,
+        granularity: Option<Granularity>,
     ) -> FieldResult<Overviews> {
         let user_id = require_user(context).await?;
         let accrued = accrued.unwrap_or(false);
+        let granularity = granularity.unwrap_or(Granularity::Month);
 
         cached(
             &context.cache,
             format!(
-                "overviews:{user_id}:{}:{}:{accrued}",
+                "overviews:{user_id}:{}:{}:{accrued}:{}",
                 bucket(from),
-                bucket(to)
+                bucket(to),
+                granularity.grain()
             ),
-            overviews_uncached(context, user_id, from, to, accrued),
+            overviews_uncached(context, user_id, from, to, accrued, granularity),
         )
         .await
     }
@@ -589,22 +614,24 @@ async fn overviews_uncached(
     from: DateTime<Utc>,
     to: DateTime<Utc>,
     accrued: bool,
+    granularity: Granularity,
 ) -> FieldResult<Overviews> {
-    // one more boundary than there are months: month i runs [starts[i], starts[i + 1])
-    let starts = month_starts(from, to)?;
+    // one more boundary than there are periods: period i runs [starts[i], starts[i + 1])
+    let starts = period_starts(from, to, granularity)?;
     let (range_from, range_to) = (starts[0], starts[starts.len() - 1]);
 
     let simulated = simulate(context, &starts, None).await?;
 
     // see `compute`: the connection goes back before the loaders take one of their own
-    let (month_rows, category_rows, expense_rows) = {
+    let (period_rows, category_rows, expense_rows) = {
         let conn = &mut context.conn().await?;
 
-        let month_rows: Vec<MonthTotalRow> = diesel::sql_query(MONTH_TOTALS)
+        let period_rows: Vec<PeriodTotalRow> = diesel::sql_query(PERIOD_TOTALS)
             .bind::<diesel::sql_types::Uuid, _>(user_id)
             .bind::<Timestamptz, _>(range_from)
             .bind::<Timestamptz, _>(range_to)
             .bind::<Bool, _>(accrued)
+            .bind::<Text, _>(granularity.grain())
             .load(conn)
             .await?;
 
@@ -613,6 +640,7 @@ async fn overviews_uncached(
             .bind::<Timestamptz, _>(range_from)
             .bind::<Timestamptz, _>(range_to)
             .bind::<Bool, _>(accrued)
+            .bind::<Text, _>(granularity.grain())
             .load(conn)
             .await?;
 
@@ -625,7 +653,7 @@ async fn overviews_uncached(
             .load(conn)
             .await?;
 
-        (month_rows, category_rows, expense_rows)
+        (period_rows, category_rows, expense_rows)
     };
 
     let accounts = context
@@ -643,30 +671,30 @@ async fn overviews_uncached(
         )
         .await;
 
-    // (sample index, account) -> the balance there, so a month can look up both its ends
+    // (sample index, account) -> the balance there, so a period can look up both its ends
     let mut balances: HashMap<(usize, Uuid), f64> = HashMap::new();
     for row in &simulated {
         balances.insert((row.sample_idx as usize - 1, row.account_id), row.amount);
     }
 
-    let mut months = Vec::with_capacity(starts.len() - 1);
-    for (index, month) in starts.iter().take(starts.len() - 1).enumerate() {
+    let mut periods = Vec::with_capacity(starts.len() - 1);
+    for (index, start) in starts.iter().take(starts.len() - 1).enumerate() {
         let mut by_account = Vec::new();
 
-        // The roll-up row, whose count is distinct across the month rather than within one
+        // The roll-up row, whose count is distinct across the period rather than within one
         // account -- summing the per-account counts would count an expense that books
         // against two of your own accounts twice.
-        let rolled_up = month_rows
+        let rolled_up = period_rows
             .iter()
-            .find(|r| r.month == *month && r.account_id.is_none());
+            .find(|r| r.period == *start && r.account_id.is_none());
         let income = rolled_up.map_or(0.0, |t| t.income);
         let expenses = rolled_up.map_or(0.0, |t| t.expenses);
         let expense_count = rolled_up.map_or(0, |t| t.expense_count);
 
         for (account_id, account) in accounts.iter().sorted_by_key(|(_, a)| a.name.clone()) {
-            let totals = month_rows
+            let totals = period_rows
                 .iter()
-                .find(|r| r.month == *month && r.account_id == Some(*account_id));
+                .find(|r| r.period == *start && r.account_id == Some(*account_id));
 
             let start_amount = *balances.get(&(index, *account_id)).unwrap_or(&0.0);
             let end_amount = *balances.get(&(index + 1, *account_id)).unwrap_or(&0.0);
@@ -686,8 +714,8 @@ async fn overviews_uncached(
         let start_total: f64 = by_account.iter().map(|a| a.start_amount).sum();
         let end_total: f64 = by_account.iter().map(|a| a.end_amount).sum();
 
-        months.push(MonthOverview {
-            month: *month,
+        periods.push(PeriodOverview {
+            start: *start,
             start_total,
             end_total,
             integrated_end_total: (!accrued).then_some(start_total + income + expenses),
@@ -697,7 +725,7 @@ async fn overviews_uncached(
             by_account,
             by_category: category_rows
                 .iter()
-                .filter(|r| r.month == *month)
+                .filter(|r| r.period == *start)
                 .map(|r| CategoryTotal {
                     category: r
                         .category_id
@@ -711,8 +739,8 @@ async fn overviews_uncached(
         });
     }
 
-    // whole range at once for the treemap, which is not a sum of the monthly ones: the
-    // biggest expenses of a year are not the biggest of each of its months
+    // whole range at once for the treemap, which is not a sum of the per-period ones: the
+    // biggest expenses of a decade are not the biggest of each of its years
     let mut by_category: Vec<CategoryBreakdown> = category_rows
         .iter()
         .map(|r| r.category_id)
@@ -760,7 +788,7 @@ async fn overviews_uncached(
     by_category.sort_by(|a, b| a.expenses.total_cmp(&b.expenses));
 
     Ok(Overviews {
-        months,
+        periods,
         by_category,
     })
 }
@@ -861,32 +889,25 @@ async fn history_uncached(
     })
 }
 
-/// The first of every month the range touches, plus the first of the month after it.
+/// The first day of every period the range touches, plus the first day of the one after it.
 ///
-/// One more boundary than there are months, because a month needs both its ends: month `i`
+/// One more boundary than there are periods, because a period needs both its ends: period `i`
 /// runs from `starts[i]` to `starts[i + 1]`, and the balance at each boundary is one sample of
 /// the same simulation.
-fn month_starts(from: DateTime<Utc>, to: DateTime<Utc>) -> FieldResult<Vec<DateTime<Utc>>> {
+///
+/// These are also the boundaries the SQL is told to assume: `analysis_movements` files an
+/// accrued cost into whole periods, so a range that ended mid-period would have its last one
+/// counted whole on one axis and cut off at the day on the other.
+fn period_starts(
+    from: DateTime<Utc>,
+    to: DateTime<Utc>,
+    granularity: Granularity,
+) -> FieldResult<Vec<DateTime<Utc>>> {
     if to < from {
         return Err(format!("Overview range ends ({to}) before it starts ({from})").into());
     }
 
-    let start_of = |d: DateTime<Utc>| -> DateTime<Utc> {
-        DateTime::from_naive_utc_and_offset(
-            d.date_naive()
-                .with_day(1)
-                .expect("the 1st always exists")
-                .into(),
-            Utc,
-        )
-    };
-    let next_month = |d: DateTime<Utc>| -> DateTime<Utc> {
-        let (year, month) = (d.year(), d.month());
-        let (year, month) = if month == 12 {
-            (year + 1, 1)
-        } else {
-            (year, month + 1)
-        };
+    let midnight = |year: i32, month: u32| -> DateTime<Utc> {
         DateTime::from_naive_utc_and_offset(
             chrono::NaiveDate::from_ymd_opt(year, month, 1)
                 .expect("the 1st of any month exists")
@@ -895,18 +916,32 @@ fn month_starts(from: DateTime<Utc>, to: DateTime<Utc>) -> FieldResult<Vec<DateT
         )
     };
 
+    let start_of = |d: DateTime<Utc>| -> DateTime<Utc> {
+        match granularity {
+            Granularity::Month => midnight(d.year(), d.month()),
+            Granularity::Year => midnight(d.year(), 1),
+        }
+    };
+    let next = |d: DateTime<Utc>| -> DateTime<Utc> {
+        match granularity {
+            Granularity::Year => midnight(d.year() + 1, 1),
+            Granularity::Month if d.month() == 12 => midnight(d.year() + 1, 1),
+            Granularity::Month => midnight(d.year(), d.month() + 1),
+        }
+    };
+
     let mut starts = vec![start_of(from)];
-    // `to` inside a month means that whole month is wanted, so the boundary after it is the
+    // `to` inside a period means that whole period is wanted, so the boundary after it is the
     // start of the following one
-    let last = next_month(to);
+    let last = next(start_of(to));
     while *starts.last().expect("seeded above") < last {
-        if starts.len() > MAX_MONTHS {
+        if starts.len() > MAX_PERIODS {
             return Err(format!(
-                "Overview from {from} to {to} covers more than {MAX_MONTHS} months"
+                "Overview from {from} to {to} covers more than {MAX_PERIODS} periods"
             )
             .into());
         }
-        starts.push(next_month(*starts.last().expect("seeded above")));
+        starts.push(next(*starts.last().expect("seeded above")));
     }
 
     Ok(starts)

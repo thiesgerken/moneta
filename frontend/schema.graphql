@@ -99,6 +99,17 @@ enum ExpenseSortField {
   CATEGORIES
 }
 
+"""
+  How wide one bar of an overview is.
+
+  It is also the word `date_trunc` and `generate_series` take, which is why there are two of
+  them and not a number of days: a month is not a fixed length and neither is a year.
+"""
+enum Granularity {
+  MONTH
+  YEAR
+}
+
 enum PeriodicInterval {
   DAILY
   WEEKLY
@@ -320,12 +331,12 @@ type AccountMutation {
   update(id: UUID!, account: AccountInput!): Boolean!
 }
 
-"One account's movement across a month."
+"One account's movement across a period."
 type AccountOverview {
   account: Account!
   startAmount: Float!
   endAmount: Float!
-  "`startAmount` plus the month's transactions — see [`MonthOverview::integrated_end_total`]"
+  "`startAmount` plus the period's transactions — see [`PeriodOverview::integrated_end_total`]"
   integratedEndAmount: Float
   income: Float!
   expenses: Float!
@@ -407,21 +418,22 @@ type AnalysisQuery {
   """
   prepayments(at: DateTime): [Prepayment!]!
   """
-    Month-by-month income, spending and wealth across a range.
+    Period-by-period income, spending and wealth across a range, a month or a year at a
+    time.
 
-    `from` and `to` are snapped outwards to whole months, so asking for the middle of a
-    month gives you that whole month rather than a fragment of one.
+    `from` and `to` are snapped outwards to whole periods, so asking for the middle of one
+    gives you that whole period rather than a fragment of it.
 
     Amounts are `calculatedAmount` — the movement on the account — rather than
     `effectiveAmount`. The totals have to reconcile with the balances, and those are
     account balances rather than ownership-weighted shares of them; mixing the two would
     make the integration error meaningless.
-    `accrued` files each cost in the months it was *for* rather than the month it was
-    paid, spread evenly over the days of its Leistungszeitraum. The balances stay where
+    `accrued` files each cost in the periods it was *for* rather than the one it was
+    paid in, spread evenly over the days of its Leistungszeitraum. The balances stay where
     they are either way -- they are money in an account, which an accrued share is not --
     so `integratedEndTotal` comes back null and there is no integration error to report.
   """
-  overviews(from: DateTime!, to: DateTime!, accrued: Boolean): Overviews!
+  overviews(from: DateTime!, to: DateTime!, accrued: Boolean, granularity: Granularity): Overviews!
   """
     One account's ledger over a range, as a bank statement reads it.
 
@@ -888,31 +900,6 @@ type InvestmentQuery {
   list: [Investment!]!
 }
 
-type MonthOverview {
-  "midnight on the first of the month, UTC"
-  month: DateTime!
-  startTotal: Float!
-  "what the recorded balances say at the end of the month"
-  endTotal: Float!
-  """
-    `startTotal` plus everything booked during the month.
-
-    The gap to `endTotal` is MoneyDB's *Integrationsfehler*. It does not mean the
-    arithmetic drifted — it means an expense is missing, which is the whole point of
-    showing it.
-
-    Null when the totals are read on the accrual axis: a sixth of a subscription is a cost
-    the month carried, not money that left an account, so there is nothing for the recorded
-    balances to disagree with.
-  """
-  integratedEndTotal: Float
-  income: Float!
-  expenses: Float!
-  expenseCount: Int!
-  byAccount: [AccountOverview!]!
-  byCategory: [CategoryTotal!]!
-}
-
 type Mutation {
   users: UserMutation!
   accounts: AccountMutation!
@@ -925,9 +912,34 @@ type Mutation {
 }
 
 type Overviews {
-  months: [MonthOverview!]!
+  periods: [PeriodOverview!]!
   "the whole range at once, for the treemap"
   byCategory: [CategoryBreakdown!]!
+}
+
+type PeriodOverview {
+  "midnight on the first day of the period, UTC — the 1st of a month or of a January"
+  start: DateTime!
+  startTotal: Float!
+  "what the recorded balances say at the end of the month"
+  endTotal: Float!
+  """
+    `startTotal` plus everything booked during the period.
+
+    The gap to `endTotal` is MoneyDB's *Integrationsfehler*. It does not mean the
+    arithmetic drifted — it means an expense is missing, which is the whole point of
+    showing it.
+
+    Null when the totals are read on the accrual axis: a sixth of a subscription is a cost
+    the period carried, not money that left an account, so there is nothing for the
+    recorded balances to disagree with.
+  """
+  integratedEndTotal: Float
+  income: Float!
+  expenses: Float!
+  expenseCount: Int!
+  byAccount: [AccountOverview!]!
+  byCategory: [CategoryTotal!]!
 }
 
 type PeriodicRule {
