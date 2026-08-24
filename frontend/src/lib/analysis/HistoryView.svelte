@@ -24,7 +24,7 @@
 	import RangePicker from './RangePicker.svelte';
 	import SeriesToggle from './SeriesToggle.svelte';
 	import ToggleGroup from '$lib/ToggleGroup.svelte';
-	import { overviewsStore, periodDrilldown, type OverviewsData } from './overviews';
+	import { overviewsStore, periodDrilldown, periodHref, type OverviewsData } from './overviews';
 	import {
 		integrationError,
 		errorClass,
@@ -34,7 +34,6 @@
 		categoryColor
 	} from './format';
 	import {
-		CUSTOM_SPAN,
 		DATE_AXES,
 		accrued,
 		axisState,
@@ -94,28 +93,6 @@
 
 	const periods = $derived(overviews?.periods ?? []);
 
-	/// A year opens into its own months rather than jumping to a month page: the bar stands for
-	/// twelve of them and there is no one month it means. The range picker follows, so what
-	/// happened is visible in the control that did it.
-	///
-	/// Local midnights, because that is what the picker's own date fields read back: they
-	/// render through `isoDate`, which is local so that nobody is shown the day before the one
-	/// they typed. A `Date.UTC` here would put 31.12. in the field for anyone west of UTC.
-	const intoYear = (start: Date) => {
-		// the backend dates a period at midnight UTC; reading it locally can land in the year
-		// before
-		const year = start.getUTCFullYear();
-		historyState.range = {
-			span: CUSTOM_SPAN,
-			from: new Date(year, 0, 1).getTime(),
-			to: new Date(year, 11, 31).getTime()
-		};
-		historyState.granularity = 'MONTH';
-		// the range is twelve months now, so the rule above would land on MONTH as well --
-		// this only saves it a redraw
-		historyState.grainDecidedFor = 12;
-	};
-
 	/// Whether the chart splits a month into categories instead of into its two sides. The
 	/// table below is the same table either way -- a balance and an integration error are facts
 	/// about a month, and a category has neither.
@@ -165,7 +142,7 @@
 			toolbar: { show: false },
 			stacked: true,
 			events: {
-				...periodDrilldown(periods, granularity, intoYear),
+				...periodDrilldown(periods, granularity),
 				// apex toggles the series itself; this only keeps our list in step with it
 				legendClick: (_c: unknown, index: number) => {
 					const clicked = bars[index]?.name;
@@ -419,33 +396,21 @@
 					<TableBody class="divide-y">
 						{#each periods.toReversed() as o (o.start.getTime())}
 							<TableBodyRow>
-								<!-- A year has no page of its own, so it opens into its own months the
-								     way its bar does. A month keeps its link, which is what made the
-								     month pages reachable in the first place. -->
+								<!-- The link that made these pages reachable in the first place. A year
+								     has one of its own now, so both grains are the same anchor. -->
 								<TableBodyCell class="px-4 py-3 whitespace-nowrap">
-									{#if byYear}
-										<button
-											type="button"
-											class="text-primary-600 dark:text-primary-500 font-medium hover:underline"
-											onclick={() => intoYear(o.start)}
-										>
-											{o.start.getUTCFullYear()}
-										</button>
-									{:else}
-										<a
-											class="text-primary-600 dark:text-primary-500 font-medium hover:underline"
-											href={resolve('/analysis/[year]/[month]', {
-												year: `${o.start.getUTCFullYear()}`,
-												month: `${o.start.getUTCMonth() + 1}`
-											})}
-										>
-											{o.start.toLocaleDateString('de-DE', {
-												month: 'long',
-												year: 'numeric',
-												timeZone: 'UTC'
-											})}
-										</a>
-									{/if}
+									<a
+										class="text-primary-600 dark:text-primary-500 font-medium hover:underline"
+										href={periodHref(o.start, granularity)}
+									>
+										{byYear
+											? o.start.getUTCFullYear()
+											: o.start.toLocaleDateString('de-DE', {
+													month: 'long',
+													year: 'numeric',
+													timeZone: 'UTC'
+												})}
+									</a>
 								</TableBodyCell>
 								<!-- what the period booked, not what the balances did: on the accrual axis
 								     the balances stand still while the two columns beside this one move,

@@ -177,8 +177,8 @@ apart they are.
 **The frontend picks the grain from the range and lets the toggle override it.** Above three
 years it draws years — 120 monthly bars are more than the axis can label, so asking for a long
 window is itself the request for a coarser grain. The toggle overrides that until the range
-changes length again. A year bar opens into its own months rather than jumping to a month page:
-it stands for twelve of them and there is no one month it means.
+changes length again. Every bar and every table row opens the period's own page, at either
+grain — see below.
 
 **Amounts are `calculatedAmount`, not `effectiveAmount`.** The totals have to reconcile with
 the balances, and those are account balances rather than ownership-weighted shares of them.
@@ -207,13 +207,24 @@ between them is MoneyDB's *Integrationsfehler*, and it is kept.
 A large gap does **not** mean the arithmetic drifted — it means an expense is missing. That is
 the whole point of the view.
 
-### Month pages
+### Period pages
 
-`/analysis/[year]/[month]` is the same `overviews` query over a one-month range, plus an
+`/analysis/[year]/[[month]]` is the same `overviews` query over a one-period range, plus an
 expense list for the biggest few. `PeriodOverview` carries `byAccount`, which is the only thing
-the month page needs beyond what the table shows, so there is no endpoint of its own.
+the page needs beyond what the table shows, so there is no endpoint of its own.
 
-Each month gets a route rather than an expandable row: summary cards, the category treemap, a
+**One route at both grains.** Without a month in the path it is the year: the summary cards,
+the category picture, the per-account breakdown and the biggest expenses are answers about a
+period and none of them care how long it is. What a year has and a month does not is the table
+of its months, each row linking to its own page.
+
+That table is a **second `overviews` call** at the month grain, aliased into the same document
+— not the twelve rows folded into one. The roll-up nets a transfer inside the period it
+happened in, so a transfer leaving in May and landing in June nets over the year and not over
+either month: summing the rows would report a year that never happened. Which is also why the
+table says out loud that its months need not add up to the year above them.
+
+Each period gets a route rather than an expandable row: summary cards, the category treemap, a
 per-account breakdown and the biggest expenses. MoneyDB nested a second DataTable inside an
 expanded row, which is the part that does not survive a narrow screen.
 

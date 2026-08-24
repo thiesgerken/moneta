@@ -352,7 +352,7 @@
 	});
 
 	const lastMonthHref = $derived(
-		resolve('/analysis/[year]/[month]', {
+		resolve('/analysis/[year]/[[month]]', {
 			year: `${lastMonth.getFullYear()}`,
 			month: `${lastMonth.getMonth() + 1}`
 		})

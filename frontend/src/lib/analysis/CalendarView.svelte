@@ -176,7 +176,7 @@
 		     that already knows which one -->
 		<a
 			class="hover:text-primary-600 dark:hover:text-primary-500 w-48 text-center text-lg font-semibold hover:underline"
-			href={resolve('/analysis/[year]/[month]', {
+			href={resolve('/analysis/[year]/[[month]]', {
 				year: `${month.getFullYear()}`,
 				month: `${month.getMonth() + 1}`
 			})}

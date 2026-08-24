@@ -36,21 +36,38 @@
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
 	const year = $derived(Number(page.params.year));
-	const month = $derived(Number(page.params.month));
 
-	// UTC because the backend buckets months in UTC; building these locally would land the
-	// boundary an hour off and pull a neighbouring month's first expense into this one
-	const start = $derived(new Date(Date.UTC(year, month - 1, 1)));
-	const end = $derived(new Date(Date.UTC(year, month, 1)));
+	/// One page at two grains. Without a month in the path it is the year, which is the same
+	/// page over a wider window: the totals, the categories and the biggest expenses are
+	/// answers about a period, and nothing about them cares how long it is. The month table is
+	/// what a year has and a month does not -- its months are what it is made of.
+	const month = $derived(page.params.month ? Number(page.params.month) : null);
+	const byYear = $derived(month === null);
+
+	// UTC because the backend buckets periods in UTC; building these locally would land the
+	// boundary an hour off and pull a neighbouring period's first expense into this one
+	const start = $derived(
+		byYear ? new Date(Date.UTC(year, 0, 1)) : new Date(Date.UTC(year, month! - 1, 1))
+	);
+	const end = $derived(
+		byYear ? new Date(Date.UTC(year + 1, 0, 1)) : new Date(Date.UTC(year, month!, 1))
+	);
 
 	let sign = $state<'expenses' | 'income'>('expenses');
 
-	const open = (y: number, m: number) => {
-		goto(resolve('/analysis/[year]/[month]', { year: `${y}`, month: `${m}` }));
+	const open = (y: number, m: number | null) => {
+		goto(
+			resolve('/analysis/[year]/[[month]]', {
+				year: `${y}`,
+				month: m === null ? undefined : `${m}`
+			})
+		);
 	};
 
 	const shift = (n: number) => {
-		const d = new Date(Date.UTC(year, month - 1 + n, 1));
+		if (byYear) return open(year + n, null);
+
+		const d = new Date(Date.UTC(year, month! - 1 + n, 1));
 		open(d.getUTCFullYear(), d.getUTCMonth() + 1);
 	};
 
@@ -60,10 +77,10 @@
 	///
 	/// A select rather than `input type="month"`: firefox has no month picker and renders one as
 	/// a plain text field, which put "2026-07" where the heading used to be.
-	const picked = $derived(`${year}-${month}`);
+	const picked = $derived(byYear ? `${year}` : `${year}-${month}`);
 
-	/// Every month from the first expense to this one, newest first — the ones there is anything
-	/// to see in. The range query is the picker's own, and cheap: one expense, sorted.
+	/// Every period from the first expense to this one, newest first — the ones there is
+	/// anything to see in. The range query is the picker's own, and cheap: one expense, sorted.
 	// No error surface, deliberately: this only widens the month picker to the earliest data,
 	// and the month being viewed is offered regardless. A failure shortens a list, it empties
 	// nothing.
@@ -86,37 +103,38 @@
 		void startStore.fetch();
 	});
 
+	/// What the period is called, wherever it is written out.
+	const label = (y: number, m: number | null) =>
+		m === null
+			? `${y}`
+			: new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('de-DE', {
+					month: 'long',
+					year: 'numeric',
+					timeZone: 'UTC'
+				});
+
 	const choices = $derived.by(() => {
 		const first = $startStore.data?.expenses.list.edges[0]?.node.accrualStart;
 		const now = new Date();
 
-		// the month being looked at is always offered, even where it is outside the data
+		// the period being looked at is always offered, even where it is outside the data
 		let y = first?.getUTCFullYear() ?? year;
-		let m = (first?.getUTCMonth() ?? month - 1) + 1;
+		let m = byYear ? 1 : (first?.getUTCMonth() ?? month! - 1) + 1;
 		const out: { value: string; label: string }[] = [];
 
-		while (y < now.getFullYear() || (y === now.getFullYear() && m <= now.getMonth() + 1)) {
-			out.push({
-				value: `${y}-${m}`,
-				label: new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('de-DE', {
-					month: 'long',
-					year: 'numeric',
-					timeZone: 'UTC'
-				})
-			});
-			if (m === 12) [y, m] = [y + 1, 1];
+		while (
+			y < now.getFullYear() ||
+			(y === now.getFullYear() && (byYear || m <= now.getMonth() + 1))
+		) {
+			out.push({ value: byYear ? `${y}` : `${y}-${m}`, label: label(y, byYear ? null : m) });
+
+			if (byYear) y += 1;
+			else if (m === 12) [y, m] = [y + 1, 1];
 			else m += 1;
 		}
 
 		if (!out.some((o) => o.value === picked)) {
-			out.push({
-				value: picked,
-				label: start.toLocaleDateString('de-DE', {
-					month: 'long',
-					year: 'numeric',
-					timeZone: 'UTC'
-				})
-			});
+			out.push({ value: picked, label: label(year, month) });
 		}
 
 		return out.reverse();
@@ -124,14 +142,22 @@
 
 	function pick(value: string) {
 		const [y, m] = value.split('-').map(Number);
-		if (y && m) open(y, m);
+		if (!y) return;
+		if (byYear) open(y, null);
+		else if (m) open(y, m);
 	}
 
 	const detailStore = graphql(`
-		query AnalysisMonthDetail($from: DateTime!, $to: DateTime!, $accrued: Boolean) {
+		query AnalysisPeriodDetail(
+			$from: DateTime!
+			$to: DateTime!
+			$accrued: Boolean
+			$granularity: Granularity
+			$byYear: Boolean!
+		) {
 			analysis {
-				# the range is one month, so the default MONTH grain gives exactly one period
-				overviews(from: $from, to: $to, accrued: $accrued) {
+				# The range is exactly one period at the grain asked for, so this is one row.
+				overviews(from: $from, to: $to, accrued: $accrued, granularity: $granularity) {
 					periods {
 						start
 						startTotal
@@ -166,6 +192,23 @@
 							title
 							amount
 						}
+					}
+				}
+				# The months a year is made of, for the table only a year has. A second call
+				# rather than folding the twelve into one: the roll-up nets a transfer inside
+				# the period it happened in, so a transfer leaving in May and landing in June
+				# nets over the year and not over either month. Summing the rows would report a
+				# year that never happened.
+				months: overviews(from: $from, to: $to, accrued: $accrued, granularity: MONTH)
+					@include(if: $byYear) {
+					periods {
+						start
+						income
+						expenses
+						expenseCount
+						startTotal
+						endTotal
+						integratedEndTotal
 					}
 				}
 			}
@@ -262,10 +305,18 @@
 		}
 	`);
 
+	/// One period wide, at the grain the path asks for. In one place because `reload` asks for
+	/// the same window again after an edit, and two copies of this drifted apart once already.
+	const detailWindow = $derived({
+		from: start,
+		to: new Date(end.getTime() - 1),
+		accrued: accrued(),
+		granularity: (byYear ? 'YEAR' : 'MONTH') as 'YEAR' | 'MONTH',
+		byYear
+	});
+
 	$effect(() => {
-		void detailStore.fetch({
-			variables: { from: start, to: new Date(end.getTime() - 1), accrued: accrued() }
-		});
+		void detailStore.fetch({ variables: detailWindow });
 	});
 
 	// One pair of the two, never both: they would be ANDed, and an expense paid in June for
@@ -332,10 +383,7 @@
 	async function reload() {
 		invalidate();
 		await Promise.all([
-			detailStore.fetch({
-				variables: { from: start, to: new Date(end.getTime() - 1), accrued: accrued() },
-				...AFTER_WRITE
-			}),
+			detailStore.fetch({ variables: detailWindow, ...AFTER_WRITE }),
 			biggestStore.fetch({
 				variables: { ...biggestWindow, categoryIds: filteredBy },
 				...AFTER_WRITE
@@ -360,6 +408,10 @@
 
 	const overviews = $derived($detailStore.data?.analysis.overviews);
 	const detail = $derived(overviews?.periods[0]);
+
+	/// The months of the year, newest first, like the overview table they mirror. Empty on a
+	/// month, which is made of nothing smaller this page knows how to show.
+	const months = $derived($detailStore.data?.analysis.months?.periods.toReversed() ?? []);
 
 	/// What the month booked, rather than what the balances did. The same figure on the value
 	/// axis, and the only one of the two that means anything on the accrual axis: filing a cost
@@ -588,7 +640,7 @@
 		<Button color="alternative" size="sm" href={resolve('/analysis')}>
 			<ArrowLeftOutline class="mr-2 h-4 w-4" />Auswertung
 		</Button>
-		<!-- the two arrows belong to the month between them; loose in the row they wrapped
+		<!-- the two arrows belong to the period between them; loose in the row they wrapped
 		     away from it, leaving a lone "next" on a line of its own -->
 		<div class="flex items-center gap-3">
 			<Button color="alternative" size="sm" onclick={() => shift(-1)}>
@@ -596,7 +648,7 @@
 			</Button>
 			<h2 class="text-xl font-semibold">
 				<label>
-					<span class="sr-only">Monat</span>
+					<span class="sr-only">{byYear ? 'Jahr' : 'Monat'}</span>
 					<select
 						value={picked}
 						onchange={(e) => pick((e.target as HTMLSelectElement).value)}
@@ -621,7 +673,10 @@
 	</div>
 
 	{#if $detailStore.errors}
-		<QueryError errors={$detailStore.errors} message="Der Monat konnte nicht geladen werden." />
+		<QueryError
+			errors={$detailStore.errors}
+			message="{byYear ? 'Das Jahr' : 'Der Monat'} konnte nicht geladen werden."
+		/>
 	{:else if detail}
 		<!-- three cards rather than four on the accrual axis, where the fourth is a balance:
 		     see the Konten table below, and the columns the overview drops for the same reason -->
@@ -700,9 +755,74 @@
 			{/if}
 		</Card>
 
+		<!-- What the year is made of, before the accounts it moved between: the months are the
+		     next question after "what did the year cost", and each of them has the same page
+		     this one is. Newest first, like the overview table it mirrors. -->
+		{#if byYear && months.length > 0}
+			<Card class="max-w-none min-w-0 p-4">
+				<h3 class="mb-2 text-lg font-semibold">Monate</h3>
+				<div class="min-w-0 overflow-x-auto">
+					<Table hoverable striped class="w-full text-left text-sm">
+						<TableHead>
+							<TableHeadCell class="px-4 py-3">Monat</TableHeadCell>
+							<TableHeadCell class="px-4 py-3">Delta</TableHeadCell>
+							<TableHeadCell class="px-4 py-3">Einnahmen</TableHeadCell>
+							<TableHeadCell class="px-4 py-3">Ausgaben</TableHeadCell>
+							<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Anzahl</TableHeadCell>
+							{#if !accrued()}
+								<TableHeadCell class="px-4 py-3">Vermögen Ende</TableHeadCell>
+							{/if}
+						</TableHead>
+						<TableBody class="divide-y">
+							{#each months as m (m.start.getTime())}
+								{@const moved = m.income + m.expenses}
+								<TableBodyRow>
+									<TableBodyCell class="px-4 py-3 whitespace-nowrap">
+										<a
+											class="text-primary-600 dark:text-primary-500 font-medium hover:underline"
+											href={resolve('/analysis/[year]/[[month]]', {
+												year: `${m.start.getUTCFullYear()}`,
+												month: `${m.start.getUTCMonth() + 1}`
+											})}
+										>
+											{m.start.toLocaleDateString('de-DE', { month: 'long', timeZone: 'UTC' })}
+										</a>
+									</TableBodyCell>
+									<TableBodyCell class="px-4 py-3">
+										<Badge color={deltaColor(moved)} class="text-sm font-semibold">
+											{euro(moved)}
+										</Badge>
+									</TableBodyCell>
+									<TableBodyCell class="px-4 py-3 text-green-700 dark:text-green-400"
+										>{euro(m.income)}</TableBodyCell
+									>
+									<TableBodyCell class="px-4 py-3 text-red-600 dark:text-red-400"
+										>{euro(m.expenses)}</TableBodyCell
+									>
+									<TableBodyCell class="hidden px-4 py-3 sm:table-cell"
+										>{m.expenseCount}</TableBodyCell
+									>
+									{#if !accrued()}
+										<TableBodyCell class="px-4 py-3">{euro(m.endTotal)}</TableBodyCell>
+									{/if}
+								</TableBodyRow>
+							{/each}
+						</TableBody>
+					</Table>
+				</div>
+				<!-- The months do not add up to the year above them, and saying so beats leaving
+				     it to be discovered: a transfer out in May and back in June is gone from both
+				     of those months and never left the year. -->
+				<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+					Umbuchungen zwischen eigenen Konten heben sich innerhalb einer Periode auf, nicht über sie
+					hinweg — die Monate summieren sich daher nicht zwingend zum Jahr.
+				</p>
+			</Card>
+		{/if}
+
 		<!-- Balances, so the accrual axis has nothing to say here: an account holds money, and
-		     money does not move between accounts because a cost was filed under another month.
-		     What that month cost is the three cards above. -->
+		     money does not move between accounts because a cost was filed under another period.
+		     What that period cost is the three cards above. -->
 		{#if !accrued()}
 			<!-- A row of its own rather than a column beside the two lists: it is as wide as the
 			     accounts make it, and sharing a row pushed the lists onto separate ones, where

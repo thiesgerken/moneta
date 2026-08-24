@@ -9,7 +9,7 @@ URL paths, query parameters — is English. `?tab=activity`, not `?tab=aktivitae
 | --- | --- | --- |
 | `/` | — | the start page |
 | `/analysis` | Auswertung | seven tabs of analysis, [documented separately](analysis-dashboard.md) |
-| `/analysis/[year]/[month]` | — | one month in detail |
+| `/analysis/[year]/[[month]]` | — | one month, or one year, in detail |
 | `/expenses` | Ausgaben | the expense list |
 | `/balances` | Kontostände | recorded balances |
 | `/categories` | Kategorien | the category tree |
