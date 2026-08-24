@@ -88,6 +88,20 @@ const YEARS_ABOVE_MONTHS = 3;
 export const grainFor = (months: number): Granularity =>
 	months > YEARS_ABOVE_MONTHS * 12 ? 'YEAR' : 'MONTH';
 
+/// Whether asking for years over a range this long needs the range widened first.
+///
+/// Two years drawn as years is two bars, and one is one -- not a chart anybody switched the
+/// grain to see. Picking Jahre is a statement about wanting the long view, so the range
+/// follows it rather than leaving a picture with nothing in it.
+export const tooShortForYears = (months: number) => months < 2 * 12;
+
+/// Where a range that was too short for years lands. Five rather than two, because two is the
+/// shortest thing that is not absurd and nobody widens a window to arrive at the minimum.
+export const YEARS_FALLBACK_SPAN = '5y';
+
+/// A preset as the picker takes it: it resolves `from` and `to` itself.
+export const preset = (span: string): Range => range(span);
+
 /// Verlauf: the periods of a range, as totals or broken into categories.
 ///
 /// One state for what were two tabs drawing the same bars off the same query, one stacked by

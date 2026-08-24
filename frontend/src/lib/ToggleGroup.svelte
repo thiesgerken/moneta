@@ -5,8 +5,12 @@
 		options: { value: string; label: string }[];
 		value: string;
 		size?: 'xs' | 'sm';
+		/// Run after the new value is set, for a choice that has to move something besides
+		/// itself. An `$effect` on the bound value cannot tell a click from whatever else
+		/// writes to it.
+		onchange?: (value: string) => void;
 	}
-	let { options, value = $bindable(), size = 'xs' }: Props = $props();
+	let { options, value = $bindable(), size = 'xs', onchange }: Props = $props();
 </script>
 
 <!--
@@ -22,7 +26,10 @@
 			<Button
 				{size}
 				color={value === o.value ? 'primary' : 'alternative'}
-				onclick={() => (value = o.value)}
+				onclick={() => {
+					value = o.value;
+					onchange?.(o.value);
+				}}
 			>
 				{o.label}
 			</Button>

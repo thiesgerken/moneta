@@ -177,8 +177,9 @@ apart they are.
 **The frontend picks the grain from the range and lets the toggle override it.** Above three
 years it draws years — 120 monthly bars are more than the axis can label, so asking for a long
 window is itself the request for a coarser grain. The toggle overrides that until the range
-changes length again. Every bar and every table row opens the period's own page, at either
-grain — see below.
+changes length again — and switching to Jahre over a window shorter than two of them widens
+the range to five, since two bars is not a chart anybody changed the grain to see. Every bar
+and every table row opens the period's own page, at either grain — see below.
 
 **Amounts are `calculatedAmount`, not `effectiveAmount`.** The totals have to reconcile with
 the balances, and those are account balances rather than ownership-weighted shares of them.

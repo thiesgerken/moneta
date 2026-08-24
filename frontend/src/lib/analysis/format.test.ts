@@ -7,7 +7,7 @@ import {
 	periodLabel,
 	periodTicks
 } from './format';
-import { grainFor } from './state.svelte';
+import { grainFor, tooShortForYears } from './state.svelte';
 
 describe('integrationError', () => {
 	// the gap is what says an expense is missing, and it is a distance rather than a direction
@@ -80,6 +80,28 @@ describe('periodTicks', () => {
 	it('leaves a short range alone rather than inventing ticks', () => {
 		expect(periodTicks(3)).toBe(3);
 		expect(periodTicks(0)).toBe(0);
+	});
+});
+
+describe('tooShortForYears', () => {
+	// two bars is not a chart anybody switches the grain to see, and one is not a chart
+	it('is what a window with fewer than two years in it is', () => {
+		expect(tooShortForYears(1)).toBe(true);
+		expect(tooShortForYears(12)).toBe(true);
+		expect(tooShortForYears(23)).toBe(true);
+	});
+
+	it('and two years is enough to draw', () => {
+		expect(tooShortForYears(24)).toBe(false);
+		expect(tooShortForYears(120)).toBe(false);
+	});
+
+	// the range that asks for years on its own is never one that needs widening for them,
+	// which is what keeps the toggle from fighting the rule
+	it('never overlaps the range that picks years by itself', () => {
+		for (let months = 1; months <= 240; months++) {
+			expect(grainFor(months) === 'YEAR' && tooShortForYears(months)).toBe(false);
+		}
 	});
 });
 

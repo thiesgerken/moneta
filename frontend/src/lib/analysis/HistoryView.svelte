@@ -35,10 +35,13 @@
 	} from './format';
 	import {
 		DATE_AXES,
+		YEARS_FALLBACK_SPAN,
 		accrued,
 		axisState,
 		grainFor,
 		historyState,
+		preset,
+		tooShortForYears,
 		type Granularity
 	} from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
@@ -74,6 +77,17 @@
 
 	const granularity = $derived((historyState.granularity || 'MONTH') as Granularity);
 	const byYear = $derived(granularity === 'YEAR');
+
+	/// Switching to Jahre over a window too short to have any widens the window to five of
+	/// them. The rule above will then agree with the choice on its own, so this only has to
+	/// move the range and not the grain.
+	///
+	/// On the toggle rather than in an `$effect`: the same field is written by the rule above,
+	/// and an effect could not tell which of the two had done it.
+	const widenForYears = (grain: string) => {
+		if (grain !== 'YEAR' || !tooShortForYears(span)) return;
+		historyState.range = preset(YEARS_FALLBACK_SPAN);
+	};
 
 	$effect(() => {
 		// undefined until the picker has resolved its preset
@@ -291,6 +305,7 @@
 		     two-year one you want summed. -->
 		<ToggleGroup
 			bind:value={historyState.granularity}
+			onchange={widenForYears}
 			size="sm"
 			options={[
 				{ value: 'MONTH', label: 'Monate' },
