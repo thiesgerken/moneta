@@ -129,6 +129,13 @@
 		to: undefined
 	});
 
+	/// The end of the filtered period as an exclusive bound: the picker, and every page that
+	/// hands one over, names the last day the reader means, while the query's `*Before` ends
+	/// the day it is given.
+	const filterBefore = $derived(
+		filterDateRange.to ? new Date(filterDateRange.to.getTime() + 86400000) : undefined
+	);
+
 	let showTemplates = $state(false);
 	let showTaxRelevant = $state(true);
 	let showExtraordinary = $state(true);
@@ -191,9 +198,7 @@
 		const { from, to } = filterDateRange;
 		if (dateAxis !== 'accrual' || (!from && !to)) return null;
 
-		// the picker's `to` is the last day the reader means, and the share wants the bound
-		// after it
-		return { from, before: to ? new Date(to.getTime() + 86400000) : undefined };
+		return { from, before: filterBefore };
 	});
 
 	const partOf = (expense: { accrualStart: Date; accrualEnd: Date }) =>
@@ -343,11 +348,11 @@
 		// the period filter follows the column: "März" means the month it was for, or the month
 		// it was paid in, depending on which of them the reader is looking at
 		accruedAfter: dateAxis === 'accrual' ? filterDateRange.from : undefined,
-		accruedBefore: dateAxis === 'accrual' ? filterDateRange.to : undefined,
+		accruedBefore: dateAxis === 'accrual' ? filterBefore : undefined,
 		valuedAfter: dateAxis === 'value' ? filterDateRange.from : undefined,
-		valuedBefore: dateAxis === 'value' ? filterDateRange.to : undefined,
+		valuedBefore: dateAxis === 'value' ? filterBefore : undefined,
 		bookedAfter: dateAxis === 'booking' ? filterDateRange.from : undefined,
-		bookedBefore: dateAxis === 'booking' ? filterDateRange.to : undefined,
+		bookedBefore: dateAxis === 'booking' ? filterBefore : undefined,
 		sortBy: SORT_FIELDS[sort.field],
 		sortDir: (sort.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options
 	});
