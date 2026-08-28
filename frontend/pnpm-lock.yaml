@@ -15,8 +15,8 @@ importers:
         specifier: ^5.3.0
         version: 5.3.0
       apexcharts:
-        specifier: ^6.7.0
-        version: 6.10.0
+        specifier: ^7.0.0
+        version: 7.0.0
     devDependencies:
       '@eslint/compat':
         specifier: ^2.1.0
@@ -1229,8 +1229,8 @@ packages:
   apexcharts@5.16.0:
     resolution: {integrity: sha512-ULO3Gqrm0/26uwBcYz49u181uIp8Fy6BQQgg9QUDajs+JAs/EbXxiAmdc6BLy1JY29/JXroM7P0j0t2JPDApdg==}
 
-  apexcharts@6.10.0:
-    resolution: {integrity: sha512-XkDW9pb5L5jrjox86Q20gR2w6YnU4hUpv+FjL1eKtYKQGtyTUSsnFeuUE8wVDz8hNNHbOEx7Sl9cjfCmhB3NVw==}
+  apexcharts@7.0.0:
+    resolution: {integrity: sha512-wX0LP5WajZXIAvQpCcDMVOlBUhlfhzUmEaKxPkUs54WFm0/GBbEyYCpw4G6iK7W5nU/R+kRzk+NHQSWlmp0qCA==}
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
 
   aria-query@5.3.1:
@@ -3488,7 +3488,7 @@ snapshots:
 
   apexcharts@5.16.0: {}
 
-  apexcharts@6.10.0:
+  apexcharts@7.0.0:
     dependencies:
       apex-commons: 0.5.0
 
