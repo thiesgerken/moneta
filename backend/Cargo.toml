@@ -6,7 +6,7 @@ edition = "2024"
 default-run = "moneta"
 
 [dependencies]
-argon2 = "0.5"
+argon2 = "0.6"
 futures = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.6", features = ["cargo"] }
