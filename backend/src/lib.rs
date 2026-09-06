@@ -15,7 +15,7 @@ extern crate rocket;
 
 use argon2::{
     Argon2,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
+    password_hash::{PasswordHasher, PasswordVerifier, phc::PasswordHash},
 };
 use diesel_async::{
     AsyncConnection, AsyncPgConnection, SimpleAsyncConnection,
@@ -128,7 +128,7 @@ pub fn verify_password(pw: &str, hash: &str) -> bool {
 
 pub fn hash_password(pw: &str) -> String {
     Argon2::default()
-        .hash_password(pw.as_bytes(), &SaltString::generate(&mut OsRng))
+        .hash_password(pw.as_bytes())
         .expect("unable to hash password")
         .to_string()
 }
@@ -156,10 +156,7 @@ mod tests {
             argon2::Version::V0x13,
             argon2::Params::new(4096, 32, 8, Some(32)).unwrap(),
         );
-        let h = legacy
-            .hash_password(b"hunter2", &SaltString::generate(&mut OsRng))
-            .unwrap()
-            .to_string();
+        let h = legacy.hash_password(b"hunter2").unwrap().to_string();
 
         assert!(verify_password("hunter2", &h));
         assert!(!verify_password("hunter3", &h));
