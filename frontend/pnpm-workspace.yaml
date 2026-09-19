@@ -5,3 +5,8 @@ allowBuilds:
   houdini-svelte: true
 minimumReleaseAgeExclude:
   - '@rolldown/binding-android-arm64@1.2.2'
+
+# pnpm 12 derives a self-requirement from the packageManager field and records it
+# in the lockfile; a pnpm bump touches only package.json, so --frozen-lockfile
+# then aborts. CI and the image install the pinned pnpm themselves.
+pmOnFail: ignore
