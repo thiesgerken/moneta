@@ -3,7 +3,8 @@
   "extends": [
     "config:best-practices",
     ":preserveSemverRanges",
-    "group:allNonMajor"
+    "group:allNonMajor",
+    "local>renovate/renovate-config"
   ],
   "description": [
     "pnpm 11 refuses a lockfile entry younger than a day, so anything that lands faster than that fails `pnpm install --frozen-lockfile` in CI until the version ages out. Three days keeps a margin over that and over a weekend of nobody looking.",
@@ -29,10 +30,6 @@
     }
   ],
   "packageRules": [
-    {
-      "matchUpdateTypes": ["digest"],
-      "automerge": true
-    },
     {
       "matchManagers": ["npm"],
       "matchUpdateTypes": ["patch"],
