@@ -7,6 +7,6 @@
 # actions-rust-lang/setup-rust-toolchain only looks there; rustup itself searches upwards, so
 # `cd backend && cargo build` picks it up either way.
 [toolchain]
-channel = "1.98.1"
+channel = "1.99.0"
 components = ["rustfmt", "clippy"]
 profile = "minimal"
