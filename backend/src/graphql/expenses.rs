@@ -138,6 +138,16 @@ impl GraphQLExpense {
         self.data.upstream_id
     }
 
+    /// When the expense record was created, independent of its transaction value dates.
+    fn created_at(&self) -> DateTime<Utc> {
+        self.data.created_at
+    }
+
+    /// When the current expense record was last edited, not a historical changelog snapshot.
+    fn updated_at(&self) -> DateTime<Utc> {
+        self.data.updated_at
+    }
+
     fn title(&self) -> &str {
         &self.data.title
     }

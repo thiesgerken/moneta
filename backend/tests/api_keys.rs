@@ -17,7 +17,8 @@ const MINE: &str = "00000000-0000-7000-8000-000000000001";
 const THEIRS: &str = "00000000-0000-7000-8000-000000000002";
 const MY_ACCOUNT: &str = "00000000-0000-7000-8000-0000000000a1";
 const THEIR_ACCOUNT: &str = "00000000-0000-7000-8000-0000000000a2";
-const EXPENSES: &str = "{ expenses { list { edges { node { id title effectiveAmount } } } } }";
+const EXPENSES: &str =
+    "{ expenses { list { edges { node { id title effectiveAmount createdAt updatedAt } } } } }";
 const KEY_LIST: &str =
     "{ apiKeys { list { id name prefix access createdAt expiresAt lastUsedAt } } }";
 
@@ -132,6 +133,7 @@ async fn credentials_preserve_the_browser_and_owner_boundaries() {
     sql(&pool, &format!("INSERT INTO accounts (id,user_id,name,description,kind,availability,risk,opened,ownership_fraction) VALUES ('{MY_ACCOUNT}','{MINE}','Dummy checking','','debit','immediately','none','2026-01-01',1), ('{THEIR_ACCOUNT}','{THEIRS}','Other dummy checking','','debit','immediately','none','2026-01-01',1)")).await;
     sql(&pool, "INSERT INTO expenses (id,title,store,description,comments,accrual_start,accrual_end,is_template,is_tax_relevant,is_unchecked,is_incomplete,is_extraordinary,receipts,positions,created_at,updated_at) VALUES ('00000000-0000-7000-8000-0000000000e1','Dummy groceries','','','','2026-01-02','2026-01-02',false,false,false,false,false,'[]','[]',now(),now()), ('00000000-0000-7000-8000-0000000000e2','Other private groceries','','','','2026-01-02','2026-01-02',false,false,false,false,false,'[]','[]',now(),now())").await;
     sql(&pool, &format!("INSERT INTO expense_transactions (expense_id,idx,account_id,date,amount,comments,statement) VALUES ('00000000-0000-7000-8000-0000000000e1',0,'{MY_ACCOUNT}','2026-01-02',-100,'',''), ('00000000-0000-7000-8000-0000000000e2',0,'{THEIR_ACCOUNT}','2026-01-02',-200,'','')")).await;
+    sql(&pool, "UPDATE expenses SET created_at = '2025-11-03T12:34:56Z', updated_at = '2026-04-05T16:17:18Z' WHERE id = '00000000-0000-7000-8000-0000000000e1'").await;
 
     let config = moneta::config::Config {
         verbosity: -2,
@@ -197,6 +199,23 @@ async fn credentials_preserve_the_browser_and_owner_boundaries() {
     success(&bearer_read);
     assert!(!bearer_read.cookies);
     assert_eq!(bearer_read.body, session.body);
+    let expense = &bearer_read.body["data"]["expenses"]["list"]["edges"][0]["node"];
+    assert_eq!(
+        expense["createdAt"]
+            .as_str()
+            .unwrap()
+            .parse::<DateTime<Utc>>()
+            .unwrap(),
+        "2025-11-03T12:34:56Z".parse::<DateTime<Utc>>().unwrap()
+    );
+    assert_eq!(
+        expense["updatedAt"]
+            .as_str()
+            .unwrap()
+            .parse::<DateTime<Utc>>()
+            .unwrap(),
+        "2026-04-05T16:17:18Z".parse::<DateTime<Utc>>().unwrap()
+    );
     assert_ne!(
         query(&machine, EXPENSES, Some(&other_token)).await.body,
         session.body
