@@ -22,3 +22,11 @@ export const amountColor = (cents: number) =>
 /// otherwise.
 export const restingAmountColor = (cents: number) =>
 	cents === 0 ? 'text-gray-500 dark:text-gray-400' : amountColor(cents);
+
+/// A zero still gets its own cell: it can describe a transfer rather than a missing amount.
+export const amountTint = (cents: number) =>
+	cents < 0
+		? 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300'
+		: cents > 0
+			? 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300'
+			: 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-200';
