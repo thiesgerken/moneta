@@ -295,7 +295,7 @@
 			series: slices.map((s) => s.value),
 			labels: slices.map((s) => s.name),
 			colors: slices.map((s) => s.color),
-			stroke: { width: 0 },
+			stroke: { width: 1.5, colors: ['var(--color-gray-500)'] },
 			dataLabels: { enabled: false },
 			legend: { position: 'bottom', fontSize: '12px' },
 			tooltip: { y: { formatter: (v: number) => euroExact(v * 100) } },
@@ -308,9 +308,14 @@
 							// the number in the middle when a slice is hovered, which is a
 							// different formatter from the total's and from the tooltip's --
 							// apex hands it the value as a string off the DOM
-							value: { formatter: (v: string) => euroExact(Number(v) * 100) },
+							name: { color: 'currentColor' },
+							value: {
+								color: 'currentColor',
+								formatter: (v: string) => euroExact(Number(v) * 100)
+							},
 							total: {
 								show: true,
+								color: 'currentColor',
 								label: sign === 'income' ? 'Eingenommen' : 'Ausgegeben',
 								formatter: () => euro(amount(thisMonth))
 							}
@@ -550,7 +555,7 @@
 			<Card class="max-w-none border-0 bg-white p-4 dark:bg-gray-800">
 				<!-- the comparison on its own line: beside the toggle it was a sentence competing
 				     with a control for the same row, and it wrapped into it on the way -->
-				<div class="flex items-center justify-between gap-3">
+				<div class="flex flex-wrap items-center justify-between gap-3">
 					<h2 class="text-lg font-semibold">{monthName(monthStart)}</h2>
 					<div class="flex items-center gap-2">
 						<!-- desktop only: three toggles in this card would leave the month name no room

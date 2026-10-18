@@ -66,7 +66,7 @@
 	import { tableSearchClasses, tableSearchTableClass, toolbarControl } from './table_styles';
 	import { page } from '$app/state';
 	import { accrualShare, shortDate } from './analysis/dates';
-	import { amountColor, euro, signedEuro } from './money';
+	import { amountColor, amountTint, euro, signedEuro } from './money';
 	import QueryError from './QueryError.svelte';
 	import SortIcon from './SortIcon.svelte';
 	import { DESC, TableSort } from './table_sort.svelte';
@@ -628,16 +628,6 @@
 			widest.removeEventListener('change', update);
 		};
 	});
-
-	/// The colour an amount is written in. Zero is its own answer rather than the absence of one:
-	/// an expense that nets out moved money between two of your own accounts. `gray-200` rather
-	/// than the `-100` the other two use, since `-100` is the shade a hovered row is.
-	const amountTint = (amount: number) =>
-		amount < 0
-			? 'bg-red-100 text-red-700'
-			: amount > 0
-				? 'bg-green-100 text-green-700'
-				: 'bg-gray-200 text-gray-600';
 
 	/// A title that names no expense: the automation rules give one this when their template has
 	/// no title of its own, and it then says the same thing on every row it produced. Tinting it
@@ -1555,9 +1545,9 @@
 														</td>
 														<td class="px-3 py-2 text-gray-500 dark:text-gray-400">
 															{#if transaction.fraction}
-																Anteilig · {(transaction.fraction * 100).toFixed(0)}% von {(
-																	(expense.referenceAmount ?? 0) / 100
-																).toFixed(2)}€
+																Anteilig · {(transaction.fraction * 100).toFixed(0)}% von {euro(
+																	expense.referenceAmount ?? 0
+																)}
 															{:else}
 																Direkt
 															{/if}
@@ -1636,9 +1626,7 @@
 																{position.unit ?? ''}
 															</td>
 															<td class="px-3 py-2 text-right whitespace-nowrap">
-																{position.amount != null
-																	? (position.amount / 100).toFixed(2) + '€'
-																	: ''}
+																{position.amount != null ? euro(position.amount) : ''}
 															</td>
 														</tr>
 													{/each}

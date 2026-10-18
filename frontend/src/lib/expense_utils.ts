@@ -201,12 +201,19 @@ export function readableTextOn(...colors: string[]): string {
 	return black >= white ? '#000' : '#fff';
 }
 
+function themedText(colors: string[]): string {
+	const light = readableTextOn(...colors);
+	return `light-dark(${light === 'inherit' ? 'currentColor' : light}, var(--color-gray-100))`;
+}
+
 /// The whole inline style for something drawn in an account's or a category's own colour.
 ///
 /// Text colour belongs with the tint rather than with the element: every caller needs both, and
 /// the ones that hardcoded `text-black` are exactly the ones that went unreadable.
 export function tint(color: string | null | undefined): string | undefined {
-	return color ? `background-color: ${color}; color: ${readableTextOn(color)};` : undefined;
+	return color
+		? `background-color: light-dark(${color}, color-mix(in srgb, ${color} 30%, var(--color-gray-800))); color: ${themedText([color])};`
+		: undefined;
 }
 
 export function makeStripedBackground(segments: { color: string; percentage: number }[]) {
@@ -223,12 +230,13 @@ export function makeStripedBackground(segments: { color: string; percentage: num
 			s += ', ';
 		}
 
-		s += `${segments[i].color} ${sum * 100}% ${(sum + segments[i].percentage) * 100}%`;
+		const color = segments[i].color;
+		s += `light-dark(${color}, color-mix(in srgb, ${color} 30%, var(--color-gray-800))) ${sum * 100}% ${(sum + segments[i].percentage) * 100}%`;
 		sum += segments[i].percentage;
 	}
 
-	// One piece of text over every stripe, so it has to be readable on all of them at once.
-	return `${s});color: ${readableTextOn(...segments.map((segment) => segment.color))};`;
+	// Dark stripes share a muted surface so one foreground remains legible across every colour.
+	return `${s});color: ${themedText(segments.map((segment) => segment.color))};`;
 }
 
 export interface SortableAccount {
