@@ -9,6 +9,7 @@ use tokio::sync::RwLock;
 use crate::graphql::{
     accounts::{AccountMutation, AccountQuery},
     analysis::AnalysisQuery,
+    api_keys::{ApiKeyMutation, ApiKeyQuery},
     balances::{BalanceMutation, BalanceQuery},
     categories::{CategoryMutation, CategoryQuery},
     expenses::{ExpenseMutation, ExpenseQuery},
@@ -33,6 +34,7 @@ pub struct Context {
     pub pool: crate::Pool,
     pub config: crate::config::Config,
     pub user_id: Arc<RwLock<Option<Uuid>>>,
+    pub credential: Credential,
     pub cache: Arc<AnalysisCache>,
     /// Set by the mutation root, read once the request is done. The cache is dropped after
     /// the write has committed rather than when the field is entered: clearing first leaves a
@@ -79,6 +81,94 @@ pub async fn require_user(context: &Context) -> juniper::FieldResult<Uuid> {
     })
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Credential {
+    Session,
+    ApiKey(crate::api_keys::ApiKeyAccess),
+}
+
+pub struct Authorization<'r>(Option<&'r str>);
+
+#[rocket::async_trait]
+impl<'r> rocket::request::FromRequest<'r> for Authorization<'r> {
+    type Error = std::convert::Infallible;
+
+    async fn from_request(
+        request: &'r rocket::Request<'_>,
+    ) -> rocket::request::Outcome<Self, Self::Error> {
+        let mut headers = request.headers().get("Authorization");
+        let header = headers.next();
+        let header = if headers.next().is_some() {
+            Some("")
+        } else {
+            header
+        };
+        rocket::request::Outcome::Success(Self(header))
+    }
+}
+
+fn unauthenticated() -> juniper::FieldError {
+    juniper::FieldError::new(
+        "Missing or invalid credential",
+        juniper::graphql_value!({"code": "UNAUTHENTICATED"}),
+    )
+}
+
+fn forbidden() -> juniper::FieldError {
+    juniper::FieldError::new(
+        "This credential does not permit this operation",
+        juniper::graphql_value!({"code": "FORBIDDEN"}),
+    )
+}
+
+pub fn require_browser(context: &Context) -> juniper::FieldResult<()> {
+    if context.credential == Credential::Session {
+        Ok(())
+    } else {
+        Err(forbidden())
+    }
+}
+
+pub async fn require_session(context: &Context) -> juniper::FieldResult<Uuid> {
+    require_browser(context)?;
+    require_user(context).await
+}
+
+fn selects_mutation(request: &juniper::http::GraphQLRequest, schema: &Schema) -> bool {
+    use juniper::{Definition, OperationType};
+    // Leave syntax and ambiguous/missing operation errors to Juniper. Such documents cannot execute.
+    let Ok(document) = juniper::parser::parse_document_source(&request.query, &schema.schema)
+    else {
+        return false;
+    };
+    let mut operations = document.iter().filter_map(|definition| match definition {
+        Definition::Operation(operation) => Some(&operation.item),
+        Definition::Fragment(_) => None,
+    });
+    let selected = match request.operation_name.as_deref() {
+        Some(name) => {
+            operations.find(|operation| operation.name.as_ref().is_some_and(|n| n.item == name))
+        }
+        None => {
+            let first = operations.next();
+            if operations.next().is_none() {
+                first
+            } else {
+                None
+            }
+        }
+    };
+    selected.is_some_and(|operation| operation.operation_type == OperationType::Mutation)
+}
+
+fn contains_mutation(request: &juniper_rocket::GraphQLRequest, schema: &Schema) -> bool {
+    match request.as_ref() {
+        juniper::http::GraphQLBatchRequest::Single(request) => selects_mutation(request, schema),
+        juniper::http::GraphQLBatchRequest::Batch(requests) => requests
+            .iter()
+            .any(|request| selects_mutation(request, schema)),
+    }
+}
 /// What a response should do with the session cookie.
 #[derive(Debug, PartialEq, Eq)]
 enum SessionCookie {
@@ -111,18 +201,51 @@ pub async fn graphql_handler(
     config: &rocket::State<crate::config::Config>,
     cache: &rocket::State<Arc<AnalysisCache>>,
     cookies: &rocket::http::CookieJar<'_>,
+    authorization: Authorization<'_>,
     request: juniper_rocket::GraphQLRequest,
     schema: &rocket::State<Schema>,
 ) -> juniper_rocket::GraphQLResponse {
-    let user_id = cookies
-        .get_private("user_id")
-        .and_then(|c| c.value().parse().ok());
+    let (user_id, credential) = if let Some(header) = authorization.0 {
+        let Some(token) = header.strip_prefix("Bearer ") else {
+            return juniper_rocket::GraphQLResponse::error(unauthenticated());
+        };
+        let authenticated = match pool.get().await {
+            Ok(mut conn) => crate::api_keys::authenticate(&mut conn, token).await,
+            Err(_) => {
+                return juniper_rocket::GraphQLResponse::error(juniper::FieldError::from(
+                    "Database unavailable",
+                ));
+            }
+        };
+        match authenticated {
+            Ok(Some((id, access))) => (Some(id), Credential::ApiKey(access)),
+            Ok(None) => return juniper_rocket::GraphQLResponse::error(unauthenticated()),
+            Err(_) => {
+                return juniper_rocket::GraphQLResponse::error(juniper::FieldError::from(
+                    "Database unavailable",
+                ));
+            }
+        }
+    } else {
+        (
+            cookies
+                .get_private("user_id")
+                .and_then(|c| c.value().parse().ok()),
+            Credential::Session,
+        )
+    };
+    if credential == Credential::ApiKey(crate::api_keys::ApiKeyAccess::Read)
+        && contains_mutation(&request, schema)
+    {
+        return juniper_rocket::GraphQLResponse::error(forbidden());
+    }
     let user_id_writer = Arc::new(RwLock::new(user_id));
 
     let context = Context {
         config: (*config).clone(),
         pool: (*pool).clone(),
         user_id: user_id_writer.clone(),
+        credential,
         cache: (*cache).clone(),
         wrote: AtomicBool::new(false),
         account_loader: get_account_loader((*pool).clone()),
@@ -139,6 +262,9 @@ pub async fn graphql_handler(
     }
 
     let new_user_id = *user_id_writer.read().await;
+    if credential != Credential::Session {
+        return r;
+    }
     match session_cookie(user_id, new_user_id) {
         SessionCookie::Login(uid) => {
             info!("Login for user_id {}", uid);
@@ -164,6 +290,12 @@ pub async fn graphql_handler(
 impl Query {
     fn api_version() -> &'static str {
         "1.0"
+    }
+
+    /// Browser-session credential management. API keys cannot list key metadata.
+    async fn api_keys(context: &Context) -> juniper::FieldResult<ApiKeyQuery> {
+        require_session(context).await?;
+        Ok(ApiKeyQuery)
     }
 
     fn users() -> UserQuery {
@@ -218,8 +350,15 @@ impl Mutation {
     // cache: this branch is login, logout and the visit marker, and the marker is recorded on
     // every single dashboard load. Dropping it here would mean the dashboard invalidates the
     // answers it is about to ask for.
-    fn users() -> UserMutation {
-        UserMutation
+    fn users(context: &Context) -> juniper::FieldResult<UserMutation> {
+        require_browser(context)?;
+        Ok(UserMutation)
+    }
+
+    /// Credential writes do not affect financial analysis.
+    async fn api_keys(context: &Context) -> juniper::FieldResult<ApiKeyMutation> {
+        require_session(context).await?;
+        Ok(ApiKeyMutation)
     }
 
     fn accounts(context: &Context) -> AccountMutation {
@@ -274,6 +413,7 @@ mod tests {
             config: crate::config::Config::default(),
             pool: pool.clone(),
             user_id: Arc::new(RwLock::new(None)),
+            credential: Credential::Session,
             cache: Arc::new(AnalysisCache::default()),
             wrote: AtomicBool::new(false),
             account_loader: get_account_loader(pool.clone()),

@@ -25,6 +25,22 @@ diesel::table! {
 diesel::table! {
     use diesel::sql_types::*;
 
+    api_keys (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        name -> Text,
+        prefix -> Text,
+        secret_hash -> Bytea,
+        access_level -> Text,
+        created_at -> Timestamptz,
+        expires_at -> Nullable<Timestamptz>,
+        last_used_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+
     automation_rules (id) {
         id -> Uuid,
         user_id -> Uuid,
@@ -103,11 +119,11 @@ diesel::table! {
         account_id -> Uuid,
         idx -> Int4,
         date -> Timestamptz,
-        booking_date -> Nullable<Timestamptz>,
         amount -> Nullable<Int4>,
         fraction -> Nullable<Float8>,
         comments -> Text,
         statement -> Text,
+        booking_date -> Nullable<Timestamptz>,
     }
 }
 
@@ -181,6 +197,7 @@ diesel::table! {
 }
 
 diesel::joinable!(accounts -> users (user_id));
+diesel::joinable!(api_keys -> users (user_id));
 diesel::joinable!(automation_rules -> accounts (filter_account_id));
 diesel::joinable!(automation_rules -> expenses (template_id));
 diesel::joinable!(automation_rules -> users (user_id));
@@ -198,6 +215,7 @@ diesel::joinable!(seen_deliveries -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     accounts,
+    api_keys,
     automation_rules,
     balances,
     categories,

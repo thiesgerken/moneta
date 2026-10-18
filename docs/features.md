@@ -17,6 +17,7 @@ URL paths, query parameters — is English. `?tab=activity`, not `?tab=aktivitae
 | `/rules` | Regeln | periodic and automation rules, in two tabs |
 | `/deliveries` | Lieferungen | bank statement lines that have been handed in |
 | `/login` | — | name and password |
+| `/api-keys` | API-Schlüssel | user-owned machine credentials |
 
 `src/lib/navigation.ts` holds the navbar entries and is also where page titles come from, so
 the two cannot drift apart.
@@ -40,6 +41,24 @@ Below it, three things:
 "Since your last visit" comes from `users.visit`, a mutation the page opens with: it records
 that you are here and returns when you were here before, and that second answer stops being
 available the moment the first is written.
+
+## API keys
+
+The API-Schlüssel page creates named credentials for Ferret and other machine clients.
+Choose **Nur lesen** for Ferret: it allows authenticated queries, not mutations. **Lesen
+und schreiben** also allows ordinary domain mutations, with exactly the browser user's
+existing ownership and visibility restrictions. Keys cannot manage credentials, log in/out,
+change identity, or write the human visit marker.
+
+Expiry is optional and defaults to none. The secret is shown once with a copy button, never
+recoverable later. Lists show its nonsecret prefix, permission, creation, optional expiry and
+last-use time. Expired credentials remain visible as **Abgelaufen**. Removing a key requires
+confirmation, physically deletes it, and makes the next request fail. There is no revocation
+history, reactivation, renewal or in-place permission upgrade.
+
+Password changes do not invalidate API keys. To replace one, create a new key and remove the
+old one. Last use is successful authentication, updated at most once per minute, even when
+the GraphQL operation itself is rejected. It is not an audit log.
 
 ## Expenses
 
