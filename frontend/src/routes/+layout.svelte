@@ -1,10 +1,10 @@
 <script lang="ts">
 	import '../app.css';
-	import Nav from '$lib/Nav.svelte';
+	import Nav from '#lib/Nav.svelte';
 	import { graphql } from '$houdini';
 	import { beforeNavigate } from '$app/navigation';
 	import { page, updated } from '$app/state';
-	import { pageTitle } from '$lib/navigation';
+	import { pageTitle } from '#lib/navigation.ts';
 	import type { Snippet } from 'svelte';
 
 	interface Props {

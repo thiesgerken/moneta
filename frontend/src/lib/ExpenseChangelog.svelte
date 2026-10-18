@@ -17,7 +17,7 @@
 	import { feedState } from './analysis/state.svelte';
 	import { shortDate } from './analysis/dates';
 	import QueryError from './QueryError.svelte';
-	import { euro, restingAmountColor } from '$lib/money';
+	import { euro, restingAmountColor } from '#lib/money.ts';
 
 	/// The dashboard shows the same feed in a column beside everything else, where the filters
 	/// belong to the tab that owns them and six entries are as many as fit.

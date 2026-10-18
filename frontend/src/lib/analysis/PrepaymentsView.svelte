@@ -17,9 +17,9 @@
 	import { prepaymentsState } from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
 	import { shortDate } from './dates';
-	import QueryError from '$lib/QueryError.svelte';
-	import ExpenseDetailModal from '$lib/ExpenseDetailModal.svelte';
-	import { amountColor, euro, signedEuro } from '$lib/money';
+	import QueryError from '#lib/QueryError.svelte';
+	import ExpenseDetailModal from '#lib/ExpenseDetailModal.svelte';
+	import { amountColor, euro, signedEuro } from '#lib/money.ts';
 
 	// How much of a prepayment is laid out, used up or still to come is a quantity of it, not a
 	// movement on an account: 145 € were prepaid, not -145 €. Expense amounts stay signed the way

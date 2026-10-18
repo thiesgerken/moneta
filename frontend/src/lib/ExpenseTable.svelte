@@ -20,7 +20,7 @@
 		Select,
 		Spinner
 	} from 'flowbite-svelte';
-	import { Section } from 'flowbite-svelte-blocks';
+	import TableSection from './TableSection.svelte';
 	import {
 		PlusOutline,
 		FilterSolid,
@@ -1051,7 +1051,7 @@
 	})) || []}
 />
 
-<Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
+<TableSection>
 	<QueryError
 		errors={[...($expenseStore.errors ?? []), ...($basicStore.errors ?? [])]}
 		message="Die Ausgaben konnten nicht geladen werden."
@@ -1802,4 +1802,4 @@
 			</div>
 		{/snippet}
 	</TableSearch>
-</Section>
+</TableSection>

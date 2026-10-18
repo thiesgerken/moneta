@@ -8,7 +8,7 @@
 	import { graphql } from '$houdini';
 	import { resolve } from '$app/paths';
 	import { shortDate } from './analysis/dates';
-	import QueryError from '$lib/QueryError.svelte';
+	import QueryError from '#lib/QueryError.svelte';
 
 	interface Props {
 		templateId: string;

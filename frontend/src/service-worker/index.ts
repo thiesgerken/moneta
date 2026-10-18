@@ -1,6 +1,3 @@
-/// <reference types="@sveltejs/kit" />
-/// <reference lib="webworker" />
-
 /// Why this exists at all: chrome will not offer to install a site without a service worker,
 /// so this is what makes the app a PWA rather than a bookmark.
 ///
@@ -8,18 +5,20 @@
 /// assets are served from the cache; everything else, `/graphql` above all, goes to the network
 /// every time. A cached balance is a wrong balance.
 
-import { build, files, version } from '$service-worker';
-
-const sw = self as unknown as ServiceWorkerGlobalScope;
+import { version } from '$app/env';
+import { assets, immutable } from '$app/manifest';
+import { resolve } from '$app/paths';
+import { self as sw } from '$app/service-worker';
 
 /// `version` is a build timestamp, so the keys sort oldest-first as strings.
 const PREFIX = 'moneta-';
 const CACHE = `${PREFIX}${version}`;
-const ASSETS = new Set([...build, ...files]);
+const base = resolve('/');
+const ASSETS = new Set([...immutable, ...assets].map(({ path }) => `${base}${path}`));
 
 /// Content-hashed, so a hit from an older build's cache is the file it asked for and not a
 /// stale one. This is what a page from before the last deploy is served from.
-const IMMUTABLE = '/_app/immutable/';
+const IMMUTABLE = `${base}_app/immutable/`;
 
 sw.addEventListener('install', (event) => {
 	// the new build takes over on the next load rather than waiting for every tab to close,

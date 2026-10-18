@@ -23,21 +23,21 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { graphql } from '$houdini';
-	import { amountColor } from '$lib/money';
-	import Chart from '$lib/Chart.svelte';
-	import ToggleGroup from '$lib/ToggleGroup.svelte';
-	import ExpenseDetailModal from '$lib/ExpenseDetailModal.svelte';
-	import { invalidate, AFTER_WRITE } from '$lib/invalidate';
+	import { amountColor } from '#lib/money.ts';
+	import Chart from '#lib/Chart.svelte';
+	import ToggleGroup from '#lib/ToggleGroup.svelte';
+	import ExpenseDetailModal from '#lib/ExpenseDetailModal.svelte';
+	import { invalidate, AFTER_WRITE } from '#lib/invalidate.ts';
 	import {
 		integrationError,
 		errorClass,
 		deltaColor,
 		categoryColor,
 		asMoney
-	} from '$lib/analysis/format';
-	import { DATE_AXES, accrued, axisState } from '$lib/analysis/state.svelte';
-	import { accrualShare, isoDate } from '$lib/analysis/dates';
-	import QueryError from '$lib/QueryError.svelte';
+	} from '#lib/analysis/format.ts';
+	import { DATE_AXES, accrued, axisState } from '#lib/analysis/state.svelte.ts';
+	import { accrualShare, isoDate } from '#lib/analysis/dates.ts';
+	import QueryError from '#lib/QueryError.svelte';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });

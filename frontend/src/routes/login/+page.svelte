@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { graphql } from '$houdini';
 	import { Button, Label, Input, Helper } from 'flowbite-svelte';
-	import Brand from '$lib/Brand.svelte';
+	import Brand from '#lib/Brand.svelte';
 
 	let error = $state<string | null>(null);
 	let busy = $state(false);

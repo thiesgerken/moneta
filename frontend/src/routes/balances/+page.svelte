@@ -1,5 +1,5 @@
 <script lang="ts">
-	import BalanceTable from '$lib/BalanceTable.svelte';
+	import BalanceTable from '#lib/BalanceTable.svelte';
 </script>
 
 <BalanceTable />
