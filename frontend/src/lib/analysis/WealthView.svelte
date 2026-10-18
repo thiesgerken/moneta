@@ -15,18 +15,18 @@
 	import { graphql } from '$houdini';
 	import type ApexCharts from 'apexcharts';
 	import type { ApexOptions } from 'apexcharts';
-	import Chart from '$lib/Chart.svelte';
-	import ToggleGroup from '$lib/ToggleGroup.svelte';
+	import Chart from '#lib/Chart.svelte';
+	import ToggleGroup from '#lib/ToggleGroup.svelte';
 	import RangePicker from './RangePicker.svelte';
 	import SeriesToggle from './SeriesToggle.svelte';
 	import { AVAILABILITY_LABELS, availabilityColor } from './availability';
 	import { CUSTOM_SPAN, DATE_AXES, wealthState } from './state.svelte';
 	import { shortDate, todayIso } from './dates';
-	import { marketState, showMarket } from '$lib/investments.svelte';
-	import { priced } from '$lib/investments';
+	import { marketState, showMarket } from '#lib/investments.svelte.ts';
+	import { priced } from '#lib/investments.ts';
 	import { ANALYSIS_CARD, WEALTH_COLOR } from './cards';
-	import QueryError from '$lib/QueryError.svelte';
-	import { amountColor, euro, signedEuro } from '$lib/money';
+	import QueryError from '#lib/QueryError.svelte';
+	import { amountColor, euro, signedEuro } from '#lib/money.ts';
 
 	const DAY = 86400000;
 

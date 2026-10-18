@@ -19,8 +19,8 @@
 	import { statementState } from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
 	import { shortDate } from './dates';
-	import QueryError from '$lib/QueryError.svelte';
-	import { amountColor, euro } from '$lib/money';
+	import QueryError from '#lib/QueryError.svelte';
+	import { amountColor, euro } from '#lib/money.ts';
 
 	const iso = (d: Date) => d.toISOString().slice(0, 10);
 

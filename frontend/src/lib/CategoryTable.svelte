@@ -14,7 +14,7 @@
 		Modal
 	} from 'flowbite-svelte';
 	import ActionButton from './ActionButton.svelte';
-	import { Section } from 'flowbite-svelte-blocks';
+	import TableSection from './TableSection.svelte';
 	import {
 		PlusOutline,
 		ChevronRightOutline,
@@ -203,7 +203,7 @@
 	</Button>
 {/snippet}
 
-<Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
+<TableSection>
 	<QueryError
 		errors={$categoryStore.errors}
 		message="Die Kategorien konnten nicht geladen werden."
@@ -399,4 +399,4 @@
 			</div>
 		{/snippet}
 	</TableSearch>
-</Section>
+</TableSection>

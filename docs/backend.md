@@ -58,6 +58,11 @@ Both roots are namespaced one level deep: `Query.expenses.list`, `Mutation.accou
 a direction. There is no filter document and no query language to parse, so a caller cannot
 reach a column the resolver did not offer.
 
+`Expense.createdAt` and `Expense.updatedAt` expose the current rendered record's creation and
+edit timestamps. They are not transaction value dates, booking dates, accrual endpoints or
+historical changelog timestamps. Related account/category edits can change rendered content
+without changing the expense's `updatedAt`.
+
 **Authentication** accepts a signed private session cookie or an explicit
 `Authorization: Bearer mk_<prefix>.<secret>` header on both GraphQL HTTP routes.
 An explicit header is the sole credential, even when malformed or invalid; it never falls

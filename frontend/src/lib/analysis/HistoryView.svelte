@@ -20,10 +20,10 @@
 	import type { ApexOptions } from 'apexcharts';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import Chart from '$lib/Chart.svelte';
+	import Chart from '#lib/Chart.svelte';
 	import RangePicker from './RangePicker.svelte';
 	import SeriesToggle from './SeriesToggle.svelte';
-	import ToggleGroup from '$lib/ToggleGroup.svelte';
+	import ToggleGroup from '#lib/ToggleGroup.svelte';
 	import { overviewsStore, periodDrilldown, periodHref, type OverviewsData } from './overviews';
 	import {
 		integrationError,
@@ -46,8 +46,8 @@
 	} from './state.svelte';
 	import { ANALYSIS_CARD } from './cards';
 	import { isoDate } from './dates';
-	import QueryError from '$lib/QueryError.svelte';
-	import { euro, signedEuro } from '$lib/money';
+	import QueryError from '#lib/QueryError.svelte';
+	import { euro, signedEuro } from '#lib/money.ts';
 
 	// Kept here rather than read off the store so the chart never sees an empty intermediate
 	// state: houdini clears `data` while a fetch is in flight, which drew the chart once

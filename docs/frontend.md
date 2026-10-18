@@ -1,6 +1,6 @@
 # Frontend
 
-SvelteKit 2 with Svelte 5 in **runes mode** (forced), [houdini](https://houdinigraphql.com) 2 as
+SvelteKit 3 with Svelte 5 in **runes mode** (forced), [houdini](https://houdinigraphql.com) 2 as
 the GraphQL client, Tailwind 4 and flowbite-svelte for the UI, apexcharts for the charts.
 
 What the UI is *supposed to look like* — the two typefaces, what each colour means, how dates
@@ -37,6 +37,27 @@ src/lib/
 application alongside that import. Sunburst needs `apexcharts/sunburst` in ApexCharts 8.
 Register additional optional renderers there when introducing a chart that needs one, rather
 than switching every chart to the full bundle.
+
+`TableSection.svelte` provides the six list screens' shared native section/container layout.
+It has no framework integration or styling options; the outer background/padding and inner
+width/gutters are the list-page contract.
+
+## Framework configuration
+
+`vite.config.ts` passes preprocessing, forced runes, the Node adapter and five-minute deployment
+polling directly to `sveltekit({...})`. There is no separate Svelte configuration file.
+SvelteKit 3 and adapter-node 6 are upgraded together; Node 22.17 or newer is required
+(the image and CI use Node 24). TypeScript remains deliberately pinned to 6.
+
+Application library imports use the package's `#lib/*` subpath mapping with explicit
+extensions, for example `#lib/money.ts` and `#lib/Chart.svelte`. Generated GraphQL artifacts
+retain the distinct `$houdini` alias. `tsconfig.json` extends `$app/tsconfig`, includes Houdini
+output and uses both generated type directories.
+
+`src/service-worker/index.ts` has its own project extending `$app/tsconfig/service-worker`.
+Its allowlist resolves the `{ path }` entries from `$app/manifest` through `$app/paths`;
+versioned caches retain the previous build's immutable chunks. Only build/static assets
+are cached: GraphQL always reaches the network. `pnpm check` checks this project separately.
 
 ## Data fetching
 

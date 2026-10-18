@@ -54,7 +54,24 @@
 
 	$effect(() => {
 		// tracked before any await, so the effect re-runs when they change
-		const next = options;
+		const next: ApexOptions = {
+			...options,
+			chart: {
+				background: 'transparent',
+				fontFamily: 'Inter Variable, sans-serif',
+				...options.chart,
+				events: {
+					...options.chart?.events,
+					// Native theme redraws bypass this effect but still discard imperative annotations.
+					updated: (updated, config) => {
+						options.chart?.events?.updated?.(updated, config);
+						if (chart === updated) onUpdated?.(updated);
+					}
+				}
+			},
+			theme: { ...options.theme, follow: 'os' },
+			tooltip: { fillSeriesColor: false, ...options.tooltip }
+		};
 		const shape = signature(next);
 
 		if (chart && shape === built) {
@@ -74,11 +91,7 @@
 					: updating.updateSeries(quiet.series ?? [], false).then(() => undefined);
 			collapsed = wanted;
 
-			void Promise.resolve(cleared)
-				.then(() => updating.updateOptions(quiet, true, false))
-				.then(() => {
-					if (chart === updating) onUpdated?.(updating);
-				});
+			void Promise.resolve(cleared).then(() => updating.updateOptions(quiet, true, false));
 			return;
 		}
 
@@ -113,4 +126,18 @@
 	});
 </script>
 
-<div bind:this={el}></div>
+<div bind:this={el} class="chart"></div>
+
+<style>
+	.chart {
+		--apx-fore: light-dark(var(--color-gray-700), var(--color-gray-200));
+		--apx-grid: light-dark(var(--color-gray-200), var(--color-gray-700));
+	}
+
+	.chart :global(.apexcharts-tooltip),
+	.chart :global(.apexcharts-tooltip-title) {
+		background-color: light-dark(var(--color-white), var(--color-gray-800));
+		border-color: var(--apx-grid);
+		color: light-dark(var(--color-gray-900), var(--color-gray-100));
+	}
+</style>

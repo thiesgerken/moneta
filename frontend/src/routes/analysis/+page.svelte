@@ -10,12 +10,12 @@
 	} from 'flowbite-svelte-icons';
 	import { page } from '$app/state';
 	import { replaceState } from '$app/navigation';
-	import ExpenseChangelog from '$lib/ExpenseChangelog.svelte';
-	import WealthView from '$lib/analysis/WealthView.svelte';
-	import HistoryView from '$lib/analysis/HistoryView.svelte';
-	import CalendarView from '$lib/analysis/CalendarView.svelte';
-	import PrepaymentsView from '$lib/analysis/PrepaymentsView.svelte';
-	import StatementView from '$lib/analysis/StatementView.svelte';
+	import ExpenseChangelog from '#lib/ExpenseChangelog.svelte';
+	import WealthView from '#lib/analysis/WealthView.svelte';
+	import HistoryView from '#lib/analysis/HistoryView.svelte';
+	import CalendarView from '#lib/analysis/CalendarView.svelte';
+	import PrepaymentsView from '#lib/analysis/PrepaymentsView.svelte';
+	import StatementView from '#lib/analysis/StatementView.svelte';
 
 	/// The tabs, in the order they are shown. The slug is what `?tab=` carries and is English
 	/// like the rest of the code; only `title` is what a reader sees.
@@ -38,7 +38,7 @@
 	/// anzeigen" straight to the feed. `replaceState` rather than `goto`, since switching tabs
 	/// is not a place you want the back button to walk through one by one.
 	function remember(tab: string) {
-		const url = new URL(page.url);
+		const url = new URL(page.url.href);
 		url.searchParams.set('tab', tab);
 		// the rule wants a literal resolve() call, which cannot carry a query string; the path
 		// here is the one we are already on, so there is nothing to resolve in the first place
