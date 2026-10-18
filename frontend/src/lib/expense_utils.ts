@@ -288,8 +288,7 @@ export function byUsageThen<T extends { usageCount: number }>(
 
 /// What the bank writes where the free text should be when a card was used: that a card was
 /// used, and on which day. It says neither what was bought nor from whom, and it is all a
-/// column three hundred pixels wide ever got to show for a card payment. Two spellings of the
-/// same nothing, the same two `import.rs` reads the purchase date out of.
+/// column three hundred pixels wide ever got to show for a card payment.
 ///
 /// Only the empty ones. The older line also carries a cash withdrawal or an exchange rate on
 /// occasion, and that is a fact about the payment rather than about the card.

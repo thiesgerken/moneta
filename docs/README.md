@@ -1,8 +1,7 @@
 # Moneta documentation
 
 Personal finance tracking for a small number of people who share accounts and expenses. Rust
-backend serving GraphQL over PostgreSQL, SvelteKit frontend. Third version of an idea that
-started as MoneyDB.
+backend serving GraphQL over PostgreSQL, SvelteKit frontend.
 
 ## Reading order
 
@@ -12,11 +11,7 @@ Coming to this repo cold, in this order:
    expense, and what "my share" means. Nothing else in the backend makes sense before this
    one, and it is short.
 2. **[features.md](features.md)** — what the application actually does, screen by screen.
-3. **[moneydb.md](moneydb.md)** — where the data came from, what the predecessor could not
-   express, and what the import undoes. Read it before touching `import.rs`, and read it if a
-   modelling decision looks arbitrary — most of them are answers to something MoneyDB got
-   wrong.
-4. **[backend.md](backend.md)** or **[frontend.md](frontend.md)** — code layout and the
+3. **[backend.md](backend.md)** or **[frontend.md](frontend.md)** — code layout and the
    conventions of whichever half you are changing.
 
 Two more, for specific work:

@@ -215,14 +215,13 @@ phase. Whichever account it names does not matter.
 **A rule may only point at an expense flagged `isTemplate`**, enforced when a rule is saved.
 Anything else is a real booking: it is in the balances and in the Auswertung, and a rule
 pointing at one turns the rule dialog into a way of rewriting money that has already been
-spent. MoneyDB allowed it and most of its rules did it, so the import gives each rule a copy of
-its own instead. A template counts in no balance, no total and no analysis, and the expense
-list hides them unless the *Vorlage* filter is switched on.
+spent. A template counts in no balance, no total and no analysis, and the expense list hides
+them unless the *Vorlage* filter is switched on.
 
 The rule editor's picker asks for templates through `onlyTemplates` rather than through the flag
 filter. The flags are permissions — each one left off filters that flag *out* — so asking for
-templates that way returns only those carrying no other flag, which on the imported books is 37
-of 58 and leaves `REWE`, `KiTa-Gebühr` and every tax-relevant contract unpickable.
+templates that way returns only those carrying no other flag. Templates that are also unchecked
+or tax-relevant must remain pickable.
 
 ## Deliveries
 
@@ -247,9 +246,8 @@ that filtered list is the queue of rules still to be written.
 
 **A delivery is judged against `seen_deliveries` alone, never against the expenses that are
 already there.** That is what makes the dedup cheap and predictable, and it means the table has
-to be told about anything that arrived by another route — which is why the moneydb import seeds
-it, see [moneydb.md](moneydb.md#the-import-says-what-the-bank-has-already-handed-over). Only the
-last 400 days are ever compared.
+to be told about any bank lines recorded by another route as well. Only the last 400 days are
+ever compared.
 
 **There is no upload client here.** Nothing in this repository feeds `deliveries.submit` from a
 real bank export; that is deliberately someone else's program, since it is per-bank and needs

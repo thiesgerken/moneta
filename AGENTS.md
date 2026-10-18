@@ -2,8 +2,8 @@
 
 Read [`docs/`](docs/) first for what the project is: [`docs/concepts.md`](docs/concepts.md) is
 the two-layer data model and the three dates, [`docs/features.md`](docs/features.md) is what
-the application does, [`docs/moneydb.md`](docs/moneydb.md) is where the data came from, and
-[`docs/backend.md`](docs/backend.md) / [`docs/frontend.md`](docs/frontend.md) are the code.
+the application does, and [`docs/backend.md`](docs/backend.md) /
+[`docs/frontend.md`](docs/frontend.md) are the code.
 `README.md` is how to run it.
 
 This file is the operational stuff: what to run to verify, and the traps that have already been
@@ -13,13 +13,13 @@ stepped in. `TODO.md` is what is deliberately not built yet.
 
 ```sh
 cd backend  && cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test
-cd backend  && PGURL=postgres://moneta:moneta@localhost:5433/moneta tests/run-sql-tests.sh
+cd backend  && PGURL=postgres://moneta:moneta@localhost:5499/moneta tests/run-sql-tests.sh
 cd frontend && pnpm build && pnpm check && pnpm lint && pnpm test
 ```
 
-The SQL tests need an empty postgres 18 (`docker compose up -d postgres` gives you one on
-5433, but they apply the migrations themselves, so point them at a scratch database rather
-than one holding real data).
+The SQL tests need an empty PostgreSQL 18 database of their own. They apply every migration,
+without recording Diesel migration state, so use a dedicated scratch database that no backend
+will connect to. Do not point them at a database holding real data.
 
 CI runs exactly these and is strict — `clippy -D warnings` and `fmt --check` both fail the
 build, including on test code.
@@ -46,20 +46,19 @@ real. If codegen gets into a bad state, `rm -rf .houdini .svelte-kit` and rebuil
 That directory is real personal financial data. It is gitignored and there is no other copy
 of most of it.
 
-To test against realistic data, use a throwaway container and re-import the moneydb export
-into it:
+Use the unit tests and the SQL fixtures against a dedicated throwaway PostgreSQL 18 container:
 
 ```sh
-docker run -d --name scratch -e POSTGRES_USER=moneta -e POSTGRES_PASSWORD=moneta \
+docker run -d --name moneta-sql-tests -e POSTGRES_USER=moneta -e POSTGRES_PASSWORD=moneta \
     -e POSTGRES_DB=moneta -p 127.0.0.1:5499:5432 postgres:18-alpine
-export MONETA__DATABASE__URL=postgres://moneta:moneta@localhost:5499/moneta
-cargo run -- user --add thies    # every user in the export has to exist first
-cargo run -- import --clear < moneydb-export.json
+cd backend
+cargo test
+PGURL=postgres://moneta:moneta@localhost:5499/moneta tests/run-sql-tests.sh
 ```
 
-That reproduces the books as they stood at the cutover and nothing since. For anything that
-depends on how the data looks *today* — deliveries, confirmations, edits — restore the nightly
-dump described below instead.
+The SQL files create their own test rows inside transactions that roll back. This workflow
+does not need a financial export or access to the real database. Migration compatibility with
+existing data uses a restored database in a separate throwaway container, as described below.
 
 ## The cluster runs the real thing, and its database is reachable
 
@@ -72,10 +71,10 @@ kubectl -n apps-moneta exec deploy/postgres -- psql -U moneta -d moneta -c 'sele
 
 **That is the same personal financial data as `volumes/postgres`, and there is no other copy.**
 Reading it is fine and is often the fastest way to settle a question about real behaviour — do
-that rather than guess. Writing to it is not: any `UPDATE`, `DELETE`, `TRUNCATE`, any
-`moneta import`, any schema change applied by hand needs Thies to allow that specific change,
-each time it comes up. Permission for one write is not permission for the next. Hand him the
-command to run instead; that is the normal way this goes, not a fallback.
+that rather than guess. Writing to it is not: any `UPDATE`, `DELETE`, `TRUNCATE` or schema change
+applied by hand needs Thies to allow that specific change, each time it comes up. Permission
+for one write is not permission for the next. Hand him the command to run instead; that is the
+normal way this goes, not a fallback.
 
 A nightly CronJob `moneta-export` dumps it at 04:00 (`pg_dump --format=custom`) onto the
 `moneta-export` PVC, keeping one complete dump. That is the rollback, and it is up to 24 hours
@@ -87,12 +86,11 @@ kubectl -n apps-moneta create job --from=cronjob/moneta-export precutover
 
 ## The data model carries data now
 
-Until the cutover in August 2026 the answer to an awkward schema change was to re-run
-`moneta import --clear` from the moneydb export. That answer is gone. The export is a
-historical record rather than the source, and everything since — deliveries, edits,
-confirmations, the stockdb links — exists only in that database.
+The database is the source of truth and cannot be rebuilt from an old export. Deliveries,
+edits, confirmations and stockdb links must survive every change, together with the existing
+UUIDs and historical changelog snapshots.
 
-So a migration has to carry the rows across rather than assume they can be rebuilt. Dropping a
+A migration has to carry the rows across rather than assume they can be rebuilt. Dropping a
 column, tightening a constraint or renaming an enum value needs the `up.sql` that moves the data
 with it, and it runs unattended against the real database on the next merge to `main`. Where
 that cannot be done in one step, plan two releases and say so, rather than guessing that the
@@ -118,14 +116,13 @@ does not exist before 18.
 
 **Delivery dedup never looks at the expenses that already exist.** `is_duplicate` compares a
 new line against `seen_deliveries` and nothing else — account, amount, date within 24 hours,
-statement text deliberately ignored. So anything that puts expenses into the database by another
-route has to record the bank lines it created, or the next statement upload delivers them all
-again. The moneydb import does this (`already_delivered`); if you add another way in, it has to
-as well.
+statement text deliberately ignored. So anything that puts bank lines into the database by
+another route has to record them in `seen_deliveries`, or the next statement upload delivers
+them all again.
 
 **A stored date is an instant, and calendar arithmetic on it needs the frame it was written
-in.** The editor writes midnight where the reader sits — 23:00 UTC the day before in winter,
-22:00 in summer — while the importer writes midday UTC. Read the day off such an instant in UTC
+in.** The editor writes midnight where the reader sits: 23:00 UTC the day before in winter,
+22:00 in summer. Stored dates can also be midday UTC. Read the day off such an instant in UTC
 and a period entered as starting on the 1st begins on the 31st of the month before, which threw
 a monthly rule's grid off by a day and made a span across the clock change stop counting as
 whole months. `accrual::on` converts to `accrual::ZONE` before anything reads a day or a month;
@@ -236,28 +233,9 @@ accounts) close themselves and are fine as they are.
 text between provisional and final bookings. Widening the comparison would duplicate
 expenses; narrowing it would drop real payments. There are tests for both directions.
 
-**`moneta import` reads the export on stdin and matches users by name**, so every user in the
-export must already exist in moneta or it panics. `--clear` wipes everything _except_ users.
-
-**moneydb's own prepayment view is the reference for the chain logic.**
-`lib/Moneydb/Computation/Prepayment.hs` in the sibling checkout groups by title, runs the clearing
-balance to its last zero and reports what is left — the same two rules `Chain` uses, arrived at
-separately and then found to agree. It also skips anything flagged `Compensated`, which is what
-that flag is for: an entry a reader marked as not counting towards what is still open. Read that
-file before changing how chains are cut.
-
-**The import is not one moneta expense per moneydb expense.** `Chain` in `import.rs` folds the
-prepayment and refund chains that ran over moneydb's "Vorauszahlungen" clearing account back into
-one expense each — around 1650 rows become 340 — so a moneydb id resolves to a merged expense,
-several of them to the same one. Two things follow. Every real account keeps its balance to the
-cent, because a merge only ever drops legs on the clearing account, and that invariant is worth
-re-checking against the export after touching this. And a periodic rule whose template was one of
-the monthly drawdowns is dropped rather than kept: the mechanism it fed is gone, and left in place
-it would generate a copy of the whole merged expense every month.
-
 **A shared expense's bank line is a fraction, not an amount.** In a split the booking is
 `fraction = 1` of `reference_amount`, so `t.amount` is null on the very transaction that came
-off a bank statement — 4817 of them. Anything asking what a transaction is worth goes through
+off a bank statement. Anything asking what a transaction is worth goes through
 `calculated_amount` in SQL or `rules::resolved_amount` in Rust. Summing `amount` gives zero for
 every shared expense, silently.
 
@@ -267,48 +245,25 @@ no view and cannot be opened — which is why an automation template keeps a *bl
 zero rather than dropping its payment line outright. The zero is what `impose` recognises;
 position decides nothing.
 
-**Every rule gets a copy of its template, and the original is left alone.** moneydb let a rule
-copy any expense and most of its rules copy a real booking — 38 of 50 in the current export. The
-import copies each one, flags the copy `is_template` and points the rule at that. Flagging the
-original instead would be the one-line version and it is wrong: it takes real money out of every
-balance and every total at once, and nothing reports it. The copies also come *before* the
-account-dropping pass, or a template booking to an otherwise unused account leaves a dangling
-reference.
+**A rule may only reference an expense flagged `is_template`.** A past booking belongs in the
+balances and totals. Flagging that booking as a template would silently remove real money from
+both; use a separate template expense instead.
 
 **`ExpenseFlagFilter` is an exclusion set, not a whitelist.** Each field is permission for that
 flag to appear, so an expense lists only when *every* flag it carries is permitted. It can ask
-for "templates and nothing else"; it cannot ask for "templates whatever else they are", and the
-combination that looks like it does silently drops 21 of the 58 imported templates. The rule
-picker uses the separate `onlyTemplates` argument for that reason.
+for "templates and nothing else"; it cannot ask for "templates whatever else they are".
+The rule picker uses the separate `onlyTemplates` argument for that reason.
 
-**A chain caught after one drawdown reads as a one-off, and must not be treated as one.** A
-spread's shares scale to the payment, a one-off's keep their amount, and one payment plus one
-drawdown is both shapes at once. The discriminator is the title's own history of being drawn in
-instalments, not anything inside the chain — read as a one-off, half a year of a newspaper says the
-other person owes 3,40 EUR of a 142,80 EUR bill. Exactly two chains in the current export hit
-this, one of each kind, so any change here wants both `import.rs` tests run.
+**Live deliveries take their accrual period from the statement before the template.**
+`accrual::statement_period` reads an explicit period from the bank's text. If none is present,
+`accrual::Shape` uses the template's span and the phase of its blank booking to place the
+delivery on its calendar grid. Calendar months must remain calendar months across short
+months and daylight-saving changes.
 
-**Four things set an accrual period, in this order.** A chain derives it from its drawdowns, a
-statement can name it outright (`accrual::statement_period`, which the automation rules call on
-the same text), a title can name one where the statement does not (`accrual::title_period`), and
-`widen_recurring` gives the rest of a recurring contract the month each payment buys. The last of
-those runs over the finished `Vec<Expense>` and only touches what still sits on a single day, so
-it cannot argue with the other three — keep it that way, and keep its gates strict. A regular
-cadence on its own also describes a fortnightly beer and a yearly pair of jeans, and widening
-those invents a period nobody recorded.
-
-Both title shapes are anchored on the day the money moved rather than read as absolute dates, and
-that anchoring is the whole guard: a month by name is the nearest such month, a bare year counts
-only at the very end of a title and only within a year either way. Loosen either and `Weltraumspiel
-2077` becomes a year of gaming, `Rechnung 2024-0042` a year of invoicing.
-
-**The imported 0,00 € balances are load-bearing — do not tidy them away.** 35 of the imported
-accounts open with one, dated the day moneydb was set up, and it looks like bookkeeping moneydb
-demanded rather than a reading anyone took. It is not: it is the statement that the account was
-empty when it started, and it is the only thing pinning the left end of that account's history.
-Remove it and the nearest anchor becomes the next recorded balance, which back-integrates every
-transaction in between — Krösus's `Bargeld` then holds 263,26 € in 2013 against a seed of 0,00 €
-and 812 transactions, and `Depot` holds 487,30 € three years before it was opened. The empty
+**Opening 0,00 € balances are load-bearing: do not tidy them away.** An opening zero is
+evidence that the account was empty at that instant, and it pins the left end of its history.
+Remove it and the nearest anchor can become a later recorded balance, which back-integrates
+every transaction in between and can show money before the account was opened. The empty
 anchor `simulate_balances` offers at `-infinity` does not save you here: it is by construction
 the furthest away, so a recorded balance always wins.
 

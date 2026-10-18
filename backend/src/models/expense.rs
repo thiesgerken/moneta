@@ -11,8 +11,8 @@ use super::Json;
 /// An expense with everything that belongs to it in one value.
 ///
 /// The tables store it across three relations, because the analysis groups by account, date
-/// and category. This shape is what the changelog remembers and what the importer builds;
-/// [`ExpenseRow`] and friends are what actually goes to the database.
+/// and category. This shape is what the changelog remembers; [`ExpenseRow`] and friends are
+/// what actually goes to the database.
 /// Named apart from the rendering the API otherwise serves: both are called `Expense` in Rust,
 /// and juniper let the two share one GraphQL name, so the SDL advertised the rendering's fields
 /// on a changelog state that does not have them.

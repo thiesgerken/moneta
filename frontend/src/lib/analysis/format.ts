@@ -9,7 +9,7 @@ import type { Granularity } from './state.svelte';
 /// How far the integrated end balance drifts from the one the recorded balances give.
 ///
 /// A large gap does not mean the arithmetic drifted — it means an expense is missing, which
-/// is the whole point of showing it. MoneyDB called it the Integrationsfehler.
+/// is the whole point of showing it.
 ///
 /// Null on the accrual axis, where the backend has nothing to integrate: a share of a
 /// subscription is a cost the month carried rather than money that left an account.
