@@ -4,10 +4,9 @@
 /// day the template was paid — so this is the only place the behaviour is visible.
 /// Whether the Referenzbetrag field is unfilled, for an expense that has a share in it.
 ///
-/// Zero is a real answer and not a missing one: the importer writes it on every rule template
-/// whose booking a delivery will replace, and `impose` overwrites it from the delivery anyway.
-/// A falsiness check refuses exactly those templates, so this asks what was typed rather than
-/// what it is worth.
+/// Zero is a real answer and not a missing one: an automation template keeps a blank booking,
+/// and `impose` overwrites its reference amount from the delivery. A falsiness check refuses
+/// exactly those templates, so this asks what was typed rather than what it is worth.
 export function referenceAmountMissing(entered: string | undefined | null): boolean {
 	const text = entered?.trim() ?? '';
 	return text === '' || isNaN(Number(text));

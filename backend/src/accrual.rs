@@ -88,9 +88,9 @@ pub fn statement_period(
         let start = day(year(&c[3])?, c[2].parse().ok()?, c[1].parse().ok()?)?;
         let end = day(year(&c[6])?, c[5].parse().ok()?, c[4].parse().ok()?)?;
 
-        // An insurer names the day cover ends rather than the last day it runs: Beispielversicherung prints
-        // `01.06.23-01.07.23` for the month of June, and a yearly policy reads
-        // `13.08.2018-13.08.2019`. Nobody sells a month plus one day, so an end landing exactly
+        // An insurer names the day cover ends rather than the last day it runs:
+        // `01.04.30-01.05.30` denotes April, and a yearly policy reads
+        // `13.08.2030-13.08.2031`. Nobody sells a month plus one day, so an end landing exactly
         // a whole number of months after the start is that convention rather than a period.
         let end = match months_apart(on(start), on(end)) {
             Some(_) => end - chrono::Duration::days(1),
@@ -313,20 +313,22 @@ mod tests {
         day(y, m, d).unwrap()
     }
 
-    /// The convention insurers write in: the end is the day cover stops, not the last day it
-    /// runs. Both of these were in the books as a period a day too long.
+    /// Insurers name the day cover stops. Whole-month coverage must not accrue an extra day.
     #[test]
     fn an_end_a_whole_month_out_is_exclusive() {
-        let moved = at(2023, 6, 1);
+        let moved = at(2030, 4, 1);
         assert_eq!(
-            statement_period("Beispielversicherung 000000000000 01.06.23-01.07.23 42,00 EUR", moved),
-            Some((at(2023, 6, 1), at(2023, 6, 30)))
+            statement_period(
+                "Beispielversicherung 000000000000 01.04.30-01.05.30 42,00 EUR",
+                moved
+            ),
+            Some((at(2030, 4, 1), at(2030, 4, 30)))
         );
 
-        let moved = at(2018, 8, 13);
+        let moved = at(2030, 8, 13);
         assert_eq!(
-            statement_period("ZEITRAUM 13.08.2018-13.08.2019", moved),
-            Some((at(2018, 8, 13), at(2019, 8, 12)))
+            statement_period("ZEITRAUM 13.08.2030-13.08.2031", moved),
+            Some((at(2030, 8, 13), at(2031, 8, 12)))
         );
     }
 

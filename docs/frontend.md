@@ -92,6 +92,12 @@ neither houdini's plugin, whose watcher held every run open for ten seconds afte
 assertion, nor anything else the app needs only in order to build. **There are no component or
 end-to-end tests.**
 
+Use invented people, merchants, references, amounts and timestamps in fixtures, including the
+backend's statement-parsing examples. Preserve the input format and the boundary being tested,
+not the original bank line. Never copy household statements or customer identifiers into tests.
+The statement formatter treats IBAN and BIC fields as opaque text, so its zeroed bank identifier
+and test BIC deliberately do not identify a real account.
+
 ## Conventions worth knowing
 
 - Indentation is **tabs** here (`.prettierrc` sets `useTabs`) and rustfmt defaults in the
