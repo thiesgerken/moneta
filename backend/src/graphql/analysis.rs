@@ -149,9 +149,8 @@ pub struct PeriodOverview {
     pub end_total: f64,
     /// `startTotal` plus everything booked during the period.
     ///
-    /// The gap to `endTotal` is MoneyDB's *Integrationsfehler*. It does not mean the
-    /// arithmetic drifted — it means an expense is missing, which is the whole point of
-    /// showing it.
+    /// The gap to `endTotal` is the integration error. It does not mean the arithmetic
+    /// drifted: it means an expense is missing, which is the whole point of showing it.
     ///
     /// Null when the totals are read on the accrual axis: a sixth of a subscription is a cost
     /// the period carried, not money that left an account, so there is nothing for the
@@ -464,11 +463,9 @@ impl AnalysisQuery {
 
     /// Expenses whose value is not yet fully consumed at `at`.
     ///
-    /// The accrual period is what makes this work without the prepayment accounts and
-    /// compensation flags MoneyDB needed: an expense whose money left on the transaction date
-    /// but whose value is spread over a period is simply one with `accrualEnd > accrualStart`.
-    /// The import derives such periods for the historical data rather than leaving everything
-    /// degenerate, so this is populated straight after one.
+    /// An expense whose money left on the transaction date but whose value is spread over a
+    /// period has `accrualEnd > accrualStart`. The remaining value is computed from that span,
+    /// without special accounts or compensation flags.
     ///
     /// `isIncomplete` expenses are open items too, but with an unknown missing amount and so
     /// no remaining balance to compute; they come from `expenses.list` with a flag filter

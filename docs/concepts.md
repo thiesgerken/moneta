@@ -114,7 +114,7 @@ remaining = amount * (1 - consumed)
 ```
 
 and a zero-length period degenerates to an ordinary expense, fully consumed the moment it
-starts. This is what [MoneyDB needed a clearing account for](moneydb.md).
+starts.
 
 Most analysis views carry a **toggle** between the two axes (`axisState` in
 `frontend/src/lib/analysis/state.svelte.ts`). The value date and the accrual period give two
@@ -135,10 +135,9 @@ date. Per account, and per availability, there is no toggle.
 
 Not derived, not modelled as state machines, just five booleans that mean five specific things:
 
-- **`isTemplate`** — a stanza for a rule to copy, never counted in any analysis. Note that a
-  template need *not* be flagged: MoneyDB let ordinary past expenses double as prototypes, and
-  the import preserved that rather than rewriting history. A template also carries a real
-  account and a real date, so nothing but this flag says it never happened — every analysis
+- **`isTemplate`** — a stanza for a rule to copy, never counted in any analysis. Every rule
+  must point to an expense carrying this flag, not to a past booking. A template carries a
+  real account and a real date, so nothing but the flag says it never happened: every analysis
   function filters it out, and forgetting to is invisible until a balance is wrong by exactly
   one template.
 - **`isIncomplete`** — more transactions are expected and their size is not known yet. Unlike

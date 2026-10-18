@@ -4,6 +4,7 @@
 	import { Navbar, NavBrand, NavHamburger, NavUl, NavLi, Avatar, Dropdown } from 'flowbite-svelte';
 	import { ArrowRightToBracketOutline } from 'flowbite-svelte-icons';
 	import { NAV } from '$lib/navigation';
+	import Brand from '$lib/Brand.svelte';
 
 	// No error surface, deliberately: a bar across the top of every page is the wrong place
 	// to report one, and the only thing lost is the menu. An ended session is the layout's job.
@@ -64,11 +65,7 @@
      every list in the app, and none of it was information. -->
 <Navbar fluid class="px-4 py-1.5 sm:px-8">
 	<NavBrand href="/">
-		<img src="/logo.svg" class="me-2.5 h-7" alt="" />
-		<!-- the wordmark is the one place the display face is the point rather than a heading -->
-		<span class="font-display self-center text-xl font-semibold whitespace-nowrap dark:text-white">
-			Moneta
-		</span>
+		<Brand class="h-8 w-auto" />
 	</NavBrand>
 	<!-- The open state is ours rather than flowbite's: its hamburger and its list talk to each
 	     other through a context the two never share here, so the menu stayed shut on phones. -->

@@ -130,6 +130,12 @@ jobs:
           TEST_DATABASE_URL: postgres://moneta:moneta@postgres:5432/moneta
           MONETA_REQUIRE_DB_TESTS: "1"
 
+      # Separate commands keep fixture truncation in the two suites strictly sequential.
+      - run: cd backend && cargo test --test api_keys
+        env:
+          TEST_DATABASE_URL: postgres://moneta:moneta@postgres:5432/moneta
+          MONETA_REQUIRE_DB_TESTS: "1"
+
   test-frontend:
     runs-on: ubuntu-latest
     steps:
@@ -137,7 +143,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
-      - run: npm install -g pnpm@12.10.1
+      - run: npm install -g pnpm@12.11.2
 
       - name: Install dependencies
         run: cd frontend && pnpm install --frozen-lockfile

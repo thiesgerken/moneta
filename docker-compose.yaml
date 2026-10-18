@@ -17,6 +17,7 @@ services:
       - MONETA__DATABASE__URL=postgres://moneta:moneta@postgres:5432/moneta
       - MONETA__API__PORT=80
       - MONETA__API__ADDRESS=0.0.0.0
+      # Local development only. Use a different, randomly generated signing key in production.
       - MONETA__API__SECRET_KEY=M7/dfyV00H6WoOGNxygzdOudibhuPdQwJay5pi+I1cg=
       # There is no stockdb in this stack, so the depots are read from the deployed one. That
       # needs a token per user, which is not in here and cannot be: `moneta user

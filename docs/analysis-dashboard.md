@@ -1,33 +1,22 @@
 # The analysis dashboard
 
-`/analysis`, a port of MoneyDB's `analysis` section. Every tab reads real data. This document
-covers what each shows, the queries behind them, and the decisions that shaped both.
+`/analysis` presents the recorded accounts, expenses and changelog. This document covers what
+each tab shows, the queries behind them, and the decisions that shaped both.
 
 ## The tabs
 
-MoneyDB had seven. Five survive the port, because four of them were different views of the same
-numbers. A sixth, **Aktivität**, is not from MoneyDB at all — it is the expense changelog,
-which used to be the whole dashboard and now sits here, last, while the start page carries the
-part of the feed worth arriving at.
+| Tab | Shows |
+| --- | --- |
+| **Vermögen** | net worth over time (total, per account, or per availability), availability totals, per-account computed balances |
+| **Verlauf** | bars per month or per year: income against expenses, or one of the two split by category; a table per period with each month linking to its own page; and a treemap of the whole range |
+| **Kontoauszug** | one account's ledger over a range: opening balance, expenses and recorded balances interleaved, running total, CSV export |
+| **Kalender** | month grid, expenses per day with a daily sum |
+| **Vorauszahlungen** | what is still unconsumed at a chosen date, plus the separate list of incomplete expenses |
+| **Aktivität** | the expense changelog with its diffs |
 
-| Tab | MoneyDB origin | Shows |
-| --- | --- | --- |
-| **Vermögen** | `computed_balances` + `history` | net worth over time (total, per account, or per availability), availability totals, per-account computed balances |
-| **Verlauf** | `monthly_overviews` + `categories` + `sunburst` | bars per month or per year — income against expenses, or one of the two split by category — a table per period with each month linking to its own page, and a treemap of the whole range |
-| **Kontoauszug** | `statements` | one account's ledger over a range: opening balance, expenses and recorded balances interleaved, running total, CSV export |
-| **Kalender** | `calendar` | month grid, expenses per day with a daily sum |
-| **Vorauszahlungen** | `prepayments` | what is still unconsumed at a chosen date, plus the separate list of incomplete expenses |
-| **Aktivität** | — | the expense changelog with its diffs |
-
-Merged away:
-
-- **history** into **Vermögen** — the line chart and the balance table are the same simulation,
-  once sampled over a range and once at a single date. Splitting them meant picking a date
-  twice.
-- **sunburst** into **Verlauf** — it was already a component of a tab, not a tab itself.
-- **categories** into **Verlauf** — its bars were the Monate bars stacked by category instead
-  of by side: same query, same x axis, same drilldown. A toggle says which, and the two tabs
-  stop keeping a range each that had to be set twice to ask one question.
+The wealth chart and balance table share a simulation and a date selection. Category totals,
+their chart and their expense drilldown share a range on **Verlauf**, so different views of the
+same numbers cannot drift onto different periods.
 
 ## The date axis
 
@@ -75,13 +64,11 @@ type History {
 chart's visible range** rather than being fixed: zoomed out it lands around 30, zoomed all the
 way in on 1. That is why the endpoint takes a resolution instead of returning everything — the
 frontend asks for the density it can draw rather than downloading years of daily points to
-throw most away. (MoneyDB's `pointspermonth` said the same thing more awkwardly, since it could
-not express "one point per day" without knowing the month length.)
+throw most away.
 
 `byAvailability` is **per bucket, not cumulative**. Stacking per-bucket series gives the
 cumulative reading back as the height of the stack; stacking cumulative ones would count the
-liquid accounts once per level above them. MoneyDB returned the cumulative form because it drew
-overlapping lines rather than a stack.
+liquid accounts once per level above them.
 
 The **Gesamt** row counts every account, whichever ones the table is listing: the *Aktive
 Konten* / *Alle* filter says which rows are worth reading, not what you own, and a wealth that
@@ -203,7 +190,7 @@ up to less than the whole, which is worse than a slice labelled "Ohne Kategorie"
 
 `PeriodOverview` reports both `endTotal` (what the recorded balances say at the end of the
 month) and the total reached by integrating expenses forward from the month's start. The gap
-between them is MoneyDB's *Integrationsfehler*, and it is kept.
+between them is the *Integrationsfehler*.
 
 A large gap does **not** mean the arithmetic drifted — it means an expense is missing. That is
 the whole point of the view.
@@ -226,8 +213,8 @@ either month: summing the rows would report a year that never happened. Which is
 table says out loud that its months need not add up to the year above them.
 
 Each period gets a route rather than an expandable row: summary cards, the category treemap, a
-per-account breakdown and the biggest expenses. MoneyDB nested a second DataTable inside an
-expanded row, which is the part that does not survive a narrow screen.
+per-account breakdown and the biggest expenses. A separate page keeps the detail usable on a
+narrow screen.
 
 ## Kontoauszug
 
@@ -256,10 +243,9 @@ distinguish it:
   into it, the ledger jumps, and that jump is the signal that an expense is missing. It is
   surfaced explicitly as `drift` rather than being allowed to pass silently — the same idea as
   the Integrationsfehler in **Verlauf**.
-- The amount shown is the **account's own share**, not the expense total. Moneta gets this for
-  free where MoneyDB did not: rendering already flattens sharing into per-account transactions,
-  so the figure is just the sum of `calculatedAmount` over transactions naming the account.
-  MoneyDB had to walk a separate `sharing` array.
+- The amount shown is the **account's own share**, not the expense total. Rendering flattens
+  sharing into per-account transactions, so the figure is the sum of `calculatedAmount` over
+  transactions naming the account.
 
 It belongs on the server rather than being assembled by the client: the running total and the
 drift have to be computed in one pass over a correctly ordered sequence, and that ordering is
@@ -278,9 +264,8 @@ Sorted ascending to accumulate, returned descending, because newest first is wha
 read. CSV export is part of the tab — that is how a range gets handed to anything outside
 moneta.
 
-MoneyDB's statement had a booking date next to the value date that its model did not carry.
-Moneta's `expense_transactions.booking_date` is real but is deliberately used for nothing here;
-see [concepts.md](concepts.md#the-three-dates).
+`expense_transactions.booking_date` records the bank's booking date but is deliberately used
+for nothing here; see [concepts.md](concepts.md#the-three-dates).
 
 ## Vorauszahlungen
 
@@ -308,8 +293,7 @@ can link to it and read its transactions: `paidOn` is `min(transaction.date)` an
 column of its own.
 
 The prepayment machinery needs no special accounts or compensation flags because the accrual
-period does the work; [moneydb.md](moneydb.md) covers what it replaced, and the import derives
-real periods for the historical data rather than leaving everything degenerate.
+period records what each expense is for.
 
 **`isIncomplete` expenses appear on the same page but in their own table.** They are open items
 too, but the missing amount is unknown, so there is no remaining balance to compute — only a
@@ -355,6 +339,5 @@ one.
 `apexcharts`, wrapped by `frontend/src/lib/Chart.svelte`. flowbite-svelte 1.x dropped the
 `Chart` component that 0.x had, so there is nothing to reuse from the UI kit.
 
-The treemap replaces MoneyDB's sunburst. Same category → expense hierarchy, but the outer ring
-of a sunburst degenerates into unlabelable slivers at the sizes this data produces, and
-apexcharts has no sunburst type anyway.
+The treemap shows the category → expense hierarchy. The outer ring of a sunburst degenerates
+into unlabelable slivers at the sizes this data produces, and apexcharts has no sunburst type.

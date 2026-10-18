@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { graphql } from '$houdini';
 	import { Button, Label, Input, Helper } from 'flowbite-svelte';
+	import Brand from '$lib/Brand.svelte';
 
 	let error = $state<string | null>(null);
 	let busy = $state(false);
@@ -50,10 +51,7 @@
      rather than under a corner it no longer has -->
 <div class="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6">
 	<div class="mb-8 flex items-center justify-center">
-		<img src="/logo.svg" class="me-2.5 h-9" alt="" />
-		<span class="font-display text-2xl font-semibold whitespace-nowrap dark:text-white">
-			Moneta
-		</span>
+		<Brand class="h-12 w-auto" />
 	</div>
 
 	<!-- no heading: the wordmark above the two fields says what this is -->

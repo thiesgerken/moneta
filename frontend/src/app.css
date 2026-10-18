@@ -13,8 +13,6 @@
 
 @plugin 'flowbite/plugin';
 
-@custom-variant dark (&:where(.dark, .dark *));
-
 @theme {
 	--font-sans:
 		'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
@@ -56,9 +54,18 @@
 	}
 
 	body {
+		background-color: var(--color-white);
+		color: var(--color-gray-900);
 		/* Inter's default 1 is narrower than its 0, so a column of amounts shifts from row to
 		   row. This is the whole reason for choosing a font with a tabular set. */
 		font-variant-numeric: tabular-nums;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		body {
+			background-color: var(--color-gray-900);
+			color: var(--color-gray-100);
+		}
 	}
 
 	/* Titles and card headings only. Numbers stay in Inter wherever they are, which is why
@@ -99,14 +106,15 @@ table tbody tr {
 	border-color: var(--color-gray-200);
 }
 
-.dark table tbody tr {
-	color: var(--color-gray-100);
-	border-color: var(--color-gray-700);
+@media (prefers-color-scheme: dark) {
+	table tbody tr {
+		color: var(--color-gray-100);
+		border-color: var(--color-gray-700);
+	}
 }
 
-/* 12px above and below a 20px line is a 44px row, and these are lists to scan rather than
-   paragraphs to read. 10px is a 40px row, which is where moneydb sat; 8px was tighter than
-   either and read as cramped. Only the vertical half is set here: the horizontal padding is
+/* These are lists to scan rather than paragraphs to read. A 20px line with 10px above and
+   below makes a 40px row. Only the vertical padding is set here: the horizontal padding is
    what the phone layout narrows, and it has to keep doing that. */
 table thead th,
 table tbody td {
@@ -128,13 +136,15 @@ table thead th {
 	border-bottom: 1px solid var(--color-gray-200);
 }
 
-.dark table thead th:not(:last-child),
-.dark table tbody td:not(:last-child) {
-	border-right-color: var(--color-gray-700);
-}
+@media (prefers-color-scheme: dark) {
+	table thead th:not(:last-child),
+	table tbody td:not(:last-child) {
+		border-right-color: var(--color-gray-700);
+	}
 
-.dark table thead th {
-	border-bottom-color: var(--color-gray-700);
+	table thead th {
+		border-bottom-color: var(--color-gray-700);
+	}
 }
 
 /* A fixed layout gives a column the width the header asked for and nothing stops the content
@@ -154,9 +164,11 @@ table tbody tr[data-expanded] {
 	background-color: var(--color-gray-100);
 }
 
-.dark table tbody tr:hover,
-.dark table tbody tr[data-expanded] {
-	background-color: var(--color-gray-700);
+@media (prefers-color-scheme: dark) {
+	table tbody tr:hover,
+	table tbody tr[data-expanded] {
+		background-color: var(--color-gray-700);
+	}
 }
 
 /* flowbite gives a field a placeholder colour in dark mode only (`dark:placeholder-gray-400`),
@@ -168,9 +180,11 @@ textarea::placeholder {
 	color: var(--color-gray-400);
 }
 
-.dark input::placeholder,
-.dark textarea::placeholder {
-	color: var(--color-gray-500);
+@media (prefers-color-scheme: dark) {
+	input::placeholder,
+	textarea::placeholder {
+		color: var(--color-gray-500);
+	}
 }
 
 /* Tailwind's preflight leaves a `<button>` with the arrow cursor the browser gives it, and

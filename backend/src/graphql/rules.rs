@@ -36,8 +36,7 @@ async fn visible_expense(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResul
 }
 
 /// A rule may only copy a template. Anything else is a real booking, and a rule pointing at one
-/// turns the rule dialog into a way of rewriting money that is already in the balances — which
-/// is how moneydb had it, and how 38 of the 50 imported rules arrived.
+/// turns the rule dialog into a way of rewriting money that is already in the balances.
 async fn require_template_expense(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResult<Uuid> {
     let found: Option<(Uuid, bool)> = scoped::expenses(user_id)
         .filter(expenses_rendered::id.eq(id))

@@ -1,8 +1,7 @@
 //! Deciding what period an expense is *for*.
 //!
 //! Two sources, in that order: what the bank prints on the line, and failing that the shape of
-//! the template the expense was generated from. Both the moneydb import and the automation
-//! rules ask the same questions, so they ask them here.
+//! the template the expense was generated from. Automation rules use both on live deliveries.
 
 use std::sync::LazyLock;
 
@@ -89,9 +88,9 @@ pub fn statement_period(
         let start = day(year(&c[3])?, c[2].parse().ok()?, c[1].parse().ok()?)?;
         let end = day(year(&c[6])?, c[5].parse().ok()?, c[4].parse().ok()?)?;
 
-        // An insurer names the day cover ends rather than the last day it runs: Beispielversicherung prints
-        // `01.06.23-01.07.23` for the month of June, and a yearly policy reads
-        // `13.08.2018-13.08.2019`. Nobody sells a month plus one day, so an end landing exactly
+        // An insurer names the day cover ends rather than the last day it runs:
+        // `01.04.30-01.05.30` denotes April, and a yearly policy reads
+        // `13.08.2030-13.08.2031`. Nobody sells a month plus one day, so an end landing exactly
         // a whole number of months after the start is that convention rather than a period.
         let end = match months_apart(on(start), on(end)) {
             Some(_) => end - chrono::Duration::days(1),
@@ -124,72 +123,6 @@ pub fn statement_period(
         && (moved - end) <= chrono::Duration::days(200);
     sane.then_some((start, end))
 }
-
-/// The period an expense names in its own title, where the statement names none.
-///
-/// A title is written by hand, so only two shapes are worth trusting, and both are anchored on
-/// the day the money moved rather than read as absolute dates.
-///
-/// A month by name is the nearest such month to that day — `Lohn Februar` paid on 15.03. is the
-/// February before it, `Urlaub im September` settled on 20.10. the September before that. Paid
-/// in advance or in arrears both come out right, since nothing here assumes a direction.
-///
-/// A bare year counts only at the very end of the title, only within a year either way, and only
-/// where the rest of the title says the money settles something. Position and window keep out an
-/// invoice number (`Rechnung 2024-0042`) and a product whose name happens to end in a number
-/// (`Weltraumspiel 2077`, `Zahnbürste Modell 2000`), but neither keeps out a product labelled
-/// with the year it is *for*: `Steuersoftware 2024` is tax software bought the November before, and
-/// `Fotobuch 2019` is a book of photographs, not twelve months of anything. Only [`SETTLED`] can
-/// tell those from `Steuerrückzahlung 2023`.
-pub fn title_period(title: &str, moved: DateTime<Utc>) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
-    static MONTH: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(
-            r"(?i)\b(Januar|Februar|M(?:ä|ae)rz|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\b",
-        )
-        .unwrap()
-    });
-    static TRAILING_YEAR: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"(?:^|\s)((?:19|20)\d{2})\s*$").unwrap());
-
-    let nearby = moved.year() - 1..=moved.year() + 1;
-
-    if let Some(c) = MONTH.captures(title) {
-        let month = named_month(&c[1])?;
-        let year = nearby
-            .filter_map(|y| month_start(y, month).map(|start| (start, y)))
-            .min_by_key(|(start, _)| (*start - moved).num_days().abs())
-            .map(|(_, y)| y)?;
-        return Some((month_start(year, month)?, month_end(year, month)?));
-    }
-
-    let year: i32 = TRAILING_YEAR.captures(title)?[1].parse().ok()?;
-    let lower = title.to_lowercase();
-    let settles = SETTLED.iter().any(|word| lower.contains(word));
-    (settles && nearby.contains(&year))
-        .then(|| Some((month_start(year, 1)?, month_end(year, 12)?)))
-        .flatten()
-}
-
-/// What a title has to call itself before a year at the end of it is a period.
-///
-/// A year names the thing a purchase is *about* as readily as the span it settles, and nothing
-/// in the numbers separates the two: `Steuersoftware 2023` costs 12,90 € and `Beitragsnachforderung
-/// 2023` costs 12,85 €. The words do. These are the German nouns for reckoning up a span that
-/// has run — a bill, an arrears demand, a refund, a distribution, a provision released — plus
-/// the two that name a thing sold *by* the year. A title that says none of them keeps its single
-/// day, which is where every expense started.
-const SETTLED: &[&str] = &[
-    "abrechnung",
-    "nachzahlung",
-    "nachforderung",
-    "rückzahlung",
-    "rückstellung",
-    "ausschüttung",
-    "erklärung",
-    "versicherung",
-    "beitrag",
-    "gebühr",
-];
 
 /// The number of whole months from `start` to an *inclusive* `end`, if it is a whole number of
 /// them: `01.06.` to `30.06.` is one, `15.02.` to `14.05.` is three.
@@ -380,20 +313,22 @@ mod tests {
         day(y, m, d).unwrap()
     }
 
-    /// The convention insurers write in: the end is the day cover stops, not the last day it
-    /// runs. Both of these were in the books as a period a day too long.
+    /// Insurers name the day cover stops. Whole-month coverage must not accrue an extra day.
     #[test]
     fn an_end_a_whole_month_out_is_exclusive() {
-        let moved = at(2023, 6, 1);
+        let moved = at(2030, 4, 1);
         assert_eq!(
-            statement_period("Beispielversicherung 000000000000 01.06.23-01.07.23 42,00 EUR", moved),
-            Some((at(2023, 6, 1), at(2023, 6, 30)))
+            statement_period(
+                "Beispielversicherung 000000000000 01.04.30-01.05.30 42,00 EUR",
+                moved
+            ),
+            Some((at(2030, 4, 1), at(2030, 4, 30)))
         );
 
-        let moved = at(2018, 8, 13);
+        let moved = at(2030, 8, 13);
         assert_eq!(
-            statement_period("ZEITRAUM 13.08.2018-13.08.2019", moved),
-            Some((at(2018, 8, 13), at(2019, 8, 12)))
+            statement_period("ZEITRAUM 13.08.2030-13.08.2031", moved),
+            Some((at(2030, 8, 13), at(2031, 8, 12)))
         );
     }
 

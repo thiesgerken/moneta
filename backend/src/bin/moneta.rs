@@ -92,8 +92,6 @@ fn main() {
             cli::account::handle(pool, sub_matches).await;
         } else if let Some(sub_matches) = matches.subcommand_matches("periodic") {
             cli::periodic::handle(pool, sub_matches).await;
-        } else if let Some(sub_matches) = matches.subcommand_matches("import") {
-            cli::import::handle(pool, sub_matches).await;
         } else if matches.subcommand_matches("serve").is_some() {
             graphql::handle(config, pool).await;
         } else {
