@@ -41,6 +41,11 @@ enum AccountSortField {
   CLOSED
 }
 
+enum ApiKeyAccess {
+  "Authenticated queries only. Sufficient for Ferret." READ
+  "Queries and domain mutations, with the owner's ordinary permissions." WRITE
+}
+
 enum AutomationRuleSortField {
   PRIORITY
   TITLE
@@ -443,6 +448,28 @@ type AnalysisQuery {
   statement(accountId: UUID!, from: DateTime!, to: DateTime!): [StatementEntry!]!
 }
 
+type ApiKey {
+  id: UUID!
+  name: String!
+  prefix: String!
+  access: ApiKeyAccess!
+  createdAt: DateTime!
+  expiresAt: DateTime
+  lastUsedAt: DateTime
+}
+
+type ApiKeyMutation {
+  "Creates a fixed-permission credential. No expiry unless explicitly supplied. Session-only."
+  create(name: String!, access: ApiKeyAccess!, expiresAt: DateTime): CreatedApiKey!
+  "Physically deletes an owned key. Authentication fails on its next request. Session-only."
+  revoke(id: UUID!): Boolean!
+}
+
+type ApiKeyQuery {
+  "Lists only this browser user's keys, including expired credentials. Session-only."
+  list: [ApiKey!]!
+}
+
 type AutomationRule {
   id: UUID!
   title: String!
@@ -590,6 +617,12 @@ type ComputedBalance {
   reference: Balance!
   account: Account!
   expenseCount: Int!
+}
+
+type CreatedApiKey {
+  key: ApiKey!
+  "Copy this now. It cannot be recovered or returned again."
+  token: String!
 }
 
 type DeliveryMutation {
@@ -899,6 +932,8 @@ type InvestmentQuery {
 
 type Mutation {
   users: UserMutation!
+  "Credential writes do not affect financial analysis."
+  apiKeys: ApiKeyMutation!
   accounts: AccountMutation!
   balances: BalanceMutation!
   expenses: ExpenseMutation!
@@ -979,6 +1014,8 @@ type Prepayment {
 
 type Query {
   apiVersion: String!
+  "Browser-session credential management. API keys cannot list key metadata."
+  apiKeys: ApiKeyQuery!
   users: UserQuery!
   accounts: AccountQuery!
   balances: BalanceQuery!

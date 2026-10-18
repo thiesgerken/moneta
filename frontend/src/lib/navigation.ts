@@ -6,7 +6,8 @@ export const NAV = [
 	{ href: '/categories', label: 'Kategorien' },
 	{ href: '/accounts', label: 'Konten' },
 	{ href: '/rules', label: 'Regeln' },
-	{ href: '/deliveries', label: 'Lieferungen' }
+	{ href: '/deliveries', label: 'Lieferungen' },
+	{ href: '/api-keys', label: 'API-Schlüssel' }
 ] as const;
 
 export function pageTitle(pathname: string): string {

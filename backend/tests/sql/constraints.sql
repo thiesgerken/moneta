@@ -22,6 +22,31 @@ DECLARE
     checked int := 0;
 BEGIN
     FOR c IN SELECT * FROM (VALUES
+        ('unknown API key access',
+         $q$INSERT INTO api_keys (user_id, name, prefix, secret_hash, access_level)
+            VALUES ('00000000-0000-7000-8000-000000000001', 'Dummy key', 'abcdef01', decode(repeat('00',32),'hex'), 'admin')$q$),
+
+        ('blank API key name',
+         $q$INSERT INTO api_keys (user_id, name, prefix, secret_hash, access_level)
+            VALUES ('00000000-0000-7000-8000-000000000001', E' \t\n', 'abcdef01', decode(repeat('00',32),'hex'), 'read')$q$),
+
+        ('API key expiry before creation',
+         $q$INSERT INTO api_keys (user_id, name, prefix, secret_hash, access_level, expires_at)
+            VALUES ('00000000-0000-7000-8000-000000000001', 'Dummy key', 'abcdef01', decode(repeat('00',32),'hex'), 'read', now() - interval '1 hour')$q$),
+
+        ('API key without owner',
+         $q$INSERT INTO api_keys (user_id, name, prefix, secret_hash, access_level)
+            VALUES ('00000000-0000-7000-8000-00000000dead', 'Dummy key', 'abcdef01', decode(repeat('00',32),'hex'), 'read')$q$),
+
+        ('API key hash must be SHA-256 sized',
+         $q$INSERT INTO api_keys (user_id, name, prefix, secret_hash, access_level)
+            VALUES ('00000000-0000-7000-8000-000000000001', 'Dummy key', 'abcdef01', decode('00','hex'), 'read')$q$),
+
+        ('duplicate API key prefix cannot replace a key',
+         $q$INSERT INTO api_keys (user_id, name, prefix, secret_hash, access_level) VALUES
+            ('00000000-0000-7000-8000-000000000001', 'First dummy', 'abcdef01', decode(repeat('00',32),'hex'), 'read'),
+            ('00000000-0000-7000-8000-000000000001', 'Second dummy', 'abcdef01', decode(repeat('11',32),'hex'), 'write')$q$),
+
         ('backwards booking period',
          $q$INSERT INTO expenses (title, store, description, comments, accrual_start, accrual_end)
             VALUES ('bad', '', '', '', '2025-12-31Z', '2025-01-01Z')$q$),

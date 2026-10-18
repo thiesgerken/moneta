@@ -58,10 +58,33 @@ Both roots are namespaced one level deep: `Query.expenses.list`, `Mutation.accou
 a direction. There is no filter document and no query language to parse, so a caller cannot
 reach a column the resolver did not offer.
 
-**Authentication** is a signed private cookie holding the user id. `require_user` in
-`graphql/root.rs` gates every resolver and puts `extensions.code = "UNAUTHENTICATED"` on its
-error — nothing else does, and the frontend's login redirect keys on exactly that, so a backend
-that is down does not look like a session that ended.
+**Authentication** accepts a signed private session cookie or an explicit
+`Authorization: Bearer mk_<prefix>.<secret>` header on both GraphQL HTTP routes.
+An explicit header is the sole credential, even when malformed or invalid; it never falls
+back to a cookie and never creates, renews or clears cookies. Invalid credentials use
+`extensions.code = "UNAUTHENTICATED"`; valid keys without permission use `FORBIDDEN`.
+The frontend's login redirect keys on `UNAUTHENTICATED`, not on arbitrary backend errors.
+
+`api_keys.rs` generates 32 random secret bytes with OS randomness, stores only a SHA-256
+hash and a unique nonsecret lookup prefix, and compares hashes in constant time, including
+unknown-prefix lookups. The database checks access levels (`read` and `write`) and expiry.
+Every bearer request joins the owner in the database and checks expiry. Revocation physically
+deletes the row; owner deletion cascades to credentials without changing financial foreign
+keys. Password changes leave API keys valid.
+
+Read keys can query, including all ordinary per-user rendering. Before execution the handler
+parses the document with Juniper and identifies the selected operation by `operationName`
+(or the sole operation). A selected mutation rejects the entire request, including a batch
+containing one. Names, aliases and fragments cannot turn a mutation into a query. Write
+keys retain existing domain ownership/visibility checks. The `users` mutation namespace
+(login/logout/visit) and all `apiKeys` fields, including metadata lists, are session-only.
+Guards precede resolver side effects. Write operations are not transactional as a whole:
+a permitted field may commit before a later session-only field returns `FORBIDDEN`.
+
+Successful authentication conditionally updates `last_used_at` at most once per minute,
+using a database predicate rechecked under row locking across replicas. Authentication
+counts even when subsequent GraphQL parsing, validation or authorization fails. Invalid or
+expired keys never update it. This is usage metadata, not an audit trail.
 
 **Per-user scoping is the resolver's own `user_id` filter** against the rendered views. Callers
 have no way to express one. Where a resolver hands out something reachable by id — a rule's
@@ -83,10 +106,10 @@ fixed ones, which is what keeps pre-2026 argonautica hashes working alongside ne
   budget. The timeout is what makes a mistake survivable. `Timeout occurred while waiting for a
   slot` in the log is the signal to resize — or that something is nesting again.
 - **A new mutation has to invalidate the analysis cache.** `analysis.balances`, `history` and
-  `overviews` are memoized in process for ten minutes (`graphql/cache.rs`); every mutation field
-  but `users` sets `context.wrote`, and the handler empties the cache once the request is done.
-  The `users` exception is deliberate — `users.visit` writes on every dashboard load, and
-  clearing there would invalidate the answers the dashboard is about to ask for.
+  `overviews` are memoized in process for ten minutes (`graphql/cache.rs`); financial
+  mutation fields set `context.wrote`, and the handler empties the cache once the request
+  is done. `users` and `apiKeys` deliberately do not: visit markers, credential management
+  and authentication/last-use writes do not change financial answers.
 
 ## Migrations and SQL
 
@@ -136,6 +159,13 @@ PGURL=postgres://moneta:moneta@localhost:5499/moneta tests/run-sql-tests.sh
 
 `cargo test` covers the pure logic: rule instantiation, accrual shapes and password
 verification.
+
+`TEST_DATABASE_URL=... cargo test --test scoping` exercises the per-user SQL accessors.
+`TEST_DATABASE_URL=... cargo test --test api_keys` exercises the production GraphQL HTTP
+handler, sessions and key lifecycle with dummy users. Both migrate and truncate fixtures,
+so run them sequentially against a disposable database, or use separate databases.
+`MONETA_REQUIRE_DB_TESTS=1` makes a missing URL fail the API-key suite. CI runs both in
+the database-backed job, not only the DB-free unit-test job.
 
 `tests/run-sql-tests.sh` applies every migration to an empty database and then asserts that the
 views, the CHECK constraints and the analysis functions do what they claim. The views carry the

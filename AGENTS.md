@@ -21,6 +21,12 @@ The SQL tests need an empty PostgreSQL 18 database of their own. They apply ever
 without recording Diesel migration state, so use a dedicated scratch database that no backend
 will connect to. Do not point them at a database holding real data.
 
+The DB-backed Rust suites take `TEST_DATABASE_URL`: run `cargo test --test scoping` and then
+`cargo test --test api_keys` against another disposable database. They migrate and truncate
+fixtures, so never run both concurrently against one database. The API-key suite exercises the
+production GraphQL HTTP handler with dummy users; `MONETA_REQUIRE_DB_TESTS=1` forbids skipping
+it when the URL is absent. CI runs both sequentially in its database-backed job.
+
 CI runs exactly these and is strict — `clippy -D warnings` and `fmt --check` both fail the
 build, including on test code.
 
@@ -165,12 +171,12 @@ Size it off that line, not off a guess.
 
 **A new mutation has to invalidate the analysis cache.** `analysis.balances`, `history` and
 `overviews` are memoized in process for ten minutes (`graphql/cache.rs`). What keeps that
-honest is the mutation root in `root.rs`: every field there but `users` sets `context.wrote`,
-and `graphql_handler` empties the cache once the request is done. Add a mutation branch
-without that line and a write leaves stale months on the screen until the TTL runs out. The
-`users` exception is deliberate — `users.visit` is a write on every dashboard load, and
-clearing there would mean the dashboard invalidates the answers it is about to ask for. Two
-tests at the bottom of `root.rs` hold both halves.
+honest is the mutation root in `root.rs`: financial branches set `context.wrote`, and
+`graphql_handler` empties the cache once the request is done. Add a financial mutation branch
+without that line and a write leaves stale months on the screen until the TTL runs out.
+`users` and `apiKeys` deliberately do not: visit markers, credential management and
+authentication/last-use writes do not affect financial answers. `root.rs` and the real-handler
+API-key tests hold those exceptions.
 
 **Keys are rounded to ten minutes, on purpose.** Every range the frontend asks for ends at
 `Date.now()`, so a key built from the exact arguments is a fresh one on every page load and
@@ -336,7 +342,8 @@ data is therefore client-side only; there is no SSR of query results.
 
 - No component or end-to-end tests in the frontend; `pnpm test` is vitest over the pure
   modules under `src/lib` and nothing more. `tests/sql/` covers the views, the constraints and
-  the balance simulation, but nothing exercises the GraphQL resolvers against a database.
+  the balance simulation. DB-backed Rust tests cover scoped accessors and the real GraphQL
+  authentication/key-lifecycle surface, not every domain resolver.
 - No upload client feeds `deliveries.submit` from a real bank export; that is deliberately
   someone else's program, since it is per-bank and needs credentials.
 - CORS is `AllowedOrigins::all()` with `allow_credentials(true)` in `graphql/mod.rs`, and

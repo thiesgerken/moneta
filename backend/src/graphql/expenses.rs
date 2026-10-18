@@ -1337,6 +1337,7 @@ mod tests {
             config: crate::config::Config::default(),
             pool: pool.clone(),
             user_id: Arc::new(RwLock::new(Some(OWNER))),
+            credential: super::super::root::Credential::Session,
             cache: Arc::new(AnalysisCache::default()),
             wrote: AtomicBool::new(false),
             account_loader: get_account_loader(pool.clone()),

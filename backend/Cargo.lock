@@ -1943,6 +1943,7 @@ name = "moneta"
 version = "3.0.0"
 dependencies = [
  "argon2",
+ "base64 0.22.1",
  "chrono",
  "chrono-tz",
  "clap",
@@ -1954,6 +1955,7 @@ dependencies = [
  "diesel_migrations",
  "dotenvy",
  "futures",
+ "getrandom 0.4.3",
  "itertools 0.15.0",
  "juniper",
  "juniper_rocket",
@@ -1965,7 +1967,9 @@ dependencies = [
  "rocket_cors",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "simplelog",
+ "subtle",
  "tokio",
  "uuid",
 ]

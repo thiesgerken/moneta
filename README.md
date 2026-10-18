@@ -55,6 +55,57 @@ Settings come from environment variables prefixed `MONETA__`, nested with `__`
 | `MONETA__STOCKDB__PUBLIC_URL` | *(empty)* | where a *browser* reaches it, for the link on a depot; falls back to `URL` |
 | `MONETA__STOCKDB__TIMEOUT_SECONDS` | `5` | a page load waits on this, so it has to give up quickly |
 
+## Machine access and Ferret
+
+Sign in with your browser, open **API-Schlüssel**, and create a named **Nur lesen** key.
+Read-only is sufficient for Ferret. Copy the full `mk_...` token from the one-time dialog
+into your client's secret storage. The optional expiry defaults to no expiry.
+
+Use the existing GraphQL endpoint, not a separate REST API:
+
+```sh
+read -rs MONETA_API_KEY
+export MONETA_API_KEY
+curl --silent --show-error 'http://localhost:8181/graphql' \
+  -H "Authorization: Bearer $MONETA_API_KEY" \
+  -H 'Content-Type: application/json' \
+  --data '{"query":"{ expenses { list(limit: 10) { edges { node { id title effectiveAmount } } } } }"}'
+unset MONETA_API_KEY
+```
+
+Treat the key like a password. Avoid shell tracing, request-header logging and pasting keys
+into issues. Moneta stores only a hash of the random secret plus a nonsecret lookup prefix.
+There is no token recovery. Replace a lost key by creating another and removing the old one.
+Password changes do **not** invalidate API keys.
+
+**Nur lesen** permits queries only. **Lesen und schreiben** adds domain mutations without
+widening your browser account's permissions. Neither level may list/create/remove API keys,
+log in/out, change identity or record a human visit. For example, a write key can create a
+balance on one of its owner's accounts:
+
+```sh
+read -rs MONETA_API_KEY
+export MONETA_API_KEY
+curl --silent --show-error 'http://localhost:8181/graphql' \
+  -H "Authorization: Bearer $MONETA_API_KEY" \
+  -H 'Content-Type: application/json' \
+  --data '{"query":"mutation($balance: BalanceInput!) { balances { create(balance: $balance) { id } } }","variables":{"balance":{"accountId":"YOUR-ACCOUNT-UUID","date":"2026-10-18T12:00:00Z","amount":10000,"comments":"Recorded balance"}}}'
+unset MONETA_API_KEY
+```
+
+An explicit Authorization header always takes precedence over cookies, even if it is invalid.
+Bearer requests never receive session-cookie changes. Invalid credentials return GraphQL
+`UNAUTHENTICATED`; forbidden credential operations return `FORBIDDEN`. Read-only rejection
+happens before mutation side effects, including aliases, fragments, selected operations and
+batch requests. A write operation may commit permitted fields before a later session-only
+field fails; requests are not transactions.
+
+Remove a key in the browser and confirm to revoke it. Removal physically deletes the row
+and removes it from the list; it fails on the next request. Expired keys remain listed as
+**Abgelaufen** until removed. Last use is bounded to one update per minute and counts
+successful authentication, even if the later operation fails. It is usage metadata, not an
+audit trail. Expiry, deletion and the owner's continued existence are checked on every request.
+
 ## CLI
 
 `moneta` is one binary; `serve` is just one of its subcommands.
