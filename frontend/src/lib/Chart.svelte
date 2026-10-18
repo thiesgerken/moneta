@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ApexCharts, { type ApexOptions } from 'apexcharts';
+	import 'apexcharts/sunburst';
 
 	interface Props {
 		options: ApexOptions;

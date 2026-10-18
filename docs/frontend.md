@@ -33,6 +33,11 @@ src/lib/
 `rules` holds both rule kinds in tabs. `analysis/` has one `*View.svelte` per tab plus
 `state.svelte.ts`, which is where the shared range and date-axis selection live.
 
+`Chart.svelte` keeps ApexCharts' default bundle and registers optional renderers used by the
+application alongside that import. Sunburst needs `apexcharts/sunburst` in ApexCharts 8.
+Register additional optional renderers there when introducing a chart that needs one, rather
+than switching every chart to the full bundle.
+
 ## Data fetching
 
 **Component queries do not load themselves.** houdini 2 removed `@load`, the
