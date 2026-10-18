@@ -642,6 +642,10 @@ type DeliveryQuery {
 type Expense {
   id: UUID!
   upstreamId: UUID!
+  "When the expense record was created, independent of its transaction value dates."
+  createdAt: DateTime!
+  "When the current expense record was last edited, not a historical changelog snapshot."
+  updatedAt: DateTime!
   title: String!
   store: String!
   description: String!
