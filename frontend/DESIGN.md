@@ -102,20 +102,21 @@ Colour carries meaning here; it is not decoration.
 dark:text-green-400` and `text-red-600 dark:text-red-400`. `deltaColor()` in
   `analysis/overviews.ts` picks the badge colour by sign. **Zero is grey**, not blank: an expense
   that nets to nothing moved money between two of your own accounts, which is a third thing
-  rather than a missing one. `gray-200` rather than the `-100` the other two use, since `-100`
-  is the shade a hovered row is and the cell would have vanished into it.
+  rather than a missing one. `amountTint()` in `money.ts` gives expense and balance cells the
+  same sign treatment: pale backgrounds in light mode, subdued red/green backgrounds and
+  brighter figures in dark mode, and a distinct grey cell for zero.
 - **Wealth** is `WEALTH_COLOR` (`#059669`, emerald) in `analysis/cards.ts`. A curve of what you
   own reads as a warning in orange.
 - **Categories and accounts** carry their own colour from the database. `categoryColor()` falls
   back to a fixed palette hashed from the name, so a category without one at least keeps the
   same colour between renders.
-- **Text on one of those colours is never a fixed colour.** The picker allows anything,
-  near-black included, so anything tinted takes its text from `readableTextOn()` in
-  `expense_utils.ts` — through `tint()` where there is one colour, and through
-  `makeStripedBackground()` where a cell carries several, which has to be readable on the
-  darkest and the lightest of them at once.
-  `text-black` beside a background that came from the database is the bug those two exist to
-  prevent.
+- **Coloured cells adapt their surface, not their meaning.** `tint()` and
+  `makeStripedBackground()` in `expense_utils.ts` retain the original colour in light mode.
+  Dark mode mixes 30% of each colour into the grey-800 surface, preserving the stripe widths
+  and making the cell quiet enough for grey-100 text to remain legible even over a white
+  source colour. Light-mode text still comes from `readableTextOn()` across all the stripes.
+  CSS `light-dark()` follows the root `color-scheme`, so cells react to system changes without
+  a second theme store or per-row listeners.
 - **Availability** has no colour of its own, so it gets a warm-to-cool ramp along the liquidity
   order — see `analysis/availability.ts`.
 
@@ -251,6 +252,17 @@ instantiate apex directly.
 
 - Series colours come from the data (account, category, availability), not from a chart
   palette. Where there is one series it is the app's own colour for that quantity.
+- The shared wrapper uses Apex's `theme.follow: 'os'` for initial rendering and live system
+  changes. CSS tokens supply foreground and grid colours; the chart surface stays transparent
+  so it belongs to its card. Series colours are not replaced by the theme palette. Theme
+  updates do not resend the series, so hiding and restoring a legend item keeps its value.
+- `onUpdated` runs after Apex's native update event as well as the initial render. Imperative
+  additions such as the Stichtag marker must survive a system-theme redraw too.
+- Tooltips use a neutral, theme-aware surface and foreground, not the series colour as a
+  background: an arbitrary account or category colour cannot guarantee readable tooltip text.
+- Donut centre labels inherit the page foreground rather than Apex's fixed label colour.
+  A thin neutral outline separates slices from each other and from the card, including
+  categories whose configured colour is black.
 - Bars grow **upwards**. Spending is stored negative; which side of zero a figure is on is what
   the toggle above the chart says, so the bars are free to grow the way bars do.
 - Every tooltip formats money through the same `euro()` as the rest of the page. Apex has three

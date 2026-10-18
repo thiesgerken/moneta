@@ -33,6 +33,7 @@
 		CashOutline
 	} from 'flowbite-svelte-icons';
 	import { accountSorter, byUsageThen, tint } from './expense_utils';
+	import { amountTint, euro } from './money';
 	import { shortDate } from './analysis/dates';
 	import BalanceModal from './BalanceModal.svelte';
 	import {
@@ -510,12 +511,8 @@
 						{/if}
 					</TableBodyCell>
 					<TableBodyCell
-						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' +
-							(balance.amount < 0
-								? 'bg-red-100 text-red-700'
-								: balance.amount > 0
-									? 'bg-green-100 text-green-700'
-									: '')}>{(balance.amount / 100).toFixed(2)}€</TableBodyCell
+						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' + amountTint(balance.amount)}
+						>{euro(balance.amount)}</TableBodyCell
 					>
 					<TableBodyCell class="hidden truncate px-4 py-3 md:table-cell md:w-full md:max-w-0"
 						>{balance.comments}</TableBodyCell
@@ -553,7 +550,7 @@
 								</div>
 								<div>
 									<b>Betrag:</b>
-									{(balance.amount / 100).toFixed(2)}€
+									{euro(balance.amount)}
 								</div>
 
 								<div class="flex gap-2">
