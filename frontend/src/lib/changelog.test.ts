@@ -179,7 +179,7 @@ describe('stateAmount', () => {
 });
 
 describe('runs', () => {
-	const entry = (id: string, expenseId: string, name = 'Thies', automatic = false) => ({
+	const entry = (id: string, expenseId: string, name = 'Alice', automatic = false) => ({
 		id,
 		expenseId,
 		automatic,
@@ -204,7 +204,7 @@ describe('runs', () => {
 
 	// otherwise the row would name one of them and silently swallow the other's edit
 	it('does not merge across authors', () => {
-		expect(shape(runs([entry('2', 'snickers'), entry('1', 'snickers', 'Krösus')]))).toEqual([
+		expect(shape(runs([entry('2', 'snickers'), entry('1', 'snickers', 'Bob')]))).toEqual([
 			['2'],
 			['1']
 		]);
@@ -212,7 +212,7 @@ describe('runs', () => {
 
 	// the badge says "automatisch" for the whole row, so it has to be true of the whole row
 	it('does not merge an automatic change with a hand-made one', () => {
-		expect(shape(runs([entry('2', 'snickers'), entry('1', 'snickers', 'Thies', true)]))).toEqual([
+		expect(shape(runs([entry('2', 'snickers'), entry('1', 'snickers', 'Alice', true)]))).toEqual([
 			['2'],
 			['1']
 		]);

@@ -88,7 +88,7 @@ pub fn instantiate(rule: &PeriodicRule, template: &Expense, step: u32) -> Expens
     e
 }
 
-/// `%d`, `%m` and `%y` in a title replacement, as moneydb defined them: no zero padding.
+/// `%d`, `%m` and `%y` in a title replacement use no zero padding.
 ///
 /// Read in the frame the occurrence was written in, or a period the editor wrote as starting
 /// on the 1st would be titled with the month before it.
@@ -285,8 +285,6 @@ pub fn resolved_amount(expense: &Expense, t: &ExpenseTransaction) -> Option<i32>
 /// A refund, a repayment or an instalment arrives from the bank as an expense of its own,
 /// because that is what a statement line looks like. It is not one — the payment and what came
 /// back are two movements of a single purchase, which is what a list of transactions is for.
-/// `Chain` in `import.rs` reaches the same conclusion for the moneydb legacy; this is the same
-/// thing done by hand afterwards.
 ///
 /// What crosses over is only what the source moved or evidenced. The target keeps its own
 /// title, flags, categories and accrual period, because those say what the merged expense *is*
@@ -371,12 +369,11 @@ pub fn deliveries_of(expense: &Expense) -> impl Iterator<Item = ExpenseDelivery>
 /// transactions. Statements carry no stable per-line id, so this is the only thing standing
 /// between a re-upload and a duplicated expense.
 ///
-/// Inherited from moneydb. It does mean a genuine second identical payment on the same day
-/// is treated as a duplicate, which is the safer way round to be wrong.
+/// A genuine second identical payment on the same day is treated as a duplicate, which is the
+/// safer way round to be wrong.
 pub const DELIVERY_DEDUP_WINDOW: TimeDelta = TimeDelta::hours(24);
 
-/// How far back a delivery is remembered. Beyond this nothing is compared, so it is also as
-/// far back as there is any point in seeding the table from an import.
+/// How far back a delivery is remembered. Older deliveries are neither retained nor compared.
 pub const DELIVERY_MEMORY: TimeDelta = TimeDelta::days(400);
 
 /// Whether this delivery has already been processed: the same amount on the same account,
@@ -1489,10 +1486,9 @@ mod tests {
         assert!(!matches(&rule, &delivery(account, -4237, "ALDI")));
     }
 
-    /// moneydb wrote its regexes against `dd.mm.yyyy HH:MM`; a different format would stop
-    /// every imported regexTime rule from matching
+    /// Stored `regex_time` patterns match `dd.mm.yyyy HH:MM`, including the leading zeros.
     #[test]
-    fn delivery_date_format_matches_moneydb() {
+    fn delivery_date_format_matches_stored_patterns() {
         let d = ExpenseDelivery {
             account_id: Uuid::now_v7(),
             date: Utc.with_ymd_and_hms(2025, 3, 4, 9, 5, 0).unwrap(),

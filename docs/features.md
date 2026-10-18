@@ -17,6 +17,7 @@ URL paths, query parameters — is English. `?tab=activity`, not `?tab=aktivitae
 | `/rules` | Regeln | periodic and automation rules, in two tabs |
 | `/deliveries` | Lieferungen | bank statement lines that have been handed in |
 | `/login` | — | name and password |
+| `/api-keys` | API-Schlüssel | user-owned machine credentials |
 
 `src/lib/navigation.ts` holds the navbar entries and is also where page titles come from, so
 the two cannot drift apart.
@@ -40,6 +41,24 @@ Below it, three things:
 "Since your last visit" comes from `users.visit`, a mutation the page opens with: it records
 that you are here and returns when you were here before, and that second answer stops being
 available the moment the first is written.
+
+## API keys
+
+The API-Schlüssel page creates named credentials for Ferret and other machine clients.
+Choose **Nur lesen** for Ferret: it allows authenticated queries, not mutations. **Lesen
+und schreiben** also allows ordinary domain mutations, with exactly the browser user's
+existing ownership and visibility restrictions. Keys cannot manage credentials, log in/out,
+change identity, or write the human visit marker.
+
+Expiry is optional and defaults to none. The secret is shown once with a copy button, never
+recoverable later. Lists show its nonsecret prefix, permission, creation, optional expiry and
+last-use time. Expired credentials remain visible as **Abgelaufen**. Removing a key requires
+confirmation, physically deletes it, and makes the next request fail. There is no revocation
+history, reactivation, renewal or in-place permission upgrade.
+
+Password changes do not invalidate API keys. To replace one, create a new key and remove the
+old one. Last use is successful authentication, updated at most once per minute, even when
+the GraphQL operation itself is rejected. It is not an audit log.
 
 ## Expenses
 
@@ -215,14 +234,13 @@ phase. Whichever account it names does not matter.
 **A rule may only point at an expense flagged `isTemplate`**, enforced when a rule is saved.
 Anything else is a real booking: it is in the balances and in the Auswertung, and a rule
 pointing at one turns the rule dialog into a way of rewriting money that has already been
-spent. MoneyDB allowed it and most of its rules did it, so the import gives each rule a copy of
-its own instead. A template counts in no balance, no total and no analysis, and the expense
-list hides them unless the *Vorlage* filter is switched on.
+spent. A template counts in no balance, no total and no analysis, and the expense list hides
+them unless the *Vorlage* filter is switched on.
 
 The rule editor's picker asks for templates through `onlyTemplates` rather than through the flag
 filter. The flags are permissions — each one left off filters that flag *out* — so asking for
-templates that way returns only those carrying no other flag, which on the imported books is 37
-of 58 and leaves `REWE`, `KiTa-Gebühr` and every tax-relevant contract unpickable.
+templates that way returns only those carrying no other flag. Templates that are also unchecked
+or tax-relevant must remain pickable.
 
 ## Deliveries
 
@@ -247,9 +265,8 @@ that filtered list is the queue of rules still to be written.
 
 **A delivery is judged against `seen_deliveries` alone, never against the expenses that are
 already there.** That is what makes the dedup cheap and predictable, and it means the table has
-to be told about anything that arrived by another route — which is why the moneydb import seeds
-it, see [moneydb.md](moneydb.md#the-import-says-what-the-bank-has-already-handed-over). Only the
-last 400 days are ever compared.
+to be told about any bank lines recorded by another route as well. Only the last 400 days are
+ever compared.
 
 **There is no upload client here.** Nothing in this repository feeds `deliveries.submit` from a
 real bank export; that is deliberately someone else's program, since it is per-bank and needs

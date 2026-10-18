@@ -41,6 +41,11 @@ enum AccountSortField {
   CLOSED
 }
 
+enum ApiKeyAccess {
+  "Authenticated queries only. Sufficient for Ferret." READ
+  "Queries and domain mutations, with the owner's ordinary permissions." WRITE
+}
+
 enum AutomationRuleSortField {
   PRIORITY
   TITLE
@@ -406,11 +411,9 @@ type AnalysisQuery {
   """
     Expenses whose value is not yet fully consumed at `at`.
 
-    The accrual period is what makes this work without the prepayment accounts and
-    compensation flags MoneyDB needed: an expense whose money left on the transaction date
-    but whose value is spread over a period is simply one with `accrualEnd > accrualStart`.
-    The import derives such periods for the historical data rather than leaving everything
-    degenerate, so this is populated straight after one.
+    An expense whose money left on the transaction date but whose value is spread over a
+    period has `accrualEnd > accrualStart`. The remaining value is computed from that span,
+    without special accounts or compensation flags.
 
     `isIncomplete` expenses are open items too, but with an unknown missing amount and so
     no remaining balance to compute; they come from `expenses.list` with a flag filter
@@ -443,6 +446,28 @@ type AnalysisQuery {
     gap comes back as `drift` — that is the signal that an expense is missing.
   """
   statement(accountId: UUID!, from: DateTime!, to: DateTime!): [StatementEntry!]!
+}
+
+type ApiKey {
+  id: UUID!
+  name: String!
+  prefix: String!
+  access: ApiKeyAccess!
+  createdAt: DateTime!
+  expiresAt: DateTime
+  lastUsedAt: DateTime
+}
+
+type ApiKeyMutation {
+  "Creates a fixed-permission credential. No expiry unless explicitly supplied. Session-only."
+  create(name: String!, access: ApiKeyAccess!, expiresAt: DateTime): CreatedApiKey!
+  "Physically deletes an owned key. Authentication fails on its next request. Session-only."
+  revoke(id: UUID!): Boolean!
+}
+
+type ApiKeyQuery {
+  "Lists only this browser user's keys, including expired credentials. Session-only."
+  list: [ApiKey!]!
 }
 
 type AutomationRule {
@@ -594,6 +619,12 @@ type ComputedBalance {
   expenseCount: Int!
 }
 
+type CreatedApiKey {
+  key: ApiKey!
+  "Copy this now. It cannot be recovered or returned again."
+  token: String!
+}
+
 type DeliveryMutation {
   """
     Hands bank statement lines to the automation rules.
@@ -681,9 +712,9 @@ type ExpenseChangelogEntry {
   oldState: ExpenseState
   newState: ExpenseState
   """
-    What this entry changed, field by field. Empty for a creation, and for the entries an
-    import writes: the export carries the expense as it is now rather than as it was, so
-    `import.rs` stores the same state on both sides.
+    What this entry changed, field by field. Empty for a creation or for historical entries
+    whose snapshots are identical: their earlier state is unknown, so no field-level diff
+    can be reconstructed.
   """
   changes: [ExpenseChange!]!
   user: User
@@ -716,8 +747,7 @@ type ExpenseMutation {
     A refund, a partial repayment or a settlement in instalments arrives from the bank as an
     expense of its own, because that is what a statement line looks like. It is not one: the
     payment and what came back are two movements of a single purchase, which is exactly what
-    a list of transactions is for. `Chain` in `import.rs` says the same thing about the
-    moneydb legacy, and this is the button for doing it by hand afterwards.
+    a list of transactions is for.
 
     `rules::absorb` says what crosses over and what does not. The accrual period is one of
     the things it leaves alone: a refund does not lengthen what a purchase was for,
@@ -769,8 +799,8 @@ type ExpenseReceipt {
   An expense with everything that belongs to it in one value.
 
   The tables store it across three relations, because the analysis groups by account, date
-  and category. This shape is what the changelog remembers and what the importer builds;
-  [`ExpenseRow`] and friends are what actually goes to the database.
+  and category. This shape is what the changelog remembers; [`ExpenseRow`] and friends are
+  what actually goes to the database.
   Named apart from the rendering the API otherwise serves: both are called `Expense` in Rust,
   and juniper let the two share one GraphQL name, so the SDL advertised the rendering's fields
   on a changelog state that does not have them.
@@ -902,6 +932,8 @@ type InvestmentQuery {
 
 type Mutation {
   users: UserMutation!
+  "Credential writes do not affect financial analysis."
+  apiKeys: ApiKeyMutation!
   accounts: AccountMutation!
   balances: BalanceMutation!
   expenses: ExpenseMutation!
@@ -926,9 +958,8 @@ type PeriodOverview {
   """
     `startTotal` plus everything booked during the period.
 
-    The gap to `endTotal` is MoneyDB's *Integrationsfehler*. It does not mean the
-    arithmetic drifted — it means an expense is missing, which is the whole point of
-    showing it.
+    The gap to `endTotal` is the integration error. It does not mean the arithmetic
+    drifted: it means an expense is missing, which is the whole point of showing it.
 
     Null when the totals are read on the accrual axis: a sixth of a subscription is a cost
     the period carried, not money that left an account, so there is nothing for the
@@ -983,6 +1014,8 @@ type Prepayment {
 
 type Query {
   apiVersion: String!
+  "Browser-session credential management. API keys cannot list key metadata."
+  apiKeys: ApiKeyQuery!
   users: UserQuery!
   accounts: AccountQuery!
   balances: BalanceQuery!

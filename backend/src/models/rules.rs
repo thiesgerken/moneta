@@ -1,7 +1,7 @@
 //! Rules that create expenses from a template expense (one with `is_template` set).
 //!
-//! Two kinds, both inherited from moneydb: periodic rules fire on a schedule, automation
-//! rules fire when a matching transaction is delivered from a bank statement.
+//! Periodic rules fire on a schedule; automation rules fire when a matching transaction is
+//! delivered from a bank statement.
 
 use chrono::{DateTime, Datelike, TimeDelta, Timelike, Utc};
 use diesel::prelude::*;
@@ -211,8 +211,8 @@ pub struct SeenDelivery {
 }
 
 impl ExpenseDelivery {
-    /// The representation `regex_time` is matched against. Kept identical to moneydb's so
-    /// imported rules keep matching what they used to.
+    /// The representation `regex_time` is matched against: `dd.mm.yyyy HH:MM` in UTC.
+    /// Stored patterns depend on its field widths and leading zeros.
     pub fn formatted_date(&self) -> String {
         format!(
             "{:02}.{:02}.{:04} {:02}:{:02}",
@@ -295,11 +295,10 @@ mod tests {
         );
     }
 
-    /// moneydb's format, which every imported automation rule's `regex_time` was written
-    /// against. Widening a field or dropping a leading zero silently stops those matching, and
-    /// a rule that no longer fires looks like a bank that stopped sending the line.
+    /// Widening a field or dropping a leading zero silently stops stored `regex_time` patterns
+    /// matching, and a rule that no longer fires looks like a bank that stopped sending the line.
     #[test]
-    fn a_delivery_date_is_formatted_the_way_moneydb_wrote_it() {
+    fn a_delivery_date_keeps_the_stored_pattern_format() {
         let delivery = ExpenseDelivery {
             account_id: Uuid::nil(),
             date: Utc.with_ymd_and_hms(2026, 8, 4, 9, 5, 0).unwrap(),

@@ -18,6 +18,7 @@ src/routes/
   login/
   expenses/  balances/  categories/  accounts/  rules/  deliveries/
   analysis/                 the tabbed dashboard
+  api-keys/                 named read/read-write credentials and one-time secret display
   analysis/[year]/[[month]]/  one month, or one year without it
 src/lib/
   *Table.svelte             one per list page
@@ -92,6 +93,12 @@ neither houdini's plugin, whose watcher held every run open for ten seconds afte
 assertion, nor anything else the app needs only in order to build. **There are no component or
 end-to-end tests.**
 
+Use invented people, merchants, references, amounts and timestamps in fixtures, including the
+backend's statement-parsing examples. Preserve the input format and the boundary being tested,
+not the original bank line. Never copy household statements or customer identifiers into tests.
+The statement formatter treats IBAN and BIC fields as opaque text, so its zeroed bank identifier
+and test BIC deliberately do not identify a real account.
+
 ## Conventions worth knowing
 
 - Indentation is **tabs** here (`.prettierrc` sets `useTabs`) and rustfmt defaults in the
@@ -109,3 +116,14 @@ end-to-end tests.**
   are fine as they are.
 - The **login redirect** keys on `extensions.code == "UNAUTHENTICATED"` alone, so a backend that
   is down does not look like a session that ended.
+
+## API-key management
+
+`routes/api-keys/+page.svelte` uses the session-only `apiKeys` query/mutation namespace.
+Its default is read-only with no expiry; the optional local datetime is sent as an instant.
+Creation returns a token shown in a separate one-time dialog with clipboard copy. Closing
+the dialog forgets the displayed token; list queries return metadata only. Removal confirms
+the named key before physically deleting it. Expired rows remain visible with an
+`Abgelaufen` badge and the same removal action. API-key operations do not invalidate the
+financial analysis cache.
+
