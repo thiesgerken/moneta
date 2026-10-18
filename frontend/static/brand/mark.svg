@@ -1,0 +1,11 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 64 64"
+  fill="#ef562f"
+  role="img"
+  aria-labelledby="title"
+>
+  <title id="title">Moneta</title>
+  <path d="M8 10h12c6 0 10 4 10 10v34c-6-5-13-8-22-8Z" />
+  <path d="M56 10H44c-6 0-10 4-10 10v34c6-5 13-8 22-8Z" />
+</svg>

@@ -8,6 +8,64 @@ The base is Tailwind 4 with flowbite-svelte. Both bring opinions of their own, a
 them are overridden below — those overrides live in `src/app.css` and are the only global CSS
 in the project.
 
+## Brand
+
+`static/brand/` contains the canonical SVG artwork used by the README, login screen and shared
+navbar. Open `static/brand/preview.html` for the light and dark treatments and the mark at
+16, 24, 32 and 48 pixels. The favicon and installed-app icons are derived from `mark.svg`.
+
+The mark is an open ledger: two facing pages share a spine without becoming the same page.
+That is the household model in one shape. It deliberately avoids a coin, currency sign or
+growth arrow, which would make a bookkeeping tool look like an investment product.
+
+- `mark.svg`: the symbol on a 64 × 64 canvas, in Moneta orange (`#ef562f`).
+- `wordmark.svg`: lowercase lettering, in ink (`#111827`).
+- `lockup.svg`: the horizontal combination, with the same baseline and proportions.
+- `lockup-dark.svg`: the same orange mark with off-white (`#f9fafb`) lettering for dark surfaces.
+- `mark-512.png` and `lockup-1200.png`: transparent raster exports for consumers without SVG.
+
+The lettering is Source Serif 4, weight 600, optical size 32, with optical pair spacing.
+It is converted to paths, so an image needs no font download and cannot acquire a fallback
+typeface. Source Serif 4 is SIL Open Font License 1.1; these assets are outlined artwork,
+not a redistributed font.
+
+Keep the canvas padding and aspect ratios intact. Use the mark alone below a 148-pixel-wide
+lockup; its minimum intended canvas is 16 × 16 pixels. The navbar uses a 148 × 32 lockup and
+login uses 222 × 48, including on phones. `Brand.svelte` shares the image markup and gives each
+logo one accessible name. It selects `lockup-dark.svg` with a `prefers-color-scheme` picture
+source and retains the light artwork as the image fallback.
+
+The README uses repository-relative `lockup.svg#gh-light-mode-only` and
+`lockup-dark.svg#gh-dark-mode-only` images, so no running application is needed. GitHub and
+Gitea use these fragments to show only the logo matching the selected repository theme,
+including a manual theme choice that differs from the operating system. Image fragments
+also survive repository renderers wrapping images in links, unlike HTML picture sources.
+
+On a dark surface, keep the orange mark and use the off-white lettering. Monochrome is an
+optional treatment for contexts that cannot reproduce the brand colour, not the dark-mode
+default. For an external image, `filter: brightness(0) invert(1)` makes both parts white; when
+inlining the SVG, set both fills to `currentColor`. Do not add a surrounding coin, shadow or
+gradient.
+
+The 64-pixel PNG favicon is transparent. Installed-app icons use a solid off-white
+(`#f9fafb`) canvas so the orange mark is legible independently of the launcher's background.
+The maskable icon centers a 368-pixel mark canvas inside 512 pixels, keeping the complete
+artwork within the central 80%-diameter safe circle. Do not scale it to fill the mask.
+Existing icon URLs in `app.html` and `manifest.webmanifest` point to these derived assets;
+the service worker populates a fresh static-asset cache for each build.
+
+Regenerate derived artwork from the frontend directory (requires librsvg and ImageMagick):
+
+```sh
+cp static/brand/mark.svg static/favicon.svg
+rsvg-convert --width 64 --height 64 --output static/favicon.png static/brand/mark.svg
+rsvg-convert --width 192 --height 192 --background-color '#f9fafb' --output static/icon-192.png static/brand/mark.svg
+rsvg-convert --width 512 --height 512 --background-color '#f9fafb' --output static/icon-512.png static/brand/mark.svg
+rsvg-convert --width 368 --height 368 static/brand/mark.svg | magick png:- -background '#f9fafb' -gravity center -extent 512x512 -alpha remove -alpha off static/icon-maskable-512.png
+rsvg-convert --width 512 --height 512 --output static/brand/mark-512.png static/brand/mark.svg
+rsvg-convert --width 1200 --output static/brand/lockup-1200.png static/brand/lockup.svg
+```
+
 ## Typography
 
 Two typefaces, both self-hosted through `@fontsource`, both variable, no CDN.
@@ -38,8 +96,8 @@ page's question, like the wealth figure on the dashboard.
 
 Colour carries meaning here; it is not decoration.
 
-- **Primary** is the moneta orange (`--color-primary-*`), used for links, primary buttons and
-  nothing else. It is also the Stichtag marker, which is why the wealth curve is _not_ orange.
+- **Primary** is the moneta orange (`--color-primary-*`), used for the brand, links and primary
+  buttons. It is also the Stichtag marker, which is why the wealth curve is _not_ orange.
 - **Money direction**: green for what came in, red for what went out — `text-green-700
 dark:text-green-400` and `text-red-600 dark:text-red-400`. `deltaColor()` in
   `analysis/overviews.ts` picks the badge colour by sign. **Zero is grey**, not blank: an expense

@@ -1,4 +1,7 @@
-# Moneta
+<h1>
+  <img src="frontend/static/brand/lockup.svg#gh-light-mode-only" alt="Moneta" width="296" height="64">
+  <img src="frontend/static/brand/lockup-dark.svg#gh-dark-mode-only" alt="Moneta" width="296" height="64">
+</h1>
 
 Personal finance tracking: expenses, accounts, balances and categories, shared between several
 users. Successor to MoneyDB (Haskell + jQuery, sibling checkout), which it can import from.
