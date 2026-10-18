@@ -2,6 +2,7 @@
 	import { graphql } from '$houdini';
 	import { Alert, Badge, Button, Input, Label, Modal, Select } from 'flowbite-svelte';
 	import { shortDate } from '$lib/analysis/dates';
+	import QueryError from '$lib/QueryError.svelte';
 
 	const keys = graphql(`
 		query ApiKeys {
@@ -127,7 +128,7 @@
 	</p>
 	{#if error}<Alert color="red">{error}</Alert>{/if}
 	{#if $keys.errors?.length}
-		<Alert color="red">Die Schlüssel konnten nicht geladen werden.</Alert>
+		<QueryError errors={$keys.errors} message="Die Schlüssel konnten nicht geladen werden." />
 	{:else if $keys.fetching && !$keys.data}
 		<p class="text-sm text-gray-500">Schlüssel werden geladen …</p>
 	{:else if list.length === 0}

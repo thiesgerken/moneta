@@ -175,12 +175,16 @@ pub async fn authenticate(
     else {
         return Ok(None);
     };
+    let mut decoded_secret = [0; 32];
     if prefix.len() != 8
         || !prefix
             .bytes()
             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
         || secret.len() != 43
-        || BASE64_URL_SAFE_NO_PAD.decode(secret).is_err()
+        || BASE64_URL_SAFE_NO_PAD
+            .decode_slice(secret, &mut decoded_secret)
+            .ok()
+            != Some(32)
     {
         return Ok(None);
     }
