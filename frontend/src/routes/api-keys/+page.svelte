@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { graphql } from '$houdini';
 	import { Alert, Badge, Button, Input, Label, Modal, Select } from 'flowbite-svelte';
-	import { shortDate } from '$lib/analysis/dates';
-	import QueryError from '$lib/QueryError.svelte';
+	import { shortDate } from '#lib/analysis/dates.ts';
+	import QueryError from '#lib/QueryError.svelte';
 
 	const keys = graphql(`
 		query ApiKeys {

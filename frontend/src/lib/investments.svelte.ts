@@ -6,7 +6,7 @@
 /// So the market value is only ever offered beside a *stock of wealth right now* -- the start
 /// page and the Vermögen tab -- and never anywhere monthly.
 
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 
 const KEY = 'moneta.market-values';
 

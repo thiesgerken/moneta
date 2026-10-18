@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { graphql } from '$houdini';
-	import { version } from '$app/environment';
+	import { version } from '$app/env';
 	import { Navbar, NavBrand, NavHamburger, NavUl, NavLi, Avatar, Dropdown } from 'flowbite-svelte';
 	import { ArrowRightToBracketOutline } from 'flowbite-svelte-icons';
-	import { NAV } from '$lib/navigation';
-	import Brand from '$lib/Brand.svelte';
+	import { NAV } from '#lib/navigation.ts';
+	import Brand from '#lib/Brand.svelte';
 
 	// No error surface, deliberately: a bar across the top of every page is the wrong place
 	// to report one, and the only thing lost is the menu. An ended session is the layout's job.

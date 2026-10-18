@@ -10,15 +10,15 @@
 		PlusOutline
 	} from 'flowbite-svelte-icons';
 	import type { ApexOptions } from 'apexcharts';
-	import Chart from '$lib/Chart.svelte';
-	import ExpenseChangelog from '$lib/ExpenseChangelog.svelte';
-	import ToggleGroup from '$lib/ToggleGroup.svelte';
-	import { categoryColor } from '$lib/analysis/format';
-	import { DATE_AXES, accrued, axisState } from '$lib/analysis/state.svelte';
-	import { WEALTH_COLOR } from '$lib/analysis/cards';
-	import { shortDate } from '$lib/analysis/dates';
-	import QueryError from '$lib/QueryError.svelte';
-	import { asOf as investmentsAsOf, priced, uncommittedGain } from '$lib/investments';
+	import Chart from '#lib/Chart.svelte';
+	import ExpenseChangelog from '#lib/ExpenseChangelog.svelte';
+	import ToggleGroup from '#lib/ToggleGroup.svelte';
+	import { categoryColor } from '#lib/analysis/format.ts';
+	import { DATE_AXES, accrued, axisState } from '#lib/analysis/state.svelte.ts';
+	import { WEALTH_COLOR } from '#lib/analysis/cards.ts';
+	import { shortDate } from '#lib/analysis/dates.ts';
+	import QueryError from '#lib/QueryError.svelte';
+	import { asOf as investmentsAsOf, priced, uncommittedGain } from '#lib/investments.ts';
 
 	const euro = (cents: number) =>
 		(cents / 100).toLocaleString('de-DE', {

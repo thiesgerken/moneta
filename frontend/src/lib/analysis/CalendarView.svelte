@@ -4,12 +4,12 @@
 	import { graphql } from '$houdini';
 	import { categoryColor } from './format';
 	import { DATE_AXES, accrued, axisState, calendarState } from './state.svelte';
-	import ToggleGroup from '$lib/ToggleGroup.svelte';
+	import ToggleGroup from '#lib/ToggleGroup.svelte';
 	import { ANALYSIS_CARD } from './cards';
 	import { shiftMonth } from './dates';
 	import { resolve } from '$app/paths';
-	import QueryError from '$lib/QueryError.svelte';
-	import { amountColor, euro } from '$lib/money';
+	import QueryError from '#lib/QueryError.svelte';
+	import { amountColor, euro } from '#lib/money.ts';
 
 	const month = $derived(new Date(calendarState.month));
 

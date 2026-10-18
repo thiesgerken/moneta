@@ -8,7 +8,7 @@ users.
 
 - **backend** — Rust: [rocket](https://rocket.rs) + [juniper](https://github.com/graphql-rust/juniper)
   serving a GraphQL API, PostgreSQL 18 for storage (diesel-async)
-- **frontend** — SvelteKit 2 / Svelte 5 (runes), [houdini](https://houdinigraphql.com) as the
+- **frontend** — SvelteKit 3 / Svelte 5 (runes), [houdini](https://houdinigraphql.com) as the
   GraphQL client, Tailwind 4 + flowbite-svelte for the UI
 
 **Documentation is in [`docs/`](docs/)** — start with [docs/README.md](docs/README.md), which

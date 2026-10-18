@@ -10,7 +10,7 @@
 		Badge,
 		Checkbox
 	} from 'flowbite-svelte';
-	import { Section } from 'flowbite-svelte-blocks';
+	import TableSection from './TableSection.svelte';
 	import { tableSearchClasses, tableSearchTableClass, headIcon } from './table_styles';
 	import {
 		CalendarMonthOutline,
@@ -65,7 +65,7 @@
 	);
 </script>
 
-<Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
+<TableSection>
 	<QueryError
 		errors={$deliveryStore.errors}
 		message="Die Lieferungen konnten nicht geladen werden."
@@ -135,4 +135,4 @@
 			{/each}
 		</TableBody>
 	</TableSearch>
-</Section>
+</TableSection>

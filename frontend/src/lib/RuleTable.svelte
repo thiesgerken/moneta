@@ -16,7 +16,7 @@
 		Modal
 	} from 'flowbite-svelte';
 	import ActionButton from './ActionButton.svelte';
-	import { Section } from 'flowbite-svelte-blocks';
+	import TableSection from './TableSection.svelte';
 	import {
 		PlusOutline,
 		EditOutline,
@@ -451,7 +451,7 @@
 	</DropdownItem>
 </Dropdown>
 
-<Section name="advancedTable" sectionClass="bg-gray-50 dark:bg-gray-900 p-0 sm:p-5">
+<TableSection>
 	<QueryError
 		errors={$store.errors}
 		message="Die Regeln konnten nicht geladen werden."
@@ -685,4 +685,4 @@
 			{/each}
 		</TableBody>
 	</TableSearch>
-</Section>
+</TableSection>
