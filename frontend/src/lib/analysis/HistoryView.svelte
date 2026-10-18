@@ -194,8 +194,8 @@
 
 	const wholePeriod = $derived(overviews?.byCategory ?? []);
 
-	// a treemap rather than MoneyDB's sunburst: same category -> expense hierarchy, but
-	// readable at the sizes where a sunburst's outer ring becomes unlabelable slivers
+	// A treemap keeps the category -> expense hierarchy readable at sizes where a sunburst's
+	// outer ring becomes unlabelable slivers.
 	const treemapSeries = $derived(
 		wholePeriod
 			.map((c) => {

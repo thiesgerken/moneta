@@ -4,10 +4,9 @@
 /// day the template was paid — so this is the only place the behaviour is visible.
 /// Whether the Referenzbetrag field is unfilled, for an expense that has a share in it.
 ///
-/// Zero is a real answer and not a missing one: the importer writes it on every rule template
-/// whose booking a delivery will replace, and `impose` overwrites it from the delivery anyway.
-/// A falsiness check refuses exactly those templates, so this asks what was typed rather than
-/// what it is worth.
+/// Zero is a real answer and not a missing one: an automation template keeps a blank booking,
+/// and `impose` overwrites its reference amount from the delivery. A falsiness check refuses
+/// exactly those templates, so this asks what was typed rather than what it is worth.
 export function referenceAmountMissing(entered: string | undefined | null): boolean {
 	const text = entered?.trim() ?? '';
 	return text === '' || isNaN(Number(text));
@@ -288,8 +287,7 @@ export function byUsageThen<T extends { usageCount: number }>(
 
 /// What the bank writes where the free text should be when a card was used: that a card was
 /// used, and on which day. It says neither what was bought nor from whom, and it is all a
-/// column three hundred pixels wide ever got to show for a card payment. Two spellings of the
-/// same nothing, the same two `import.rs` reads the purchase date out of.
+/// column three hundred pixels wide ever got to show for a card payment.
 ///
 /// Only the empty ones. The older line also carries a cash withdrawal or an exchange rate on
 /// occasion, and that is a fact about the payment rather than about the card.

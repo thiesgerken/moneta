@@ -113,9 +113,8 @@ table tbody tr {
 	}
 }
 
-/* 12px above and below a 20px line is a 44px row, and these are lists to scan rather than
-   paragraphs to read. 10px is a 40px row, which is where moneydb sat; 8px was tighter than
-   either and read as cramped. Only the vertical half is set here: the horizontal padding is
+/* These are lists to scan rather than paragraphs to read. A 20px line with 10px above and
+   below makes a 40px row. Only the vertical padding is set here: the horizontal padding is
    what the phone layout narrows, and it has to keep doing that. */
 table thead th,
 table tbody td {

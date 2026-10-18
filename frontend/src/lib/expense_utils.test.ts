@@ -96,23 +96,21 @@ describe('formatAccount', () => {
 
 	// my own accounts are the common case and naming me on every row of my own list is noise
 	it('leaves my own account bare', () => {
-		expect(formatAccount(account('Girokonto', 'thies'), 'thies')).toBe('Girokonto');
+		expect(formatAccount(account('Girokonto', 'alice'), 'alice')).toBe('Girokonto');
 	});
 
 	it('says whose it is when it is not mine', () => {
-		expect(formatAccount(account('Girokonto', 'kroesus', 'Krösus'), 'thies')).toBe(
-			'Krösus / Girokonto'
-		);
+		expect(formatAccount(account('Girokonto', 'bob', 'Bob'), 'alice')).toBe('Bob / Girokonto');
 	});
 
 	it('falls back to the login name where there is no first name', () => {
-		expect(formatAccount(account('Girokonto', 'kroesus'), 'thies')).toBe('kroesus / Girokonto');
+		expect(formatAccount(account('Girokonto', 'bob'), 'alice')).toBe('bob / Girokonto');
 	});
 
 	// nobody logged in yet: every account is somebody else's, which is the safe way round
 	it('qualifies everything when it does not know who is reading', () => {
-		expect(formatAccount(account('Girokonto', 'thies', 'Thies'), undefined)).toBe(
-			'Thies / Girokonto'
+		expect(formatAccount(account('Girokonto', 'alice', 'Alice'), undefined)).toBe(
+			'Alice / Girokonto'
 		);
 	});
 });
@@ -126,8 +124,8 @@ describe('formatTransactionAccounts', () => {
 	it('names the account the most money moved on first', () => {
 		expect(
 			formatTransactionAccounts(
-				[leg('Bargeld', 'thies', -100), leg('Giro', 'thies', -900)],
-				'thies'
+				[leg('Bargeld', 'alice', -100), leg('Giro', 'alice', -900)],
+				'alice'
 			)
 		).toBe('Giro, Bargeld');
 	});
@@ -136,8 +134,8 @@ describe('formatTransactionAccounts', () => {
 	it('adds up the legs that land on the same account', () => {
 		expect(
 			formatTransactionAccounts(
-				[leg('Giro', 'thies', -100), leg('Bargeld', 'thies', -200), leg('Giro', 'thies', -500)],
-				'thies'
+				[leg('Giro', 'alice', -100), leg('Bargeld', 'alice', -200), leg('Giro', 'alice', -500)],
+				'alice'
 			)
 		).toBe('Giro, Bargeld');
 	});
@@ -145,12 +143,12 @@ describe('formatTransactionAccounts', () => {
 	// a transfer has legs pointing opposite ways, and a big one either way is still the big one
 	it('ranks by how much moved, not by which direction', () => {
 		expect(
-			formatTransactionAccounts([leg('Giro', 'thies', 900), leg('Bargeld', 'thies', -100)], 'thies')
+			formatTransactionAccounts([leg('Giro', 'alice', 900), leg('Bargeld', 'alice', -100)], 'alice')
 		).toBe('Giro, Bargeld');
 	});
 
 	it('has nothing to say about no transactions', () => {
-		expect(formatTransactionAccounts([], 'thies')).toBe('');
+		expect(formatTransactionAccounts([], 'alice')).toBe('');
 	});
 });
 
@@ -326,7 +324,7 @@ describe('accountSorter', () => {
 		accounts.toSorted((a, b) => accountSorter(a, b, me)).map((a) => a.name);
 
 	it('puts my own accounts first, whatever they are called', () => {
-		expect(sorted([account('Zweitkonto', 'kroesus'), account('Aaa', 'thies')], 'thies')).toEqual([
+		expect(sorted([account('Zweitkonto', 'bob'), account('Aaa', 'alice')], 'alice')).toEqual([
 			'Aaa',
 			'Zweitkonto'
 		]);
@@ -334,14 +332,14 @@ describe('accountSorter', () => {
 
 	it('groups the other people by name', () => {
 		expect(
-			sorted([account('b', 'kroesus'), account('a', 'anna'), account('c', 'kroesus')], 'thies')
+			sorted([account('b', 'bob'), account('a', 'ada'), account('c', 'bob')], 'alice')
 		).toEqual(['a', 'b', 'c']);
 	});
 
 	// a closed account is history: still reachable, but not in the way
 	it('sinks a closed account below the open ones of the same owner', () => {
 		expect(
-			sorted([account('a', 'thies', new Date('2020-01-01')), account('z', 'thies')], 'thies')
+			sorted([account('a', 'alice', new Date('2000-01-01')), account('z', 'alice')], 'alice')
 		).toEqual(['z', 'a']);
 	});
 });
@@ -387,8 +385,7 @@ describe('byUsageThen', () => {
 	});
 });
 
-/// A rule template's booking is blanked to zero and its share stays beside it, so the dialog
-/// refusing a zero reference refused to save exactly the templates the importer had built.
+/// A rule template's blank booking still has a reference amount: zero is a value, not a gap.
 describe('referenceAmountMissing', () => {
 	it('treats zero as an answer, not as a gap', () => {
 		expect(referenceAmountMissing('0')).toBe(false);
@@ -413,40 +410,46 @@ describe('statementLine', () => {
 
 	it('names the shop where the bank only said a card was used', () => {
 		expect(statementLine(card('VISA Debitkartenumsatz'))).toBe('BEISPIELMARKT/TESTSTADT');
-		expect(statementLine(card('VISA Debitkartenumsatz vom 15.03.2026'))).toBe('BEISPIELMARKT/TESTSTADT');
+		expect(statementLine(card('VISA Debitkartenumsatz vom 18.03.2030'))).toBe(
+			'BEISPIELMARKT/TESTSTADT'
+		);
 		expect(statementLine(card('Girokartenumsatz'))).toBe('BEISPIELMARKT/TESTSTADT');
 	});
 
 	it('names the shop behind the older spelling of the same nothing', () => {
-		expect(statementLine(card('2025-01-01T12.00Debitk.99 2099-12 Zahl.System VISA Debit'))).toBe(
+		expect(statementLine(card('2030-01-15T10.20Debitk.16 2099-12 Zahl.System VISA Debit'))).toBe(
 			'BEISPIELMARKT/TESTSTADT'
 		);
-		expect(statementLine(card('2019-01-01T12.00 Debitk.0 2099-12'))).toBe('BEISPIELMARKT/TESTSTADT');
+		expect(statementLine(card('2029-11-05T14.35 Debitk.0 2032-12'))).toBe(
+			'BEISPIELMARKT/TESTSTADT'
+		);
 	});
 
 	it('keeps what the older line says beyond the card', () => {
-		const withdrawal = '2019-01-02T12.00 Debitk.0 2099-12 Bargeldausz. 100,00 EUR';
+		const withdrawal = '2030-02-06T09.15 Debitk.0 2032-12 Bargeldausz. 80,00 EUR';
 		expect(statementLine(card(withdrawal))).toBe(withdrawal);
 	});
 
 	it('keeps a free text that says something of its own', () => {
-		expect(statementLine(card('304-1234567-1234567 AMZNMktplace'))).toBe(
-			'304-1234567-1234567 AMZNMktplace'
+		expect(statementLine(card('000-0000000-0000000 AMZNMktplace'))).toBe(
+			'000-0000000-0000000 AMZNMktplace'
 		);
 		// the merchant on the boilerplate's own line is the free text, not boilerplate
-		expect(statementLine(card('VISA Debitkartenumsatz DR. MUSTERMANN'))).toBe(
-			'VISA Debitkartenumsatz DR. MUSTERMANN'
+		expect(statementLine(card('VISA Debitkartenumsatz BEISPIELWERKSTATT'))).toBe(
+			'VISA Debitkartenumsatz BEISPIELWERKSTATT'
 		);
 	});
 
 	it('drops the field block a cell one line high cannot show', () => {
-		expect(statementLine('REWE TeststadtTeststadt\n\napplicant_bin: TESTDE00XXX')).toBe(
-			'REWE TeststadtTeststadt'
+		expect(statementLine('BEISPIELMARKT Teststadt\n\napplicant_bin: TESTDE00XXX')).toBe(
+			'BEISPIELMARKT Teststadt'
 		);
 	});
 
 	it('falls back to the boilerplate when there is nothing better', () => {
 		expect(statementLine('Girokartenumsatz')).toBe('Girokartenumsatz');
-		expect(statementLine('Dauerauftrag Beispiel')).toBe('Dauerauftrag Beispiel');
+		expect(statementLine('Dauerauftrag Ausgleich Testkonto')).toBe(
+			'Dauerauftrag Ausgleich Testkonto'
+		);
 	});
 });

@@ -307,9 +307,9 @@ impl GraphQLExpenseChangelogEntry {
     fn new_state(&self) -> Option<Expense> {
         self.data.new_state.clone().map(|state| state.0)
     }
-    /// What this entry changed, field by field. Empty for a creation, and for the entries an
-    /// import writes: the export carries the expense as it is now rather than as it was, so
-    /// `import.rs` stores the same state on both sides.
+    /// What this entry changed, field by field. Empty for a creation or for historical entries
+    /// whose snapshots are identical: their earlier state is unknown, so no field-level diff
+    /// can be reconstructed.
     fn changes(&self) -> Vec<ExpenseChange> {
         let (Some(old_state), Some(new_state)) =
             (self.data.old_state.clone(), self.data.new_state.as_ref())
@@ -554,8 +554,8 @@ impl ExpenseQuery {
             // Not something `flags` can say. Each of those is permission for a flag to appear,
             // so an expense shows only when every flag it carries was allowed -- "templates and
             // nothing else", never "templates whatever else they are". A rule needs the second
-            // one: 21 of 58 imported templates are also tax-relevant, unchecked or incomplete,
-            // and asking through `flags` hides every one of them.
+            // one: templates can also be tax-relevant, unchecked or incomplete, and asking
+            // through `flags` hides those.
             if only_templates.unwrap_or(false) {
                 query = query.filter(expenses_rendered::is_template.eq(true));
             }
@@ -698,7 +698,7 @@ impl ExpenseQuery {
             ),
             // the default the table opens with: what needs attention first, then newest.
             // Without the booking date as a secondary key the id tiebreaker would order by
-            // insertion, which for an imported history is meaningless.
+            // insertion rather than when the money moved.
             ExpenseSortField::Status => match direction {
                 SortDirection::Asc => query.order_by((
                     expenses_rendered::is_template.desc(),
@@ -954,8 +954,7 @@ impl ExpenseMutation {
     /// A refund, a partial repayment or a settlement in instalments arrives from the bank as an
     /// expense of its own, because that is what a statement line looks like. It is not one: the
     /// payment and what came back are two movements of a single purchase, which is exactly what
-    /// a list of transactions is for. `Chain` in `import.rs` says the same thing about the
-    /// moneydb legacy, and this is the button for doing it by hand afterwards.
+    /// a list of transactions is for.
     ///
     /// `rules::absorb` says what crosses over and what does not. The accrual period is one of
     /// the things it leaves alone: a refund does not lengthen what a purchase was for,

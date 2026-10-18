@@ -1081,9 +1081,9 @@
 				class="flex w-full flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
 			>
 				<div class="flex items-center gap-2">
-					<!-- One group, in moneydb's order. Everything but Neu acts on whichever row is open,
-					     so on a phone the group goes and Neu stands on its own: the row you opened fills
-					     the screen there and carries the same four buttons itself. -->
+					<!-- Everything but Neu acts on whichever row is open, so on a phone the group
+                         goes and Neu stands on its own: the row you opened fills the screen there
+                         and carries the same four buttons itself. -->
 					{@render newExpenseButton('grow md:hidden')}
 					<ButtonGroup class="hidden md:inline-flex">
 						{@render newExpenseButton('')}
@@ -1699,10 +1699,8 @@
 															Ausgabe erstellt
 														</div>
 													{:else if change.changes.length === 0}
-														<!-- An entry with nothing to report is one whose two states are the same,
-													     which is what an import writes: the export carries the expense as it is
-													     now and not as it was, so `import.rs` stores that same state on both
-													     sides. Something was changed and there is no way to say what. -->
+														<!-- Historical entries can have identical snapshots when the earlier state
+                                                             is unknown. Keep the event visible even without a field-level diff. -->
 														<div class="text-xs text-gray-500 dark:text-gray-400">Geändert</div>
 													{:else}
 														<ChangeList changes={change.changes} names={changeNames} class="mt-1" />

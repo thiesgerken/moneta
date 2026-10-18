@@ -158,7 +158,7 @@ END $$;
 -- ... while the shapes the app relies on must still go in.
 DO $$
 BEGIN
-    -- every imported expense has a single-instant booking period
+    -- an ordinary expense can have a single-instant accrual period
     INSERT INTO expenses (title, store, description, comments, accrual_start, accrual_end)
     VALUES ('ok', '', '', '', '2025-06-01Z', '2025-06-01Z');
 

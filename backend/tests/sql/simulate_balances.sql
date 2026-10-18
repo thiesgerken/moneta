@@ -18,8 +18,7 @@ INSERT INTO accounts (id, user_id, name, description, kind, availability, risk, 
     -- half-owned, to pin that the account's own balance is reported rather than the share of
     -- it that counts towards the owner's wealth
     ('00000000-0000-7000-8000-0000000000a5', '00000000-0000-7000-8000-000000000001', 's5', '', 'debit', 'immediately', 'none', '2025-01-01Z', 0.5),
-    -- s6 has no balance either but does have expenses, which is what integrating from empty
-    -- is for: moneydb demanded a 0,00 row before it would show an account at all
+    -- s6 has no balance either but does have expenses, so its simulation integrates from empty
     ('00000000-0000-7000-8000-0000000000a6', '00000000-0000-7000-8000-000000000001', 's6', '', 'debit', 'immediately', 'none', '2025-01-01Z', 1.0);
 
 INSERT INTO expenses (id, title, store, description, comments, reference_amount, accrual_start, accrual_end) VALUES
