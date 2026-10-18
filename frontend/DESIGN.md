@@ -146,9 +146,12 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
 
 ## Layout
 
-- Page width is capped at `max-w-7xl`; the feed on its own is `max-w-3xl`, since a column of
+- Dashboard width is capped at `max-w-7xl`; the feed on its own is `max-w-3xl`, since a column of
   prose that wide is already too wide.
 - Page gutters are `px-4 sm:px-8`, and content is stacked with `space-y-4`.
+- List pages use the available viewport width through `TableSection.svelte`, with `px-4` inner
+  gutters and `sm:p-5` section padding. Fixed table columns need the remaining space for dates,
+  titles and bank text; do not apply the dashboard's width cap or larger desktop gutters here.
 - Cards use `ANALYSIS_CARD` (`analysis/cards.ts`), which deliberately draws **no frame on a
   phone**: the tab panel is already a box with a gutter, and a card inside it spends forty
   pixels of a narrow screen saying "this is a thing".
@@ -188,6 +191,9 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   also lays out as many columns as the _widest row_ declares, so a detail row's `colspan` has to
   match the number of columns the breakpoint is actually showing — nine over three invents six
   empty ones and shares the width between all nine.
+  The expense date column reserves a full date range's width on desktop. Use a real width:
+  fixed table layout ignores cell min-width. The description column yields space below `2xl`
+  so dates and titles fit smaller desktops too.
 - **A detail row is two columns from `lg`**: what is prose on the left as a `dl`, what is a table
   on the right. A row of the expense list is two thousand pixels wide and its detail used to be
   one narrow stack down the left of it.

@@ -1068,7 +1068,7 @@
 	>
 		{#snippet header()}
 			<div
-				class="flex w-full flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:items-center md:gap-3"
+				class="flex w-full flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:flex-wrap md:items-center md:gap-3"
 			>
 				<div class="flex items-center gap-2">
 					<!-- Everything but Neu acts on whichever row is open, so on a phone the group
@@ -1271,14 +1271,11 @@
 		<TableHead>
 			<!-- pl to clear the chevron: it hangs in the column's left margin, and without this the
 			     label started 24px to the left of every date under it. -->
-			<!-- The header only says which date it is showing; the period filter picks it, since
-			     that is where the range it applies to is chosen too. min-w rather than w, because
-			     the names are wider than the dates under them and a fixed width clipped them.
-			     On a phone it wraps instead: "Leistungszeitraum" on one line would take half the
-			     row from the title, and `wrap-anywhere` is what breaks a word with no space in
-			     it. -->
+			<!-- Fixed table layout ignores a cell's min-width, so reserve a full date range's
+			     width on desktop. On phones the axis label wraps instead, since an unbroken
+			     "Leistungszeitraum" would take half the title's space. -->
 			<TableHeadCell
-				class="w-28 py-3 pr-2 pl-7 wrap-anywhere md:w-auto md:min-w-36 md:pr-4 md:pl-10 md:whitespace-nowrap"
+				class="w-28 py-3 pr-2 pl-7 wrap-anywhere md:w-60 md:pr-4 md:pl-10 md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sort.by(axis.sort)}
 			>
@@ -1334,7 +1331,7 @@
 				<SortIcon direction={sort.on('store')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell md:w-56"
+				class="hidden px-4 py-3 md:table-cell md:w-40 2xl:w-56"
 				scope="col"
 				onclick={() => sort.by('description')}
 			>
