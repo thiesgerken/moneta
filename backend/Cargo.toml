@@ -8,7 +8,7 @@ default-run = "moneta"
 [dependencies]
 argon2 = "0.6"
 futures = "0.3"
-base64 = "0.22"
+base64 = "0.23"
 getrandom = "0.4"
 sha2 = "0.11"
 subtle = "2.6"
