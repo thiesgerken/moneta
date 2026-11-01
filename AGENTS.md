@@ -9,6 +9,9 @@ the application does, and [`docs/backend.md`](docs/backend.md) /
 This file is the operational stuff: what to run to verify, and the traps that have already been
 stepped in. `TODO.md` is what is deliberately not built yet.
 
+With Nix, the dev shell (`direnv allow` or `nix develop`) brings the pinned Rust toolchain, node,
+pnpm and psql. Postgres for the tests still runs in Docker, as below.
+
 ## Verify your changes
 
 ```sh

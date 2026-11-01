@@ -11,6 +11,9 @@
     "Renovate does not apply this to lockFileMaintenance, lockfileUpdate, pin or replacement updates -- the package manager resolves those itself -- so a lock file maintenance run can still produce an entry pnpm will reject."
   ],
   "minimumReleaseAge": "3 days",
+  "nix": {
+    "enabled": true
+  },
   "lockFileMaintenance": {
     "enabled": true,
     "automerge": true

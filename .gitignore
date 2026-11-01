@@ -7,3 +7,4 @@ moneydb-export.json
 backend-coverage.json
 frontend-coverage.json
 .claude/worktrees
+.direnv
