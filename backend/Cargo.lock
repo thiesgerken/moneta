@@ -440,16 +440,15 @@ dependencies = [
 
 [[package]]
 name = "compact_str"
-version = "0.9.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9dfdd1c2274d9aa354115b09dc9a901d6c5576818cdf70d14cae2bdb47df00ab"
+checksum = "79fcda08c33bb58b97008b2cdada6622500e949e060f5913361763121abd2416"
 dependencies = [
  "castaway",
  "cfg-if",
  "itoa",
- "rustversion",
- "ryu",
  "static_assertions",
+ "zmij",
 ]
 
 [[package]]
@@ -1611,15 +1610,6 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
 name = "itertools"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
@@ -1715,9 +1705,9 @@ dependencies = [
 
 [[package]]
 name = "juniper"
-version = "0.17.2"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59ab1773fa41e0512d4686dc41066bb18c8c49875f30349aec1c5e428a42cad1"
+checksum = "571c64a26767dad86fe8271719cc43dd503a55607813c9ec3db5134bb2137270"
 dependencies = [
  "arcstr",
  "async-trait",
@@ -1729,7 +1719,7 @@ dependencies = [
  "futures",
  "graphql-parser",
  "indexmap",
- "itertools 0.14.0",
+ "itertools",
  "juniper_codegen",
  "ref-cast",
  "serde",
@@ -1740,22 +1730,22 @@ dependencies = [
 
 [[package]]
 name = "juniper_codegen"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8634f500d6d2ec5c91c115b83e15d998d9ea05645aaa43f7afec09e660c483ba"
+checksum = "efe73f508ada06adcf00ef6b149d93fe5aad0413def8865840230fb0d64196a0"
 dependencies = [
  "derive_more",
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.9",
  "url",
 ]
 
 [[package]]
 name = "juniper_rocket"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f74cfeb272343768eebb530fafbcbaea85e22f1be0ddd96f4c4839da5b352da"
+checksum = "1da123aa8c3df543dc0584c07c426ff38d8b8bf085a0acb73d319f573bbb5b4e"
 dependencies = [
  "derive_more",
  "either",
@@ -1918,7 +1908,7 @@ dependencies = [
  "dotenvy",
  "futures",
  "getrandom 0.4.3",
- "itertools 0.15.0",
+ "itertools",
  "juniper",
  "juniper_rocket",
  "log",
