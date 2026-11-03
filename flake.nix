@@ -35,7 +35,8 @@
               pkgs.pkg-config
               pkgs.openssl
               pkgs.nodejs
-              # pnpm switches itself to the version in frontend/package.json's packageManager.
+              # May trail packageManager in frontend/package.json by a few minor versions, which
+              # reads the same lockfile.
               pkgs.pnpm
               # psql for tests/run-sql-tests.sh; the test databases themselves run in Docker.
               pkgs.postgresql
