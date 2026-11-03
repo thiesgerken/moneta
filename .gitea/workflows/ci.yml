@@ -25,6 +25,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  debug-env:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          env | grep -E '^(GITHUB_SERVER_URL|GITHUB_API_URL|GITHUB_EVENT_NAME|ACTIONS_RESULTS_URL|ACTIONS_RUNTIME_URL)=' | sort
+          echo probe > probe.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: debug-probe
+          path: probe.txt
+
   test-backend:
     runs-on: ubuntu-latest
     steps:
