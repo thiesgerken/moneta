@@ -143,7 +143,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "26"
-      - run: npm install -g pnpm@12.16.1
+      - run: npm install -g pnpm@12.17.0
 
       - name: Install dependencies
         run: cd frontend && pnpm install --frozen-lockfile
