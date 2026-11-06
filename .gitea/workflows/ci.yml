@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: apt-get update -y && apt-get install -y --no-install-recommends libssl-dev gcc
 
-      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
+      - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2
         with:
           # llvm-tools is what cargo-llvm-cov needs to read the instrumented profiles
           components: rustfmt, clippy, llvm-tools-preview
@@ -119,7 +119,7 @@ jobs:
       - name: Install dependencies
         run: apt-get update -y && apt-get install -y --no-install-recommends libssl-dev gcc
 
-      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
+      - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2
         with:
           cache-workspaces: backend
 
