@@ -95,6 +95,28 @@ old — force a fresh one before anything irreversible:
 kubectl -n apps-moneta create job --from=cronjob/moneta-export precutover
 ```
 
+## What you read in the real data stays out of the repository
+
+The repository is public. Nothing in it (code, comments, tests, fixtures, docs, commit messages)
+may carry what the real database or a bank export holds: names of the household's people,
+merchants and places from real statements, contract or customer numbers, IBANs, amounts,
+balances, counts ("35 of the imported accounts") or dates of real bookings. Reading the cluster
+database to settle a question is fine; writing down what it answered is not. Describe the
+behaviour, not the figures it was found with.
+
+Fixtures and examples are invented, keeping only the format and the boundary under test, as
+[`docs/frontend.md`](docs/frontend.md) says for the tests. The conventions:
+
+| Real | Stand-in |
+| --- | --- |
+| the second household member | Krösus (the owner is Thies, whose name is public anyway) |
+| bank | Commerzbank, IBAN `DE00000000000000000000`, BIC `TESTDE00XXX` |
+| merchant, insurer | `REWE`, `BEISPIELMARKT/TESTSTADT`, `Beispielversicherung 000000000000` |
+| dates | far enough off not to be anybody's real booking, e.g. 2030 |
+
+Hostnames of the owner's infrastructure may appear. The secrets in `docker-compose.yaml` are demo
+values; real secrets never go into the repository.
+
 ## The data model carries data now
 
 The database is the source of truth and cannot be rebuilt from an old export. Deliveries,
