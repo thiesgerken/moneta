@@ -1,7 +1,5 @@
 services:
   backend:
-    build:
-      context: ./backend
     image: gitea.gerken.haus/thies/moneta/backend:main
     restart: unless-stopped
     expose:
@@ -32,11 +30,11 @@ services:
       - "traefik.http.routers.moneta-backend.entrypoints=web"
 
   # In production this is a scheduled job rather than a service; here it is a sidecar so the
-  # compose stack exercises the same command. Generation is idempotent, so the interval only
-  # decides how soon a due expense appears.
+  # compose stack exercises the same command. The image has no shell to loop in, so the restart
+  # policy is the loop: docker brings the container back after every run, backing off to once a
+  # minute. Generation is idempotent, so the interval only decides how soon a due expense
+  # appears.
   periodic:
-    build:
-      context: ./backend
     image: gitea.gerken.haus/thies/moneta/backend:main
     restart: unless-stopped
     depends_on:
@@ -44,7 +42,7 @@ services:
         condition: service_healthy
     environment:
       - MONETA__DATABASE__URL=postgres://moneta:moneta@postgres:5432/moneta
-    command: sh -c 'while true; do moneta periodic --run; sleep 3600; done'
+    command: moneta periodic --run
 
   frontend:
     deploy:

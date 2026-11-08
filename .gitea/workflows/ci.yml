@@ -24,30 +24,19 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The jobs that need a toolchain run on the nix runner inside the dev shell, so they test with
+# exactly the Rust, node and Postgres a `nix develop` gives locally. They run directly on the
+# runner host, whose Nix store is warm between runs.
 jobs:
   test-backend:
-    runs-on: ubuntu-latest
+    runs-on: nix
+    defaults:
+      run:
+        shell: nix develop --command bash -eo pipefail {0}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Install dependencies
-        run: apt-get update -y && apt-get install -y --no-install-recommends libssl-dev gcc
-
-      - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2
         with:
-          # llvm-tools is what cargo-llvm-cov needs to read the instrumented profiles
-          components: rustfmt, clippy, llvm-tools-preview
-          # `cache-workspaces`, not `workspaces`: the latter is not an input of this action,
-          # so it was dropped silently and the cache step looked for a Cargo.toml in the repo
-          # root, where there is none. It only surfaced when the save got far enough to run
-          # `cargo metadata`, which failed the whole job from a post step.
-          cache-workspaces: backend
-
-      # a prebuilt binary; `cargo install cargo-llvm-cov` is a couple of minutes of compiling
-      # a tool this job only calls once
-      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2
-        with:
-          tool: cargo-llvm-cov
+          persist-credentials: false
 
       - run: cd backend && cargo fmt --all -- --check
       - run: cd backend && cargo clippy --all-targets -- -D warnings
@@ -67,83 +56,71 @@ jobs:
           name: backend-coverage
           path: backend-coverage.json
 
-  test-schema:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        # uuidv7() as a column default needs 18
-        image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
-        env:
-          POSTGRES_USER: moneta
-          POSTGRES_PASSWORD: moneta
-          POSTGRES_DB: moneta
-        options: >-
-          --health-cmd "pg_isready -U moneta"
-          --health-interval 5s
-          --health-retries 10
+  # The SQL suite and the per-user filters against a real database, which `cargo test` in
+  # test-backend cannot do and deliberately does not try to: those are unit tests and stay unit
+  # tests.
+  #
+  # One server, but a database per suite. The SQL suite applies the migrations and asserts
+  # against a known set of fixtures; the Rust suites truncate and insert their own. Sharing a
+  # database would mean each suite's data was whatever the other left behind.
+  test-database:
+    runs-on: nix
+    defaults:
+      run:
+        shell: nix develop --command bash -eo pipefail {0}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
-      - name: Install psql
-        run: apt-get update -y && apt-get install -y --no-install-recommends postgresql-client
+      # Jobs on the runner host get no `services:` container. The dev shell's Postgres runs
+      # inside the job instead, reachable only through a socket in its own temp dir, so
+      # concurrent jobs can't collide on a port. PGDATA, PGHOST and PGUSER are what pg_ctl,
+      # createdb and psql read, so the later steps need no flags to find it.
+      #
+      # The directory is under /tmp rather than mktemp's default, which is the TMPDIR of this
+      # step's dev shell, and the server has to outlive the step. A short path also keeps the
+      # socket under the length limit for unix sockets.
+      - name: Start Postgres
+        run: |
+          pg=$(mktemp -d /tmp/moneta-postgres.XXXXXX)
+          export PGDATA="$pg" PGHOST="$pg" PGUSER=postgres
+          printf 'PGDATA=%s\nPGHOST=%s\nPGUSER=%s\n' "$PGDATA" "$PGHOST" "$PGUSER" >> "$GITHUB_ENV"
+          initdb --auth trust --username "$PGUSER" --no-sync >/dev/null
+          pg_ctl --log "$pg/log" --options "-k $pg -c listen_addresses=''" --wait start
+          createdb schema
+          createdb scoping
 
       # applies every migration to an empty database, then asserts that the rendered views and
       # the CHECK constraints still do what they claim
-      - run: backend/tests/run-sql-tests.sh
-        env:
-          PGURL: postgres://moneta:moneta@postgres:5432/moneta
+      - run: PGURL="postgres:///schema?host=$PGHOST&user=$PGUSER" backend/tests/run-sql-tests.sh
 
-  # The per-user filters against a real database, which `cargo test` in test-backend cannot do
-  # and deliberately does not try to: those are unit tests and stay unit tests.
-  #
-  # Its own postgres rather than test-schema's. That one applies the migrations and asserts
-  # against a known set of fixtures; this one truncates and inserts its own. Sharing the
-  # instance would mean each job's data was whatever the other left behind, and a failure would
-  # depend on which finished first.
-  test-scoping:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
-        env:
-          POSTGRES_USER: moneta
-          POSTGRES_PASSWORD: moneta
-          POSTGRES_DB: moneta
-        options: >-
-          --health-cmd "pg_isready -U moneta"
-          --health-interval 5s
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # The url is spelled out because the Rust client does not read PGHOST. The second
+      # variable turns a missing url from "skip" into a failure, so that a suite which quietly
+      # tested nothing cannot report green. Separate commands keep fixture truncation in the
+      # two suites strictly sequential.
+      - name: Test the database-backed suites
+        run: |
+          export TEST_DATABASE_URL="postgres:///scoping?host=$PGHOST&user=$PGUSER" MONETA_REQUIRE_DB_TESTS=1
+          cd backend
+          cargo test --test scoping
+          cargo test --test api_keys
 
-      - name: Install dependencies
-        run: apt-get update -y && apt-get install -y --no-install-recommends libssl-dev gcc
-
-      - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2
-        with:
-          cache-workspaces: backend
-
-      # the second variable turns a missing url from "skip" into a failure, so that a suite
-      # which quietly tested nothing cannot report green
-      - run: cd backend && cargo test --test scoping
-        env:
-          TEST_DATABASE_URL: postgres://moneta:moneta@postgres:5432/moneta
-          MONETA_REQUIRE_DB_TESTS: "1"
-
-      # Separate commands keep fixture truncation in the two suites strictly sequential.
-      - run: cd backend && cargo test --test api_keys
-        env:
-          TEST_DATABASE_URL: postgres://moneta:moneta@postgres:5432/moneta
-          MONETA_REQUIRE_DB_TESTS: "1"
+      # ponytail: a cancelled run skips this and leaves its Postgres behind, clean up by hand if
+      # that piles up.
+      - name: Stop Postgres
+        if: always()
+        run: pg_ctl --mode immediate stop && rm -rf "$PGDATA"
 
   test-frontend:
-    runs-on: ubuntu-latest
+    runs-on: nix
+    defaults:
+      run:
+        shell: nix develop --command bash -eo pipefail {0}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "26"
-      - run: npm install -g pnpm@12.17.0
+          persist-credentials: false
 
       - name: Install dependencies
         run: cd frontend && pnpm install --frozen-lockfile
@@ -183,13 +160,15 @@ jobs:
   # re-enable.
   coverage-comment:
     needs: [test-backend, test-frontend]
-    runs-on: ubuntu-latest
+    runs-on: nix
     if: false
+    defaults:
+      run:
+        shell: nix develop --command bash -eo pipefail {0}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "26"
+          persist-credentials: false
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -212,11 +191,40 @@ jobs:
           GITEA_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
 
-  # Two steps rather than a matrix over the components, because checkout, buildx and the
-  # registry login are shared. The rollout is in the same job as the build so that it cannot
-  # restart the deployments onto an image this run did not push.
-  build-and-deploy:
-    needs: [test-backend, test-schema, test-scoping, test-frontend]
+  # Built with the toolchain from rust-toolchain.toml, the one the tests ran with. Built on pull
+  # requests too, so a broken image shows up before the merge; pushed, like the frontend image,
+  # only once every test is green.
+  backend-image:
+    needs: [test-backend, test-database, test-frontend]
+    runs-on: nix
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Build image
+        run: nix build .#backend-image
+
+      - name: Push image
+        if: github.event_name == 'push'
+        env:
+          REGISTRY_PASSWORD: ${{ secrets.DOCKER_REGISTRY_GITEA }}
+        run: |
+          export REGISTRY_AUTH_FILE="$RUNNER_TEMP/registry-auth.json"
+          # The runner host has no /etc/containers/policy.json, and the policy only governs which
+          # images skopeo accepts as a source, here our own fresh build.
+          skopeo() { nix run --inputs-from . nixpkgs#skopeo -- --insecure-policy "$@"; }
+          skopeo login --username thies --password-stdin gitea.gerken.haus <<< "$REGISTRY_PASSWORD"
+          ./result | skopeo copy docker-archive:/dev/stdin docker://gitea.gerken.haus/thies/moneta/backend:${{ github.ref_name }}
+
+      - name: Remove registry credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/registry-auth.json"
+
+  # Still a Dockerfile: a Nix build of the frontend would need a hash of the pnpm dependencies
+  # in flake.nix, which renovate cannot update.
+  frontend-image:
+    needs: [test-backend, test-database, test-frontend]
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     steps:
@@ -232,15 +240,6 @@ jobs:
           username: thies
           password: ${{ secrets.DOCKER_REGISTRY_GITEA }}
 
-      - name: Build and push the backend
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
-        with:
-          context: ./backend
-          push: true
-          tags: gitea.gerken.haus/thies/moneta/backend:${{ github.ref_name }}
-          cache-from: type=registry,ref=gitea.gerken.haus/thies/moneta/backend:${{ github.ref_name }}
-          cache-to: type=inline
-
       - name: Build and push the frontend
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
@@ -253,10 +252,15 @@ jobs:
           cache-from: type=registry,ref=gitea.gerken.haus/thies/moneta/frontend:${{ github.ref_name }}
           cache-to: type=inline
 
+  deploy:
+    needs: [backend-image, frontend-image]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
       - name: Setup kubectl
         uses: azure/setup-kubectl@bda439f5f36b99b262ebdcd3613869bddb064c8e # v5
         with:
-          version: "latest"
+          version: "v1.37.1"
 
       - name: Configure kubectl
         run: |
