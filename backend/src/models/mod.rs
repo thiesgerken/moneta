@@ -25,6 +25,7 @@ pub use rules::{
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use juniper::{GraphQLInputObject, GraphQLObject};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Queryable, Selectable, Insertable)]
@@ -37,8 +38,11 @@ pub struct User {
     pub password_hash: String,
 }
 
-#[derive(Debug, Clone, GraphQLObject, Queryable, Selectable, Insertable)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, GraphQLObject, Queryable, Selectable, Insertable,
+)]
 #[diesel(table_name = crate::schema::categories, check_for_backend(diesel::pg::Pg))]
+#[serde(rename_all = "camelCase")]
 pub struct Category {
     pub id: Uuid,
 
@@ -79,8 +83,11 @@ impl CategoryInput {
 pub type CategoryUpdateInput = CategoryInput;
 pub type CategoryCreateInput = CategoryInput;
 
-#[derive(Debug, Clone, GraphQLObject, Queryable, Selectable, Insertable)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, GraphQLObject, Queryable, Selectable, Insertable,
+)]
 #[diesel(table_name = crate::schema::balances, check_for_backend(diesel::pg::Pg))]
+#[serde(rename_all = "camelCase")]
 pub struct Balance {
     pub id: Uuid,
 

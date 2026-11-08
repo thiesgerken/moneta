@@ -1,5 +1,6 @@
 pub mod accrual;
 pub mod api_keys;
+pub mod backup;
 pub mod cli;
 pub mod config;
 pub mod graphql;

@@ -12,9 +12,7 @@ use uuid::Uuid;
 
 use super::text_enum;
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, GraphQLEnum, AsExpression, FromSqlRow,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, GraphQLEnum, AsExpression, FromSqlRow)]
 #[diesel(sql_type = diesel::sql_types::Text)]
 pub enum PeriodicInterval {
     Daily,
@@ -49,8 +47,19 @@ impl PeriodicInterval {
     }
 }
 
-#[derive(Debug, Clone, GraphQLObject, Queryable, Selectable, Insertable, AsChangeset)]
+#[derive(
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    GraphQLObject,
+    Queryable,
+    Selectable,
+    Insertable,
+    AsChangeset,
+)]
 #[diesel(table_name = crate::schema::periodic_rules, check_for_backend(diesel::pg::Pg))]
+#[serde(rename_all = "camelCase")]
 pub struct PeriodicRule {
     pub id: Uuid,
 
@@ -102,8 +111,19 @@ impl PeriodicRuleInput {
     }
 }
 
-#[derive(Debug, Clone, GraphQLObject, Queryable, Selectable, Insertable, AsChangeset)]
+#[derive(
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    GraphQLObject,
+    Queryable,
+    Selectable,
+    Insertable,
+    AsChangeset,
+)]
 #[diesel(table_name = crate::schema::automation_rules, check_for_backend(diesel::pg::Pg))]
+#[serde(rename_all = "camelCase")]
 pub struct AutomationRule {
     pub id: Uuid,
 
@@ -192,8 +212,9 @@ pub struct ExpenseDelivery {
 ///
 /// Bank statement uploads overlap — the same lines get handed over again on the next run —
 /// so deliveries are remembered to keep re-uploads from duplicating expenses.
-#[derive(Debug, Clone, Queryable, Selectable, Insertable)]
+#[derive(Debug, Clone, Serialize, Deserialize, Queryable, Selectable, Insertable)]
 #[diesel(table_name = crate::schema::seen_deliveries, check_for_backend(diesel::pg::Pg))]
+#[serde(rename_all = "camelCase")]
 pub struct SeenDelivery {
     pub id: Uuid,
 
