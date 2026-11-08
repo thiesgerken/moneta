@@ -66,7 +66,7 @@ services:
       - "traefik.http.routers.moneta-frontend.entrypoints=web"
 
   postgres:
-    image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+    image: postgres:18-alpine@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
     environment:
       # The 18 image defaults PGDATA to /var/lib/postgresql/18/docker, outside the mount,
       # and then refuses to start because the mount looks like a stray data directory.
@@ -86,7 +86,7 @@ services:
       retries: 10
 
   traefik:
-    image: "traefik:v3.7@sha256:9c3b91d5fb7770853ca5c1124a23c34bf2d9b47ffaebeab2614cbaf410dcb2ac"
+    image: "traefik:v3.7@sha256:f4bb143d1135a579b630ed491e17ec50f6f7c9c6a30585ff3d385471d2a86f5a"
     container_name: "traefik"
     command:
       - "--providers.docker=true"
