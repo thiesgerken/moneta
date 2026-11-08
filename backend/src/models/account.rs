@@ -127,10 +127,10 @@ pub struct Account {
     pub sync_account_id: Option<Uuid>,
     pub sync_invert: Option<bool>,
 
-    /// The same depot over in stockdb, which knows what it is worth at today's prices. What
+    /// The same depot over in renditier, which knows what it is worth at today's prices. What
     /// that link is good for is `graphql::investments`, and it is read-only there: nothing on
     /// this side is ever written from it.
-    pub stockdb_account_id: Option<i32>,
+    pub renditier_account_id: Option<i32>,
 }
 
 impl Account {
@@ -157,7 +157,7 @@ pub struct AccountInput {
 
     pub ownership_fraction: f64,
 
-    pub stockdb_account_id: Option<i32>,
+    pub renditier_account_id: Option<i32>,
 }
 
 pub type AccountUpdateInput = AccountInput;
@@ -207,7 +207,7 @@ impl AccountInput {
             ownership_fraction: self.ownership_fraction,
             sync_account_id: None,
             sync_invert: None,
-            stockdb_account_id: self.stockdb_account_id,
+            renditier_account_id: self.renditier_account_id,
         }
     }
 }
@@ -255,7 +255,7 @@ mod tests {
             opened: at(2025, 1, 1),
             closed: None,
             ownership_fraction: 1.0,
-            stockdb_account_id: None,
+            renditier_account_id: None,
         }
     }
 

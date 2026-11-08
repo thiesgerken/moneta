@@ -170,7 +170,7 @@
 
 	const investments = $derived($investmentStore.data?.investments.list ?? []);
 
-	/// Only on today's Stichtag. stockdb prices what a depot is worth *now*, and laying that
+	/// Only on today's Stichtag. renditier prices what a depot is worth *now*, and laying that
 	/// over a balance computed for some day in 2019 would answer a question nobody asked.
 	const marketAvailable = $derived(wealthState.date === todayIso() && priced(investments));
 	const useMarket = $derived(marketAvailable && marketState.show);

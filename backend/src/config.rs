@@ -6,7 +6,7 @@ pub struct Config {
     pub verbosity: i8,
     pub database: DatabaseConfig,
     pub api: ApiConfig,
-    pub stockdb: StockdbConfig,
+    pub renditier: RenditierConfig,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -43,23 +43,23 @@ impl Default for ApiConfig {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
-pub struct StockdbConfig {
-    /// Where stockdb answers, without a trailing slash, e.g. `https://stocks.gerken.haus`.
+pub struct RenditierConfig {
+    /// Where renditier answers, without a trailing slash, e.g. `https://renditier.gerken.haus`.
     /// Empty switches the whole integration off: `investments` then reports nothing, which is
-    /// what every deployment that has no stockdb wants.
+    /// what every deployment that has no renditier wants.
     pub url: String,
 
-    /// Where a *browser* reaches stockdb, for the link on a linked depot. In the cluster `url`
+    /// Where a *browser* reaches renditier, for the link on a linked depot. In the cluster `url`
     /// is a Service that resolves nowhere outside it, which would make that link dead; where
     /// the two are the same, leaving this empty falls back to `url`.
     pub public_url: String,
 
-    /// How long to wait for it. This sits on a page load, so a stockdb that hangs has to
+    /// How long to wait for it. This sits on a page load, so a renditier that hangs has to
     /// become a missing number quickly rather than a spinner that never resolves.
     pub timeout_seconds: u64,
 }
 
-impl Default for StockdbConfig {
+impl Default for RenditierConfig {
     fn default() -> Self {
         Self {
             url: String::new(),

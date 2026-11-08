@@ -1312,7 +1312,7 @@ mod tests {
                 ownership_fraction: 1.0,
                 sync_account_id: None,
                 sync_invert: None,
-                stockdb_account_id: None,
+                renditier_account_id: None,
             })
             .execute(conn)
             .await
