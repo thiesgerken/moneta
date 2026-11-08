@@ -223,7 +223,8 @@ Three accounts are in play and they do different jobs:
 | the rule's **`filterAccountId`** | filters, and only filters: "only deliveries from this account". |
 
 The accounts on counter-bookings and shares are real in both kinds: `Kreditkartenabrechnung`
-genuinely books Commerzbank Girokonto against Commerzbank Kreditkarte. Only the blank booking is a placeholder.
+genuinely books Commerzbank Girokonto against Commerzbank Kreditkarte. Only the blank booking
+is a placeholder.
 
 So a template that serves deliveries on *any* account is written by setting its three dates and
 leaving the rule's account filter empty. `accrualStart` gives the grid — its day of the month is

@@ -244,7 +244,7 @@
 	/// Where the other half of a shared expense goes: the debt account you use most, unless this
 	/// expense already books against it.
 	///
-	/// Only my own -- "Krösus / Schulden Thies" is the same debt seen from her side, and putting
+	/// Only my own -- "Krösus / Schulden Thies" is the same debt seen from their side, and putting
 	/// this expense there would record it twice. Guessing at all is defensible here because
 	/// there is a name for what the guess means; for a Umbuchung there is no such word, so that
 	/// one asks.
@@ -263,7 +263,7 @@
 	/// What colour the computed share under a percentage is drawn in.
 	///
 	/// Green and red mean money in and money out, which is only true of an account of mine: on
-	/// "Krösus / Commerzbank Girokonto" the same figure is her direction, not mine, and colouring it
+	/// "Krösus / Commerzbank Girokonto" the same figure is their direction, not mine, and colouring it
 	/// would state the opposite of what happened to me. Those stay grey, as does a share of
 	/// nothing and a row with no account picked yet.
 	function shareColor(accountId: string, value: number) {

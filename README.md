@@ -156,3 +156,7 @@ the API), and the analysis dashboard with its value-date/accrual toggle.
 
 Missing: an upload client feeding `deliveries.submit` from a bank export, receipts in the UI,
 and push notifications. See `TODO.md`.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
