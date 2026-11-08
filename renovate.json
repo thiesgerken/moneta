@@ -26,6 +26,11 @@
       "matchDepNames": ["actions/upload-artifact", "actions/download-artifact"],
       "matchUpdateTypes": ["major"],
       "enabled": false
+    },
+    {
+      "description": "Our own images are rebuilt and pushed as :main on every merge, so a pinned digest would be stale after the next merge and every deploy would open another PR. docker-compose.yaml is meant to follow :main.",
+      "matchPackageNames": ["gitea.gerken.haus/thies/moneta/**"],
+      "enabled": false
     }
   ]
 }
