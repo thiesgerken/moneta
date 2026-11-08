@@ -9,19 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use super::text_enum;
 
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    GraphQLEnum,
-    AsExpression,
-    FromSqlRow,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, GraphQLEnum, AsExpression, FromSqlRow)]
 #[diesel(sql_type = diesel::sql_types::Text)]
 pub enum AccountAvailability {
     Immediately,
@@ -55,7 +43,7 @@ text_enum!(AccountAvailability {
     Decades => "decades",
 });
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, GraphQLEnum, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, Copy, GraphQLEnum, AsExpression, FromSqlRow)]
 #[diesel(sql_type = diesel::sql_types::Text)]
 pub enum AccountRisk {
     None,
@@ -75,7 +63,7 @@ text_enum!(AccountRisk {
     Huge => "huge",
 });
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, GraphQLEnum, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, Copy, GraphQLEnum, AsExpression, FromSqlRow)]
 #[diesel(sql_type = diesel::sql_types::Text)]
 pub enum AccountKind {
     Cash,
@@ -99,8 +87,9 @@ text_enum!(AccountKind {
     Other => "other",
 });
 
-#[derive(Debug, Clone, Queryable, Selectable, Insertable, AsChangeset)]
+#[derive(Debug, Clone, Serialize, Deserialize, Queryable, Selectable, Insertable, AsChangeset)]
 #[diesel(table_name = crate::schema::accounts, check_for_backend(diesel::pg::Pg))]
+#[serde(rename_all = "camelCase")]
 pub struct Account {
     pub id: Uuid,
     pub user_id: Uuid,

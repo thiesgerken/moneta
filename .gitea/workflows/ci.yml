@@ -103,13 +103,14 @@ jobs:
       # The url is spelled out because the Rust client does not read PGHOST. The second
       # variable turns a missing url from "skip" into a failure, so that a suite which quietly
       # tested nothing cannot report green. Separate commands keep fixture truncation in the
-      # two suites strictly sequential.
+      # suites strictly sequential.
       - name: Test the database-backed suites
         run: |
           export TEST_DATABASE_URL="postgres:///scoping?host=$PGHOST&user=$PGUSER" MONETA_REQUIRE_DB_TESTS=1
           cd backend
           cargo test --test scoping
           cargo test --test api_keys
+          cargo test --test backup
 
       # A cancelled run skips this and leaves its Postgres behind; "Start Postgres" of a later run
       # sweeps it.

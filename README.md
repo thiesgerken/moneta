@@ -122,12 +122,36 @@ moneta account --sync <id1> <id2> [--invert x]
 moneta account --unsync <id>
 moneta periodic --list               # rules and how many expenses each is due for
 moneta periodic --run                # generate the expenses that are due
+moneta export > moneta-export.json   # all users' data as JSON, see below
+moneta import < moneta-export.json   # only into a database without user data
 moneta schema                        # the GraphQL schema as SDL, for frontend/schema.graphql
 ```
 
 Note the odd argument shapes on `account`: `--list` and `--invert` are declared as value-taking
 options rather than flags, so they need a throwaway argument (`moneta account --list x`). Worth
 fixing, hasn't been.
+
+### Export and import
+
+`moneta export` writes the whole database's user data to stdout as JSON: users, categories,
+accounts, expenses with their transactions, balances, periodic and automation rules, seen
+deliveries and the expense changelog. Credentials stay out: no password hashes, API keys or
+renditier tokens. Sessions are cookies and were never in the database. Ids are kept, so the
+changelog still points at what it describes.
+
+`moneta import` reads such a file back, and only into a database that holds no user data yet
+(the migrations having run is fine; a single user is not). Anything else is refused before the
+first write: an expense books across several users' accounts, so there is no replacing one
+user's data without breaking what they share with the others. The file is checked for
+duplicate ids and dangling references first, and whatever the database rejects after that
+rolls the whole import back. Imported users have no password; give each one with
+`moneta user --update <name>`, and set renditier tokens again with `--renditier-token`.
+
+The file holds everything personal there is, so it goes nowhere but where you redirect it:
+both commands are CLI-only, nothing is served over HTTP, and `*-export.json` is gitignored.
+The export complements a `pg_dump` rather than replacing it: it is readable and independent
+of the schema's internals, but it leaves the credentials behind and restores only into an empty
+database.
 
 ## Tests and CI
 

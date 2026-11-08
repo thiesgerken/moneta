@@ -160,7 +160,18 @@ impl UserMutation {
         let conn = &mut context.conn().await?;
 
         if let Some(user) = queries::query_user_by_name(conn, &name).await? {
-            if verify_password(&password, &user.password_hash) {
+            let Some(hash) = &user.password_hash else {
+                warn!(
+                    "Attempt to login with a password for user '{}', who has none",
+                    &name
+                );
+                return Err(juniper::FieldError::new(
+                    "Unauthorized",
+                    juniper::Value::null(),
+                ));
+            };
+
+            if verify_password(&password, hash) {
                 info!("Successful login with username '{}'", &name);
                 let mut user_id = context.user_id.write().await;
                 *user_id = Some(user.id);

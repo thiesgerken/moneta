@@ -1,8 +1,8 @@
 use moneta::{cli, config::Config, graphql};
 
 use dotenvy::dotenv;
-use log::{LevelFilter, debug, info};
-use simplelog::{ColorChoice, SimpleLogger, TermLogger, TerminalMode};
+use log::{LevelFilter, debug};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use tokio::runtime::Builder;
 
 pub fn initialize_logging(verbosity: i8) {
@@ -27,19 +27,15 @@ pub fn initialize_logging(verbosity: i8) {
     // log_config.add_filter_ignore_str("selectors");
     // log_config.add_filter_allow_str("moneta");
 
-    if let Err(e) = TermLogger::init(
+    // stderr, all of it: stdout is where `export` and `schema` write their documents, and
+    // a log line in there corrupts the file it was redirected into
+    TermLogger::init(
         level,
         log_config.build(),
-        TerminalMode::Mixed,
+        TerminalMode::Stderr,
         ColorChoice::Auto,
-    ) {
-        SimpleLogger::init(level, log_config.build())
-            .expect("TermLogger and SimpleLogger failed to init!?");
-        info!(
-            "Falling back to SimpleLogger because TermLogger init failed: {}",
-            e
-        );
-    }
+    )
+    .expect("logging is initialized once");
 }
 
 fn main() {
@@ -92,6 +88,10 @@ fn main() {
             cli::account::handle(pool, sub_matches).await;
         } else if let Some(sub_matches) = matches.subcommand_matches("periodic") {
             cli::periodic::handle(pool, sub_matches).await;
+        } else if matches.subcommand_matches("export").is_some() {
+            cli::export::handle(pool).await;
+        } else if matches.subcommand_matches("import").is_some() {
+            cli::import::handle(pool).await;
         } else if matches.subcommand_matches("serve").is_some() {
             graphql::handle(config, pool).await;
         } else {

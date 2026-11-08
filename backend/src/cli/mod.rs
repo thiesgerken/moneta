@@ -1,4 +1,6 @@
 pub mod account;
+pub mod export;
+pub mod import;
 pub mod periodic;
 pub mod user;
 
@@ -19,21 +21,11 @@ pub fn build() -> Command {
         .subcommand(user::build())
         .subcommand(account::build())
         .subcommand(periodic::build())
+        .subcommand(export::build())
+        .subcommand(import::build())
         .subcommand(Command::new("serve").about("serve web interface"))
         .subcommand(
             Command::new("schema")
                 .about("print the GraphQL schema as SDL, for frontend/schema.graphql"),
         )
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn import_is_not_a_supported_command() {
-        let error = super::build()
-            .try_get_matches_from(["moneta", "import", "--clear"])
-            .unwrap_err();
-
-        assert_eq!(error.kind(), clap::error::ErrorKind::InvalidSubcommand);
-    }
 }

@@ -1290,7 +1290,7 @@ mod tests {
                 id: OWNER,
                 name: "owner".into(),
                 full_name: "owner".into(),
-                password_hash: "x".into(),
+                password_hash: Some("x".into()),
             })
             .execute(conn)
             .await

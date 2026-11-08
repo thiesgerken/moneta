@@ -189,7 +189,7 @@ diesel::table! {
         id -> Uuid,
         name -> Text,
         full_name -> Text,
-        password_hash -> Text,
+        password_hash -> Nullable<Text>,
         seen_at -> Nullable<Timestamptz>,
         seen_before -> Nullable<Timestamptz>,
         renditier_token -> Nullable<Text>,
