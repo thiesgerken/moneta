@@ -1,7 +1,7 @@
 /.vscode
 moneta.toml
 vapid.pem
-moneydb-export.json
+*-export.json
 .env
 /volumes
 backend-coverage.json

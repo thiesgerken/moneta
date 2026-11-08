@@ -26,11 +26,13 @@ The SQL tests need an empty PostgreSQL 18 database of their own. They apply ever
 without recording Diesel migration state, so use a dedicated scratch database that no backend
 will connect to. Do not point them at a database holding real data.
 
-The DB-backed Rust suites take `TEST_DATABASE_URL`: run `cargo test --test scoping` and then
-`cargo test --test api_keys` against another disposable database. They migrate and truncate
-fixtures, so never run both concurrently against one database. The API-key suite exercises the
-production GraphQL HTTP handler with dummy users; `MONETA_REQUIRE_DB_TESTS=1` forbids skipping
-it when the URL is absent. CI runs both sequentially in its database-backed job.
+The DB-backed Rust suites take `TEST_DATABASE_URL`: run `cargo test --test scoping`, then
+`cargo test --test api_keys`, then `cargo test --test backup` against another disposable
+database. They migrate and truncate fixtures, so never run two concurrently against one
+database. The API-key suite exercises the production GraphQL HTTP handler with dummy users;
+the backup suite round-trips every table through `moneta export` and `moneta import`.
+`MONETA_REQUIRE_DB_TESTS=1` forbids skipping them when the URL is absent. CI runs all three
+sequentially in its database-backed job.
 
 CI runs exactly these and is strict — `clippy -D warnings` and `fmt --check` both fail the
 build, including on test code.
@@ -103,6 +105,10 @@ merchants and places from real statements, contract or customer numbers, IBANs, 
 balances, counts ("35 of the imported accounts") or dates of real bookings. Reading the cluster
 database to settle a question is fine; writing down what it answered is not. Describe the
 behaviour, not the figures it was found with.
+
+`moneta export` is the whole database in one file: every name, IBAN, statement line and
+amount. Keep such a file out of the working tree, or at least under the gitignored
+`*-export.json` name, and never base a fixture, a demo or a doc example on one.
 
 Fixtures and examples are invented, keeping only the format and the boundary under test, as
 [`docs/frontend.md`](docs/frontend.md) says for the tests. The conventions:
@@ -246,6 +252,11 @@ an update rewrites the children instead of diffing them.
 **The changelog stores whole expenses as jsonb.** `expense_changes.old_state`/`new_state` are
 snapshots on purpose: a later schema change must not retroactively alter what the history says
 happened. `target_id` is deliberately not a foreign key — a change outlives its expense.
+
+**A new table or column has to be decided for the export.** `backup.rs` reads and writes the
+row structs, so a column added to one travels automatically; a column the struct leaves out, or
+a new table, does not. `tests/backup.rs` fails on a table it does not know and on a fixture
+column left null, and that is the moment to decide: user data goes in, credentials stay out.
 
 **TypeScript is pinned to 6 on purpose.** The 7.x Go port ships no CJS entry, so it crashes
 `svelte-check` and `eslint`, and SvelteKit / svelte-check / typescript-eslint all cap their
