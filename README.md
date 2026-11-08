@@ -51,9 +51,9 @@ Settings come from environment variables prefixed `MONETA__`, nested with `__`
 | `MONETA__API__PORT` | `8181` | |
 | `MONETA__API__ADDRESS` | `127.0.0.1` | |
 | `MONETA__API__SECRET_KEY` | *(empty)* | signs the session cookie; `openssl rand -base64 32` |
-| `MONETA__STOCKDB__URL` | *(empty)* | where the backend reaches stockdb; empty switches the integration off |
-| `MONETA__STOCKDB__PUBLIC_URL` | *(empty)* | where a *browser* reaches it, for the link on a depot; falls back to `URL` |
-| `MONETA__STOCKDB__TIMEOUT_SECONDS` | `5` | a page load waits on this, so it has to give up quickly |
+| `MONETA__RENDITIER__URL` | *(empty)* | where the backend reaches renditier; empty switches the integration off |
+| `MONETA__RENDITIER__PUBLIC_URL` | *(empty)* | where a *browser* reaches it, for the link on a depot; falls back to `URL` |
+| `MONETA__RENDITIER__TIMEOUT_SECONDS` | `5` | a page load waits on this, so it has to give up quickly |
 
 ## Machine access and Ferret
 
@@ -113,7 +113,7 @@ audit trail. Expiry, deletion and the owner's continued existence are checked on
 ```sh
 moneta serve                         # run the API
 moneta user --add|--update|--remove <name> | --list
-moneta user --stockdb-token <name>   # paste the token on stdin; empty clears it
+moneta user --renditier-token <name>   # paste the token on stdin; empty clears it
 moneta account --list x              # the flags take a dummy value, see below
 moneta account --sync <id1> <id2> [--invert x]
 moneta account --unsync <id>

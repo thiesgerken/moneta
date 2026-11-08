@@ -110,7 +110,7 @@
 					opened
 					closed
 					ownershipFraction
-					stockdbAccountId
+					renditierAccountId
 					synchronization {
 						account {
 							id
@@ -138,7 +138,7 @@
 					account {
 						id
 					}
-					stockdbAccountId
+					renditierAccountId
 					value
 					invested
 					irr
@@ -162,8 +162,8 @@
 	$effect(() => void investmentStore.fetch({ variables: { now: new Date() } }));
 
 	const investments = $derived($investmentStore.data?.investments.list ?? []);
-	const stockdbUrl = $derived($investmentStore.data?.investments.url ?? null);
-	const stockdbAccounts = $derived($investmentStore.data?.investments.accounts ?? []);
+	const renditierUrl = $derived($investmentStore.data?.investments.url ?? null);
+	const renditierAccounts = $derived($investmentStore.data?.investments.accounts ?? []);
 	const committedBalances = $derived(
 		new Map(($investmentStore.data?.analysis.balances ?? []).map((b) => [b.account.id, b.amount]))
 	);
@@ -358,7 +358,7 @@
 <AccountModal
 	bind:open={showNewAccountModal}
 	onsubmit={handleAccountModalSubmit}
-	{stockdbAccounts}
+	{renditierAccounts}
 	accounts={allAccounts.map((a) => ({
 		id: a.id.toString(),
 		name: a.name,
@@ -372,7 +372,7 @@
 		opened: a.opened,
 		closed: a.closed,
 		ownershipFraction: a.ownershipFraction,
-		stockdbAccountId: a.stockdbAccountId,
+		renditierAccountId: a.renditierAccountId,
 		synchronization: a.synchronization
 			? {
 					account: { id: a.synchronization.account.id.toString() },
@@ -385,7 +385,7 @@
 <AccountModal
 	bind:open={showEditAccountModal}
 	onsubmit={handleAccountModalSubmit}
-	{stockdbAccounts}
+	{renditierAccounts}
 	account={accountToEdit}
 	accounts={allAccounts.map((a) => ({
 		id: a.id.toString(),
@@ -400,7 +400,7 @@
 		opened: a.opened,
 		closed: a.closed,
 		ownershipFraction: a.ownershipFraction,
-		stockdbAccountId: a.stockdbAccountId,
+		renditierAccountId: a.renditierAccountId,
 		synchronization: a.synchronization
 			? {
 					account: { id: a.synchronization.account.id.toString() },
@@ -689,21 +689,21 @@
 									</div>
 								{/if}
 
-								<!-- What stockdb says the depot is worth today. Nothing here is booked, and
+								<!-- What renditier says the depot is worth today. Nothing here is booked, and
 								     nothing here books: the button below opens the ordinary balance dialog
 								     with the figure filled in, and what gets saved is still typed by hand. -->
-								{#if account.stockdbAccountId !== null}
+								{#if account.renditierAccountId !== null}
 									{@const investment = investmentFor(account.id)}
 									{@const committed = committedBalances.get(account.id) ?? 0}
 									<div class="mt-1 border-t border-gray-200 pt-2 dark:border-gray-700">
-										<b>Depot in StockDB:</b>
-										{stockdbAccounts.find((a) => a.id === account.stockdbAccountId)?.name ??
-											`Nr. ${account.stockdbAccountId}`}
-										{#if stockdbUrl}
-											<!-- stockdb has no page per depot, so this lands on its list of them -->
+										<b>Depot in Renditier:</b>
+										{renditierAccounts.find((a) => a.id === account.renditierAccountId)?.name ??
+											`Nr. ${account.renditierAccountId}`}
+										{#if renditierUrl}
+											<!-- renditier has no page per depot, so this lands on its list of them -->
 											<!-- eslint-disable svelte/no-navigation-without-resolve -- another app entirely -->
 											<a
-												href="{stockdbUrl}/accounts"
+												href="{renditierUrl}/accounts"
 												target="_blank"
 												rel="noreferrer"
 												class="text-primary-600 dark:text-primary-500 ml-1 hover:underline"

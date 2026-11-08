@@ -46,7 +46,7 @@ describe('uncommittedGain', () => {
 });
 
 describe('asOf', () => {
-	/// The pessimistic end: a total is only as fresh as its stalest part, and stockdb will use a
+	/// The pessimistic end: a total is only as fresh as its stalest part, and renditier will use a
 	/// price up to four days old.
 	it('reports the oldest price behind the figures', () => {
 		const dates = [
@@ -67,7 +67,7 @@ describe('priced', () => {
 		expect(priced([investment('a', null), investment('b', 1)])).toBe(true);
 	});
 
-	it('is false when every value is missing, which is also what a stockdb that is down looks like', () => {
+	it('is false when every value is missing, which is also what a renditier that is down looks like', () => {
 		expect(priced([investment('a', null)])).toBe(false);
 		expect(priced([])).toBe(false);
 	});
