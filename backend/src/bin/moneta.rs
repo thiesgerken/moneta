@@ -27,10 +27,12 @@ pub fn initialize_logging(verbosity: i8) {
     // log_config.add_filter_ignore_str("selectors");
     // log_config.add_filter_allow_str("moneta");
 
+    // stderr, all of it: stdout is where `export` and `schema` write their documents, and
+    // a log line in there corrupts the file it was redirected into
     if let Err(e) = TermLogger::init(
         level,
         log_config.build(),
-        TerminalMode::Mixed,
+        TerminalMode::Stderr,
         ColorChoice::Auto,
     ) {
         SimpleLogger::init(level, log_config.build())
@@ -92,6 +94,10 @@ fn main() {
             cli::account::handle(pool, sub_matches).await;
         } else if let Some(sub_matches) = matches.subcommand_matches("periodic") {
             cli::periodic::handle(pool, sub_matches).await;
+        } else if matches.subcommand_matches("export").is_some() {
+            cli::export::handle(pool).await;
+        } else if matches.subcommand_matches("import").is_some() {
+            cli::import::handle(pool).await;
         } else if matches.subcommand_matches("serve").is_some() {
             graphql::handle(config, pool).await;
         } else {
