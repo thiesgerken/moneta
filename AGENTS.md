@@ -241,7 +241,8 @@ ship together; a frontend newer than its backend simply never redirects.
 
 **Password hashes are verified with the parameters from the stored PHC string**, not with
 fixed ones. That is what keeps pre-2026 argonautica hashes (m=4096, t=32, p=num_cpus) working
-alongside new argon2 ones. `verifies_legacy_parameters` in `lib.rs` guards this.
+alongside new argon2 ones. `verifies_legacy_parameters` in `lib.rs` guards this. The hash is
+nullable: a user restored by `moneta import` has none, and the login refuses them explicitly.
 
 **An expense spans three tables.** `expenses`, `expense_transactions` and
 `expense_categorizations`. `Expense::split()`/`join()` convert between the aggregate and the

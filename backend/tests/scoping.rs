@@ -50,7 +50,7 @@ fn user(id: Uuid, name: &str) -> User {
         id,
         name: name.into(),
         full_name: name.into(),
-        password_hash: "x".into(),
+        password_hash: Some("x".into()),
     }
 }
 

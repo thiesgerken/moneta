@@ -98,6 +98,8 @@ template, say — it still has to check that the caller can *see* it.
 
 Password hashes are verified with the parameters from the stored PHC string rather than with
 fixed ones, which is what keeps pre-2026 argonautica hashes working alongside new argon2 ones.
+A user can have no hash at all (`moneta import` restores users without one); the login refuses
+them until `moneta user --update` sets a password.
 
 ### Three things that bite
 

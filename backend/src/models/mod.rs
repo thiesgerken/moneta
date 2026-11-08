@@ -35,7 +35,8 @@ pub struct User {
 
     pub name: String,
     pub full_name: String,
-    pub password_hash: String,
+    /// absent for a user restored by `moneta import` until `moneta user --update` sets one
+    pub password_hash: Option<String>,
 }
 
 #[derive(

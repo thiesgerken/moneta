@@ -286,8 +286,8 @@ async fn export_and_import_round_trip_and_refuse() {
 
     #[derive(diesel::QueryableByName)]
     struct Credentials {
-        #[diesel(sql_type = Text)]
-        password_hash: String,
+        #[diesel(sql_type = diesel::sql_types::Nullable<Text>)]
+        password_hash: Option<String>,
         #[diesel(sql_type = diesel::sql_types::Nullable<Text>)]
         renditier_token: Option<String>,
     }
@@ -299,7 +299,7 @@ async fn export_and_import_round_trip_and_refuse() {
     assert!(
         credentials
             .iter()
-            .all(|c| !moneta::verify_password("", &c.password_hash) && c.renditier_token.is_none()),
+            .all(|c| c.password_hash.is_none() && c.renditier_token.is_none()),
         "an imported user can sign in or reach renditier without being given a credential"
     );
     assert_eq!(count(conn, "api_keys").await, 0);

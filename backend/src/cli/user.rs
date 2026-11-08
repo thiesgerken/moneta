@@ -87,7 +87,7 @@ pub async fn handle(pool: crate::Pool, sub_matches: &ArgMatches) {
             id: Uuid::now_v7(),
             name: uname.to_string(),
             full_name: fname,
-            password_hash: hash_password(&password),
+            password_hash: Some(hash_password(&password)),
         };
 
         diesel::insert_into(users::table)
@@ -119,7 +119,7 @@ pub async fn handle(pool: crate::Pool, sub_matches: &ArgMatches) {
         diesel::update(users::table.find(user.id))
             .set((
                 users::full_name.eq(fname),
-                users::password_hash.eq(hash_password(&password)),
+                users::password_hash.eq(Some(hash_password(&password))),
             ))
             .execute(conn)
             .await

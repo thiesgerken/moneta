@@ -501,6 +501,16 @@ async fn credentials_preserve_the_browser_and_owner_boundaries() {
     assert!(logged_out.cookies);
     code(&query(&browser, EXPENSES, None).await, "UNAUTHENTICATED");
 
+    // A user without a password, as `moneta import` leaves them, cannot sign in with any.
+    sql(
+        &pool,
+        &format!("UPDATE users SET password_hash = NULL WHERE id = '{MINE}'"),
+    )
+    .await;
+    let refused = post(&browser, json!({"query": "mutation { users { login(name: \"dummy-alice\", password: \"dummy-password\") { id } } }"}), None).await;
+    assert_eq!(refused.body["errors"][0]["message"], "Unauthorized");
+    assert!(!refused.cookies, "a refused login must not set a cookie");
+
     // No financial references for this disposable third user: exercise the real owner FK cascade.
     sql(&pool, "INSERT INTO users (id,name,full_name,password_hash) VALUES ('00000000-0000-7000-8000-000000000003','deleted-dummy','Deleted dummy','x')").await;
     let orphan_token = moneta::api_keys::create(

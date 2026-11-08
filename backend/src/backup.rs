@@ -31,11 +31,6 @@ use crate::schema::{
 /// Stays below postgres' limit of 65535 bind parameters per statement for every table here.
 const ROWS_PER_INSERT: usize = 1000;
 
-/// What an imported user's password hash is set to. It is no PHC string, so `verify_password`
-/// rejects every password against it, and the user cannot sign in until `moneta user --update`
-/// gives them one.
-const NO_PASSWORD: &str = "";
-
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Backup {
@@ -272,7 +267,6 @@ impl Backup {
                     users::id.eq(u.id),
                     users::name.eq(&u.name),
                     users::full_name.eq(&u.full_name),
-                    users::password_hash.eq(NO_PASSWORD),
                     users::seen_at.eq(u.seen_at),
                     users::seen_before.eq(u.seen_before),
                 )
