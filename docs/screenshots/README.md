@@ -15,14 +15,16 @@ a flat, a child in Kita and a pair of debt accounts, and everything in their boo
 ## Retaking them
 
 1. **Bring the demo up to date.** It ends on the day it was generated, and the start page talks
-   about "this month" and "since your last visit", so regenerate it for today first:
+   about "this month" and "since your last visit", so generate one for today, under the
+   gitignored `*-export.json` name rather than over the committed file:
 
    ```sh
-   python3 docs/demo/generate.py --until "$(date +%F)"
+   python3 docs/demo/generate.py --until "$(date +%F)" --output demo-export.json
    ```
 
-   Do not commit that one. The committed file is pinned to a fixed date so that it can be
-   reproduced byte for byte; when the export format changes, regenerate it without `--until`.
+   The committed `rudolph.json` is pinned to a fixed date so that it can be reproduced byte for
+   byte. Regenerate that one, without `--until` or `--output`, only when the export format
+   changes.
 
 2. **Import it into an empty database.** `moneta import` refuses a database that already holds
    user data, and the first page load moves the visit marker the start page dates its news
@@ -33,7 +35,7 @@ a flat, a child in Kita and a pair of debt accounts, and everything in their boo
        -e POSTGRES_DB=moneta -p 127.0.0.1:5498:5432 postgres:18-alpine
    cd backend
    export MONETA__DATABASE__URL=postgres://moneta:moneta@localhost:5498/moneta
-   cargo run -- import < ../docs/demo/rudolph.json
+   cargo run -- import < ../demo-export.json
    ```
 
 3. **Run the backend signing everybody in as Rudolph's proxy would.** The demo users have no

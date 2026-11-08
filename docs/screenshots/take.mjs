@@ -8,7 +8,7 @@
 // README.md next to it says what has to be running first.
 
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +17,6 @@ const BASE = process.argv[2] ?? 'http://localhost:5173';
 const CHROME =
   process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const OUT = dirname(fileURLToPath(import.meta.url));
-const PORT = 9333;
 
 /// Each page, and the table rows to open on it (matched on the start of the row's text).
 const PAGES = [
@@ -30,10 +29,13 @@ const PAGES = [
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function pageSocket() {
+/// Chrome picks a free port and writes it into the profile: a fixed one would attach to
+/// whatever browser already listens there.
+async function pageSocket(profile) {
   for (let attempt = 0; attempt < 50; attempt++) {
     try {
-      const response = await fetch(`http://127.0.0.1:${PORT}/json/new?about:blank`, {
+      const port = readFileSync(join(profile, 'DevToolsActivePort'), 'utf8').split('\n')[0];
+      const response = await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, {
         method: 'PUT'
       });
       return (await response.json()).webSocketDebuggerUrl;
@@ -118,14 +120,14 @@ const chrome = spawn(
   [
     '--headless=new',
     '--hide-scrollbars',
-    `--remote-debugging-port=${PORT}`,
+    '--remote-debugging-port=0',
     `--user-data-dir=${profile}`
   ],
   { stdio: 'ignore' }
 );
 
 try {
-  const page = await connect(await pageSocket());
+  const page = await connect(await pageSocket(profile));
   await page.send('Network.enable');
   await page.send('Page.enable');
   await page.send('Emulation.setDeviceMetricsOverride', {
