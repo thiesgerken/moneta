@@ -1590,6 +1590,9 @@ name = "ipnet"
 version = "2.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "791930b43c0d5973160d90a8f3894509f2b273430f5c5c73b668636d0287c5c0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "is-terminal"
@@ -1908,6 +1911,7 @@ dependencies = [
  "dotenvy",
  "futures",
  "getrandom 0.4.3",
+ "ipnet",
  "itertools",
  "juniper",
  "juniper_rocket",
@@ -1916,7 +1920,6 @@ dependencies = [
  "regex",
  "reqwest",
  "rocket",
- "rocket_cors",
  "serde",
  "serde_ignored",
  "serde_json",
@@ -2620,23 +2623,6 @@ dependencies = [
  "syn 3.0.9",
  "unicode-xid",
  "version_check",
-]
-
-[[package]]
-name = "rocket_cors"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfac3a1df83f8d4fc96aa41dba3b86c786417b7fc0f52ec76295df2ba781aa69"
-dependencies = [
- "http 0.2.12",
- "log",
- "regex",
- "rocket",
- "serde",
- "serde_derive",
- "unicase",
- "unicase_serde",
- "url",
 ]
 
 [[package]]
@@ -3629,22 +3615,6 @@ checksum = "e1b88fcfe09e89d3866a5c11019378088af2d24c3fbd4f0543f96b479ec90697"
 dependencies = [
  "serde",
  "version_check",
-]
-
-[[package]]
-name = "unicase"
-version = "2.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "357cc3acc6a036009fd6c973ed009037c732d60d0b4f6c673e9041497482a28f"
-
-[[package]]
-name = "unicase_serde"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ef53697679d874d69f3160af80bc28de12730a985d57bdf2b47456ccb8b11f1"
-dependencies = [
- "serde",
- "unicase",
 ]
 
 [[package]]

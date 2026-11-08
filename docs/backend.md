@@ -64,10 +64,23 @@ edit timestamps. They are not transaction value dates, booking dates, accrual en
 historical changelog timestamps. Related account/category edits can change rendered content
 without changing the expense's `updatedAt`.
 
-**Authentication** accepts a signed private session cookie or an explicit
-`Authorization: Bearer mk_<prefix>.<secret>` header on both GraphQL HTTP routes.
+**Authentication** accepts a signed private session cookie, an explicit
+`Authorization: Bearer mk_<prefix>.<secret>` header, or, when switched on, a `Remote-User`
+header from a trusted proxy, on both GraphQL HTTP routes. `root::Presented` picks exactly one,
+in that order of precedence: Authorization, Remote-User, cookie.
 An explicit header is the sole credential, even when malformed or invalid; it never falls
-back to a cookie and never creates, renews or clears cookies. Invalid credentials use
+back to a cookie and never creates, renews or clears cookies. `Remote-User` counts only when the
+socket peer (`Request::remote`, never `client_ip`, which prefers the caller-written
+`X-Real-IP`) is inside `api.trusted_proxies`. It then decides alone: an unknown name or a
+repeated header is nobody, not a fallback to the cookie, which it neither writes nor clears. It
+counts as a browser (`Credential::TrustedHeader`), so the session-only fields below are open to
+it.
+
+The endpoint only takes what another site cannot send with the reader's cookies attached:
+POST requires `Content-Type: application/json` (an HTML form or a CORS-simple request can only
+send form data or text/plain), and GET runs queries only, refusing a mutation before anything
+executes. There is no CORS layer: the frontend is served from the same origin, so no other
+origin's preflight is ever approved. Invalid credentials use
 `extensions.code = "UNAUTHENTICATED"`; valid keys without permission use `FORBIDDEN`.
 The frontend's login redirect keys on `UNAUTHENTICATED`, not on arbitrary backend errors.
 
@@ -171,11 +184,13 @@ verification.
 `TEST_DATABASE_URL=... cargo test --test scoping` exercises the per-user SQL accessors.
 `TEST_DATABASE_URL=... cargo test --test api_keys` exercises the production GraphQL HTTP
 handler, sessions and key lifecycle with dummy users. `TEST_DATABASE_URL=... cargo test --test
-backup` round-trips every table through export and import and checks the refusals. All three
-migrate and truncate fixtures, so run them sequentially against a disposable database, or use
-separate databases.
-`MONETA_REQUIRE_DB_TESTS=1` makes a missing URL fail the API-key and backup suites. CI runs
-all three in the database-backed job, not only the DB-free unit-test job.
+backup` round-trips every table through export and import and checks the refusals.
+`TEST_DATABASE_URL=... cargo test --test trusted_header` drives `Remote-User` through the real
+handler from inside and outside the allowlist; its content-type and GET checks need no database
+and run in plain `cargo test`. All four migrate and truncate fixtures, so run them sequentially
+against a disposable database, or use separate databases.
+`MONETA_REQUIRE_DB_TESTS=1` makes a missing URL fail the API-key, backup and Remote-User suites.
+CI runs all four in the database-backed job, not only the DB-free unit-test job.
 
 `tests/run-sql-tests.sh` applies every migration to an empty database and then asserts that the
 views, the CHECK constraints and the analysis functions do what they claim. The views carry the
