@@ -10,7 +10,9 @@ This file is the operational stuff: what to run to verify, and the traps that ha
 stepped in. `TODO.md` is what is deliberately not built yet.
 
 With Nix, the dev shell (`direnv allow` or `nix develop`) brings the pinned Rust toolchain, node
-(with npm) and psql. Postgres for the tests still runs in Docker, as below.
+(with npm), cargo-llvm-cov and PostgreSQL 18. CI runs every check inside it, and both images are
+built with the same toolchain, so `rust-toolchain.toml` and `flake.lock` are the one place the
+versions live. Locally, Postgres for the tests still runs in Docker, as below.
 
 ## Verify your changes
 
@@ -39,7 +41,7 @@ same figures come from `cargo llvm-cov --summary-only` and `npm test -- --covera
 
 A push to `main` also builds both images and restarts the deployments in the cluster, so a
 merge is a deploy. `main` is the only branch CI runs on; work happens in pull requests
-against it, which run the tests but neither build nor deploy.
+against it, which run the tests and build both images but neither push nor deploy.
 
 `npm test` is vitest over the plain modules under `src/lib` — the pure ones, where the logic
 is worth pinning down and no browser is needed. It has a `vitest.config.ts` of its own so it

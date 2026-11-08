@@ -47,7 +47,7 @@ width/gutters are the list-page contract.
 `vite.config.ts` passes preprocessing, forced runes, the Node adapter and five-minute deployment
 polling directly to `sveltekit({...})`. There is no separate Svelte configuration file.
 SvelteKit 3 and adapter-node 6 are upgraded together; Node 22.17 or newer is required
-(the image and CI use Node 24). TypeScript remains deliberately pinned to 6.
+(the image and CI use Node 26). TypeScript remains deliberately pinned to 6.
 
 Application library imports use the package's `#lib/*` subpath mapping with explicit
 extensions, for example `#lib/money.ts` and `#lib/Chart.svelte`. Generated GraphQL artifacts

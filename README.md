@@ -28,6 +28,9 @@ cd frontend && npm install && npm run dev   # UI on :5173, proxies /graphql to :
 The full stack (traefik in front of backend, frontend and postgres) comes up with
 `docker compose up -d`, reachable on <http://localhost:8485>. It publishes the backend on 8181
 as well, so `npm run dev` talks to it without any change — run one backend or the other, not both.
+Both images are built with Nix, not from Dockerfiles: compose pulls them from the registry, or on
+x86_64-linux `nix build .#backend-image && ./result | docker load` (and the same for
+`frontend-image`) builds them locally under the same names.
 
 **PostgreSQL 18 is a hard requirement**: ids default to `uuidv7()`, which does not exist
 before it.
@@ -140,8 +143,10 @@ what they claim. Never point it at a database holding real data. The views carry
 maths, so they are where a mistake would be expensive. `npm test` is vitest over the pure
 modules under `src/lib`; there are no component or end-to-end tests.
 
-CI (`.gitea/workflows/ci.yml`) runs exactly those, then builds and pushes both images on pushes
-to `main`, and then restarts the two deployments in the cluster. A merge to `main` is a deploy.
+CI (`.gitea/workflows/ci.yml`) runs exactly those inside the Nix dev shell, so it tests with
+the toolchain a `nix develop` gives locally. On pushes to `main` it then builds and pushes both
+images (with Nix, from the same toolchain) and restarts the two deployments in the cluster. A
+merge to `main` is a deploy.
 
 ## Status
 

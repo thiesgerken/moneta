@@ -8,3 +8,4 @@ backend-coverage.json
 frontend-coverage.json
 .claude/worktrees
 .direnv
+/result
