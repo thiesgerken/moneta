@@ -12,12 +12,10 @@ pub mod scoped;
 pub mod users;
 mod util;
 
-use rocket_cors::{AllowedOrigins, CorsOptions};
-
 use rocket::State;
 use rocket::config::LogLevel;
 use rocket::data::{Limits, ToByteUnit};
-use rocket::http::{CookieJar, Method};
+use rocket::http::CookieJar;
 
 use crate::config::Config;
 use cache::AnalysisCache;
@@ -105,16 +103,10 @@ pub fn rocket(config: Config, pool: crate::Pool) -> rocket::Rocket<rocket::Build
         rocket_config = rocket_config.merge(("secret_key", config.api.secret_key.clone()));
     }
 
-    let cors = CorsOptions::default()
-        .allowed_origins(AllowedOrigins::all())
-        .allowed_methods(
-            vec![Method::Get, Method::Post, Method::Patch]
-                .into_iter()
-                .map(From::from)
-                .collect(),
-        )
-        .allow_credentials(true);
-
+    // No CORS at all: the frontend is served from the same origin as /graphql (traefik routes
+    // the path, vite proxies it in development), and machine clients do not read CORS headers.
+    // A layer approving other origins with credentials would let any page whose request carries
+    // the reader's cookie, or a login proxy's, write and read through the API.
     rocket::custom(rocket_config)
         .manage(config.clone())
         .manage(pool.clone())
@@ -128,7 +120,6 @@ pub fn rocket(config: Config, pool: crate::Pool) -> rocket::Rocket<rocket::Build
             "/",
             rocket::routes![graphiql, get_graphql_handler, post_graphql_handler],
         )
-        .attach(cors.to_cors().unwrap())
 }
 
 pub async fn handle(config: Config, pool: crate::Pool) {

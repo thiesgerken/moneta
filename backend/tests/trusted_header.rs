@@ -231,7 +231,7 @@ async fn remote_user_is_believed_from_trusted_proxies_only() {
 
 /// Needs no database: every request here is refused, or reads nothing but the API version.
 #[tokio::test]
-async fn only_json_posts_and_query_gets_reach_graphql() {
+async fn only_json_posts_and_query_gets_reach_graphql_and_only_from_its_own_origin() {
     // never connected to; deadpool only dials when a connection is taken
     let pool = moneta::pool("postgres://nobody@127.0.0.1:1/nothing", "test").unwrap();
     let client = client(config(false), &pool).await;
@@ -257,6 +257,45 @@ async fn only_json_posts_and_query_gets_reach_graphql() {
     }
     let response = client.post("/graphql").body(&query).dispatch().await;
     assert_ne!(response.status(), Status::Ok, "no content type");
+
+    // no other origin is let in: a preflight is not approved, and an answer is not readable
+    let origin = Header::new("Origin", "https://elsewhere.example");
+    let response = client
+        .options("/graphql")
+        .header(origin.clone())
+        .header(Header::new("Access-Control-Request-Method", "POST"))
+        .header(Header::new(
+            "Access-Control-Request-Headers",
+            "content-type",
+        ))
+        .dispatch()
+        .await;
+    assert!(
+        response
+            .headers()
+            .get_one("Access-Control-Allow-Origin")
+            .is_none(),
+        "a cross-origin preflight was approved"
+    );
+    let response = client
+        .post("/graphql")
+        .header(ContentType::JSON)
+        .header(origin)
+        .body(&query)
+        .dispatch()
+        .await;
+    assert!(
+        response
+            .headers()
+            .get_one("Access-Control-Allow-Origin")
+            .is_none()
+    );
+    assert!(
+        response
+            .headers()
+            .get_one("Access-Control-Allow-Credentials")
+            .is_none()
+    );
 
     // a query over GET is fine, a mutation is not
     let response = client

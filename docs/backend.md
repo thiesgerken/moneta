@@ -79,7 +79,8 @@ it.
 The endpoint only takes what another site cannot send with the reader's cookies attached:
 POST requires `Content-Type: application/json` (an HTML form or a CORS-simple request can only
 send form data or text/plain), and GET runs queries only, refusing a mutation before anything
-executes. Invalid credentials use
+executes. There is no CORS layer: the frontend is served from the same origin, so no other
+origin's preflight is ever approved. Invalid credentials use
 `extensions.code = "UNAUTHENTICATED"`; valid keys without permission use `FORBIDDEN`.
 The frontend's login redirect keys on `UNAUTHENTICATED`, not on arbitrary backend errors.
 

@@ -221,7 +221,10 @@ forged `X-Real-IP` to hold this.
 **GraphQL takes JSON over POST and queries over GET, nothing else.** With a login proxy every
 request the browser sends is authenticated, including the ones another site makes it send. A
 form or a CORS-simple request cannot set `application/json`, and a link cannot POST; keep both
-refusals when touching the routes in `graphql/mod.rs`.
+refusals when touching the routes in `graphql/mod.rs`. And keep CORS out: the frontend is
+same-origin, and a CORS layer approving other origins with credentials would hand exactly those
+requests back their preflight. It was `AllowedOrigins::all()` with credentials until the
+proxy login made that a hole.
 
 **Keys are rounded to ten minutes, on purpose.** Every range the frontend asks for ends at
 `Date.now()`, so a key built from the exact arguments is a fresh one on every page load and
@@ -397,12 +400,8 @@ data is therefore client-side only; there is no SSR of query results.
   authentication/key-lifecycle surface, not every domain resolver.
 - No upload client feeds `deliveries.submit` from a real bank export; that is deliberately
   someone else's program, since it is per-bank and needs credentials.
-- CORS is `AllowedOrigins::all()` with `allow_credentials(true)` in `graphql/mod.rs`, and
-  `docker-compose.yaml` carries a committed `MONETA__API__SECRET_KEY`. Both are known and
-  accepted for now — the deployment is private infrastructure. The CORS half matters more with
-  `Remote-User` switched on: any origin's preflight is approved, so a page on another origin
-  whose request carries the login proxy's cookie (a sibling subdomain, with a domain-wide proxy
-  cookie) can send JSON and read the answer. The content-type check does not help against that.
+- `docker-compose.yaml` carries a committed `MONETA__API__SECRET_KEY`. Known and accepted for
+  now — the deployment is private infrastructure.
 - The value-date/accrual-period toggle is done and this is where it stops. Verlauf,
   the calendar and the dashboard donut share one `axisState`; the expense list picks one of the
   three dates for its column, sort and period filter. `simulate_balances`, `analysis_statement`
