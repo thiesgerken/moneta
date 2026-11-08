@@ -18,7 +18,13 @@ That loads them under the names [`docker-compose.yaml`](../docker-compose.yaml) 
 registry is the owner's own and not public. `docker compose up -d` then runs the whole stack:
 traefik on <http://localhost:8485> routing `/graphql` to the backend and everything else to the
 frontend, PostgreSQL 18 with its data in `./volumes/postgres`, and the `periodic` sidecar below.
-It publishes the backend on 8181 as well, so a local `npm run dev` talks to it without any
+Nothing is visible before the first user exists:
+
+```sh
+docker compose exec backend moneta user --add <name>   # asks for a full name and a password
+```
+
+The stack publishes the backend on 8181 as well, so a local `npm run dev` talks to it without any
 change; run one backend or the other, not both.
 
 The compose file is a development stack. Its `MONETA__API__SECRET_KEY` is a demo value that

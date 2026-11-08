@@ -123,7 +123,7 @@ which for a depot happens about once a year, at year end, with a conservative ha
 gains. That is deliberate: the monthly analysis is about spending habits, and a stock market
 moving those figures around would ruin it as an answer to that question.
 
-[renditier](https://gitea.gerken.haus/thies/Renditier) knows what the same depots are worth at
+[renditier](https://github.com/thiesgerken/renditier) knows what the same depots are worth at
 today's prices. `accounts.renditierAccountId` links the two, `users.renditier_token` is the API
 token that reads it (`moneta user --renditier-token`), and `investments` — its own query, beside
 `analysis` rather than inside it — is where the two numbers meet. It is an overlay and never a

@@ -101,27 +101,38 @@ The quickest way to see Moneta with something in it is to run it locally and imp
 household. You need Docker (for PostgreSQL 18), Rust (rustup picks the pinned toolchain from
 `rust-toolchain.toml`) and Node. With Nix, `nix develop` brings all of them except Docker.
 
+In one terminal, from the top of the repository:
+
 ```sh
 docker compose up -d postgres                       # PostgreSQL 18 on 127.0.0.1:5433
-
 cd backend
 cargo run -- import < ../docs/demo/rudolph.json     # into the still empty database
 cargo run -- user --update Rudolph                  # imported users have no password yet
-cargo run -- serve                                  # the API on :8181
+cargo run -- serve                                  # the API on :8181, GraphiQL at its root
+```
 
-cd frontend                                         # in a second terminal, from the top
+`user --update` asks for the full name again (type `Rudolph`; an empty answer is stored as
+empty), then for a password of at least 8 characters.
+
+In a second terminal, again from the top:
+
+```sh
+cd frontend
 npm ci && npm run dev                               # the UI on :5173, proxying /graphql to :8181
 ```
 
-Open <http://localhost:5173> and sign in as Rudolph. The demo ends on the day it was generated;
-to make it end today, generate a fresh one under a gitignored name and import that instead:
+Open <http://localhost:5173> and sign in as Rudolph. The demo ends on the day it was generated.
+To make it end today, generate a fresh one under a gitignored name and import that instead, into
+an empty database:
 
 ```sh
 python3 docs/demo/generate.py --until "$(date +%F)" --output demo-export.json
+cd backend && cargo run -- import < ../demo-export.json
 ```
 
 For your own books, start from an empty database and add yourself with
-`cargo run -- user --add <name>`, which asks for a full name and a password.
+`cargo run -- user --add <name>`, which asks for a full name and a password of at least 8
+characters.
 
 The images are built with Nix, and [`docker-compose.yaml`](docker-compose.yaml) runs the whole
 stack from them behind traefik; its registry is not public, so build them yourself first.
@@ -142,7 +153,7 @@ Settings come from environment variables prefixed `MONETA__`, nested with `__`
 | `MONETA__API__SECRET_KEY` | *(empty)* | signs the session cookie; `openssl rand -base64 32` |
 | `MONETA__API__TRUSTED_HEADER_AUTHENTICATION` | `false` | sign people in by the `Remote-User` header a login proxy sets, see [signing in](#-signing-in) |
 | `MONETA__API__TRUSTED_PROXIES` | *(empty)* | CIDRs, comma-separated (`10.42.0.0/16,10.0.0.5/32`), that `Remote-User` is believed from; required when the above is on |
-| `MONETA__RENDITIER__URL` | *(empty)* | where the backend reaches [renditier](https://gitea.gerken.haus/thies/Renditier) for today's depot values; empty switches the integration off |
+| `MONETA__RENDITIER__URL` | *(empty)* | where the backend reaches [renditier](https://github.com/thiesgerken/renditier) for today's depot values; empty switches the integration off |
 | `MONETA__RENDITIER__PUBLIC_URL` | *(empty)* | where a *browser* reaches it, for the link on a depot; falls back to `URL` |
 | `MONETA__RENDITIER__TIMEOUT_SECONDS` | `5` | a page load waits on this, so it has to give up quickly |
 
@@ -151,7 +162,8 @@ it. Migrations run on their own before every subcommand except `schema`.
 
 ## 🔑 Signing in
 
-- **Password.** `moneta user --add <name>` creates a user and asks for one, `--update` changes it.
+- **Password.** `moneta user --add <name>` creates a user and asks for a full name and a
+  password of at least 8 characters; `--update <name>` asks for both again and replaces them.
 - **API keys** for scripts and agents: created under *API-Schlüssel* in the browser, read-only or
   read-write, sent as `Authorization: Bearer mk_…` to the same GraphQL endpoint. An explicit
   key always wins over any other credential, even when it is invalid. [API keys](docs/api.md)

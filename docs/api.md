@@ -4,7 +4,8 @@ Moneta has one API, the GraphQL endpoint the frontend uses; there is no separate
 browser signs in with a session cookie or through a login proxy (see the
 [README](../README.md#-signing-in)); scripts and agents such as Ferret use an API key.
 
-The schema is checked in and documented in place at
+The backend serves GraphiQL at its root (<http://localhost:8181/> when run locally), which is
+the quickest way to try a query. The schema is checked in and documented in place at
 [`frontend/schema.graphql`](../frontend/schema.graphql); [backend.md](backend.md#graphql-conventions)
 has the conventions behind it and the details of how keys are stored and checked.
 
