@@ -58,17 +58,21 @@ Settings come from environment variables prefixed `MONETA__`, nested with `__`
 | `MONETA__RENDITIER__PUBLIC_URL` | *(empty)* | where a *browser* reaches it, for the link on a depot; falls back to `URL` |
 | `MONETA__RENDITIER__TIMEOUT_SECONDS` | `5` | a page load waits on this, so it has to give up quickly |
 | `MONETA__API__TRUSTED_HEADER_AUTHENTICATION` | `false` | sign people in by the `Remote-User` header a login proxy sets, see below |
-| `MONETA__API__TRUSTED_PROXIES` | *(empty)* | CIDRs, comma-separated, that `Remote-User` is believed from; required when the above is on |
+| `MONETA__API__TRUSTED_PROXIES` | *(empty)* | CIDRs, comma-separated (`10.42.0.0/16,10.0.0.5/32`), that `Remote-User` is believed from; required when the above is on |
 
 ### Signing in through a login proxy
 
 With `MONETA__API__TRUSTED_HEADER_AUTHENTICATION=true`, a reverse proxy that does the login
 (Authelia, oauth2-proxy, traefik's forward auth, ...) can hand over who is calling in a
-`Remote-User` header carrying an existing moneta user name. Nobody is created for a name moneta
-does not know, and such a user needs no password, so an imported user works straight away.
+`Remote-User` header carrying an existing moneta user name. Such a user needs no password, so an
+imported user works straight away. Nobody is created for a name moneta does not know: that
+request is simply signed out, with no fallback to a password login or to a session cookie the
+browser still holds. The names on both sides therefore have to agree exactly, including case.
 
 The header is believed only when the TCP connection comes from an address in
-`MONETA__API__TRUSTED_PROXIES` (e.g. `10.42.0.0/16`, the pod network the proxy runs in).
+`MONETA__API__TRUSTED_PROXIES`: a network such as `10.42.0.0/16` (the pod network the proxy runs
+in), or a single host written as `10.42.0.5/32`. A bare address without a prefix length is
+refused at startup.
 `X-Forwarded-For` and `X-Real-IP` play no part in that decision. Switching the header on with an
 empty list is a startup error. From anywhere else the header is ignored and logged.
 

@@ -171,16 +171,21 @@ mod tests {
 
     #[test]
     fn a_malformed_allowlist_fails_to_load() {
-        let error = config::Config::builder()
-            .set_override("api.trusted_proxies", "10.42.0.0/33")
-            .unwrap()
-            .build()
-            .unwrap()
-            .try_deserialize::<Config>()
-            .unwrap_err();
-        assert!(
-            error.to_string().contains("trusted proxy '10.42.0.0/33'"),
-            "{error}"
-        );
+        // a bare address too: a single host is written as /32, and guessing would hide a typo
+        for entry in ["10.42.0.0/33", "10.42.0.5"] {
+            let error = config::Config::builder()
+                .set_override("api.trusted_proxies", entry)
+                .unwrap()
+                .build()
+                .unwrap()
+                .try_deserialize::<Config>()
+                .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains(&format!("trusted proxy '{entry}'")),
+                "{error}"
+            );
+        }
     }
 }
