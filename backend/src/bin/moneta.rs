@@ -1,8 +1,8 @@
 use moneta::{cli, config::Config, graphql};
 
 use dotenvy::dotenv;
-use log::{LevelFilter, debug, info};
-use simplelog::{ColorChoice, SimpleLogger, TermLogger, TerminalMode};
+use log::{LevelFilter, debug};
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use tokio::runtime::Builder;
 
 pub fn initialize_logging(verbosity: i8) {
@@ -29,19 +29,13 @@ pub fn initialize_logging(verbosity: i8) {
 
     // stderr, all of it: stdout is where `export` and `schema` write their documents, and
     // a log line in there corrupts the file it was redirected into
-    if let Err(e) = TermLogger::init(
+    TermLogger::init(
         level,
         log_config.build(),
         TerminalMode::Stderr,
         ColorChoice::Auto,
-    ) {
-        SimpleLogger::init(level, log_config.build())
-            .expect("TermLogger and SimpleLogger failed to init!?");
-        info!(
-            "Falling back to SimpleLogger because TermLogger init failed: {}",
-            e
-        );
-    }
+    )
+    .expect("logging is initialized once");
 }
 
 fn main() {
