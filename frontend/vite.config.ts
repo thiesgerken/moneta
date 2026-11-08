@@ -17,10 +17,9 @@ export default defineConfig({
 			alias: { $houdini: '.houdini/' }
 		})
 	],
-	// The docker context is ./frontend, which has no .git in it, so the commit has to be handed
-	// in from outside: CI passes it as a build arg and the Dockerfile turns it into an ARG,
-	// which docker exposes to the build as an environment variable. Empty anywhere it was not
-	// handed in, and the menu leaves the line out rather than showing a placeholder.
+	// The Nix build sandbox has no git history, so the commit has to be handed in from outside:
+	// flake.nix sets GIT_SHA from the flake's own revision. Empty anywhere it was not handed in,
+	// and the menu leaves the line out rather than showing a placeholder.
 	define: {
 		__GIT_SHA__: JSON.stringify(process.env.GIT_SHA ?? '')
 	},

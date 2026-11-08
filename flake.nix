@@ -125,6 +125,7 @@
         in
         {
           backend-image = image "backend" {
+            Cmd = [ "moneta" ];
             Env = [
               "PATH=${lib.makeBinPath [ moneta ]}"
               # For reaching stockdb over https: rustls finds the root store through this.

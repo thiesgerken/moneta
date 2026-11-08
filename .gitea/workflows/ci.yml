@@ -83,6 +83,11 @@ jobs:
       # socket under the length limit for unix sockets.
       - name: Start Postgres
         run: |
+          # Servers of cancelled runs, which skip "Stop Postgres": no job outlives a few hours.
+          for stale in $(find /tmp -maxdepth 1 -name 'moneta-postgres.*' -mmin +360); do
+            pg_ctl --pgdata "$stale" --mode immediate stop || true
+            rm -rf "$stale"
+          done
           pg=$(mktemp -d /tmp/moneta-postgres.XXXXXX)
           export PGDATA="$pg" PGHOST="$pg" PGUSER=postgres
           printf 'PGDATA=%s\nPGHOST=%s\nPGUSER=%s\n' "$PGDATA" "$PGHOST" "$PGUSER" >> "$GITHUB_ENV"
@@ -106,8 +111,8 @@ jobs:
           cargo test --test scoping
           cargo test --test api_keys
 
-      # ponytail: a cancelled run skips this and leaves its Postgres behind, clean up by hand if
-      # that piles up.
+      # A cancelled run skips this and leaves its Postgres behind; "Start Postgres" of a later run
+      # sweeps it.
       - name: Stop Postgres
         if: always()
         run: pg_ctl --mode immediate stop && rm -rf "$PGDATA"

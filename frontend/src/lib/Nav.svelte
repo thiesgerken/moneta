@@ -32,8 +32,8 @@
 	// ponytail: no version string of our own. sveltekit already stamps every build -- it is what
 	// the layout watches to notice a deploy -- and its default is the build's `Date.now()`. That
 	// answers the only question this line is here for, "am I looking at the deploy I just made",
-	// without a build arg to thread through the Dockerfile and CI. Non-numeric if anyone ever
-	// sets `kit.version.name` by hand, hence the fallback.
+	// without another value to hand into the build. Non-numeric if anyone ever sets
+	// `kit.version.name` by hand, hence the fallback.
 	const build = $derived.by(() => {
 		const stamp = Number(version);
 		if (!Number.isFinite(stamp)) return version;
@@ -42,7 +42,7 @@
 		return new Date(stamp).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
 	});
 
-	// empty outside a CI build, where nothing handed the commit in -- see vite.config.ts
+	// empty outside the Nix build, where nothing handed the commit in -- see vite.config.ts
 	const commit = __GIT_SHA__.slice(0, 7);
 
 	async function logout() {
