@@ -582,8 +582,10 @@ def generate(until):
 
     # --- two years of it ---------------------------------------------------------------------
 
+    # The last day is the morning of "today": nothing on it has moved yet, and a bank line only
+    # arrives the morning after it was booked.
     def happened(day):
-        return START <= day <= until
+        return START <= day < until
 
     def auto(rule, user, template, account, day, cents, statement, unchecked=None, **fields):
         """What an automation rule makes of a delivered line: the template around it, the
@@ -908,8 +910,11 @@ def generate(until):
                 accrual=period,
             )
 
+        # the shops are closed on Sundays
+        open_days = [d for d in range(1, end.day + 1) if date(year, month, d).weekday() != 6]
+
         # groceries: whoever is at the till pays, half of it is the other's
-        shopping = sorted(rng.sample(range(1, end.day + 1), 6))
+        shopping = sorted(rng.sample(open_days, 6))
         for i, d in enumerate(shopping):
             day = date(year, month, d)
             if not happened(day):
@@ -937,7 +942,7 @@ def generate(until):
                     f"REWE MARKT GMBH {rng.randint(10000, 99999)}//TESTSTADT",
                     unchecked=day >= recent,
                 )
-        for d in sorted(rng.sample(range(1, end.day + 1), 2)):
+        for d in sorted(rng.sample(open_days, 2)):
             day = date(year, month, d)
             if happened(day):
                 payer = rng.choice((giro, k_giro))
@@ -991,11 +996,12 @@ def generate(until):
                     categories=[(mobilitaet, 1.0)],
                     **split(karte, -rng.randint(1900, 6400), "TEILAUTO TESTSTADT"),
                 )
-        if month in (4, 10) and happened(date(year, month, 19)):
+        clothes = workday_before(date(year, month, 19))
+        if month in (4, 10) and happened(clothes):
             for payer in (karte, k_giro):
                 h.expense(
                     "Kleidung",
-                    date(year, month, 19),
+                    clothes,
                     store="BEISPIELMARKT/TESTSTADT",
                     categories=[(haushalt, 1.0)],
                     legs=[
