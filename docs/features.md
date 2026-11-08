@@ -44,7 +44,8 @@ available the moment the first is written.
 
 ## API keys
 
-The API-Schlüssel page creates named credentials for Ferret and other machine clients.
+The API-Schlüssel page creates named credentials for Ferret and other machine clients;
+[api.md](api.md) shows how to use one.
 Choose **Nur lesen** for Ferret: it allows authenticated queries, not mutations. **Lesen
 und schreiben** also allows ordinary domain mutations, with exactly the browser user's
 existing ownership and visibility restrictions. Keys cannot manage credentials, log in/out,

@@ -25,7 +25,9 @@ Two more, for specific work:
 
 | File | What it is |
 | --- | --- |
-| [`../README.md`](../README.md) | running it locally, configuration, the CLI |
+| [`../README.md`](../README.md) | what Moneta is, the demo running locally, configuration |
+| [`operations.md`](operations.md) | the containers, the periodic job, login-proxy sign-in, export and import, the CLI |
+| [`api.md`](api.md) | API keys for scripts and agents, with examples |
 | [`../AGENTS.md`](../AGENTS.md) | how to work here: what to run to verify, and the traps already stepped in |
 | [`../TODO.md`](../TODO.md) | what is deliberately not built yet |
 | `../frontend/schema.graphql` | the API reference, generated and documented in place |
