@@ -143,19 +143,18 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "26"
-      - run: npm install -g pnpm@12.18.0
 
       - name: Install dependencies
-        run: cd frontend && pnpm install --frozen-lockfile
+        run: cd frontend && npm ci
 
       # build first: it runs houdini codegen, which lint and check both need
-      - run: cd frontend && pnpm build
-      - run: cd frontend && pnpm check
-      - run: cd frontend && pnpm lint
+      - run: cd frontend && npm run build
+      - run: cd frontend && npm run check
+      - run: cd frontend && npm run lint
 
       # v8 coverage costs a few hundred milliseconds here, so it is always on rather than
       # being a second run of the same 23 tests
-      - run: cd frontend && pnpm test --coverage
+      - run: cd frontend && npm test -- --coverage
 
       # Named where it is uploaded from, not renamed on the way out: an artifact built from a
       # single path keeps only that file's basename, so uploading
