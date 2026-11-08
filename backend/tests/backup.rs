@@ -271,7 +271,7 @@ async fn export_and_import_round_trip_and_refuse() {
     }
 
     sql(conn, CLEAR).await;
-    let parsed: Backup = serde_json::from_str(&exported).expect("the export parses");
+    let parsed = Backup::read(exported.as_bytes()).expect("the export parses");
     parsed
         .restore(conn)
         .await
@@ -335,7 +335,7 @@ async fn export_and_import_round_trip_and_refuse() {
 
     // what only the database notices rolls back everything written before it
     sql(conn, CLEAR).await;
-    let mut broken: Backup = serde_json::from_str(&exported).unwrap();
+    let mut broken = Backup::read(exported.as_bytes()).unwrap();
     broken.accounts[0].ownership_fraction = 2.0;
     let error = broken
         .restore(conn)

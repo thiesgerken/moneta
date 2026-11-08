@@ -11,6 +11,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
+use std::io::Read;
 
 use chrono::{DateTime, Utc};
 use diesel::dsl::exists;
@@ -32,7 +33,7 @@ use crate::schema::{
 const ROWS_PER_INSERT: usize = 1000;
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct Backup {
     pub users: Vec<BackupUser>,
     pub categories: Vec<Category>,
@@ -48,7 +49,7 @@ pub struct Backup {
 /// A user without their credentials.
 #[derive(Debug, Serialize, Deserialize, Queryable, Selectable)]
 #[diesel(table_name = users, check_for_backend(diesel::pg::Pg))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct BackupUser {
     pub id: Uuid,
     pub name: String,
@@ -62,7 +63,7 @@ pub struct BackupUser {
 /// exactly what keeping them as documents is meant to prevent.
 #[derive(Debug, Serialize, Deserialize, Queryable, Selectable, Insertable)]
 #[diesel(table_name = expense_changes, check_for_backend(diesel::pg::Pg))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct BackupExpenseChange {
     pub id: Uuid,
     pub target_id: Uuid,
@@ -76,6 +77,21 @@ pub struct BackupExpenseChange {
 }
 
 impl Backup {
+    /// Parses an export, refusing every key it does not know rather than dropping it: a
+    /// misspelled `syncAccountId` would otherwise import as a quiet `NULL`.
+    pub fn read(reader: impl Read) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        let mut document = serde_json::Deserializer::from_reader(reader);
+        let mut unknown = Vec::new();
+        let backup =
+            serde_ignored::deserialize(&mut document, |path| unknown.push(path.to_string()))?;
+        document.end()?;
+
+        if !unknown.is_empty() {
+            return Err(format!("unknown fields in the export: {}", unknown.join(", ")).into());
+        }
+        Ok(backup)
+    }
+
     /// Reads everything, each table in id order so that two exports of the same data are
     /// byte for byte the same.
     pub async fn load(conn: &mut AsyncPgConnection) -> QueryResult<Self> {
@@ -494,8 +510,12 @@ mod tests {
 
     type Breakage = fn(&mut Value);
 
+    fn read(backup: Value) -> Result<Backup, String> {
+        Backup::read(backup.to_string().as_bytes()).map_err(|e| e.to_string())
+    }
+
     fn check(backup: Value) -> Result<(), String> {
-        serde_json::from_value::<Backup>(backup).unwrap().check()
+        read(backup).unwrap().check()
     }
 
     #[test]
@@ -569,16 +589,32 @@ mod tests {
     }
 
     #[test]
-    fn credentials_cannot_ride_along() {
+    fn unknown_fields_are_refused_wherever_they_are() {
         let mut backup = valid();
         backup["users"][0]["passwordHash"] = json!("$argon2id$v=19$invented");
-        let error = serde_json::from_value::<Backup>(backup).unwrap_err();
-        assert!(error.to_string().contains("unknown field `passwordHash`"));
+        backup["accounts"][0]["syncAcountId"] = json!(GIRO);
+        backup["expenses"][0]["transactions"][0]["bookingDat"] = json!(AT);
+        assert_eq!(
+            read(backup).unwrap_err(),
+            "unknown fields in the export: users.0.passwordHash, accounts.0.syncAcountId, \
+             expenses.0.transactions.0.bookingDat"
+        );
+    }
+
+    #[test]
+    fn snapshots_are_documents_and_keep_what_they_carry() {
+        let mut backup = valid();
+        backup["expenseChanges"][0]["oldState"]["bookingStart"] = json!("2030-02-01");
+        let backup = read(backup).unwrap();
+        assert_eq!(
+            backup.expense_changes[0].old_state.as_ref().unwrap()["bookingStart"],
+            "2030-02-01"
+        );
     }
 
     #[test]
     fn values_are_spelled_as_the_database_spells_them() {
-        let backup: Backup = serde_json::from_value(valid()).unwrap();
+        let backup = read(valid()).unwrap();
         let written = serde_json::to_value(&backup).unwrap();
         assert_eq!(written["accounts"][0]["kind"], "real_estate");
         assert_eq!(written["periodicRules"][0]["period"], "monthly");

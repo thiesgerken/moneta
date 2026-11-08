@@ -29,6 +29,10 @@ reqwest = { version = "0.13", default-features = false, features = [
 rocket = { version = "0.5.1", features = ["secrets", "json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["float_roundtrip", "preserve_order"] }
+# Names every key a deserialization skipped, so that `moneta import` can refuse a misspelled one.
+# `deny_unknown_fields` cannot do that throughout: `Expense` is also how the changelog reads its
+# old snapshots, which may carry fields the struct has since lost.
+serde_ignored = "0.1"
 simplelog = "0.12"
 tokio = { version = "1", features = ["full"] }
 diesel = { version = "2.3", features = [

@@ -18,8 +18,10 @@ pub fn build() -> Command {
 }
 
 pub async fn handle(pool: crate::Pool) {
-    let backup: Backup = serde_json::from_reader(io::BufReader::new(io::stdin().lock()))
-        .expect("Could not parse the export");
+    let backup = match Backup::read(io::BufReader::new(io::stdin().lock())) {
+        Ok(backup) => backup,
+        Err(e) => panic!("Could not read the export, nothing was written: {e}"),
+    };
 
     let conn = &mut pool.get().await.expect("Could not get a connection");
     if let Err(e) = backup.restore(conn).await {
