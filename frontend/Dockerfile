@@ -2,7 +2,7 @@ FROM node:26-bookworm-slim@sha256:add5c17c14752c54d2f3d519ec46a3815684d41c33f198
 
 ENV NODE_ENV=production
 WORKDIR /app
-RUN npm i -g pnpm@12.17.0
+RUN npm i -g pnpm@12.18.0
 
 # pnpm-workspace.yaml carries allowBuilds; without it pnpm 10 refuses to install at all
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
