@@ -62,6 +62,8 @@ juniper_rocket = "0.11"
 dotenvy = "0.15"
 rocket_cors = "0.6.0"
 chrono-tz = "0.10.4"
+# the trusted-proxy allowlist for Remote-User, which is CIDRs; contains() is all it is used for
+ipnet = { version = "2", features = ["serde"] }
 
 [profile.release]
 lto = true

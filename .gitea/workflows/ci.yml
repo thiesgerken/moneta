@@ -111,6 +111,7 @@ jobs:
           cargo test --test scoping
           cargo test --test api_keys
           cargo test --test backup
+          cargo test --test trusted_header
 
       # A cancelled run skips this and leaves its Postgres behind; "Start Postgres" of a later run
       # sweeps it.

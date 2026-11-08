@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use uuid::Uuid;
 
 use juniper::graphql_object;
-use log::info;
+use log::{debug, info, warn};
 use tokio::sync::RwLock;
 
 use crate::graphql::{
@@ -83,27 +83,81 @@ pub async fn require_user(context: &Context) -> juniper::FieldResult<Uuid> {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Credential {
+    /// The session cookie, or nobody at all.
     Session,
+    /// `Remote-User` from a trusted proxy. A browser like a session, but one the proxy keeps:
+    /// it neither writes nor clears the cookie.
+    TrustedHeader,
     ApiKey(crate::api_keys::ApiKeyAccess),
 }
 
-pub struct Authorization<'r>(Option<&'r str>);
+/// What a request offers as its credential. Only one of them counts, in this order: an explicit
+/// Authorization header, even a malformed one, then `Remote-User` from a trusted proxy, then the
+/// session cookie. The proxy before the cookie: it says who is at the browser on every request,
+/// and a cookie left behind by a password login must not outvote it.
+pub enum Presented<'r> {
+    /// Empty when the header came more than once, which no token matches.
+    Authorization(&'r str),
+    RemoteUser(&'r str),
+    /// More than one `Remote-User`. A proxy that appends rather than replaces puts the one the
+    /// client sent first, so none of them can be believed.
+    AmbiguousRemoteUser,
+    Cookie(Option<Uuid>),
+}
 
 #[rocket::async_trait]
-impl<'r> rocket::request::FromRequest<'r> for Authorization<'r> {
+impl<'r> rocket::request::FromRequest<'r> for Presented<'r> {
     type Error = std::convert::Infallible;
 
     async fn from_request(
         request: &'r rocket::Request<'_>,
     ) -> rocket::request::Outcome<Self, Self::Error> {
-        let mut headers = request.headers().get("Authorization");
-        let header = headers.next();
-        let header = if headers.next().is_some() {
-            Some("")
+        let presented = if let Some(header) = single(request, "Authorization") {
+            Self::Authorization(header.unwrap_or(""))
+        } else if let Some(name) = single(request, "Remote-User").filter(|_| from_proxy(request)) {
+            name.map_or(Self::AmbiguousRemoteUser, Self::RemoteUser)
         } else {
-            header
+            Self::Cookie(
+                request
+                    .cookies()
+                    .get_private("user_id")
+                    .and_then(|c| c.value().parse().ok()),
+            )
         };
-        rocket::request::Outcome::Success(Self(header))
+        rocket::request::Outcome::Success(presented)
+    }
+}
+
+/// `None` without the header, `Some(None)` when it came more than once.
+fn single<'r>(request: &'r rocket::Request<'_>, name: &str) -> Option<Option<&'r str>> {
+    let mut headers = request.headers().get(name);
+    let first = headers.next()?;
+    Some(if headers.next().is_some() {
+        None
+    } else {
+        Some(first)
+    })
+}
+
+/// Whether the request came straight from a proxy `Remote-User` is believed from.
+fn from_proxy(request: &rocket::Request<'_>) -> bool {
+    let api = &request
+        .rocket()
+        .state::<crate::config::Config>()
+        .expect("the config is managed")
+        .api;
+    // The socket peer, not `client_ip()`: that one prefers rocket's `ip_header` (X-Real-IP by
+    // default), which whoever sends the request gets to write.
+    let peer = request.remote().map(|address| address.ip());
+
+    if !api.trusted_header_authentication {
+        debug!("Ignoring Remote-User from {peer:?}: header authentication is off");
+        false
+    } else if peer.is_some_and(|peer| api.trusts(peer)) {
+        true
+    } else {
+        warn!("Ignoring Remote-User from {peer:?}, which is not a trusted proxy");
+        false
     }
 }
 
@@ -122,10 +176,9 @@ fn forbidden() -> juniper::FieldError {
 }
 
 pub fn require_browser(context: &Context) -> juniper::FieldResult<()> {
-    if context.credential == Credential::Session {
-        Ok(())
-    } else {
-        Err(forbidden())
+    match context.credential {
+        Credential::Session | Credential::TrustedHeader => Ok(()),
+        Credential::ApiKey(_) => Err(forbidden()),
     }
 }
 
@@ -161,7 +214,7 @@ fn selects_mutation(request: &juniper::http::GraphQLRequest, schema: &Schema) ->
     selected.is_some_and(|operation| operation.operation_type == OperationType::Mutation)
 }
 
-fn contains_mutation(request: &juniper_rocket::GraphQLRequest, schema: &Schema) -> bool {
+pub(crate) fn contains_mutation(request: &juniper_rocket::GraphQLRequest, schema: &Schema) -> bool {
     match request.as_ref() {
         juniper::http::GraphQLBatchRequest::Single(request) => selects_mutation(request, schema),
         juniper::http::GraphQLBatchRequest::Batch(requests) => requests
@@ -196,43 +249,54 @@ fn session_cookie(before: Option<Uuid>, after: Option<Uuid>) -> SessionCookie {
     }
 }
 
+fn database_unavailable() -> juniper_rocket::GraphQLResponse {
+    juniper_rocket::GraphQLResponse::error(juniper::FieldError::from("Database unavailable"))
+}
+
 pub async fn graphql_handler(
     pool: &rocket::State<crate::Pool>,
     config: &rocket::State<crate::config::Config>,
     cache: &rocket::State<Arc<AnalysisCache>>,
     cookies: &rocket::http::CookieJar<'_>,
-    authorization: Authorization<'_>,
+    presented: Presented<'_>,
     request: juniper_rocket::GraphQLRequest,
     schema: &rocket::State<Schema>,
 ) -> juniper_rocket::GraphQLResponse {
-    let (user_id, credential) = if let Some(header) = authorization.0 {
-        let Some(token) = header.strip_prefix("Bearer ") else {
-            return juniper_rocket::GraphQLResponse::error(unauthenticated());
-        };
-        let authenticated = match pool.get().await {
-            Ok(mut conn) => crate::api_keys::authenticate(&mut conn, token).await,
-            Err(_) => {
-                return juniper_rocket::GraphQLResponse::error(juniper::FieldError::from(
-                    "Database unavailable",
-                ));
-            }
-        };
-        match authenticated {
-            Ok(Some((id, access))) => (Some(id), Credential::ApiKey(access)),
-            Ok(None) => return juniper_rocket::GraphQLResponse::error(unauthenticated()),
-            Err(_) => {
-                return juniper_rocket::GraphQLResponse::error(juniper::FieldError::from(
-                    "Database unavailable",
-                ));
+    let (user_id, credential) = match presented {
+        Presented::Authorization(header) => {
+            let Some(token) = header.strip_prefix("Bearer ") else {
+                return juniper_rocket::GraphQLResponse::error(unauthenticated());
+            };
+            let authenticated = match pool.get().await {
+                Ok(mut conn) => crate::api_keys::authenticate(&mut conn, token).await,
+                Err(_) => return database_unavailable(),
+            };
+            match authenticated {
+                Ok(Some((id, access))) => (Some(id), Credential::ApiKey(access)),
+                Ok(None) => return juniper_rocket::GraphQLResponse::error(unauthenticated()),
+                Err(_) => return database_unavailable(),
             }
         }
-    } else {
-        (
-            cookies
-                .get_private("user_id")
-                .and_then(|c| c.value().parse().ok()),
-            Credential::Session,
-        )
+        Presented::RemoteUser(name) => {
+            let found = match pool.get().await {
+                Ok(mut conn) => crate::queries::query_user_by_name(&mut conn, name).await,
+                Err(_) => return database_unavailable(),
+            };
+            match found {
+                Ok(Some(user)) => (Some(user.id), Credential::TrustedHeader),
+                // nobody is created for a name the proxy knows and moneta does not
+                Ok(None) => {
+                    warn!("Remote-User '{name}' is not a user here");
+                    (None, Credential::TrustedHeader)
+                }
+                Err(_) => return database_unavailable(),
+            }
+        }
+        Presented::AmbiguousRemoteUser => {
+            warn!("Refusing a request with more than one Remote-User header");
+            (None, Credential::TrustedHeader)
+        }
+        Presented::Cookie(user_id) => (user_id, Credential::Session),
     };
     if credential == Credential::ApiKey(crate::api_keys::ApiKeyAccess::Read)
         && contains_mutation(&request, schema)

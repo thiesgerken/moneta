@@ -41,30 +41,40 @@ pub fn sdl() -> String {
     .as_sdl()
 }
 
+/// Queries only. A GET is what a link, an image or a top-level navigation from another site
+/// sends, with the cookies (and behind a login proxy, the proxy's) attached, so a mutation in
+/// one would be a write anybody can trigger by getting a reader to open a URL.
 #[rocket::get("/graphql?<request..>")]
 async fn get_graphql_handler(
     pool: &State<crate::Pool>,
     config: &State<crate::config::Config>,
     cache: &State<std::sync::Arc<AnalysisCache>>,
     cookies: &CookieJar<'_>,
-    authorization: root::Authorization<'_>,
+    presented: root::Presented<'_>,
     request: juniper_rocket::GraphQLRequest,
     schema: &State<root::Schema>,
 ) -> juniper_rocket::GraphQLResponse {
-    root::graphql_handler(pool, config, cache, cookies, authorization, request, schema).await
+    if root::contains_mutation(&request, schema) {
+        return juniper_rocket::GraphQLResponse::error(juniper::FieldError::from(
+            "Mutations are only accepted over POST",
+        ));
+    }
+    root::graphql_handler(pool, config, cache, cookies, presented, request, schema).await
 }
 
-#[rocket::post("/graphql", data = "<request>")]
+/// JSON only. An HTML form or a CORS-simple request can send form data or text/plain without a
+/// preflight, cookies included; neither can send application/json.
+#[rocket::post("/graphql", format = "json", data = "<request>")]
 async fn post_graphql_handler(
     pool: &State<crate::Pool>,
     config: &State<crate::config::Config>,
     cache: &State<std::sync::Arc<AnalysisCache>>,
     cookies: &CookieJar<'_>,
-    authorization: root::Authorization<'_>,
+    presented: root::Presented<'_>,
     request: juniper_rocket::GraphQLRequest,
     schema: &State<root::Schema>,
 ) -> juniper_rocket::GraphQLResponse {
-    root::graphql_handler(pool, config, cache, cookies, authorization, request, schema).await
+    root::graphql_handler(pool, config, cache, cookies, presented, request, schema).await
 }
 
 /// Builds the same HTTP application used in production and handler integration tests.
@@ -122,5 +132,8 @@ pub fn rocket(config: Config, pool: crate::Pool) -> rocket::Rocket<rocket::Build
 }
 
 pub async fn handle(config: Config, pool: crate::Pool) {
+    if let Err(e) = config.api.validate() {
+        panic!("invalid configuration: {e}");
+    }
     rocket(config, pool).launch().await.expect("server died");
 }

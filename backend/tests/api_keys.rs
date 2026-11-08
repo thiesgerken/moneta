@@ -369,7 +369,10 @@ async fn credentials_preserve_the_browser_and_owner_boundaries() {
         .dispatch()
         .await;
     let denied_get: Value = denied_get.into_json().await.unwrap();
-    assert_eq!(denied_get["errors"][0]["extensions"]["code"], "FORBIDDEN");
+    assert_eq!(
+        denied_get["errors"][0]["message"],
+        "Mutations are only accepted over POST"
+    );
 
     // Successful authentication counts even if parsing, validation or permission checks fail.
     sql(
