@@ -1,52 +1,149 @@
-<h1>
-  <img src="frontend/static/brand/lockup.svg#gh-light-mode-only" alt="Moneta" width="296" height="64">
-  <img src="frontend/static/brand/lockup-dark.svg#gh-dark-mode-only" alt="Moneta" width="296" height="64">
-</h1>
+<p align="center">
+  <img alt="Moneta" src="frontend/static/brand/lockup.svg#gh-light-mode-only" width="296" height="64">
+  <img alt="Moneta" src="frontend/static/brand/lockup-dark.svg#gh-dark-mode-only" width="296" height="64">
+</p>
+<p align="center"><strong>A household's money, kept together: who paid, who owes, and what it cost each of you.</strong></p>
 
-Personal finance tracking: expenses, accounts, balances and categories, shared between several
-users.
+<p align="center">Expenses shared across several people's accounts, filed by when the money moved and by what it paid for, and booked from bank lines by rules.</p>
 
-- **backend** — Rust: [rocket](https://rocket.rs) + [juniper](https://github.com/graphql-rust/juniper)
-  serving a GraphQL API, PostgreSQL 18 for storage (diesel-async)
-- **frontend** — SvelteKit 3 / Svelte 5 (runes), [houdini](https://houdinigraphql.com) as the
-  GraphQL client, Tailwind 4 + flowbite-svelte for the UI
+<p align="center">
+  <a href="#-getting-started">🚀 Getting started</a>
+  ·
+  <a href="#-screenshots">📸 Screenshots</a>
+  ·
+  <a href="#-configuration">🔧 Configuration</a>
+  ·
+  <a href="docs/README.md">📚 Docs</a>
+</p>
 
-**Documentation is in [`docs/`](docs/)** — start with [docs/README.md](docs/README.md), which
-says what to read in which order. The short version: [concepts.md](docs/concepts.md) for the
-data model, [features.md](docs/features.md) for what the app does, and
-[backend.md](docs/backend.md) / [frontend.md](docs/frontend.md) for the code. If you are about
-to change something, [AGENTS.md](AGENTS.md) is the list of traps already stepped in.
+Moneta records what a household spends and owns. Several people share it: some accounts belong
+to two of them, one purchase can move money on more than one account, and a bill one of them
+paid is half the other's. Moneta keeps all of that in one set of books and shows each person
+their own view of it, from net worth down to a single receipt. It runs on your own server as a
+Rust backend with a GraphQL API over PostgreSQL and a SvelteKit frontend. The interface is
+German.
 
-## Running it locally
+## ✨ Highlights
+
+- 👥 **One set of books, a view for each.** An expense belongs to nobody; it shows up for whoever
+  owns the accounts it touches, at their share. A purchase split three ways is written as
+  fractions of one amount, and a debt between two people is a pair of mirrored accounts, each
+  seeing the other's entry with the sign flipped.
+- 📅 **When it was paid, and what it was for.** Every expense has the day the money moved and the
+  period it covers. A yearly insurance paid in January spreads over the year, childcare debited
+  on the 30th counts for the month it pays for, and the analysis switches between the two views.
+- 🏦 **Bank lines booked by rules.** Automation rules match statement lines by text, date, amount
+  and account and wrap them in a template: the shares, the categories, the period. Periodic
+  rules write the rent and the savings plan on schedule. Re-delivered lines are recognised and
+  skipped, unclaimed ones wait in a queue.
+- 📊 **Analysis that adds up.** Net worth over time by account or by how quickly the money can be
+  reached, income and spending per month and category, prepayments still to be used up, a
+  statement per account and a calendar. Balances you record are evidence: the computed figures
+  reconcile against them and show the difference.
+- 🕓 **Nothing changes silently.** Every edit is kept as a before-and-after snapshot, shown as a
+  diff on the expense and as a feed of what happened since your last visit.
+- 🔑 **Sign-in that fits the setup.** Passwords, read or write API keys for scripts and agents,
+  or a login proxy's `Remote-User` header.
+- 📦 **Your data as one file.** `moneta export` writes everything except credentials as JSON,
+  `moneta import` restores it into an empty database.
+
+## 📸 Screenshots
+
+<p align="center">
+  <img alt="Start page" src="docs/screenshots/overview-light.png#gh-light-mode-only" width="1000">
+  <img alt="Start page" src="docs/screenshots/overview-dark.png#gh-dark-mode-only" width="1000">
+</p>
+
+<p align="center"><em>The start page: net worth and its curve, what wants attention, this month's categories, and what happened since the last visit.</em></p>
+
+<br>
+
+<p align="center">
+  <img alt="Expenses" src="docs/screenshots/expenses-light.png#gh-light-mode-only" width="1000">
+  <img alt="Expenses" src="docs/screenshots/expenses-dark.png#gh-dark-mode-only" width="1000">
+</p>
+
+<p align="center"><em>Expenses: shared bookings across a current account and a debt account, rent and childcare over the month they pay for, and what still needs checking.</em></p>
+
+<br>
+
+<p align="center">
+  <img alt="Analysis" src="docs/screenshots/analysis-light.png#gh-light-mode-only" width="1000">
+  <img alt="Analysis" src="docs/screenshots/analysis-dark.png#gh-dark-mode-only" width="1000">
+</p>
+
+<p align="center"><em>Income and spending per month, and an overview that reconciles against the recorded balances.</em></p>
+
+<br>
+
+<p align="center">
+  <img alt="Accounts" src="docs/screenshots/accounts-light.png#gh-light-mode-only" width="1000">
+  <img alt="Accounts" src="docs/screenshots/accounts-dark.png#gh-dark-mode-only" width="1000">
+</p>
+
+<p align="center"><em>Accounts, with a debt account that mirrors the other person's.</em></p>
+
+<br>
+
+<p align="center">
+  <img alt="Rules" src="docs/screenshots/rules-light.png#gh-light-mode-only" width="1000">
+  <img alt="Rules" src="docs/screenshots/rules-dark.png#gh-dark-mode-only" width="1000">
+</p>
+
+<p align="center"><em>Periodic and automation rules side by side.</em></p>
+
+All screenshots show the demo household of Rudolph and Krösus: two invented people and two
+invented years of their books. [Retaking them](docs/screenshots/README.md) is scripted.
+
+## 🚀 Getting started
+
+The quickest way to see Moneta with something in it is to run it locally and import the demo
+household. You need Docker (for PostgreSQL 18), Rust (rustup picks the pinned toolchain from
+`rust-toolchain.toml`) and Node. With Nix, `nix develop` brings all of them except Docker.
+
+In one terminal, from the top of the repository:
 
 ```sh
-docker compose up -d postgres               # postgres on 127.0.0.1:5433
-cd backend  && cargo run -- serve           # API + graphiql on :8181
-cd frontend && npm install && npm run dev   # UI on :5173, proxies /graphql to :8181
+docker compose up -d postgres                       # PostgreSQL 18 on 127.0.0.1:5433
+cd backend
+cargo run -- import < ../docs/demo/rudolph.json     # into the still empty database
+cargo run -- user --update Rudolph                  # imported users have no password yet
+cargo run -- serve                                  # the API on :8181, GraphiQL at its root
 ```
 
-The full stack (traefik in front of backend, frontend and postgres) comes up with
-`docker compose up -d`, reachable on <http://localhost:8485>. It publishes the backend on 8181
-as well, so `npm run dev` talks to it without any change — run one backend or the other, not both.
-Both images are built with Nix, not from Dockerfiles: compose pulls them from the registry, or on
-x86_64-linux `nix build .#backend-image && ./result | docker load` (and the same for
-`frontend-image`) builds them locally under the same names.
+`user --update` asks for the full name again (type `Rudolph`; an empty answer is stored as
+empty), then for a password of at least 8 characters.
 
-**PostgreSQL 18 is a hard requirement**: ids default to `uuidv7()`, which does not exist
-before it.
-
-You need at least one user before anything is visible:
+In a second terminal, again from the top:
 
 ```sh
-cargo run -- user --add <name>                     # or, against the compose stack:
-docker compose exec backend moneta user --add <name>
+cd frontend
+npm ci && npm run dev                               # the UI on :5173, proxying /graphql to :8181
 ```
 
-### Configuration
+Open <http://localhost:5173> and sign in as Rudolph. The demo ends on the day it was generated.
+To make it end today, generate a fresh one under a gitignored name and import that instead, into
+an empty database:
+
+```sh
+python3 docs/demo/generate.py --until "$(date +%F)" --output demo-export.json
+cd backend && cargo run -- import < ../demo-export.json
+```
+
+For your own books, start from an empty database and add yourself with
+`cargo run -- user --add <name>`, which asks for a full name and a password of at least 8
+characters.
+
+The images are built with Nix, and [`docker-compose.yaml`](docker-compose.yaml) runs the whole
+stack from them behind traefik; its registry is not public, so build them yourself first.
+[Operations](docs/operations.md) has that, the periodic job, and what to change before the
+stack holds real data.
+
+## 🔧 Configuration
 
 Settings come from environment variables prefixed `MONETA__`, nested with `__`
 (`MONETA__DATABASE__URL`), or a `.env` file next to the backend. Defaults live in
-`backend/src/config.rs`.
+[`backend/src/config.rs`](backend/src/config.rs).
 
 | Variable | Default | Notes |
 | --- | --- | --- |
@@ -54,156 +151,70 @@ Settings come from environment variables prefixed `MONETA__`, nested with `__`
 | `MONETA__API__PORT` | `8181` | |
 | `MONETA__API__ADDRESS` | `127.0.0.1` | |
 | `MONETA__API__SECRET_KEY` | *(empty)* | signs the session cookie; `openssl rand -base64 32` |
-| `MONETA__RENDITIER__URL` | *(empty)* | where the backend reaches renditier; empty switches the integration off |
+| `MONETA__API__TRUSTED_HEADER_AUTHENTICATION` | `false` | sign people in by the `Remote-User` header a login proxy sets, see [signing in](#-signing-in) |
+| `MONETA__API__TRUSTED_PROXIES` | *(empty)* | CIDRs, comma-separated (`10.42.0.0/16,10.0.0.5/32`), that `Remote-User` is believed from; required when the above is on |
+| `MONETA__RENDITIER__URL` | *(empty)* | where the backend reaches [renditier](https://github.com/thiesgerken/renditier) for today's depot values; empty switches the integration off |
 | `MONETA__RENDITIER__PUBLIC_URL` | *(empty)* | where a *browser* reaches it, for the link on a depot; falls back to `URL` |
 | `MONETA__RENDITIER__TIMEOUT_SECONDS` | `5` | a page load waits on this, so it has to give up quickly |
-| `MONETA__API__TRUSTED_HEADER_AUTHENTICATION` | `false` | sign people in by the `Remote-User` header a login proxy sets, see below |
-| `MONETA__API__TRUSTED_PROXIES` | *(empty)* | CIDRs, comma-separated (`10.42.0.0/16,10.0.0.5/32`), that `Remote-User` is believed from; required when the above is on |
 
-### Signing in through a login proxy
+**PostgreSQL 18 is a hard requirement**: ids default to `uuidv7()`, which does not exist before
+it. Migrations run on their own before every subcommand except `schema`.
 
-With `MONETA__API__TRUSTED_HEADER_AUTHENTICATION=true`, a reverse proxy that does the login
-(Authelia, oauth2-proxy, traefik's forward auth, ...) can hand over who is calling in a
-`Remote-User` header carrying an existing moneta user name. Such a user needs no password, so an
-imported user works straight away. Nobody is created for a name moneta does not know: that
-request is simply signed out, with no fallback to a password login or to a session cookie the
-browser still holds. The names on both sides therefore have to agree exactly, including case.
+## 🔑 Signing in
 
-The header is believed only when the TCP connection comes from an address in
-`MONETA__API__TRUSTED_PROXIES`: a network such as `10.42.0.0/16` (the pod network the proxy runs
-in), or a single host written as `10.42.0.5/32`. A bare address without a prefix length is
-refused at startup.
-`X-Forwarded-For` and `X-Real-IP` play no part in that decision. Switching the header on with an
-empty list is a startup error. From anywhere else the header is ignored and logged.
+- **Password.** `moneta user --add <name>` creates a user and asks for a full name and a
+  password of at least 8 characters; `--update <name>` asks for both again and replaces them.
+- **API keys** for scripts and agents: created under *API-Schlüssel* in the browser, read-only or
+  read-write, sent as `Authorization: Bearer mk_…` to the same GraphQL endpoint. An explicit
+  key always wins over any other credential, even when it is invalid. [API keys](docs/api.md)
+  has examples and the rules.
+- **A login proxy** (Authelia, oauth2-proxy, traefik forward auth, …) can sign people in with a
+  `Remote-User` header naming an existing user, with
+  `MONETA__API__TRUSTED_HEADER_AUTHENTICATION=true` and the proxy's addresses in
+  `MONETA__API__TRUSTED_PROXIES`. The header is believed only from those addresses, checked
+  against the TCP connection. **This is safe only when the backend is reachable solely through
+  that proxy, and the proxy removes a `Remote-User` the client sent.** Details are in
+  [operations](docs/operations.md#signing-in-through-a-login-proxy).
 
-This is safe only when the backend is reachable **solely through that proxy**, and when the
-proxy **removes a `Remote-User` the client sent** before setting its own. Anything that can open
-a connection from inside the allowlist can sign in as anybody. An API key still wins over the
-header, and the header wins over a session cookie. Signing out is the proxy's business: the
-app's own logout cannot end a session it does not keep.
-
-## Machine access and Ferret
-
-Sign in with your browser, open **API-Schlüssel**, and create a named **Nur lesen** key.
-Read-only is sufficient for Ferret. Copy the full `mk_...` token from the one-time dialog
-into your client's secret storage. The optional expiry defaults to no expiry.
-
-Use the existing GraphQL endpoint, not a separate REST API:
+## 📦 Export and import
 
 ```sh
-read -rs MONETA_API_KEY
-export MONETA_API_KEY
-curl --silent --show-error 'http://localhost:8181/graphql' \
-  -H "Authorization: Bearer $MONETA_API_KEY" \
-  -H 'Content-Type: application/json' \
-  --data '{"query":"{ expenses { list(limit: 10) { edges { node { id title effectiveAmount } } } } }"}'
-unset MONETA_API_KEY
-```
-
-Treat the key like a password. Avoid shell tracing, request-header logging and pasting keys
-into issues. Moneta stores only a hash of the random secret plus a nonsecret lookup prefix.
-There is no token recovery. Replace a lost key by creating another and removing the old one.
-Password changes do **not** invalidate API keys.
-
-**Nur lesen** permits queries only. **Lesen und schreiben** adds domain mutations without
-widening your browser account's permissions. Neither level may list/create/remove API keys,
-log in/out, change identity or record a human visit. For example, a write key can create a
-balance on one of its owner's accounts:
-
-```sh
-read -rs MONETA_API_KEY
-export MONETA_API_KEY
-curl --silent --show-error 'http://localhost:8181/graphql' \
-  -H "Authorization: Bearer $MONETA_API_KEY" \
-  -H 'Content-Type: application/json' \
-  --data '{"query":"mutation($balance: BalanceInput!) { balances { create(balance: $balance) { id } } }","variables":{"balance":{"accountId":"YOUR-ACCOUNT-UUID","date":"2026-10-18T12:00:00Z","amount":10000,"comments":"Recorded balance"}}}'
-unset MONETA_API_KEY
-```
-
-An explicit Authorization header always takes precedence over cookies, even if it is invalid.
-Bearer requests never receive session-cookie changes. Invalid credentials return GraphQL
-`UNAUTHENTICATED`; forbidden credential operations return `FORBIDDEN`. Read-only rejection
-happens before mutation side effects, including aliases, fragments, selected operations and
-batch requests. A write operation may commit permitted fields before a later session-only
-field fails; requests are not transactions.
-
-Remove a key in the browser and confirm to revoke it. Removal physically deletes the row
-and removes it from the list; it fails on the next request. Expired keys remain listed as
-**Abgelaufen** until removed. Last use is bounded to one update per minute and counts
-successful authentication, even if the later operation fails. It is usage metadata, not an
-audit trail. Expiry, deletion and the owner's continued existence are checked on every request.
-
-## CLI
-
-`moneta` is one binary; `serve` is just one of its subcommands.
-
-```sh
-moneta serve                         # run the API
-moneta user --add|--update|--remove <name> | --list
-moneta user --renditier-token <name>   # paste the token on stdin; empty clears it
-moneta account --list x              # the flags take a dummy value, see below
-moneta account --sync <id1> <id2> [--invert x]
-moneta account --unsync <id>
-moneta periodic --list               # rules and how many expenses each is due for
-moneta periodic --run                # generate the expenses that are due
-moneta export > moneta-export.json   # all users' data as JSON, see below
+moneta export > moneta-export.json   # everything but credentials, as JSON on stdout
 moneta import < moneta-export.json   # only into a database without user data
-moneta schema                        # the GraphQL schema as SDL, for frontend/schema.graphql
 ```
 
-Note the odd argument shapes on `account`: `--list` and `--invert` are declared as value-taking
-options rather than flags, so they need a throwaway argument (`moneta account --list x`). Worth
-fixing, hasn't been.
+The file holds everything personal there is, which is why both are CLI-only and
+`*-export.json` is gitignored. Import refuses a database that already holds user data, checks
+the file before writing, and rolls back on any error; imported users get a password with
+`moneta user --update <name>`. It complements a `pg_dump` rather than replacing it.
+[Operations](docs/operations.md#export-and-import) has the details, and the rest of the
+[command line](docs/operations.md#cli).
 
-### Export and import
+## 🛠️ Development
 
-`moneta export` writes the whole database's user data to stdout as JSON: users, categories,
-accounts, expenses with their transactions, balances, periodic and automation rules, seen
-deliveries and the expense changelog. Credentials stay out: no password hashes, API keys or
-renditier tokens. Sessions are cookies and were never in the database. Ids are kept, so the
-changelog still points at what it describes.
-
-`moneta import` reads such a file back, and only into a database that holds no user data yet
-(the migrations having run is fine; a single user is not). Anything else is refused before the
-first write: an expense books across several users' accounts, so there is no replacing one
-user's data without breaking what they share with the others. The file is checked for
-duplicate ids and dangling references first, and whatever the database rejects after that
-rolls the whole import back. Imported users have no password; give each one with
-`moneta user --update <name>`, and set renditier tokens again with `--renditier-token`.
-
-The file holds everything personal there is, so it goes nowhere but where you redirect it:
-both commands are CLI-only, nothing is served over HTTP, and `*-export.json` is gitignored.
-The export complements a `pg_dump` rather than replacing it: it is readable and independent
-of the schema's internals, but it leaves the credentials behind and restores only into an empty
-database.
-
-## Tests and CI
+[`docs/`](docs/README.md) explains what the system is, starting with the
+[data model](docs/concepts.md) and [what the app does](docs/features.md);
+[AGENTS.md](AGENTS.md) is what to run before pushing and the traps already stepped in. In short:
 
 ```sh
-cd backend  && cargo test && cargo clippy --all-targets -- -D warnings && cargo fmt --all -- --check
+cd backend  && cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test
 cd backend  && PGURL=postgres://moneta:moneta@localhost:5499/moneta tests/run-sql-tests.sh
 cd frontend && npm run build && npm run check && npm run lint && npm test
 ```
 
-`tests/run-sql-tests.sh` applies every migration to an empty **scratch PostgreSQL 18 database**
-and then asserts that the rendered views, the CHECK constraints and the analysis functions do
-what they claim. Never point it at a database holding real data. The views carry the money
-maths, so they are where a mistake would be expensive. `npm test` is vitest over the pure
-modules under `src/lib`; there are no component or end-to-end tests.
-
-CI (`.gitea/workflows/ci.yml`) runs exactly those inside the Nix dev shell, so it tests with
-the toolchain a `nix develop` gives locally. On pushes to `main` it then builds and pushes both
-images (with Nix, from the same toolchain) and restarts the two deployments in the cluster. A
-merge to `main` is a deploy.
+The SQL tests and the database-backed Rust suites want a throwaway PostgreSQL 18 of their own,
+never one holding real data. CI runs the same commands inside the Nix dev shell; on `main` it
+also builds both images and deploys them.
 
 ## Status
 
-Working: auth, CRUD for all four entities, the rendering pipeline, expense changelog with
-diffs, computed balances, periodic and automation rules (generation runnable from the CLI or
-the API), and the analysis dashboard with its value-date/accrual toggle.
+Working: shared accounts and expenses with the per-user rendering, balances and their
+reconciliation, periodic and automation rules with delivery deduplication, the analysis with its
+value-date/accrual toggle, the changelog, API keys, login-proxy sign-in, and export and import.
 
-Missing: an upload client feeding `deliveries.submit` from a bank export, receipts in the UI,
-and push notifications. See `TODO.md`.
+Missing: an upload client feeding `deliveries.submit` from a real bank export (deliberately
+someone else's program, since it is per bank and needs credentials), receipts in the UI, and
+push notifications. [`TODO.md`](TODO.md) is the current list.
 
 ## License
 

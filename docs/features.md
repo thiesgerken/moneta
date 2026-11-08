@@ -44,7 +44,8 @@ available the moment the first is written.
 
 ## API keys
 
-The API-Schlüssel page creates named credentials for Ferret and other machine clients.
+The API-Schlüssel page creates named credentials for Ferret and other machine clients;
+[api.md](api.md) shows how to use one.
 Choose **Nur lesen** for Ferret: it allows authenticated queries, not mutations. **Lesen
 und schreiben** also allows ordinary domain mutations, with exactly the browser user's
 existing ownership and visibility restrictions. Keys cannot manage credentials, log in/out,
@@ -122,7 +123,7 @@ which for a depot happens about once a year, at year end, with a conservative ha
 gains. That is deliberate: the monthly analysis is about spending habits, and a stock market
 moving those figures around would ruin it as an answer to that question.
 
-[renditier](https://gitea.gerken.haus/thies/Renditier) knows what the same depots are worth at
+[renditier](https://github.com/thiesgerken/renditier) knows what the same depots are worth at
 today's prices. `accounts.renditierAccountId` links the two, `users.renditier_token` is the API
 token that reads it (`moneta user --renditier-token`), and `investments` — its own query, beside
 `analysis` rather than inside it — is where the two numbers meet. It is an overlay and never a

@@ -7,8 +7,8 @@
 		"#lib/*": "./src/lib/*"
 	},
 	"scripts": {
-		"dev": "export $(cat .env | xargs) && vite dev",
-		"preview": "export $(cat .env | xargs) && vite preview",
+		"dev": "test -f .env && export $(xargs < .env); vite dev",
+		"preview": "test -f .env && export $(xargs < .env); vite preview",
 		"build": "vite build",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsc --noEmit --project src/service-worker/tsconfig.json",

@@ -4,7 +4,8 @@ Read [`docs/`](docs/) first for what the project is: [`docs/concepts.md`](docs/c
 the two-layer data model and the three dates, [`docs/features.md`](docs/features.md) is what
 the application does, and [`docs/backend.md`](docs/backend.md) /
 [`docs/frontend.md`](docs/frontend.md) are the code.
-`README.md` is how to run it.
+`README.md` is how to run it, and [`docs/operations.md`](docs/operations.md) how to run it for
+real.
 
 This file is the operational stuff: what to run to verify, and the traps that have already been
 stepped in. `TODO.md` is what is deliberately not built yet.
