@@ -29,6 +29,8 @@ Two more, for specific work:
 | [`../AGENTS.md`](../AGENTS.md) | how to work here: what to run to verify, and the traps already stepped in |
 | [`../TODO.md`](../TODO.md) | what is deliberately not built yet |
 | `../frontend/schema.graphql` | the API reference, generated and documented in place |
+| [`demo/`](demo/) | an invented household in the export format, and the script that writes it |
+| [`screenshots/`](screenshots/) | the README's screenshots and how to retake them |
 
 `AGENTS.md` and this folder do different jobs and both are worth having. These documents
 explain *what the system is*; `AGENTS.md` explains *what goes wrong when you change it* — the

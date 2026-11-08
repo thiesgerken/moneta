@@ -71,7 +71,10 @@ PGURL=postgres://moneta:moneta@localhost:5499/moneta tests/run-sql-tests.sh
 ```
 
 The SQL files create their own test rows inside transactions that roll back. This workflow
-does not need a financial export or access to the real database. Migration compatibility with
+does not need a financial export or access to the real database. For an app with something in
+it, `moneta import < docs/demo/rudolph.json` into an empty database gives two invented users
+and two years of their books; `docs/demo/generate.py` writes that file, and is what to change
+when the export format does. Migration compatibility with
 existing data uses a restored database in a separate throwaway container, as described below.
 
 ## The cluster runs the real thing, and its database is reachable
