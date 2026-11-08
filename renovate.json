@@ -6,11 +6,6 @@
     "group:allNonMajor",
     "local>renovate/renovate-config"
   ],
-  "description": [
-    "pnpm 11 refuses a lockfile entry younger than a day, so anything that lands faster than that fails `pnpm install --frozen-lockfile` in CI until the version ages out. Three days keeps a margin over that and over a weekend of nobody looking.",
-    "Renovate does not apply this to lockFileMaintenance, lockfileUpdate, pin or replacement updates -- the package manager resolves those itself -- so a lock file maintenance run can still produce an entry pnpm will reject."
-  ],
-  "minimumReleaseAge": "3 days",
   "nix": {
     "enabled": true
   },
@@ -18,20 +13,6 @@
     "enabled": true,
     "automerge": true
   },
-  "customManagers": [
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/(^|/)Dockerfile$/",
-        "/^\\.gitea/workflows/.*\\.ya?ml$/"
-      ],
-      "matchStrings": [
-        "npm (?:i|install) -g pnpm@(?<currentValue>\\d+\\.\\d+\\.\\d+)"
-      ],
-      "depNameTemplate": "pnpm",
-      "datasourceTemplate": "npm"
-    }
-  ],
   "packageRules": [
     {
       "matchManagers": ["npm"],
@@ -45,13 +26,6 @@
       "matchDepNames": ["actions/upload-artifact", "actions/download-artifact"],
       "matchUpdateTypes": ["major"],
       "enabled": false
-    },
-    {
-      "description": "pnpm releases often and its minor/patch bumps are routine; the groupName splits them out of the grouped update PR so they can merge on green by themselves",
-      "matchDepNames": ["pnpm"],
-      "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "pnpm",
-      "automerge": true
     }
   ]
 }

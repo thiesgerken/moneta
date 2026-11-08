@@ -1,5 +1,5 @@
 {
-  description = "Moneta: dev shell and backend image";
+  description = "Moneta: dev shell and container images";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -13,6 +13,7 @@
 
   outputs =
     {
+      self,
       nixpkgs,
       rust-overlay,
       crane,
@@ -48,17 +49,13 @@
               pkgs.pkg-config
               pkgs.openssl
               pkgs.nodejs_26
-              # Trails packageManager in frontend/package.json by a few minor versions, which
-              # reads the same lockfile. Following it exactly would take a hash in here that
-              # renovate cannot update.
-              pkgs.pnpm
               # psql for tests/run-sql-tests.sh, and the server for the database tests in CI.
               # uuidv7() as a column default needs 18.
               pkgs.postgresql_18
             ];
             shellHook = ''
               printf '💶 \033[1m\033[38;2;46;204;113mM\033[38;2;41;189;107mo\033[38;2;36;174;101mn\033[38;2;32;158;96me\033[38;2;27;143;90mt\033[38;2;22;128;84ma\033[0m  \033[2m%s\033[0m\n' 'Rust ${rust.version} · node ${pkgs.nodejs_26.version}'
-              printf '  \033[32m%s\033[0m \033[2m·\033[0m \033[32m%s\033[0m\n' 'cd backend && cargo test' 'cd frontend && pnpm dev'
+              printf '  \033[32m%s\033[0m \033[2m·\033[0m \033[32m%s\033[0m\n' 'cd backend && cargo test' 'cd frontend && npm run dev'
             '';
           };
         }
@@ -91,17 +88,58 @@
               doCheck = false;
             }
           );
+
+          frontend = pkgs.buildNpmPackage {
+            pname = "moneta-frontend";
+            version = "0.0.1";
+            src = ./frontend;
+            nodejs = pkgs.nodejs_26;
+            npmDeps = pkgs.importNpmLock { npmRoot = ./frontend; };
+            inherit (pkgs.importNpmLock) npmConfigHook;
+            # houdini's codegen is a prebuilt binary from npm, linked against an FHS loader the
+            # sandbox does not have, and the build runs it.
+            nativeBuildInputs = [ pkgs.autoPatchelfHook ];
+            preBuild = "autoPatchelf node_modules/houdini-*";
+            # The menu links the commit the bundle was built from, and the sandbox has no git
+            # history.
+            env.GIT_SHA = self.rev or self.dirtyRev;
+            # adapter-node's output imports the runtime dependencies from node_modules.
+            installPhase = ''
+              runHook preInstall
+              npm prune --omit=dev
+              mkdir $out
+              cp -r build node_modules package.json $out
+              runHook postInstall
+            '';
+          };
+
+          # Both images run as root, because both deployments bind port 80. The name and tag are
+          # what docker-compose.yaml runs, so `./result | docker load` drops a local build in.
+          image =
+            component: config:
+            pkgs.dockerTools.streamLayeredImage {
+              name = "gitea.gerken.haus/thies/moneta/${component}";
+              tag = "main";
+              inherit config;
+            };
         in
         {
-          backend-image = pkgs.dockerTools.streamLayeredImage {
-            # So that `./result | docker load` yields the image docker-compose.yaml runs.
-            name = "gitea.gerken.haus/thies/moneta/backend";
-            tag = "main";
-            # No User: the deployment binds port 80, which needs root.
-            config.Env = [
+          backend-image = image "backend" {
+            Env = [
               "PATH=${lib.makeBinPath [ moneta ]}"
               # For reaching stockdb over https: rustls finds the root store through this.
               "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+            ];
+          };
+
+          frontend-image = image "frontend" {
+            Cmd = [
+              (lib.getExe pkgs.nodejs-slim_26)
+              "${frontend}/build"
+            ];
+            Env = [
+              "HOST=0.0.0.0"
+              "PORT=80"
             ];
           };
         };

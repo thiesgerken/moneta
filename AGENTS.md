@@ -9,8 +9,8 @@ the application does, and [`docs/backend.md`](docs/backend.md) /
 This file is the operational stuff: what to run to verify, and the traps that have already been
 stepped in. `TODO.md` is what is deliberately not built yet.
 
-With Nix, the dev shell (`direnv allow` or `nix develop`) brings the pinned Rust toolchain, node,
-pnpm, cargo-llvm-cov and PostgreSQL 18. CI runs every check inside it, and the backend image is
+With Nix, the dev shell (`direnv allow` or `nix develop`) brings the pinned Rust toolchain, node
+(with npm), cargo-llvm-cov and PostgreSQL 18. CI runs every check inside it, and both images are
 built with the same toolchain, so `rust-toolchain.toml` and `flake.lock` are the one place the
 versions live. Locally, Postgres for the tests still runs in Docker, as below.
 
@@ -19,7 +19,7 @@ versions live. Locally, Postgres for the tests still runs in Docker, as below.
 ```sh
 cd backend  && cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test
 cd backend  && PGURL=postgres://moneta:moneta@localhost:5499/moneta tests/run-sql-tests.sh
-cd frontend && pnpm build && pnpm check && pnpm lint && pnpm test
+cd frontend && npm run build && npm run check && npm run lint && npm test
 ```
 
 The SQL tests need an empty PostgreSQL 18 database of their own. They apply every migration,
@@ -37,18 +37,18 @@ build, including on test code.
 
 On a pull request it also comments the coverage of both halves, editing the same comment on
 every push. It is a report, not a gate: nothing fails on a number going down. Locally the
-same figures come from `cargo llvm-cov --summary-only` and `pnpm test --coverage`.
+same figures come from `cargo llvm-cov --summary-only` and `npm test -- --coverage`.
 
 A push to `main` also builds both images and restarts the deployments in the cluster, so a
 merge is a deploy. `main` is the only branch CI runs on; work happens in pull requests
-against it, which run the tests and build the backend image but neither push nor deploy.
+against it, which run the tests and build both images but neither push nor deploy.
 
-`pnpm test` is vitest over the plain modules under `src/lib` — the pure ones, where the logic
+`npm test` is vitest over the plain modules under `src/lib` — the pure ones, where the logic
 is worth pinning down and no browser is needed. It has a `vitest.config.ts` of its own so it
 loads neither houdini's plugin, whose watcher held every run open for ten seconds after the
 last assertion, nor anything else the app needs only to build.
 
-**Run `pnpm build` before `pnpm check` or `pnpm lint`.** The build triggers houdini codegen;
+**Run `npm run build` before `npm run check` or `npm run lint`.** The build triggers houdini codegen;
 without it `$houdini` types are stale or missing and you will chase type errors that aren't
 real. If codegen gets into a bad state, `rm -rf .houdini .svelte-kit` and rebuild.
 
@@ -227,7 +227,7 @@ happened. `target_id` is deliberately not a foreign key — a change outlives it
 
 **TypeScript is pinned to 6 on purpose.** The 7.x Go port ships no CJS entry, so it crashes
 `svelte-check` and `eslint`, and SvelteKit / svelte-check / typescript-eslint all cap their
-peer range at `^6`. `pnpm outdated` will keep suggesting 7; don't take it until the toolchain
+peer range at `^6`. `npm outdated` will keep suggesting 7; don't take it until the toolchain
 declares support.
 
 **A rendered id is the upstream id.** A reader only ever sees their own rendering, so the view
@@ -345,7 +345,7 @@ data is therefore client-side only; there is no SSR of query results.
 
 ## Known gaps worth knowing before you plan work
 
-- No component or end-to-end tests in the frontend; `pnpm test` is vitest over the pure
+- No component or end-to-end tests in the frontend; `npm test` is vitest over the pure
   modules under `src/lib` and nothing more. `tests/sql/` covers the views, the constraints and
   the balance simulation. DB-backed Rust tests cover scoped accessors and the real GraphQL
   authentication/key-lifecycle surface, not every domain resolver.

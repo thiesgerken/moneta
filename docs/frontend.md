@@ -57,7 +57,7 @@ output and uses both generated type directories.
 `src/service-worker/index.ts` has its own project extending `$app/tsconfig/service-worker`.
 Its allowlist resolves the `{ path }` entries from `$app/manifest` through `$app/paths`;
 versioned caches retain the previous build's immutable chunks. Only build/static assets
-are cached: GraphQL always reaches the network. `pnpm check` checks this project separately.
+are cached: GraphQL always reaches the network. `npm run check` checks this project separately.
 
 ## Data fetching
 
@@ -105,14 +105,14 @@ It is also the API reference — the backend's doc comments become descriptions 
 ## Verifying
 
 ```sh
-pnpm build && pnpm check && pnpm lint && pnpm test
+npm run build && npm run check && npm run lint && npm test
 ```
 
-**Run `pnpm build` before `check` or `lint`.** The build triggers houdini codegen; without it
+**Run `npm run build` before `check` or `lint`.** The build triggers houdini codegen; without it
 the `$houdini` types are stale or missing and you will chase type errors that are not real. If
 codegen gets into a bad state, `rm -rf .houdini .svelte-kit` and rebuild.
 
-`pnpm test` is vitest over the plain modules under `src/lib` — the pure ones (`money.ts`,
+`npm test` is vitest over the plain modules under `src/lib` — the pure ones (`money.ts`,
 `filters.ts`, `expense_utils.ts`, `table_sort`, `regex_highlight`), where the logic is worth
 pinning down and no browser is needed. It has a `vitest.config.ts` of its own so it loads
 neither houdini's plugin, whose watcher held every run open for ten seconds after the last
@@ -135,7 +135,7 @@ and test BIC deliberately do not identify a real account.
   value that *is* the German text, such as a downloaded file's name.
 - **TypeScript is pinned to 6 on purpose.** The 7.x Go port ships no CJS entry, so it crashes
   `svelte-check` and `eslint`, and SvelteKit, svelte-check and typescript-eslint all cap their
-  peer range at `^6`. `pnpm outdated` will keep suggesting 7; don't take it.
+  peer range at `^6`. `npm outdated` will keep suggesting 7; don't take it.
 - **A modal inside a `<TabItem>` cannot close itself.** Writing to a `bind:open` prop from a
   component rendered inside flowbite's tabs does not reach the parent, so the rules page closes
   its modals from the parent's `onsubmit` callback. Modals on plain pages close themselves and

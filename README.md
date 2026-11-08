@@ -22,15 +22,15 @@ to change something, [AGENTS.md](AGENTS.md) is the list of traps already stepped
 ```sh
 docker compose up -d postgres               # postgres on 127.0.0.1:5433
 cd backend  && cargo run -- serve           # API + graphiql on :8181
-cd frontend && pnpm install && pnpm dev     # UI on :5173, proxies /graphql to :8181
+cd frontend && npm install && npm run dev   # UI on :5173, proxies /graphql to :8181
 ```
 
 The full stack (traefik in front of backend, frontend and postgres) comes up with
 `docker compose up -d`, reachable on <http://localhost:8485>. It publishes the backend on 8181
-as well, so `pnpm dev` talks to it without any change — run one backend or the other, not both.
-The backend image is built with Nix, not from a Dockerfile: compose pulls it from the registry,
-or on x86_64-linux `nix build .#backend-image && ./result | docker load` builds it locally
-under the same name.
+as well, so `npm run dev` talks to it without any change — run one backend or the other, not both.
+Both images are built with Nix, not from Dockerfiles: compose pulls them from the registry, or on
+x86_64-linux `nix build .#backend-image && ./result | docker load` (and the same for
+`frontend-image`) builds them locally under the same names.
 
 **PostgreSQL 18 is a hard requirement**: ids default to `uuidv7()`, which does not exist
 before it.
@@ -134,19 +134,19 @@ fixing, hasn't been.
 ```sh
 cd backend  && cargo test && cargo clippy --all-targets -- -D warnings && cargo fmt --all -- --check
 cd backend  && PGURL=postgres://moneta:moneta@localhost:5499/moneta tests/run-sql-tests.sh
-cd frontend && pnpm build && pnpm check && pnpm lint && pnpm test
+cd frontend && npm run build && npm run check && npm run lint && npm test
 ```
 
 `tests/run-sql-tests.sh` applies every migration to an empty **scratch PostgreSQL 18 database**
 and then asserts that the rendered views, the CHECK constraints and the analysis functions do
 what they claim. Never point it at a database holding real data. The views carry the money
-maths, so they are where a mistake would be expensive. `pnpm test` is vitest over the pure
+maths, so they are where a mistake would be expensive. `npm test` is vitest over the pure
 modules under `src/lib`; there are no component or end-to-end tests.
 
 CI (`.gitea/workflows/ci.yml`) runs exactly those inside the Nix dev shell, so it tests with
 the toolchain a `nix develop` gives locally. On pushes to `main` it then builds and pushes both
-images (the backend's with Nix, from the same `rust-toolchain.toml`) and restarts the two
-deployments in the cluster. A merge to `main` is a deploy.
+images (with Nix, from the same toolchain) and restarts the two deployments in the cluster. A
+merge to `main` is a deploy.
 
 ## Status
 
