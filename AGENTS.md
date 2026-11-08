@@ -27,12 +27,13 @@ without recording Diesel migration state, so use a dedicated scratch database th
 will connect to. Do not point them at a database holding real data.
 
 The DB-backed Rust suites take `TEST_DATABASE_URL`: run `cargo test --test scoping`, then
-`cargo test --test api_keys`, then `cargo test --test backup` against another disposable
-database. They migrate and truncate fixtures, so never run two concurrently against one
-database. The API-key suite exercises the production GraphQL HTTP handler with dummy users;
-the backup suite round-trips every table through `moneta export` and `moneta import`.
-`MONETA_REQUIRE_DB_TESTS=1` forbids skipping them when the URL is absent. CI runs all three
-sequentially in its database-backed job.
+`cargo test --test api_keys`, `cargo test --test backup` and `cargo test --test trusted_header`
+against another disposable database. They migrate and truncate fixtures, so never run two
+concurrently against one database. The API-key suite exercises the production GraphQL HTTP
+handler with dummy users; the backup suite round-trips every table through `moneta export` and
+`moneta import`; the trusted-header suite drives `Remote-User` from inside and outside the proxy
+allowlist. `MONETA_REQUIRE_DB_TESTS=1` forbids skipping them when the URL is absent. CI runs all
+four sequentially in its database-backed job.
 
 CI runs exactly these and is strict — `clippy -D warnings` and `fmt --check` both fail the
 build, including on test code.
@@ -211,6 +212,17 @@ without that line and a write leaves stale months on the screen until the TTL ru
 authentication/last-use writes do not affect financial answers. `root.rs` and the real-handler
 API-key tests hold those exceptions.
 
+**`Remote-User` is believed from the socket peer and nothing else.** `Request::client_ip()`
+looks tempting and is wrong here: it prefers rocket's `ip_header`, `X-Real-IP` by default,
+which the caller writes. `root::from_proxy` uses `Request::remote()`, canonicalized because a
+dual-stack listener reports IPv4 peers as `::ffff:a.b.c.d`. `tests/trusted_header.rs` sends a
+forged `X-Real-IP` to hold this.
+
+**GraphQL takes JSON over POST and queries over GET, nothing else.** With a login proxy every
+request the browser sends is authenticated, including the ones another site makes it send. A
+form or a CORS-simple request cannot set `application/json`, and a link cannot POST; keep both
+refusals when touching the routes in `graphql/mod.rs`.
+
 **Keys are rounded to ten minutes, on purpose.** Every range the frontend asks for ends at
 `Date.now()`, so a key built from the exact arguments is a fresh one on every page load and
 the cache never hits. `cache::bucket` floors the dates, which means an entry can answer a
@@ -387,7 +399,10 @@ data is therefore client-side only; there is no SSR of query results.
   someone else's program, since it is per-bank and needs credentials.
 - CORS is `AllowedOrigins::all()` with `allow_credentials(true)` in `graphql/mod.rs`, and
   `docker-compose.yaml` carries a committed `MONETA__API__SECRET_KEY`. Both are known and
-  accepted for now — the deployment is private infrastructure.
+  accepted for now — the deployment is private infrastructure. The CORS half matters more with
+  `Remote-User` switched on: any origin's preflight is approved, so a page on another origin
+  whose request carries the login proxy's cookie (a sibling subdomain, with a domain-wide proxy
+  cookie) can send JSON and read the answer. The content-type check does not help against that.
 - The value-date/accrual-period toggle is done and this is where it stops. Verlauf,
   the calendar and the dashboard donut share one `axisState`; the expense list picks one of the
   three dates for its column, sort and period filter. `simulate_balances`, `analysis_statement`

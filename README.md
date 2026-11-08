@@ -57,6 +57,26 @@ Settings come from environment variables prefixed `MONETA__`, nested with `__`
 | `MONETA__RENDITIER__URL` | *(empty)* | where the backend reaches renditier; empty switches the integration off |
 | `MONETA__RENDITIER__PUBLIC_URL` | *(empty)* | where a *browser* reaches it, for the link on a depot; falls back to `URL` |
 | `MONETA__RENDITIER__TIMEOUT_SECONDS` | `5` | a page load waits on this, so it has to give up quickly |
+| `MONETA__API__TRUSTED_HEADER_AUTHENTICATION` | `false` | sign people in by the `Remote-User` header a login proxy sets, see below |
+| `MONETA__API__TRUSTED_PROXIES` | *(empty)* | CIDRs, comma-separated, that `Remote-User` is believed from; required when the above is on |
+
+### Signing in through a login proxy
+
+With `MONETA__API__TRUSTED_HEADER_AUTHENTICATION=true`, a reverse proxy that does the login
+(Authelia, oauth2-proxy, traefik's forward auth, ...) can hand over who is calling in a
+`Remote-User` header carrying an existing moneta user name. Nobody is created for a name moneta
+does not know, and such a user needs no password, so an imported user works straight away.
+
+The header is believed only when the TCP connection comes from an address in
+`MONETA__API__TRUSTED_PROXIES` (e.g. `10.42.0.0/16`, the pod network the proxy runs in).
+`X-Forwarded-For` and `X-Real-IP` play no part in that decision. Switching the header on with an
+empty list is a startup error. From anywhere else the header is ignored and logged.
+
+This is safe only when the backend is reachable **solely through that proxy**, and when the
+proxy **removes a `Remote-User` the client sent** before setting its own. Anything that can open
+a connection from inside the allowlist can sign in as anybody. An API key still wins over the
+header, and the header wins over a session cookie. Signing out is the proxy's business: the
+app's own logout cannot end a session it does not keep.
 
 ## Machine access and Ferret
 
