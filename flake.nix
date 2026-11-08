@@ -128,7 +128,7 @@
             Cmd = [ "moneta" ];
             Env = [
               "PATH=${lib.makeBinPath [ moneta ]}"
-              # For reaching stockdb over https: rustls finds the root store through this.
+              # For reaching renditier over https: rustls finds the root store through this.
               "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
             ];
           };

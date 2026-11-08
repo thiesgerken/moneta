@@ -158,7 +158,7 @@ input AccountInput {
   opened: DateTime!
   closed: DateTime
   ownershipFraction: Float!
-  stockdbAccountId: Int
+  renditierAccountId: Int
 }
 
 input AutomationRuleInput {
@@ -288,7 +288,7 @@ input PeriodicRuleInput {
   [1]: https://graphql-scalars.dev/docs/scalars/date-time
   [2]: https://docs.rs/chrono/latest/chrono/struct.DateTime.html
 """
-scalar DateTime
+scalar DateTime @specifiedBy(url: "https://graphql-scalars.dev/docs/scalars/date-time")
 
 """
   [Universally Unique Identifier][0] (UUID).
@@ -301,7 +301,7 @@ scalar DateTime
   [1]: https://graphql-scalars.dev/docs/scalars/uuid
   [2]: https://docs.rs/uuid/*/uuid/struct.Uuid.html
 """
-scalar UUID
+scalar UUID @specifiedBy(url: "https://graphql-scalars.dev/docs/scalars/uuid")
 
 type Account {
   id: UUID!
@@ -323,10 +323,10 @@ type Account {
   closed: DateTime
   ownershipFraction: Float!
   """
-    The depot in stockdb this account stands for, where there is one. Only the link lives
+    The depot in renditier this account stands for, where there is one. Only the link lives
     here; what it is worth today is `investments`, deliberately a query of its own.
   """
-  stockdbAccountId: Int
+  renditierAccountId: Int
   synchronization: AccountSynchronization
 }
 
@@ -887,28 +887,28 @@ type History {
 """
   What a linked depot is worth, beside what has been booked for it.
 
-  Every figure is nullable and for one reason: stockdb could not answer, or had no price
+  Every figure is nullable and for one reason: renditier could not answer, or had no price
   recent enough to use. A reader is told that rather than shown a zero.
 """
 type Investment {
   "The moneta account, so a caller can hold this against the balance it already has."
   account: Account!
-  "The depot in stockdb, which is also what a link into stockdb is built from."
-  stockdbAccountId: Int!
+  "The depot in renditier, which is also what a link into renditier is built from."
+  renditierAccountId: Int!
   """
-    Market value at stockdb's latest usable price, in cents, scaled by the account's
+    Market value at renditier's latest usable price, in cents, scaled by the account's
     ownership fraction so that it compares to a rendered balance.
   """
   value: Float
   """
-    What went in, in cents: the net of every payment and fee, sign flipped, since stockdb
+    What went in, in cents: the net of every payment and fee, sign flipped, since renditier
     counts a purchase as money leaving.
   """
   invested: Float
   "Internal rate of return as a fraction, so 0.07 is seven percent."
   irr: Float
   """
-    How old the oldest price behind `value` is. stockdb will use a price up to four days
+    How old the oldest price behind `value` is. renditier will use a price up to four days
     stale, so "realtime" needs a date next to it or it claims more than it knows.
   """
   asOf: DateTime
@@ -916,20 +916,20 @@ type Investment {
 
 type InvestmentQuery {
   """
-    Where a browser reaches stockdb, so a linked depot can offer a way over to it. Null
+    Where a browser reaches renditier, so a linked depot can offer a way over to it. Null
     where none is configured, and deliberately not the url the backend itself calls: in the
     cluster that one is a Service name and resolves nowhere outside it.
   """
   url: String
   """
-    The depots this reader has over in stockdb, so the account dialog can offer a choice
-    rather than ask for a number. Empty when there is no stockdb configured, no token, or
+    The depots this reader has over in renditier, so the account dialog can offer a choice
+    rather than ask for a number. Empty when there is no renditier configured, no token, or
     nothing to reach — the dialog goes disabled on that rather than guessing why.
   """
-  accounts: [StockdbAccount!]!
+  accounts: [RenditierAccount!]!
   """
-    Every account of the reader's that is linked to a depot in stockdb. Empty when none is
-    linked, or when this deployment has no stockdb configured.
+    Every account of the reader's that is linked to a depot in renditier. Empty when none is
+    linked, or when this deployment has no renditier configured.
   """
   list: [Investment!]!
 }
@@ -1028,13 +1028,19 @@ type Query {
   analysis: AnalysisQuery!
   """
     Deliberately beside `analysis` rather than inside it: what a depot is worth today is
-    read from stockdb and never booked, so it must not reach the memoized analysis, the
+    read from renditier and never booked, so it must not reach the memoized analysis, the
     balances or anything monthly.
   """
   investments: InvestmentQuery!
   automationRules: AutomationRuleQuery!
   periodicRules: PeriodicRuleQuery!
   deliveries: DeliveryQuery!
+}
+
+"A depot as renditier lists it, which is all the account dialog needs to offer a choice."
+type RenditierAccount {
+  id: Int!
+  name: String!
 }
 
 type SeenDelivery {
@@ -1065,12 +1071,6 @@ type StatementEntry {
     is the signal that an expense is missing.
   """
   drift: Float
-}
-
-"A depot as stockdb lists it, which is all the account dialog needs to offer a choice."
-type StockdbAccount {
-  id: Int!
-  name: String!
 }
 
 type User {

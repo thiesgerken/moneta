@@ -323,7 +323,7 @@ impl Query {
     }
 
     /// Deliberately beside `analysis` rather than inside it: what a depot is worth today is
-    /// read from stockdb and never booked, so it must not reach the memoized analysis, the
+    /// read from renditier and never booked, so it must not reach the memoized analysis, the
     /// balances or anything monthly.
     fn investments() -> InvestmentQuery {
         InvestmentQuery

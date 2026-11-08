@@ -36,10 +36,10 @@ pub fn build() -> Command {
                 .help("update user name and password"),
         )
         .arg(
-            Arg::new("stockdb-token")
-                .long("stockdb-token")
+            Arg::new("renditier-token")
+                .long("renditier-token")
                 .value_name("name")
-                .help("set this user's stockdb API token, read on stdin (empty clears it)"),
+                .help("set this user's renditier API token, read on stdin (empty clears it)"),
         )
         .arg(
             Arg::new("list")
@@ -49,7 +49,7 @@ pub fn build() -> Command {
         )
         .group(
             ArgGroup::new("action")
-                .args(["add", "update", "remove", "stockdb-token", "list"])
+                .args(["add", "update", "remove", "renditier-token", "list"])
                 .required(true),
         )
 }
@@ -125,30 +125,30 @@ pub async fn handle(pool: crate::Pool, sub_matches: &ArgMatches) {
             .await
             .expect("Could not update user");
         info!("Updated user {}", uname);
-    } else if let Some(uname) = sub_matches.get_one::<String>("stockdb-token") {
+    } else if let Some(uname) = sub_matches.get_one::<String>("renditier-token") {
         let user = queries::query_user_by_name(conn, uname)
             .await
             .expect("Error loading users")
             .expect("User does not exist!");
 
-        // stockdb prints a token once and keeps only its hash, so this is the token itself and
+        // renditier prints a token once and keeps only its hash, so this is the token itself and
         // there is no way around storing it. It is read here rather than taken as an argument
         // so that it stays out of the shell history and out of `ps`.
         let token = prompt(&format!(
-            "Please paste the stockdb API token for {} (`stockdb user --token {}` issues one)",
+            "Please paste the renditier API token for {} (`renditier user --token {}` issues one)",
             user.name, user.name
         ));
 
         diesel::update(users::table.find(user.id))
-            .set(users::stockdb_token.eq(Some(token.clone()).filter(|t| !t.is_empty())))
+            .set(users::renditier_token.eq(Some(token.clone()).filter(|t| !t.is_empty())))
             .execute(conn)
             .await
             .expect("Could not update user");
 
         if token.is_empty() {
-            info!("Cleared the stockdb token of user {}", uname);
+            info!("Cleared the renditier token of user {}", uname);
         } else {
-            info!("Set the stockdb token of user {}", uname);
+            info!("Set the renditier token of user {}", uname);
         }
     } else if let Some(uname) = sub_matches.get_one::<String>("remove") {
         let user = queries::query_user_by_name(conn, uname)
@@ -172,7 +172,7 @@ pub async fn handle(pool: crate::Pool, sub_matches: &ArgMatches) {
         // The token itself never leaves the database; this only says whether there is one.
         let found: Vec<(User, Option<String>)> = users::table
             .order_by(users::name.asc())
-            .select((User::as_select(), users::stockdb_token))
+            .select((User::as_select(), users::renditier_token))
             .load(conn)
             .await
             .expect("Could not obtain users");
@@ -182,13 +182,13 @@ pub async fn handle(pool: crate::Pool, sub_matches: &ArgMatches) {
             "ID",
             "Name",
             "Full Name",
-            "stockdb",
+            "renditier",
             "# Accounts",
             "# Expenses",
             "# Balances"
         ]);
 
-        for (u, stockdb_token) in found {
+        for (u, renditier_token) in found {
             let account_count: i64 = accounts::table
                 .filter(accounts::user_id.eq(u.id))
                 .count()
@@ -214,7 +214,7 @@ pub async fn handle(pool: crate::Pool, sub_matches: &ArgMatches) {
                 u.id,
                 u.name,
                 u.full_name,
-                if stockdb_token.is_some() {
+                if renditier_token.is_some() {
                     "token"
                 } else {
                     "-"

@@ -9,10 +9,10 @@
 
 	interface Props {
 		open?: boolean;
-		/// The depots this reader has in StockDB. Empty when there is no token, no StockDB or
+		/// The depots this reader has in Renditier. Empty when there is no token, no Renditier or
 		/// nothing reachable — the field then goes disabled rather than disappearing, since a
 		/// missing control reads as a feature that does not exist.
-		stockdbAccounts?: { readonly id: number; readonly name: string }[];
+		renditierAccounts?: { readonly id: number; readonly name: string }[];
 		onsubmit?: () => Promise<void>; // used to signal that the form has been successfully submitted, need to invalidate cached stuff
 		accounts: {
 			readonly id: string;
@@ -28,7 +28,7 @@
 			readonly opened: Date;
 			readonly closed: Date | null;
 			readonly ownershipFraction: number;
-			readonly stockdbAccountId: number | null;
+			readonly renditierAccountId: number | null;
 			readonly synchronization: {
 				readonly account: { readonly id: string };
 				readonly invert: boolean;
@@ -48,14 +48,14 @@
 			readonly opened: Date;
 			readonly closed: Date | null;
 			readonly ownershipFraction: number;
-			readonly stockdbAccountId: number | null;
+			readonly renditierAccountId: number | null;
 			readonly synchronization: {
 				readonly account: { readonly id: string };
 				readonly invert: boolean;
 			} | null;
 		};
 	}
-	let { open = $bindable(), accounts, stockdbAccounts = [], account, onsubmit }: Props = $props();
+	let { open = $bindable(), accounts, renditierAccounts = [], account, onsubmit }: Props = $props();
 
 	let name = $derived(account?.name || '');
 	let description = $derived(account?.description || '');
@@ -71,10 +71,10 @@
 	let ownershipFraction = $derived(
 		account?.ownershipFraction ? (account.ownershipFraction * 100).toFixed(0) : '100'
 	);
-	let stockdbAccountId = $derived(
-		account?.stockdbAccountId === null || account?.stockdbAccountId === undefined
+	let renditierAccountId = $derived(
+		account?.renditierAccountId === null || account?.renditierAccountId === undefined
 			? ''
-			: String(account.stockdbAccountId)
+			: String(account.renditierAccountId)
 	);
 	let synchronizationAccountId = $derived(account?.synchronization?.account.id.toString() || '');
 	let synchronizationInvert = $derived(account?.synchronization?.invert || false);
@@ -133,9 +133,9 @@
 	];
 
 	/// `''` is "not linked", and the ids are strings because that is what a `Select` binds.
-	const stockdbOptions = $derived([
+	const renditierOptions = $derived([
 		{ value: '', name: 'Nicht verknüpft' },
-		...stockdbAccounts.map((a) => ({ value: String(a.id), name: a.name }))
+		...renditierAccounts.map((a) => ({ value: String(a.id), name: a.name }))
 	]);
 
 	const riskOptions = [
@@ -179,7 +179,7 @@
 			opened,
 			closed,
 			ownershipFraction: Number(ownershipFraction) / 100,
-			stockdbAccountId: stockdbAccountId.trim() ? Number(stockdbAccountId) : null
+			renditierAccountId: renditierAccountId.trim() ? Number(renditierAccountId) : null
 		};
 
 		console.log('account', account);
@@ -240,21 +240,21 @@
 				<Input id="iban" placeholder="" bind:value={iban} color={ibanError ? 'red' : undefined} />
 			</div>
 			<div>
-				<!-- Which depot in StockDB this account stands for. Only the link is kept here;
+				<!-- Which depot in Renditier this account stands for. Only the link is kept here;
 				     nothing is ever written back to this account from it. -->
-				<Label for="stockdbAccountId" class="mb-2">StockDB-Depot</Label>
+				<Label for="renditierAccountId" class="mb-2">Renditier-Depot</Label>
 				<Select
-					id="stockdbAccountId"
-					items={stockdbOptions}
-					bind:value={stockdbAccountId}
-					disabled={stockdbAccounts.length === 0}
+					id="renditierAccountId"
+					items={renditierOptions}
+					bind:value={renditierAccountId}
+					disabled={renditierAccounts.length === 0}
 					placeholder=""
 				/>
-				{#if stockdbAccounts.length === 0}
+				{#if renditierAccounts.length === 0}
 					<!-- Disabled and said out loud, rather than hidden: which of the three reasons it
 					     is matters less than not looking like a feature that was never built. -->
 					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-						Keine StockDB-Depots verfügbar – Token hinterlegt?
+						Keine Renditier-Depots verfügbar – Token hinterlegt?
 					</p>
 				{/if}
 			</div>
