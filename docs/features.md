@@ -72,10 +72,11 @@ covers the text fields, the positions, the bank's statement text on each transac
 amount in either sign. The period filter and the date column both follow whichever of the
 three dates is selected — accrual, value or booking. Active filters show as removable chips.
 
-Clicking a row opens the detail modal: the transactions with their per-account amounts, the
+Clicking a row opens it in place: the transactions with their per-account amounts, the
 categorizations and their weights, receipts, positions, and the **changelog** with a rendered
-diff of every change the expense has been through. Its id is there too, in monospace and selected
-whole with one click, for naming the expense to an agent working on the books.
+diff of every change the expense has been through. The open row also shows the expense's id, in
+monospace and selected whole with one click, for naming the expense to an agent working on the
+books. The analysis pages show an expense in `ExpenseDetailModal` instead, which has no id.
 
 Creating and editing happen in a modal too. A transaction takes either an amount or a fraction
 of the expense's reference amount, which is how a shared purchase is entered without doing the
