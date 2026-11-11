@@ -85,9 +85,15 @@ division by hand.
 what it is about to touch, named rather than counted. Six statement lines filed by the wrong
 rule are six rows to open and one press.
 
-*Zusammenführen* is the one that needs more than one: a refund, a repayment or an instalment
-arrives from the bank as an expense of its own, because that is what a statement line looks
-like, and it is really a second movement of a purchase already in the books. The modal picks
+An *Unbestätigt* expense's open row has *Bestätigen* beside the badge. `expenses.confirm` clears
+the flag and nothing else, so reviewing an automatically filed booking that was right does not
+mean a round trip through the form. It takes a list of ids and is all or nothing; an expense
+already confirmed is left alone and gets no changelog entry.
+
+*Zusammenführen* is the one that needs more than one, and the toolbar only offers it once two
+rows are open: a refund, a repayment or an instalment arrives from the bank as an expense of its
+own, because that is what a statement line looks like, and it is really a second movement of a
+purchase already in the books. The modal picks
 which expense absorbs the others — the oldest by default, since that is usually the purchase —
 and `expenses.merge` moves their transactions, receipts and positions across in one
 transaction. A fraction is resolved to cents on the way: it is a share of *its own* expense's

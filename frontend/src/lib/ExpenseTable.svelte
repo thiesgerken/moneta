@@ -643,7 +643,13 @@
 	/// What the toolbar's Bearbeiten and Löschen act on. An open row is this list's idea of "the
 	/// one you mean", and several open rows are no answer at all rather than a reason to pick the
 	/// first -- deleting the wrong expense is not something to be clever about.
-	const selectedExpenseId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
+	///
+	/// Off `selectedExpenses` rather than `expandedRows`, so that a row which has left the page
+	/// -- confirmed under the review filter, say -- stops being the one you mean. Bearbeiten on
+	/// an id the page no longer holds opens the empty form, which saves a new expense.
+	const selectedExpenseId = $derived(
+		selectedExpenses.length === 1 ? selectedExpenses[0].id : undefined
+	);
 
 	/// Descending, ascending, off. The third state is what there was no way back to: sorting
 	/// lives in the component rather than in the url, so a header clicked by accident could only
@@ -719,15 +725,26 @@
 		}
 	`);
 
+	const ConfirmExpenses = graphql(`
+		mutation ConfirmExpenses($ids: [UUID!]!) {
+			expenses {
+				confirm(ids: $ids) {
+					id
+					isUnchecked
+				}
+			}
+		}
+	`);
+
 	let showResortExpenseModal = $state(false);
 	let actionError: string | undefined = $state(undefined);
 
-	/// What every one of these three does once the writing is over: ask for the page again, and
-	/// drop the selection, since the rows it named have been rewritten, removed or absorbed.
+	/// What every one of these does once the writing is over: ask for the page again, and drop
+	/// the selection, since the rows it named have been rewritten, removed or absorbed.
 	///
-	/// `keepSelection` is for the modal that stays open on an error. The rows it lists are what
-	/// it is still offering to act on, and clearing them under it leaves it asking about none
-	/// while its button does nothing.
+	/// `keepSelection` is for when the open rows are still what the reader is looking at: the
+	/// modal that stays open on an error, whose rows are what it is still offering to act on,
+	/// and a confirmation, which changes one flag on a row the reader is in the middle of.
 	async function afterAction(keepSelection = false) {
 		invalidate();
 		await expenseStore.fetch({ variables: expenseVariables(), ...AFTER_WRITE });
@@ -808,6 +825,21 @@
 		// moved off this one would open a blank form that saves a second expense.
 		if (expenses.some((e) => e.id === merged)) openEditModal(merged);
 	}
+
+	/// Which row's Bestätigen failed, and why. Said beside the button rather than in a modal:
+	/// there is no modal here to stay open, and a row that keeps its badge is not an explanation.
+	let confirmError: { id: string; message: string } | undefined = $state(undefined);
+
+	async function handleConfirmExpense(id: string) {
+		confirmError = undefined;
+
+		const result = await ConfirmExpenses.mutate({ ids: [id] });
+		if (result.errors?.length) {
+			confirmError = { id, message: result.errors.map((e) => e.message).join(' ') };
+		}
+
+		await afterAction(true);
+	}
 </script>
 
 {#snippet newExpenseButton(cls: string)}
@@ -837,13 +869,19 @@
 	<h4 class="mb-1 text-xs font-semibold text-gray-500 dark:text-gray-400">{text}</h4>
 {/snippet}
 
-{#snippet statusBadges(expense: {
-	isTaxRelevant: boolean;
-	isTemplate: boolean;
-	isUnchecked: boolean;
-	isIncomplete: boolean;
-	isExtraordinary: boolean;
-})}
+<!-- `onconfirm` puts Bestätigen beside Unbestätigt. Only the expanded row passes it, where the
+     row's other actions are: in the list's own cells a button would sit inside the row's click
+     target, and a press meant to open the row would confirm it. -->
+{#snippet statusBadges(
+	expense: {
+		isTaxRelevant: boolean;
+		isTemplate: boolean;
+		isUnchecked: boolean;
+		isIncomplete: boolean;
+		isExtraordinary: boolean;
+	},
+	onconfirm?: () => void
+)}
 	{#if expense.isTaxRelevant}
 		<span class="rounded-md bg-green-100 px-2 py-1 text-green-700">
 			<LandmarkOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Steuerrelevant
@@ -858,6 +896,11 @@
 		<span class="rounded-md bg-yellow-100 px-2 py-1 text-yellow-700">
 			<QuestionCircleOutline class="me-1 inline h-3.5 w-3.5 align-text-bottom" />Unbestätigt
 		</span>
+		{#if onconfirm}
+			<Button size="xs" color="alternative" class="px-2 py-1" onclick={onconfirm}>
+				Bestätigen
+			</Button>
+		{/if}
 	{/if}
 	{#if expense.isIncomplete}
 		<span class="rounded-md bg-red-100 px-2 py-1 text-red-700">
@@ -1120,23 +1163,26 @@
 						>
 							<ArchiveArrowDownOutline class="mr-2 h-3.5 w-3.5" />Einsortieren
 						</ActionButton>
-						<ActionButton
-							color="blue"
-							class={toolbarControl}
-							disabled={selectedExpenses.length < 2}
-							onclick={() => {
-								// The oldest is the purchase and the newer ones are what came back
-								// from it, which is the way round it nearly always is; the modal is
-								// where that gets overruled.
-								mergeTargetId = selectedExpenses.reduce((oldest, e) =>
-									axisPeriod(e)[0] < axisPeriod(oldest)[0] ? e : oldest
-								).id;
-								actionError = undefined;
-								showMergeExpenseModal = true;
-							}}
-						>
-							<ObjectsColumnOutline class="mr-2 h-3.5 w-3.5" />Zusammenführen
-						</ActionButton>
+						<!-- Only there from two open rows on: below that it can do nothing, and the
+						     toolbar has no room for a button that is greyed out nearly all the time. -->
+						{#if selectedExpenses.length >= 2}
+							<Button
+								color="blue"
+								class={toolbarControl}
+								onclick={() => {
+									// The oldest is the purchase and the newer ones are what came back
+									// from it, which is the way round it nearly always is; the modal is
+									// where that gets overruled.
+									mergeTargetId = selectedExpenses.reduce((oldest, e) =>
+										axisPeriod(e)[0] < axisPeriod(oldest)[0] ? e : oldest
+									).id;
+									actionError = undefined;
+									showMergeExpenseModal = true;
+								}}
+							>
+								<ObjectsColumnOutline class="mr-2 h-3.5 w-3.5" />Zusammenführen
+							</Button>
+						{/if}
 					</ButtonGroup>
 					<!-- Stacked, the filters filled a phone screen before a single expense appeared,
 					     so on small screens they fold behind this. -->
@@ -1484,13 +1530,18 @@
 									{/if}
 									<div class="py-2">
 										{@render fieldLabel('Status')}
-										<dd class="mt-1 flex flex-wrap gap-1 text-xs">
+										<dd class="mt-1 flex flex-wrap items-center gap-1 text-xs">
 											{#if expense.isTaxRelevant || expense.isTemplate || expense.isUnchecked || expense.isIncomplete || expense.isExtraordinary}
-												{@render statusBadges(expense)}
+												{@render statusBadges(expense, () => handleConfirmExpense(expense.id))}
 											{:else}
 												<span class="text-sm text-gray-500 dark:text-gray-400">Normal</span>
 											{/if}
 										</dd>
+										{#if confirmError?.id === expense.id}
+											<dd class="mt-1 text-sm text-red-600 dark:text-red-400">
+												{confirmError.message}
+											</dd>
+										{/if}
 									</div>
 									{#each expense.transactions.filter((t) => t.statement) as transaction, i (i)}
 										<div class="py-2">
