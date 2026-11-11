@@ -74,7 +74,8 @@ three dates is selected — accrual, value or booking. Active filters show as re
 
 Clicking a row opens the detail modal: the transactions with their per-account amounts, the
 categorizations and their weights, receipts, positions, and the **changelog** with a rendered
-diff of every change the expense has been through.
+diff of every change the expense has been through. Its id is there too, in monospace and selected
+whole with one click, for naming the expense to an agent working on the books.
 
 Creating and editing happen in a modal too. A transaction takes either an amount or a fraction
 of the expense's reference amount, which is how a shared purchase is entered without doing the

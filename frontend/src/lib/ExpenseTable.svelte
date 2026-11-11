@@ -1559,6 +1559,16 @@
 											</dd>
 										</div>
 									{/each}
+									<!-- for naming this expense to somebody outside the app, an agent working on
+									     the books say; one click selects the whole UUID -->
+									<div class="py-2">
+										{@render fieldLabel('ID')}
+										<dd
+											class="mt-1 font-mono text-xs wrap-anywhere text-gray-600 select-all dark:text-gray-300"
+										>
+											{expense.id}
+										</dd>
+									</div>
 								</dl>
 
 								<div class="space-y-6">
