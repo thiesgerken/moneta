@@ -856,17 +856,13 @@ impl ExpenseMutation {
                     .await?;
 
                 diesel::insert_into(expense_changes::table)
-                    .values(&ExpenseChangelogEntry {
-                        id: Uuid::now_v7(),
-                        user_id: Some(user_id),
-                        target_id: upstream_id,
-                        date: Utc::now(),
-                        old_state: Some(Json(old_state)),
-                        new_state: None,
-                        tool: None,
-                        automatic: false,
-                        confidence: 1.0,
-                    })
+                    .values(&change_by_hand(
+                        user_id,
+                        upstream_id,
+                        Utc::now(),
+                        Some(old_state),
+                        None,
+                    ))
                     .execute(conn)
                     .await?;
 
@@ -891,17 +887,13 @@ impl ExpenseMutation {
             queries::insert_expense(conn, &entry).await?;
 
             diesel::insert_into(expense_changes::table)
-                .values(&ExpenseChangelogEntry {
-                    id: Uuid::now_v7(),
-                    user_id: Some(user_id),
-                    target_id: entry.id,
-                    date: entry.created_at,
-                    old_state: None,
-                    new_state: Some(Json(entry.clone())),
-                    tool: None,
-                    automatic: false,
-                    confidence: 1.0,
-                })
+                .values(&change_by_hand(
+                    user_id,
+                    entry.id,
+                    entry.created_at,
+                    None,
+                    Some(entry.clone()),
+                ))
                 .execute(conn)
                 .await?;
 
@@ -936,17 +928,13 @@ impl ExpenseMutation {
             queries::replace_expense(conn, &updated).await?;
 
             diesel::insert_into(expense_changes::table)
-                .values(&ExpenseChangelogEntry {
-                    id: Uuid::now_v7(),
-                    user_id: Some(user_id),
-                    target_id: upstream_id,
-                    date: updated.updated_at,
-                    old_state: Some(Json(old_state)),
-                    new_state: Some(Json(updated.clone())),
-                    tool: None,
-                    automatic: false,
-                    confidence: 1.0,
-                })
+                .values(&change_by_hand(
+                    user_id,
+                    upstream_id,
+                    updated.updated_at,
+                    Some(old_state),
+                    Some(updated.clone()),
+                ))
                 .execute(conn)
                 .await?;
 
@@ -1017,17 +1005,13 @@ impl ExpenseMutation {
                     .execute(conn)
                     .await?;
                 diesel::insert_into(expense_changes::table)
-                    .values(&ExpenseChangelogEntry {
-                        id: Uuid::now_v7(),
-                        user_id: Some(user_id),
-                        target_id: *source_id,
-                        date: now,
-                        old_state: Some(Json(source)),
-                        new_state: None,
-                        tool: None,
-                        automatic: false,
-                        confidence: 1.0,
-                    })
+                    .values(&change_by_hand(
+                        user_id,
+                        *source_id,
+                        now,
+                        Some(source),
+                        None,
+                    ))
                     .execute(conn)
                     .await?;
             }
@@ -1037,17 +1021,13 @@ impl ExpenseMutation {
             queries::replace_expense(conn, &merged).await?;
 
             diesel::insert_into(expense_changes::table)
-                .values(&ExpenseChangelogEntry {
-                    id: Uuid::now_v7(),
-                    user_id: Some(user_id),
+                .values(&change_by_hand(
+                    user_id,
                     target_id,
-                    date: now,
-                    old_state: Some(Json(old_state)),
-                    new_state: Some(Json(merged)),
-                    tool: None,
-                    automatic: false,
-                    confidence: 1.0,
-                })
+                    now,
+                    Some(old_state),
+                    Some(merged),
+                ))
                 .execute(conn)
                 .await?;
 
@@ -1114,16 +1094,15 @@ impl ExpenseMutation {
 
             diesel::insert_into(expense_changes::table)
                 .values(&ExpenseChangelogEntry {
-                    id: Uuid::now_v7(),
-                    user_id: Some(user_id),
-                    target_id: upstream_id,
-                    date: now,
-                    old_state: Some(Json(old_state)),
-                    new_state: Some(Json(sorted.clone())),
                     tool: Some("Einsortieren".into()),
                     // a person pressed the button; the rule only decided the outcome
-                    automatic: false,
-                    confidence: 1.0,
+                    ..change_by_hand(
+                        user_id,
+                        upstream_id,
+                        now,
+                        Some(old_state),
+                        Some(sorted.clone()),
+                    )
                 })
                 .execute(conn)
                 .await?;
@@ -1135,6 +1114,85 @@ impl ExpenseMutation {
         Ok(GraphQLExpense::new(
             load_rendered(conn, user_id, upstream_id).await?,
         ))
+    }
+
+    /// Clears the Unbestätigt flag on every expense given, which is what reviewing an
+    /// automatically filed booking ends in, without sending the whole expense back.
+    ///
+    /// All or nothing: an id the reader cannot see fails the request before anything is
+    /// written. An expense that was already confirmed is left alone and gets no changelog
+    /// entry, since nothing about it changed.
+    pub async fn confirm(context: &Context, ids: Vec<Uuid>) -> FieldResult<Vec<GraphQLExpense>> {
+        let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
+
+        let mut upstream_ids = Vec::with_capacity(ids.len());
+        for id in ids {
+            upstream_ids.push(load_rendered(conn, user_id, id).await?.upstream_id);
+        }
+        let now = Utc::now();
+
+        conn.transaction::<_, Box<dyn Error + Send + Sync>, _>(async |conn| {
+            for upstream_id in &upstream_ids {
+                let old_state = queries::load_expense(conn, *upstream_id)
+                    .await?
+                    .ok_or("entry to confirm disappeared")?;
+                if !old_state.is_unchecked {
+                    continue;
+                }
+
+                let confirmed = Expense {
+                    is_unchecked: false,
+                    updated_at: now,
+                    ..old_state.clone()
+                };
+                queries::replace_expense(conn, &confirmed).await?;
+
+                diesel::insert_into(expense_changes::table)
+                    .values(&change_by_hand(
+                        user_id,
+                        *upstream_id,
+                        now,
+                        Some(old_state),
+                        Some(confirmed),
+                    ))
+                    .execute(conn)
+                    .await?;
+            }
+
+            Ok(())
+        })
+        .await?;
+
+        let mut confirmed = Vec::with_capacity(upstream_ids.len());
+        for upstream_id in upstream_ids {
+            confirmed.push(GraphQLExpense::new(
+                load_rendered(conn, user_id, upstream_id).await?,
+            ));
+        }
+        Ok(confirmed)
+    }
+}
+
+/// A change a person made through the API. `None` on the old side is a creation, on the new
+/// side a deletion.
+fn change_by_hand(
+    user_id: Uuid,
+    target_id: Uuid,
+    date: DateTime<Utc>,
+    old_state: Option<Expense>,
+    new_state: Option<Expense>,
+) -> ExpenseChangelogEntry {
+    ExpenseChangelogEntry {
+        id: Uuid::now_v7(),
+        user_id: Some(user_id),
+        target_id,
+        date,
+        old_state: old_state.map(Json),
+        new_state: new_state.map(Json),
+        tool: None,
+        automatic: false,
+        confidence: 1.0,
     }
 }
 

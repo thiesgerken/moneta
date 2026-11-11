@@ -28,13 +28,14 @@ without recording Diesel migration state, so use a dedicated scratch database th
 will connect to. Do not point them at a database holding real data.
 
 The DB-backed Rust suites take `TEST_DATABASE_URL`: run `cargo test --test scoping`, then
-`cargo test --test api_keys`, `cargo test --test backup` and `cargo test --test trusted_header`
-against another disposable database. They migrate and truncate fixtures, so never run two
-concurrently against one database. The API-key suite exercises the production GraphQL HTTP
-handler with dummy users; the backup suite round-trips every table through `moneta export` and
-`moneta import`; the trusted-header suite drives `Remote-User` from inside and outside the proxy
-allowlist. `MONETA_REQUIRE_DB_TESTS=1` forbids skipping them when the URL is absent. CI runs all
-four sequentially in its database-backed job.
+`cargo test --test api_keys`, `cargo test --test backup`, `cargo test --test trusted_header` and
+`cargo test --test expenses` against another disposable database. They migrate and truncate
+fixtures, so never run two concurrently against one database. The API-key suite exercises the
+production GraphQL HTTP handler with dummy users; the backup suite round-trips every table
+through `moneta export` and `moneta import`; the trusted-header suite drives `Remote-User` from
+inside and outside the proxy allowlist; the expense suite drives expense mutations through the
+real handler. `MONETA_REQUIRE_DB_TESTS=1` forbids skipping them when the URL is absent. CI runs
+all five sequentially in its database-backed job.
 
 CI runs exactly these and is strict — `clippy -D warnings` and `fmt --check` both fail the
 build, including on test code.

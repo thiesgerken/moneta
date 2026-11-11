@@ -773,6 +773,15 @@ type ExpenseMutation {
     second record of it is what would make the next statement upload skip a real payment.
   """
   resort(id: UUID!): Expense!
+  """
+    Clears the Unbestätigt flag on every expense given, which is what reviewing an
+    automatically filed booking ends in, without sending the whole expense back.
+
+    All or nothing: an id the reader cannot see fails the request before anything is
+    written. An expense that was already confirmed is left alone and gets no changelog
+    entry, since nothing about it changed.
+  """
+  confirm(ids: [UUID!]!): [Expense!]!
 }
 
 type ExpenseNode {

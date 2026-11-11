@@ -187,10 +187,12 @@ handler, sessions and key lifecycle with dummy users. `TEST_DATABASE_URL=... car
 backup` round-trips every table through export and import and checks the refusals.
 `TEST_DATABASE_URL=... cargo test --test trusted_header` drives `Remote-User` through the real
 handler from inside and outside the allowlist; its content-type and GET checks need no database
-and run in plain `cargo test`. All four migrate and truncate fixtures, so run them sequentially
-against a disposable database, or use separate databases.
-`MONETA_REQUIRE_DB_TESTS=1` makes a missing URL fail the API-key, backup and Remote-User suites.
-CI runs all four in the database-backed job, not only the DB-free unit-test job.
+and run in plain `cargo test`. `TEST_DATABASE_URL=... cargo test --test expenses` drives expense
+mutations through the real handler: what they write, the changelog, the refusals and the cache.
+All five migrate and truncate fixtures, so run them sequentially against a disposable database,
+or use separate databases.
+`MONETA_REQUIRE_DB_TESTS=1` makes a missing URL fail the API-key, backup, Remote-User and expense
+suites. CI runs all five in the database-backed job, not only the DB-free unit-test job.
 
 `tests/run-sql-tests.sh` applies every migration to an empty database and then asserts that the
 views, the CHECK constraints and the analysis functions do what they claim. The views carry the
