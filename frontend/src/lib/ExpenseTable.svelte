@@ -1447,7 +1447,7 @@
 			<div
 				class="flex w-full flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:flex-wrap md:items-center md:gap-3"
 			>
-				<div class="flex items-center gap-2">
+				<div class="flex flex-wrap items-center gap-2">
 					<!-- Everything but Neu acts on whichever row is open, so on a phone the group
                          goes and Neu stands on its own: the item you opened carries its own
                          buttons there, and the multi-row actions are a desktop job. -->
@@ -1664,15 +1664,11 @@
 				scope="col"
 				onclick={() => sort.by(axis.sort)}
 			>
-				<CalendarMonthOutline
-					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
-				/>{axis.label}
+				<CalendarMonthOutline class={headIcon} />{axis.label}
 				<SortIcon direction={sort.on(axis.sort)} />
 			</TableHeadCell>
 			<TableHeadCell class="px-2 py-3 md:px-4" scope="col" onclick={() => sort.by('title')}>
-				<TextSizeOutline
-					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
-				/>Titel
+				<TextSizeOutline class={headIcon} />Titel
 				<SortIcon direction={sort.on('title')} />
 			</TableHeadCell>
 			<TableHeadCell
@@ -1680,9 +1676,7 @@
 				scope="col"
 				onclick={() => sort.by('accounts')}
 			>
-				<WalletOutline
-					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
-				/>Konten
+				<WalletOutline class={headIcon} />Konten
 				<SortIcon direction={sort.on('accounts')} />
 			</TableHeadCell>
 			<TableHeadCell
@@ -1690,9 +1684,7 @@
 				scope="col"
 				onclick={() => sort.by('categories')}
 			>
-				<TagOutline
-					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
-				/>Kategorien
+				<TagOutline class={headIcon} />Kategorien
 				<SortIcon direction={sort.on('categories')} />
 			</TableHeadCell>
 			<TableHeadCell
@@ -1700,9 +1692,7 @@
 				scope="col"
 				onclick={() => sort.by('effectiveAmount')}
 			>
-				<EuroOutline
-					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
-				/>Betrag
+				<EuroOutline class={headIcon} />Betrag
 				<SortIcon direction={sort.on('effectiveAmount')} />
 			</TableHeadCell>
 			<TableHeadCell
@@ -1710,9 +1700,7 @@
 				scope="col"
 				onclick={() => sort.by('store')}
 			>
-				<StoreOutline
-					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
-				/>Geschäft
+				<StoreOutline class={headIcon} />Geschäft
 				<SortIcon direction={sort.on('store')} />
 			</TableHeadCell>
 			<TableHeadCell
@@ -1720,9 +1708,7 @@
 				scope="col"
 				onclick={() => sort.by('description')}
 			>
-				<AlignLeftOutline
-					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
-				/>Beschreibung
+				<AlignLeftOutline class={headIcon} />Beschreibung
 				<SortIcon direction={sort.on('description')} />
 			</TableHeadCell>
 			<!-- What the bank wrote, cut to the line of it that says something: see `statementLine`.
@@ -1730,18 +1716,14 @@
 			     the title: at 1280 the nine columns together are wider than the window, and both of
 			     them end up too narrow to read. Below that the expanded row still has it in full. -->
 			<TableHeadCell class="hidden px-4 py-3 2xl:table-cell" scope="col">
-				<ReceiptOutline
-					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
-				/>Transaktionstext
+				<ReceiptOutline class={headIcon} />Transaktionstext
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-36"
 				scope="col"
 				onclick={() => sort.by('status')}
 			>
-				<FlagOutline
-					class="me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500"
-				/>Status
+				<FlagOutline class={headIcon} />Status
 				<SortIcon direction={sort.on('status')} />
 			</TableHeadCell>
 		</TableHead>

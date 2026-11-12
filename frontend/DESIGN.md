@@ -117,7 +117,7 @@ saying something a reader would otherwise have to read.
   row whose point is its amount. Several accounts or categories are several dots, the one most
   money moved on (or the heaviest) first. `categoryColor()` falls back to a fixed palette hashed from
   the name, so a category without one at least keeps the same colour between renders. Charts are
-  the exception: a series *is* its colour, so there the account and category colours fill bars and
+  the exception: a series _is_ its colour, so there the account and category colours fill bars and
   slices.
 - **Availability** has no colour of its own, so it gets a warm-to-cool ramp along the liquidity
   order — see `analysis/availability.ts`.
