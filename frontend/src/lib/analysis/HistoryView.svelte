@@ -39,7 +39,7 @@
 	import { ANALYSIS_CARD } from './cards';
 	import { isoDate } from './dates';
 	import QueryError from '#lib/QueryError.svelte';
-	import { euro, restingAmountColor, signedEuro } from '#lib/money.ts';
+	import { balanceColor, euro, restingAmountColor, signedEuro } from '#lib/money.ts';
 
 	// Kept here rather than read off the store so the chart never sees an empty intermediate
 	// state: houdini clears `data` while a fetch is in flight, which drew the chart once
@@ -378,22 +378,28 @@
 				     inviting the wrong subtraction. -->
 				<TableHead>
 					<TableHeadCell class="px-2 py-3 sm:px-4">{periodWord}</TableHeadCell>
-					<TableHeadCell class="px-2 py-3 sm:px-4">Delta</TableHeadCell>
-					<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Einnahmen</TableHeadCell>
-					<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Ausgaben</TableHeadCell>
-					<TableHeadCell class="hidden px-2 py-3 sm:px-4 xl:table-cell">Anzahl</TableHeadCell>
+					<TableHeadCell class="px-2 py-3 text-right sm:px-4">Delta</TableHeadCell>
+					<TableHeadCell class="hidden px-2 py-3 text-right sm:table-cell sm:px-4"
+						>Einnahmen</TableHeadCell
+					>
+					<TableHeadCell class="hidden px-2 py-3 text-right sm:table-cell sm:px-4"
+						>Ausgaben</TableHeadCell
+					>
+					<TableHeadCell class="hidden px-2 py-3 text-right sm:px-4 xl:table-cell"
+						>Anzahl</TableHeadCell
+					>
 					{#if !accrued()}
-						<TableHeadCell class="hidden px-2 py-3 sm:px-4 xl:table-cell"
+						<TableHeadCell class="hidden px-2 py-3 text-right sm:px-4 xl:table-cell"
 							>Vermögen Beginn</TableHeadCell
 						>
-						<TableHeadCell class="px-2 py-3 sm:px-4">Vermögen Ende</TableHeadCell>
+						<TableHeadCell class="px-2 py-3 text-right sm:px-4">Vermögen Ende</TableHeadCell>
 					{/if}
 					<!-- Only on the value axis. The error is the gap between the balances and what the
 					     period booked, and on the accrual axis those are answers to different
 					     questions: a sixth of a subscription is a cost the period carried, not money
 					     that left an account, so there is nothing to reconcile. -->
 					{#if !accrued()}
-						<TableHeadCell class="hidden px-2 py-3 sm:px-4 xl:table-cell">
+						<TableHeadCell class="hidden px-2 py-3 text-right sm:px-4 xl:table-cell">
 							<span class="underline decoration-dotted">Fehler</span>
 							<Tooltip class="max-w-xs text-xs font-normal normal-case">
 								Die Lücke zwischen dem fortgeschriebenen und dem gemessenen Endvermögen. Eine große
@@ -426,29 +432,39 @@
 							     the balances stand still while the two columns beside this one move,
 							     and a delta that disagreed with the sum of them read as an error -->
 							{@const delta = o.income + o.expenses}
-							<TableBodyCell class="px-2 py-3 font-semibold sm:px-4 {restingAmountColor(delta)}">
+							<TableBodyCell
+								class="px-2 py-3 text-right font-semibold sm:px-4 {restingAmountColor(delta)}"
+							>
 								{signedEuro(delta)}
 							</TableBodyCell>
 							<TableBodyCell
-								class="hidden px-2 py-3 sm:table-cell sm:px-4 {restingAmountColor(o.income)}"
-								>{signedEuro(o.income)}</TableBodyCell
+								class="hidden px-2 py-3 text-right sm:table-cell sm:px-4 {restingAmountColor(
+									o.income
+								)}">{signedEuro(o.income)}</TableBodyCell
 							>
 							<TableBodyCell
-								class="hidden px-2 py-3 sm:table-cell sm:px-4 {restingAmountColor(o.expenses)}"
-								>{signedEuro(o.expenses)}</TableBodyCell
+								class="hidden px-2 py-3 text-right sm:table-cell sm:px-4 {restingAmountColor(
+									o.expenses
+								)}">{signedEuro(o.expenses)}</TableBodyCell
 							>
-							<TableBodyCell class="hidden px-2 py-3 sm:px-4 xl:table-cell"
+							<TableBodyCell class="hidden px-2 py-3 text-right sm:px-4 xl:table-cell"
 								>{o.expenseCount}</TableBodyCell
 							>
 							{#if !accrued()}
-								<TableBodyCell class="hidden px-2 py-3 sm:px-4 xl:table-cell"
-									>{euro(o.startTotal)}</TableBodyCell
+								<TableBodyCell
+									class="hidden px-2 py-3 text-right sm:px-4 xl:table-cell {balanceColor(
+										o.startTotal
+									)}">{euro(o.startTotal)}</TableBodyCell
 								>
-								<TableBodyCell class="px-2 py-3 sm:px-4">{euro(o.endTotal)}</TableBodyCell>
+								<TableBodyCell class="px-2 py-3 text-right sm:px-4 {balanceColor(o.endTotal)}"
+									>{euro(o.endTotal)}</TableBodyCell
+								>
 							{/if}
 							{@const error = integrationError(o)}
 							{#if error !== null}
-								<TableBodyCell class="hidden px-2 py-3 sm:px-4 xl:table-cell {errorClass(error)}">
+								<TableBodyCell
+									class="hidden px-2 py-3 text-right sm:px-4 xl:table-cell {errorClass(error)}"
+								>
 									{signedEuro(error)}
 								</TableBodyCell>
 							{/if}

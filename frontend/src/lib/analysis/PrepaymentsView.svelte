@@ -170,7 +170,7 @@
 					<TableHeadCell class="px-2 py-3 sm:px-4">Titel</TableHeadCell>
 					<TableHeadCell class="hidden px-2 py-3 sm:px-4 xl:table-cell">Bezahlt am</TableHeadCell>
 					<TableHeadCell class="hidden px-2 py-3 sm:px-4 md:table-cell">Zeitraum</TableHeadCell>
-					<TableHeadCell class="px-2 py-3 sm:px-4">Betrag</TableHeadCell>
+					<TableHeadCell class="px-2 py-3 text-right sm:px-4">Betrag</TableHeadCell>
 					<TableHeadCell class="px-2 py-3 sm:px-4">Verbraucht</TableHeadCell>
 				</TableHead>
 				<TableBody class="divide-y">
@@ -189,7 +189,7 @@
 								{shortDate(p.expense.accrualStart)} – {shortDate(p.expense.accrualEnd)}
 							</TableBodyCell>
 							<TableBodyCell
-								class="px-2 py-3 whitespace-nowrap sm:px-4 {restingAmountColor(
+								class="px-2 py-3 text-right whitespace-nowrap sm:px-4 {restingAmountColor(
 									p.expense.effectiveAmount
 								)}">{signedEuro(p.expense.effectiveAmount)}</TableBodyCell
 							>
@@ -238,7 +238,7 @@
 				<TableHead>
 					<TableHeadCell class="px-2 py-3 sm:px-4">Titel</TableHeadCell>
 					<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Datum</TableHeadCell>
-					<TableHeadCell class="px-2 py-3 sm:px-4">Bisher gebucht</TableHeadCell>
+					<TableHeadCell class="px-2 py-3 text-right sm:px-4">Bisher gebucht</TableHeadCell>
 					<TableHeadCell class="hidden px-2 py-3 sm:px-4 md:table-cell">Status</TableHeadCell>
 				</TableHead>
 				<TableBody class="divide-y">
@@ -251,8 +251,9 @@
 								{shortDate(e.accrualStart)}
 							</TableBodyCell>
 							<TableBodyCell
-								class="px-2 py-3 whitespace-nowrap sm:px-4 {restingAmountColor(e.effectiveAmount)}"
-								>{signedEuro(e.effectiveAmount)}</TableBodyCell
+								class="px-2 py-3 text-right whitespace-nowrap sm:px-4 {restingAmountColor(
+									e.effectiveAmount
+								)}">{signedEuro(e.effectiveAmount)}</TableBodyCell
 							>
 							<TableBodyCell class="hidden px-2 py-3 sm:px-4 md:table-cell">
 								<span class={chip}>Unvollständig</span>

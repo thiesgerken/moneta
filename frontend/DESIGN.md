@@ -109,6 +109,14 @@ saying something a reader would otherwise have to read.
   that treatment, deltas included.
   A filled cell or pill behind an amount is not used: a column of pink and green blocks is read
   as a pattern before any figure in it is.
+- **A balance is not a flow**: money in an account is plain text, red only below zero and grey at
+  zero (`balanceColor()`), in Kontostände, the computed balances, the statement's Saldo and every
+  wealth figure. A positive balance is the normal case, so green on all of them says nothing, and
+  the red of an overdrawn account is only noticed when it is the one coloured figure in the
+  column. Expense amounts, monthly in and out, and deltas are flows and keep green and red.
+- **A placeholder title is red text** ("Automatisch Generiert", or none at all), in the table and
+  in the phone list alike: the one sign in the list that an automation filed something a person
+  still has to name.
 - **Wealth** is `WEALTH_COLOR` (`#059669`, emerald) in `analysis/cards.ts`. A curve of what you
   own reads as a warning in orange.
 - **Categories and accounts** carry their own colour from the database, shown as **a dot in front

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amountColor, euro, restingAmountColor, signedEuro } from './money';
+import { amountColor, balanceColor, euro, restingAmountColor, signedEuro } from './money';
 
 // Intl puts a non-breaking space before the sign, and a test written with an ordinary one
 // fails on a difference nobody can see in the diff.
@@ -53,5 +53,14 @@ describe('restingAmountColor', () => {
 		expect(restingAmountColor(0)).toContain('gray');
 		expect(restingAmountColor(-1)).toBe(amountColor(-1));
 		expect(restingAmountColor(1)).toBe(amountColor(1));
+	});
+});
+
+describe('balanceColor', () => {
+	// a positive balance is the normal case; only an overdrawn one is news
+	it('leaves a positive balance alone and marks only a negative one', () => {
+		expect(balanceColor(100)).toBe('');
+		expect(balanceColor(-100)).toBe(amountColor(-100));
+		expect(balanceColor(0)).toContain('text-gray-500');
 	});
 });

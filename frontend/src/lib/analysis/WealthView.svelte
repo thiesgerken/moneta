@@ -26,7 +26,7 @@
 	import { priced } from '#lib/investments.ts';
 	import { ANALYSIS_CARD, WEALTH_COLOR } from './cards';
 	import QueryError from '#lib/QueryError.svelte';
-	import { euro, restingAmountColor, signedEuro } from '#lib/money.ts';
+	import { balanceColor, euro, signedEuro } from '#lib/money.ts';
 
 	const DAY = 86400000;
 
@@ -561,7 +561,7 @@
 			<Table hoverable class="w-full text-left text-sm">
 				<TableHead>
 					<TableHeadCell class="px-2 py-3 sm:px-4">Konto</TableHeadCell>
-					<TableHeadCell class="px-2 py-3 sm:px-4">Stand</TableHeadCell>
+					<TableHeadCell class="px-2 py-3 text-right sm:px-4">Stand</TableHeadCell>
 					<!-- A phone keeps account and balance, the reading; what the number was worked
 					     out from is the footnote, and from sm on. -->
 					<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Berechnet aus</TableHeadCell
@@ -573,7 +573,9 @@
 				     ordinary row that happens to be bold. -->
 					<TableBodyRow class="border-b-2 border-gray-300 dark:border-gray-600">
 						<TableBodyCell class="px-2 py-3 font-semibold sm:px-4">Gesamt</TableBodyCell>
-						<TableBodyCell class="px-2 py-3 font-semibold sm:px-4">{euro(total)}</TableBodyCell>
+						<TableBodyCell class="px-2 py-3 text-right font-semibold sm:px-4 {balanceColor(total)}"
+							>{euro(total)}</TableBodyCell
+						>
 						<TableBodyCell class="hidden px-2 py-3 sm:table-cell sm:px-4"></TableBodyCell>
 					</TableBodyRow>
 					<!-- What the rows below do not account for, in the two columns a phone also
@@ -585,7 +587,9 @@
 									? 'ein ausgeblendetes Konto'
 									: `${hiddenBalances.length} ausgeblendete Konten`}
 							</TableBodyCell>
-							<TableBodyCell class="px-2 py-3 text-gray-500 italic sm:px-4 dark:text-gray-400">
+							<TableBodyCell
+								class="px-2 py-3 text-right text-gray-500 italic sm:px-4 dark:text-gray-400"
+							>
 								{signedEuro(hiddenTotal)}
 							</TableBodyCell>
 							<TableBodyCell class="hidden px-2 py-3 sm:table-cell sm:px-4"></TableBodyCell>
@@ -602,7 +606,7 @@
 								></span>{b.account.name}
 							</TableBodyCell>
 							{@const shown = shownAmount(b.account.id, b.amount)}
-							<TableBodyCell class="px-2 py-3 sm:px-4 {restingAmountColor(shown)}">
+							<TableBodyCell class="px-2 py-3 text-right sm:px-4 {balanceColor(shown)}">
 								{euro(shown)}
 							</TableBodyCell>
 							<TableBodyCell

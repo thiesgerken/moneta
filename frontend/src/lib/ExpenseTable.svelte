@@ -678,10 +678,13 @@
 	});
 
 	/// A title that names no expense: the automation rules give one this when their template has
-	/// no title of its own, and it then says the same thing on every row it produced. Tinting it
-	/// is the only thing in the list that says "this one still needs a human".
+	/// no title of its own, and it then says the same thing on every row it produced. Red text is
+	/// the only thing in the list that says "this one still needs a human", in the table and in the
+	/// phone list alike; red rather than a filled cell, because colour here is text.
 	const PLACEHOLDER_TITLE = 'Automatisch Generiert';
 	const titleIsPlaceholder = (title: string) => !title.trim() || title.trim() === PLACEHOLDER_TITLE;
+	const titleColor = (title: string) =>
+		titleIsPlaceholder(title) ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white';
 
 	function toggleRow(id: string) {
 		if (expandedRows.includes(id)) expandedRows = expandedRows.filter((rowId) => rowId !== id);
@@ -1778,18 +1781,16 @@
 					     itself is gone now that the cell holds two lines rather than one string. Zero
 					     max-width plus full width leaves it exactly the space the other columns did
 					     not take. -->
-					<TableBodyCell
-						class="px-2 py-3 whitespace-normal md:px-4 {titleIsPlaceholder(expense.title)
-							? 'bg-red-50 dark:bg-red-950/40'
-							: ''}"
-					>
+					<TableBodyCell class="px-2 py-3 whitespace-normal md:px-4">
 						<!-- wraps rather than truncates below md: with the other columns gone the title is
 						     most of what identifies the row, and there is no second place to read it -->
 						<!-- wrap-anywhere, not break-words: only `overflow-wrap: anywhere` counts towards
 					     the cell's min-content width, and a table column is sized by that. With
 					     break-word the column stayed as wide as "Auslandskrankenversicherung" and the
 					     title ran across the amount beside it. -->
-						<span class="block wrap-anywhere md:truncate">{expense.title}</span>
+						<span class="block wrap-anywhere md:truncate {titleColor(expense.title)}"
+							>{expense.title}</span
+						>
 						<span class="mt-1 flex flex-wrap gap-1 text-xs empty:mt-0 md:hidden">
 							{@render statusBadges(expense)}
 						</span>
@@ -1871,7 +1872,7 @@
 							onclick={() => toggleRow(expense.id)}
 						>
 							<span class="flex items-baseline justify-between gap-3">
-								<span class="truncate font-medium text-gray-900 dark:text-white">
+								<span class="truncate font-medium {titleColor(expense.title)}">
 									{expense.title || 'Ohne Titel'}{#if expense.store}<span
 											class="ms-1 font-normal text-gray-500 dark:text-gray-400"
 											>· {expense.store}</span

@@ -33,7 +33,7 @@
 		CashOutline
 	} from 'flowbite-svelte-icons';
 	import { accountSorter, byUsageThen, formatAccount } from './expense_utils';
-	import { euro, restingAmountColor } from './money';
+	import { balanceColor, euro } from './money';
 	import ColorDots from './ColorDots.svelte';
 	import { shortDate } from './analysis/dates';
 	import BalanceModal from './BalanceModal.svelte';
@@ -511,8 +511,8 @@
 						<ColorDots items={[accountDot(balance.account)]} />
 					</TableBodyCell>
 					<TableBodyCell
-						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' +
-							restingAmountColor(balance.amount)}>{euro(balance.amount)}</TableBodyCell
+						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' + balanceColor(balance.amount)}
+						>{euro(balance.amount)}</TableBodyCell
 					>
 					<TableBodyCell class="hidden truncate px-4 py-3 md:table-cell md:w-full md:max-w-0"
 						>{balance.comments}</TableBodyCell

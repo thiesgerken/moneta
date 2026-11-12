@@ -19,7 +19,7 @@
 	import { ANALYSIS_CARD } from './cards';
 	import { shortDate } from './dates';
 	import QueryError from '#lib/QueryError.svelte';
-	import { euro, restingAmountColor, signedEuro } from '#lib/money.ts';
+	import { balanceColor, euro, restingAmountColor, signedEuro } from '#lib/money.ts';
 
 	const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -162,7 +162,9 @@
 		</Card>
 		<Card class={ANALYSIS_CARD}>
 			<span class="text-sm text-gray-500 dark:text-gray-400">Saldo am {statementState.to}</span>
-			<span class="text-2xl font-semibold">{euro(rows[0]?.balance ?? 0)}</span>
+			<span class="text-2xl font-semibold {balanceColor(rows[0]?.balance ?? 0)}"
+				>{euro(rows[0]?.balance ?? 0)}</span
+			>
 		</Card>
 	</div>
 
@@ -208,7 +210,9 @@
 								{r.amount == null ? '' : signedEuro(r.amount)}
 							</TableBodyCell>
 							<TableBodyCell
-								class="hidden px-2 py-3 text-right font-medium whitespace-nowrap sm:table-cell sm:px-4"
+								class="hidden px-2 py-3 text-right font-medium whitespace-nowrap sm:table-cell sm:px-4 {balanceColor(
+									r.balance
+								)}"
 							>
 								{euro(r.balance)}
 							</TableBodyCell>

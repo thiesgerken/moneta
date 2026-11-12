@@ -22,7 +22,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { graphql } from '$houdini';
-	import { amountColor, euro, restingAmountColor, signedEuro } from '#lib/money.ts';
+	import { amountColor, balanceColor, euro, restingAmountColor, signedEuro } from '#lib/money.ts';
 	import Chart from '#lib/Chart.svelte';
 	import ToggleGroup from '#lib/ToggleGroup.svelte';
 	import ExpenseDetailModal from '#lib/ExpenseDetailModal.svelte';
@@ -755,7 +755,9 @@
 			{#if !accrued()}
 				<Card class="max-w-none p-4">
 					<span class="text-sm text-gray-500 dark:text-gray-400">Vermögen am Ende</span>
-					<span class="text-2xl font-semibold">{euro(detail.endTotal)}</span>
+					<span class="text-2xl font-semibold {balanceColor(detail.endTotal)}"
+						>{euro(detail.endTotal)}</span
+					>
 					{@const error = integrationError(detail)}
 					{#if error !== null}
 						<span class="text-xs text-gray-500 dark:text-gray-400">
@@ -805,12 +807,18 @@
 				<Table hoverable class="w-full text-left text-sm">
 					<TableHead>
 						<TableHeadCell class="px-2 py-3 sm:px-4">Monat</TableHeadCell>
-						<TableHeadCell class="px-2 py-3 sm:px-4">Delta</TableHeadCell>
-						<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Einnahmen</TableHeadCell>
-						<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Ausgaben</TableHeadCell>
-						<TableHeadCell class="hidden px-2 py-3 sm:px-4 xl:table-cell">Anzahl</TableHeadCell>
+						<TableHeadCell class="px-2 py-3 text-right sm:px-4">Delta</TableHeadCell>
+						<TableHeadCell class="hidden px-2 py-3 text-right sm:table-cell sm:px-4"
+							>Einnahmen</TableHeadCell
+						>
+						<TableHeadCell class="hidden px-2 py-3 text-right sm:table-cell sm:px-4"
+							>Ausgaben</TableHeadCell
+						>
+						<TableHeadCell class="hidden px-2 py-3 text-right sm:px-4 xl:table-cell"
+							>Anzahl</TableHeadCell
+						>
 						{#if !accrued()}
-							<TableHeadCell class="px-2 py-3 sm:px-4">Vermögen Ende</TableHeadCell>
+							<TableHeadCell class="px-2 py-3 text-right sm:px-4">Vermögen Ende</TableHeadCell>
 						{/if}
 					</TableHead>
 					<TableBody class="divide-y">
@@ -828,22 +836,28 @@
 										{m.start.toLocaleDateString('de-DE', { month: 'long', timeZone: 'UTC' })}
 									</a>
 								</TableBodyCell>
-								<TableBodyCell class="px-2 py-3 font-semibold sm:px-4 {restingAmountColor(moved)}">
+								<TableBodyCell
+									class="px-2 py-3 text-right font-semibold sm:px-4 {restingAmountColor(moved)}"
+								>
 									{signedEuro(moved)}
 								</TableBodyCell>
 								<TableBodyCell
-									class="hidden px-2 py-3 sm:table-cell sm:px-4 {restingAmountColor(m.income)}"
-									>{signedEuro(m.income)}</TableBodyCell
+									class="hidden px-2 py-3 text-right sm:table-cell sm:px-4 {restingAmountColor(
+										m.income
+									)}">{signedEuro(m.income)}</TableBodyCell
 								>
 								<TableBodyCell
-									class="hidden px-2 py-3 sm:table-cell sm:px-4 {restingAmountColor(m.expenses)}"
-									>{signedEuro(m.expenses)}</TableBodyCell
+									class="hidden px-2 py-3 text-right sm:table-cell sm:px-4 {restingAmountColor(
+										m.expenses
+									)}">{signedEuro(m.expenses)}</TableBodyCell
 								>
-								<TableBodyCell class="hidden px-2 py-3 sm:px-4 xl:table-cell"
+								<TableBodyCell class="hidden px-2 py-3 text-right sm:px-4 xl:table-cell"
 									>{m.expenseCount}</TableBodyCell
 								>
 								{#if !accrued()}
-									<TableBodyCell class="px-2 py-3 sm:px-4">{euro(m.endTotal)}</TableBodyCell>
+									<TableBodyCell class="px-2 py-3 text-right sm:px-4 {balanceColor(m.endTotal)}"
+										>{euro(m.endTotal)}</TableBodyCell
+									>
 								{/if}
 							</TableBodyRow>
 						{/each}
@@ -873,10 +887,16 @@
 				<Table hoverable class="w-full text-left text-sm">
 					<TableHead>
 						<TableHeadCell class="px-2 py-3 sm:px-4">Konto</TableHeadCell>
-						<TableHeadCell class="hidden px-2 py-3 sm:px-4 md:table-cell">Beginn</TableHeadCell>
-						<TableHeadCell class="px-2 py-3 sm:px-4">Ende</TableHeadCell>
-						<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Delta</TableHeadCell>
-						<TableHeadCell class="hidden px-2 py-3 sm:px-4 md:table-cell">Fehler</TableHeadCell>
+						<TableHeadCell class="hidden px-2 py-3 text-right sm:px-4 md:table-cell"
+							>Beginn</TableHeadCell
+						>
+						<TableHeadCell class="px-2 py-3 text-right sm:px-4">Ende</TableHeadCell>
+						<TableHeadCell class="hidden px-2 py-3 text-right sm:table-cell sm:px-4"
+							>Delta</TableHeadCell
+						>
+						<TableHeadCell class="hidden px-2 py-3 text-right sm:px-4 md:table-cell"
+							>Fehler</TableHeadCell
+						>
 					</TableHead>
 					<TableBody class="divide-y">
 						{#each detail.byAccount as a (a.account.id)}
@@ -895,20 +915,24 @@
 										style="background-color: {a.account.color ?? '#94a3b8'}"
 									></span>{a.account.name}
 								</TableBodyCell>
-								<TableBodyCell class="hidden px-2 py-3 sm:px-4 md:table-cell"
-									>{euro(a.startAmount)}</TableBodyCell
+								<TableBodyCell
+									class="hidden px-2 py-3 text-right sm:px-4 md:table-cell {balanceColor(
+										a.startAmount
+									)}">{euro(a.startAmount)}</TableBodyCell
 								>
-								<TableBodyCell class="px-2 py-3 sm:px-4">{euro(a.endAmount)}</TableBodyCell>
+								<TableBodyCell class="px-2 py-3 text-right sm:px-4 {balanceColor(a.endAmount)}"
+									>{euro(a.endAmount)}</TableBodyCell
+								>
 								{@const moved = a.endAmount - a.startAmount}
 								<TableBodyCell
-									class="hidden px-2 py-3 font-semibold sm:table-cell sm:px-4 {restingAmountColor(
+									class="hidden px-2 py-3 text-right font-semibold sm:table-cell sm:px-4 {restingAmountColor(
 										moved
 									)}"
 								>
 									{signedEuro(moved)}
 								</TableBodyCell>
 								<TableBodyCell
-									class="hidden px-2 py-3 sm:px-4 md:table-cell {error === null
+									class="hidden px-2 py-3 text-right sm:px-4 md:table-cell {error === null
 										? ''
 										: errorClass(error)}"
 								>
@@ -962,7 +986,7 @@
 			<TableHead>
 				<TableHeadCell class="px-2 py-3 sm:px-4">Titel</TableHeadCell>
 				<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Kategorie</TableHeadCell>
-				<TableHeadCell class="px-2 py-3 sm:px-4">Betrag</TableHeadCell>
+				<TableHeadCell class="px-2 py-3 text-right sm:px-4">Betrag</TableHeadCell>
 			</TableHead>
 			<TableBody class="divide-y">
 				{#each rows as e (e.id)}
@@ -990,7 +1014,7 @@
 							</div>
 						</TableBodyCell>
 						<TableBodyCell
-							class="px-2 py-3 whitespace-nowrap sm:px-4 {restingAmountColor(e.amount)}"
+							class="px-2 py-3 text-right whitespace-nowrap sm:px-4 {restingAmountColor(e.amount)}"
 						>
 							{signedEuro(e.amount)}
 							<!-- under the figure, for the same reason as in the expense table: a second
