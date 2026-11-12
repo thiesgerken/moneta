@@ -298,8 +298,8 @@ period records what each expense is for.
 **`isIncomplete` expenses appear on the same page but in their own table.** They are open items
 too, but the missing amount is unknown, so there is no remaining balance to compute — only a
 flag and what has been booked so far. Do not merge the two tables: a *Rest* column would be a
-lie for the incomplete ones. That list needs no endpoint either — `expenses.list` with every
-flag off except `incomplete`, alongside `normal: false`, is exactly that set.
+lie for the incomplete ones. That list needs no endpoint either: `expenses.list` with only
+`incomplete` ticked is exactly that set: every incomplete expense that is not a template.
 
 ## Kalender
 

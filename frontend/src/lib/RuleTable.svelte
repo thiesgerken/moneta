@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { graphql } from '$houdini';
+	import { resolve } from '$app/paths';
 	import { invalidate, AFTER_WRITE } from './invalidate';
 	import {
 		TableBody,
@@ -29,7 +30,8 @@
 		WandMagicSparklesOutline,
 		SearchOutline,
 		SortOutline,
-		ClockArrowOutline
+		ClockArrowOutline,
+		FileCloneOutline
 	} from 'flowbite-svelte-icons';
 	import AutomationRuleModal from './AutomationRuleModal.svelte';
 	import PeriodicRuleModal from './PeriodicRuleModal.svelte';
@@ -146,7 +148,7 @@
 		/// the text the trigger sorts and searches on
 		trigger: string;
 		lastUsed: Date | null;
-		hasTemplate: boolean;
+		templateId: string | null;
 		priority: number | null;
 		pending: number | null;
 		automation?: (typeof automation)[number];
@@ -160,7 +162,7 @@
 			title: r.title,
 			trigger: r.regexStatement ?? '',
 			lastUsed: r.lastDelivery,
-			hasTemplate: !!r.templateId,
+			templateId: r.templateId,
 			priority: r.priority,
 			pending: null,
 			automation: r
@@ -171,7 +173,7 @@
 			title: r.title,
 			trigger: PERIOD_NAMES[r.period] ?? r.period,
 			lastUsed: r.lastCreation,
-			hasTemplate: !!r.templateId,
+			templateId: r.templateId,
 			priority: null,
 			pending: r.pending.length,
 			periodic: r
@@ -566,7 +568,7 @@
 							{/if}
 						</button>
 						{row.title}
-						{#if !row.hasTemplate}
+						{#if !row.templateId}
 							<Badge color="red" class="ml-2">Vorlage fehlt</Badge>
 						{/if}
 						<!-- Four columns do not fit on a phone, and a rule is nothing without what fires
@@ -662,6 +664,16 @@
 								</div>
 
 								<div class="flex gap-2">
+									{#if row.templateId}
+										<Button
+											color="alternative"
+											size="xs"
+											href="{resolve('/expenses')}?expense={row.templateId}"
+										>
+											<FileCloneOutline class="mr-2 h-3.5 w-3.5" />
+											Vorlage
+										</Button>
+									{/if}
 									<Button color="yellow" size="xs" onclick={() => edit(row.id)}>
 										<EditOutline class="mr-2 h-3.5 w-3.5" />
 										Bearbeiten

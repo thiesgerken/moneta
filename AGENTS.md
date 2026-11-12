@@ -319,10 +319,11 @@ position decides nothing.
 balances and totals. Flagging that booking as a template would silently remove real money from
 both; use a separate template expense instead.
 
-**`ExpenseFlagFilter` is an exclusion set, not a whitelist.** Each field is permission for that
-flag to appear, so an expense lists only when *every* flag it carries is permitted. It can ask
-for "templates and nothing else"; it cannot ask for "templates whatever else they are".
-The rule picker uses the separate `onlyTemplates` argument for that reason.
+**`ExpenseFlagFilter` lists an expense carrying any ticked flag, but never a template
+unless `templates` is ticked.** A template is no money, so it stays out of the default list
+even when it is also unchecked or tax-relevant. Ticking only `templates` lists every template,
+which is what the rule picker asks for. Do not make templates "one flag among the others":
+the list would fill with templates as soon as one carries a second flag.
 
 **Live deliveries take their accrual period from the statement before the template.**
 `accrual::statement_period` reads an explicit period from the bank's text. If none is present,

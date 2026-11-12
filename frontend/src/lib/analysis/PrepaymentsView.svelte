@@ -49,8 +49,8 @@
 	`);
 
 	// The open items with an unknown amount are ordinary expenses carrying a flag, so they
-	// come from the expense list rather than needing an endpoint of their own. Every other
-	// flag is off, which together with `normal: false` leaves exactly the incomplete ones.
+	// come from the expense list rather than needing an endpoint of their own: ticking only
+	// `incomplete` lists every incomplete expense that is not a template.
 	const incompleteStore = graphql(`
 		query AnalysisIncompleteExpenses {
 			expenses {

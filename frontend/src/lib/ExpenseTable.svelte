@@ -397,6 +397,7 @@
 			$limit: Int
 			$offset: Int
 			$search: String
+			$ids: [UUID!]
 			$accountIds: [UUID!]
 			$categoryIds: [UUID!]
 			$flags: ExpenseFlagFilter
@@ -414,6 +415,7 @@
 					limit: $limit
 					skip: $offset
 					search: $search
+					ids: $ids
 					accountIds: $accountIds
 					categoryIds: $categoryIds
 					flags: $flags

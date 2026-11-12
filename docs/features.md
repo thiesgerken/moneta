@@ -247,10 +247,10 @@ pointing at one turns the rule dialog into a way of rewriting money that has alr
 spent. A template counts in no balance, no total and no analysis, and the expense list hides
 them unless the *Vorlage* filter is switched on.
 
-The rule editor's picker asks for templates through `onlyTemplates` rather than through the flag
-filter. The flags are permissions — each one left off filters that flag *out* — so asking for
-templates that way returns only those carrying no other flag. Templates that are also unchecked
-or tax-relevant must remain pickable.
+The *Status* filter lists an expense when it carries any ticked flag. Ticking only *Vorlage*
+therefore lists every template, also those that are unchecked or tax-relevant, which is the
+same question the rule editor's picker asks. With *Vorlage* off a template stays hidden whatever
+else it carries.
 
 ## Deliveries
 

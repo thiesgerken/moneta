@@ -403,13 +403,14 @@ pub enum ExpenseSortField {
     Categories,
 }
 
-/// The flag checkboxes above the expense table. Each one being off means "hide the expenses
-/// that carry this flag"; `normal` off means "show only expenses that carry some flag".
+/// The status checkboxes above the expense table: an expense is listed when it carries any
+/// ticked flag, or carries none and `normal` is ticked. Ticking only `templates` therefore
+/// lists every template, whatever else it is flagged as.
+///
+/// Templates are the exception to "any": one is no money, so with `templates` off it stays out
+/// even when it is also unchecked or tax-relevant. Otherwise the default list, which hides
+/// templates, would show every template carrying a second flag.
 #[derive(Debug, Clone, Copy, juniper::GraphQLInputObject)]
-/// Which flags an expense is allowed to carry and still be listed — an exclusion set, not a
-/// whitelist. Every field left false filters that flag *out*, so the flags an expense has must
-/// all be permitted for it to show. That cannot ask for "everything carrying this one flag";
-/// `only_templates` on the list is there for the single case that needs it.
 pub struct ExpenseFlagFilter {
     pub templates: bool,
     pub tax_relevant: bool,
@@ -429,6 +430,30 @@ impl Default for ExpenseFlagFilter {
             incomplete: true,
             normal: true,
         }
+    }
+}
+
+impl ExpenseFlagFilter {
+    fn predicate(self) -> ExpensePredicate {
+        use diesel::dsl::not;
+        use expenses_rendered::*;
+
+        let ticked = |on: bool| on.into_sql::<Bool>();
+        let flagged = is_template
+            .or(is_tax_relevant)
+            .or(is_extraordinary)
+            .or(is_unchecked)
+            .or(is_incomplete);
+
+        Box::new(
+            (ticked(self.templates).and(is_template))
+                .or(ticked(self.tax_relevant).and(is_tax_relevant))
+                .or(ticked(self.extraordinary).and(is_extraordinary))
+                .or(ticked(self.unchecked).and(is_unchecked))
+                .or(ticked(self.incomplete).and(is_incomplete))
+                .or(ticked(self.normal).and(not(flagged)))
+                .and(ticked(self.templates).or(not(is_template))),
+        )
     }
 }
 
@@ -503,7 +528,6 @@ impl ExpenseQuery {
         account_ids: Option<Vec<Uuid>>,
         category_ids: Option<Vec<Uuid>>,
         flags: Option<ExpenseFlagFilter>,
-        only_templates: Option<bool>,
         accrued_after: Option<DateTime<Utc>>,
         accrued_before: Option<DateTime<Utc>>,
         valued_after: Option<DateTime<Utc>>,
@@ -561,39 +585,7 @@ impl ExpenseQuery {
                 );
             }
 
-            // Not something `flags` can say. Each of those is permission for a flag to appear,
-            // so an expense shows only when every flag it carries was allowed -- "templates and
-            // nothing else", never "templates whatever else they are". A rule needs the second
-            // one: templates can also be tax-relevant, unchecked or incomplete, and asking
-            // through `flags` hides those.
-            if only_templates.unwrap_or(false) {
-                query = query.filter(expenses_rendered::is_template.eq(true));
-            }
-
-            if !flags.templates {
-                query = query.filter(expenses_rendered::is_template.eq(false));
-            }
-            if !flags.tax_relevant {
-                query = query.filter(expenses_rendered::is_tax_relevant.eq(false));
-            }
-            if !flags.extraordinary {
-                query = query.filter(expenses_rendered::is_extraordinary.eq(false));
-            }
-            if !flags.unchecked {
-                query = query.filter(expenses_rendered::is_unchecked.eq(false));
-            }
-            if !flags.incomplete {
-                query = query.filter(expenses_rendered::is_incomplete.eq(false));
-            }
-            if !flags.normal {
-                query = query.filter(
-                    expenses_rendered::is_template
-                        .or(expenses_rendered::is_tax_relevant)
-                        .or(expenses_rendered::is_extraordinary)
-                        .or(expenses_rendered::is_unchecked)
-                        .or(expenses_rendered::is_incomplete),
-                );
-            }
+            query = query.filter(flags.predicate());
 
             // Overlap, not containment: an expense accruing from January to June was a cost in
             // March, and a caller asking for March wants it. Each end also stands on its own --
@@ -1266,10 +1258,9 @@ fn check_references(
 
 /// The rule picker's query, run through the schema against a real database.
 ///
-/// The flag filter and `only_templates` answer different questions, and the difference only
-/// shows on a template that carries a second flag — which no unit test over the filter itself
-/// can produce, because the flags are combined in the query rather than in Rust. So this goes
-/// through `juniper::execute` with the document the picker actually sends.
+/// What the flag filter does with a template that carries a second flag only shows in the
+/// query, since the flags are combined in SQL rather than in Rust. So this goes through
+/// `juniper::execute` with the document the picker actually sends.
 ///
 /// Needs an empty database of its own in `TEST_DATABASE_URL`, like `tests/scoping.rs`.
 #[cfg(test)]
@@ -1389,11 +1380,15 @@ mod tests {
 
         let booking = expense("echte Buchung", false);
 
+        let mut pending = expense("ungeprüfte Steuersache", false);
+        pending.is_unchecked = true;
+        pending.is_tax_relevant = true;
+
         // the bank's own text lives on the transaction, nowhere in the expense's own fields
         let mut card = expense("Kartenzahlung", false);
         card.transactions[0].statement = "REWE SAGT DANKE 12345//HAMBURG".into();
 
-        for e in [plain, taxed, half, seen, booking, card] {
+        for e in [plain, taxed, half, seen, booking, pending, card] {
             crate::queries::insert_expense(conn, &e)
                 .await
                 .expect("insert");
@@ -1454,7 +1449,9 @@ mod tests {
 
         let mut found = titles(
             &pool,
-            "{ expenses { list(limit: 25, onlyTemplates: true) { edges { node { title } } } } }",
+            "{ expenses { list(limit: 25, flags: { templates: true, taxRelevant: false, \
+             extraordinary: false, unchecked: false, incomplete: false, normal: false }) \
+             { edges { node { title } } } } }",
         )
         .await;
         found.sort();
@@ -1470,17 +1467,17 @@ mod tests {
             "every template, whatever else it is flagged as -- and no real booking"
         );
 
-        // what the picker asked before, which is the same question the flag filter can answer:
-        // templates carrying no other flag. Three of the four disappear.
-        let filtered = titles(
+        // the unchecked template stays out with its checkbox off, and the unchecked booking is
+        // listed although it also carries a flag that is not ticked
+        let unchecked = titles(
             &pool,
-            "{ expenses { list(limit: 25, flags: { templates: true, taxRelevant: false, \
-             extraordinary: false, unchecked: false, incomplete: false, normal: false }) \
+            "{ expenses { list(limit: 25, flags: { templates: false, taxRelevant: false, \
+             extraordinary: false, unchecked: true, incomplete: false, normal: false }) \
              { edges { node { title } } } } }",
         )
         .await;
 
-        assert_eq!(filtered, vec!["schlichte Vorlage"]);
+        assert_eq!(unchecked, vec!["ungeprüfte Steuersache"]);
 
         let found = titles(
             &pool,

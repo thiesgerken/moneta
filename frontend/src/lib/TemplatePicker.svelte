@@ -51,7 +51,14 @@
 				list(
 					limit: 25
 					search: $search
-					onlyTemplates: true
+					flags: {
+						templates: true
+						taxRelevant: false
+						extraordinary: false
+						unchecked: false
+						incomplete: false
+						normal: false
+					}
 					sortBy: ACCRUAL_START
 					sortDir: DESC
 				) {
