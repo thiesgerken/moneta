@@ -656,16 +656,24 @@
 	/// is why this only became a problem with `table-fixed`.
 	let columns = $state(9);
 	$effect(() => {
-		const wide = window.matchMedia('(min-width: 768px)');
-		const widest = window.matchMedia('(min-width: 1536px)');
-		const update = () => (columns = wide.matches ? (widest.matches ? 9 : 8) : 3);
+		// Which columns a breakpoint adds: Status from md, Konten and Kategorien from lg,
+		// Geschäft and Beschreibung from xl, the bank's text from 2xl. Any earlier and the fixed
+		// widths add up to the whole card at the bottom of a range, and the title, the one column
+		// without a width, gets none.
+		const added = [
+			['(min-width: 768px)', 1],
+			['(min-width: 1024px)', 2],
+			['(min-width: 1280px)', 2],
+			['(min-width: 1536px)', 1]
+		] as const;
+		const queries = added.map(([query, count]) => [window.matchMedia(query), count] as const);
+		const update = () =>
+			(columns = queries.reduce((n, [query, count]) => n + (query.matches ? count : 0), 3));
 
 		update();
-		wide.addEventListener('change', update);
-		widest.addEventListener('change', update);
+		for (const [query] of queries) query.addEventListener('change', update);
 		return () => {
-			wide.removeEventListener('change', update);
-			widest.removeEventListener('change', update);
+			for (const [query] of queries) query.removeEventListener('change', update);
 		};
 	});
 
@@ -1539,7 +1547,7 @@
 				<div
 					class="{filtersOpen
 						? 'flex'
-						: 'hidden'} flex-col gap-2 md:flex md:flex-row md:items-center md:gap-3"
+						: 'hidden'} flex-col gap-2 md:flex md:flex-row md:flex-wrap md:items-center md:gap-3"
 				>
 					<!-- The period is the button's label rather than the contents of a text field.
 					     flowbite's own input is sized for one date, so a range arrived clipped, and in
@@ -1673,7 +1681,7 @@
 				<SortIcon direction={sort.on('title')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell md:w-36"
+				class="hidden px-4 py-3 md:w-36 lg:table-cell"
 				scope="col"
 				onclick={() => sort.by('accounts')}
 			>
@@ -1681,7 +1689,7 @@
 				<SortIcon direction={sort.on('accounts')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell md:w-36"
+				class="hidden px-4 py-3 md:w-36 lg:table-cell"
 				scope="col"
 				onclick={() => sort.by('categories')}
 			>
@@ -1697,7 +1705,7 @@
 				<SortIcon direction={sort.on('effectiveAmount')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell md:w-32"
+				class="hidden px-4 py-3 md:w-32 xl:table-cell"
 				scope="col"
 				onclick={() => sort.by('store')}
 			>
@@ -1705,7 +1713,7 @@
 				<SortIcon direction={sort.on('store')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell md:w-40 2xl:w-56"
+				class="hidden px-4 py-3 md:w-40 xl:table-cell 2xl:w-56"
 				scope="col"
 				onclick={() => sort.by('description')}
 			>
@@ -1775,10 +1783,10 @@
 							{@render statusBadges(expense)}
 						</span>
 					</TableBodyCell>
-					<TableBodyCell class="hidden max-w-64 px-4 py-3 md:table-cell">
+					<TableBodyCell class="hidden max-w-64 px-4 py-3 lg:table-cell">
 						<ColorDots items={accountsOf(expense)} />
 					</TableBodyCell>
-					<TableBodyCell class="hidden max-w-64 px-4 py-3 md:table-cell">
+					<TableBodyCell class="hidden max-w-64 px-4 py-3 lg:table-cell">
 						<ColorDots items={weightedCategories(expense.categories)} />
 					</TableBodyCell>
 					{@const part = partOf(expense)}
@@ -1796,10 +1804,10 @@
 							</div>
 						{/if}
 					</TableBodyCell>
-					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
+					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 xl:table-cell"
 						>{expense.store}</TableBodyCell
 					>
-					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 md:table-cell"
+					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 xl:table-cell"
 						>{expense.description}
 						{expense.positions
 							.map(

@@ -184,7 +184,7 @@
 			<!-- A phone keeps date, amount and title: what happened, and when. The running
 			     balance is from sm on, the store -- mostly a repeat of the title -- from xl. The
 			     title takes what is left and truncates, so a long one cannot widen the table. -->
-			<Table hoverable striped class="w-full text-left text-sm">
+			<Table hoverable class="w-full text-left text-sm">
 				<TableHead>
 					<TableHeadCell class="px-2 py-3 sm:px-4">Datum</TableHeadCell>
 					<TableHeadCell class="px-2 py-3 text-right sm:px-4">Betrag</TableHeadCell>

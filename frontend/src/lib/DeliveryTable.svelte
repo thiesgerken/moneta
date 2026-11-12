@@ -87,18 +87,19 @@
 		{/snippet}
 
 		<!-- No header below md: the two columns left are a line and its amount, and the line says
-		     what the dropped columns said. -->
+		     what the dropped columns said. Account and text come back as columns from lg, where
+		     they fit beside the rest. -->
 		<TableHead class="hidden md:table-header-group">
 			<TableHeadCell class="px-4 py-3 md:whitespace-nowrap">
 				<CalendarMonthOutline class={headIcon} />Datum
 			</TableHeadCell>
-			<TableHeadCell class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap">
+			<TableHeadCell class="hidden px-4 py-3 lg:table-cell lg:whitespace-nowrap">
 				<WalletOutline class={headIcon} />Konto
 			</TableHeadCell>
 			<TableHeadCell class="px-2 py-3 text-right md:px-4 md:whitespace-nowrap">
 				<CashOutline class={headIcon} />Betrag
 			</TableHeadCell>
-			<TableHeadCell class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap">
+			<TableHeadCell class="hidden px-4 py-3 lg:table-cell lg:whitespace-nowrap">
 				<SearchOutline class={headIcon} />Verwendungszweck
 			</TableHeadCell>
 			<TableHeadCell class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap">
@@ -110,15 +111,17 @@
 				<TableBodyRow>
 					<TableBodyCell class="w-full max-w-0 px-2 py-3 whitespace-normal md:px-4">
 						{shortDate(delivery.date)}
-						<!-- the account and the statement text, which are columns of their own from md
-						     on: a booking without its text says nothing about what it was -->
-						<span class="mt-1 block text-xs text-gray-500 md:hidden dark:text-gray-400">
+						<!-- the account and the statement text, which are columns of their own from lg
+						     on: a booking without its text says nothing about what it was. The status
+						     has its column from md. -->
+						<span class="mt-1 block text-xs text-gray-500 lg:hidden dark:text-gray-400">
 							{accountNames.get(delivery.accountId) ?? '?'} ·
 							<span class="wrap-anywhere">{delivery.statement}</span>
-							· {delivery.matched ? 'Ausgabe erzeugt' : 'Keine Regel'}
+							<span class="md:hidden">· {delivery.matched ? 'Ausgabe erzeugt' : 'Keine Regel'}</span
+							>
 						</span>
 					</TableBodyCell>
-					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
+					<TableBodyCell class="hidden px-4 py-3 lg:table-cell">
 						{accountNames.get(delivery.accountId) ?? '?'}
 					</TableBodyCell>
 					<TableBodyCell
@@ -128,7 +131,7 @@
 					>
 						{signedEuro(delivery.amount)}
 					</TableBodyCell>
-					<TableBodyCell class="hidden max-w-md truncate px-4 py-3 text-xs md:table-cell">
+					<TableBodyCell class="hidden max-w-md truncate px-4 py-3 text-xs lg:table-cell">
 						{delivery.statement}
 					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">

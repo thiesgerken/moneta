@@ -364,7 +364,7 @@
 					class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
 				/>Übersichten je {periodWord}
 			</h3>
-			<Table hoverable striped class="w-full text-left text-sm">
+			<Table hoverable class="w-full text-left text-sm">
 				<!-- What the period did comes before what it left behind: delta, then the two
 				     sides it is made of, then the balances they moved between. A phone keeps the
 				     period, its delta and the wealth it ended on, which is the whole answer to

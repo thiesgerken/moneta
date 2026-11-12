@@ -520,7 +520,7 @@
 				<SortIcon direction={sort.on('availability')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
+				class="hidden px-4 py-3 md:whitespace-nowrap lg:table-cell"
 				scope="col"
 				onclick={() => sort.by('risk')}
 			>
@@ -528,7 +528,7 @@
 				<SortIcon direction={sort.on('risk')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
+				class="hidden px-4 py-3 md:whitespace-nowrap lg:table-cell"
 				scope="col"
 				onclick={() => sort.by('ownershipFraction')}
 			>
@@ -536,7 +536,7 @@
 				<SortIcon direction={sort.on('ownershipFraction')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
+				class="hidden px-4 py-3 md:whitespace-nowrap xl:table-cell"
 				scope="col"
 				onclick={() => sort.by('opened')}
 			>
@@ -544,7 +544,7 @@
 				<SortIcon direction={sort.on('opened')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap"
+				class="hidden px-4 py-3 md:whitespace-nowrap xl:table-cell"
 				scope="col"
 				onclick={() => sort.by('closed')}
 			>
@@ -584,22 +584,22 @@
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{getAvailabilityDisplayName(account.availability)}
 					</TableBodyCell>
-					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
+					<TableBodyCell class="hidden px-4 py-3 lg:table-cell">
 						<span class={chip}>
 							{getRiskDisplayName(account.risk)}
 						</span>
 					</TableBodyCell>
-					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
+					<TableBodyCell class="hidden px-4 py-3 lg:table-cell">
 						{(account.ownershipFraction * 100).toFixed(0)}%
 					</TableBodyCell>
-					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
+					<TableBodyCell class="hidden px-4 py-3 xl:table-cell">
 						{account.opened.toLocaleDateString('de-DE', {
 							year: 'numeric',
 							month: '2-digit',
 							day: '2-digit'
 						})}
 					</TableBodyCell>
-					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
+					<TableBodyCell class="hidden px-4 py-3 xl:table-cell">
 						{account.closed?.toLocaleDateString('de-DE', {
 							year: 'numeric',
 							month: '2-digit',

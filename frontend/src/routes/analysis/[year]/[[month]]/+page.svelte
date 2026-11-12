@@ -802,7 +802,7 @@
 				<h3 class="mb-2 text-lg font-semibold">Monate</h3>
 				<!-- The same columns at the same breakpoints as the overview table: a phone keeps
 				     month, delta and closing wealth, the two sides from sm, the count from xl. -->
-				<Table hoverable striped class="w-full text-left text-sm">
+				<Table hoverable class="w-full text-left text-sm">
 					<TableHead>
 						<TableHeadCell class="px-2 py-3 sm:px-4">Monat</TableHeadCell>
 						<TableHeadCell class="px-2 py-3 sm:px-4">Delta</TableHeadCell>
@@ -870,7 +870,7 @@
 				<h3 class="mb-2 text-lg font-semibold">Konten</h3>
 				<!-- A phone keeps account and closing balance, what the account holds; the delta
 				     comes back from sm, the opening balance and the reconciliation error from md. -->
-				<Table hoverable striped class="w-full text-left text-sm">
+				<Table hoverable class="w-full text-left text-sm">
 					<TableHead>
 						<TableHeadCell class="px-2 py-3 sm:px-4">Konto</TableHeadCell>
 						<TableHeadCell class="hidden px-2 py-3 sm:px-4 md:table-cell">Beginn</TableHeadCell>
@@ -958,7 +958,7 @@
 			class="mb-3"
 		/>
 		<!-- A phone keeps title and amount; the categories, a list of their own, from sm. -->
-		<Table hoverable striped class="w-full text-left text-sm">
+		<Table hoverable class="w-full text-left text-sm">
 			<TableHead>
 				<TableHeadCell class="px-2 py-3 sm:px-4">Titel</TableHeadCell>
 				<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Kategorie</TableHeadCell>

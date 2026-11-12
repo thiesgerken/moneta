@@ -558,7 +558,7 @@
 					{/if}
 				</div>
 			</div>
-			<Table hoverable striped class="w-full text-left text-sm">
+			<Table hoverable class="w-full text-left text-sm">
 				<TableHead>
 					<TableHeadCell class="px-2 py-3 sm:px-4">Konto</TableHeadCell>
 					<TableHeadCell class="px-2 py-3 sm:px-4">Stand</TableHeadCell>
@@ -569,8 +569,8 @@
 				</TableHead>
 				<TableBody class="divide-y">
 					<!-- First, because it is the number the table exists to produce; the rows below are
-				     how it was arrived at. The rule under it is what keeps `striped` from making
-				     this read as an ordinary row that happens to be bold. -->
+				     how it was arrived at. The rule under it is what keeps it from reading as an
+				     ordinary row that happens to be bold. -->
 					<TableBodyRow class="border-b-2 border-gray-300 dark:border-gray-600">
 						<TableBodyCell class="px-2 py-3 font-semibold sm:px-4">Gesamt</TableBodyCell>
 						<TableBodyCell class="px-2 py-3 font-semibold sm:px-4">{euro(total)}</TableBodyCell>

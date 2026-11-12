@@ -165,7 +165,7 @@
 		{:else}
 			<!-- A phone keeps what was prepaid, for how much, and how far it is used up; the
 			     period behind that share is from md, the day it was paid only from xl. -->
-			<Table hoverable striped class="w-full text-left text-sm">
+			<Table hoverable class="w-full text-left text-sm">
 				<TableHead>
 					<TableHeadCell class="px-2 py-3 sm:px-4">Titel</TableHeadCell>
 					<TableHeadCell class="hidden px-2 py-3 sm:px-4 xl:table-cell">Bezahlt am</TableHeadCell>
@@ -234,7 +234,7 @@
 		{:else}
 			<!-- A phone keeps what is incomplete and how much of it is booked so far; the date is
 			     from sm, the status -- the same word on every row of this table -- from md. -->
-			<Table hoverable striped class="w-full text-left text-sm">
+			<Table hoverable class="w-full text-left text-sm">
 				<TableHead>
 					<TableHeadCell class="px-2 py-3 sm:px-4">Titel</TableHeadCell>
 					<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Datum</TableHeadCell>
