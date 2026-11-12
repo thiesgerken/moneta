@@ -67,8 +67,9 @@
 		actionGroup,
 		chip,
 		dangerText,
-		tableSearchClasses,
 		detailTable,
+		headIcon,
+		tableSearchClasses,
 		tableSearchTableClass,
 		toolbarControl
 	} from './table_styles';
