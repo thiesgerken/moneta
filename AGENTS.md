@@ -28,13 +28,14 @@ without recording Diesel migration state, so use a dedicated scratch database th
 will connect to. Do not point them at a database holding real data.
 
 The DB-backed Rust suites take `TEST_DATABASE_URL`: run `cargo test --test scoping`, then
-`cargo test --test api_keys`, `cargo test --test backup` and `cargo test --test trusted_header`
-against another disposable database. They migrate and truncate fixtures, so never run two
-concurrently against one database. The API-key suite exercises the production GraphQL HTTP
-handler with dummy users; the backup suite round-trips every table through `moneta export` and
-`moneta import`; the trusted-header suite drives `Remote-User` from inside and outside the proxy
-allowlist. `MONETA_REQUIRE_DB_TESTS=1` forbids skipping them when the URL is absent. CI runs all
-four sequentially in its database-backed job.
+`cargo test --test api_keys`, `cargo test --test backup`, `cargo test --test trusted_header` and
+`cargo test --test expenses` against another disposable database. They migrate and truncate
+fixtures, so never run two concurrently against one database. The API-key suite exercises the
+production GraphQL HTTP handler with dummy users; the backup suite round-trips every table
+through `moneta export` and `moneta import`; the trusted-header suite drives `Remote-User` from
+inside and outside the proxy allowlist; the expense suite drives expense mutations through the
+real handler. `MONETA_REQUIRE_DB_TESTS=1` forbids skipping them when the URL is absent. CI runs
+all five sequentially in its database-backed job.
 
 CI runs exactly these and is strict — `clippy -D warnings` and `fmt --check` both fail the
 build, including on test code.
@@ -104,12 +105,15 @@ kubectl -n apps-moneta create job --from=cronjob/moneta-export precutover
 
 ## What you read in the real data stays out of the repository
 
-The repository is public. Nothing in it (code, comments, tests, fixtures, docs, commit messages)
-may carry what the real database or a bank export holds: names of the household's people,
-merchants and places from real statements, contract or customer numbers, IBANs, amounts,
-balances, counts ("35 of the imported accounts") or dates of real bookings. Reading the cluster
-database to settle a question is fine; writing down what it answered is not. Describe the
-behaviour, not the figures it was found with.
+The repository is public. Nothing in it (code, comments, tests, fixtures, docs, commit messages,
+issues, PRs, screenshots) may carry what the real database or a bank export holds: names of the
+household's people, merchants and places from real statements, contract or customer numbers,
+IBANs, amounts, balances, counts ("35 of the imported accounts") or dates of real bookings.
+Reading the cluster database to settle a question is fine; writing down what it answered is not.
+Describe the behaviour, not the figures it was found with.
+
+Screenshots, in the repository or attached to a PR or issue, only ever show the demo household
+from `docs/demo/`.
 
 `moneta export` is the whole database in one file: every name, IBAN, statement line and
 amount. Keep such a file out of the working tree, or at least under the gitignored
@@ -127,6 +131,8 @@ Fixtures and examples are invented, keeping only the format and the boundary und
 
 Hostnames of the owner's infrastructure may appear. The secrets in `docker-compose.yaml` are demo
 values; real secrets never go into the repository.
+
+When in doubt whether something is personal, ask instead of committing it.
 
 ## The data model carries data now
 
