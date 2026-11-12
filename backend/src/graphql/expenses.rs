@@ -435,33 +435,25 @@ impl Default for ExpenseFlagFilter {
 
 impl ExpenseFlagFilter {
     fn predicate(self) -> ExpensePredicate {
+        use diesel::dsl::not;
         use expenses_rendered::*;
 
+        let ticked = |on: bool| on.into_sql::<Bool>();
         let flagged = is_template
             .or(is_tax_relevant)
             .or(is_extraordinary)
             .or(is_unchecked)
             .or(is_incomplete);
-        let ticked: [(bool, ExpensePredicate); 6] = [
-            (self.templates, Box::new(is_template)),
-            (self.tax_relevant, Box::new(is_tax_relevant)),
-            (self.extraordinary, Box::new(is_extraordinary)),
-            (self.unchecked, Box::new(is_unchecked)),
-            (self.incomplete, Box::new(is_incomplete)),
-            (self.normal, Box::new(diesel::dsl::not(flagged))),
-        ];
 
-        let any = ticked
-            .into_iter()
-            .filter_map(|(on, matches)| on.then_some(matches))
-            .reduce(|a, b| Box::new(a.or(b)))
-            .unwrap_or_else(|| Box::new(false.into_sql::<Bool>()));
-
-        if self.templates {
-            any
-        } else {
-            Box::new(is_template.eq(false).and(any))
-        }
+        Box::new(
+            (ticked(self.templates).and(is_template))
+                .or(ticked(self.tax_relevant).and(is_tax_relevant))
+                .or(ticked(self.extraordinary).and(is_extraordinary))
+                .or(ticked(self.unchecked).and(is_unchecked))
+                .or(ticked(self.incomplete).and(is_incomplete))
+                .or(ticked(self.normal).and(not(flagged)))
+                .and(ticked(self.templates).or(not(is_template))),
+        )
     }
 }
 
@@ -1388,11 +1380,15 @@ mod tests {
 
         let booking = expense("echte Buchung", false);
 
+        let mut pending = expense("ungeprüfte Steuersache", false);
+        pending.is_unchecked = true;
+        pending.is_tax_relevant = true;
+
         // the bank's own text lives on the transaction, nowhere in the expense's own fields
         let mut card = expense("Kartenzahlung", false);
         card.transactions[0].statement = "REWE SAGT DANKE 12345//HAMBURG".into();
 
-        for e in [plain, taxed, half, seen, booking, card] {
+        for e in [plain, taxed, half, seen, booking, pending, card] {
             crate::queries::insert_expense(conn, &e)
                 .await
                 .expect("insert");
@@ -1471,7 +1467,8 @@ mod tests {
             "every template, whatever else it is flagged as -- and no real booking"
         );
 
-        // a template stays out with its checkbox off, even when another flag it carries is on
+        // the unchecked template stays out with its checkbox off, and the unchecked booking is
+        // listed although it also carries a flag that is not ticked
         let unchecked = titles(
             &pool,
             "{ expenses { list(limit: 25, flags: { templates: false, taxRelevant: false, \
@@ -1480,7 +1477,7 @@ mod tests {
         )
         .await;
 
-        assert!(unchecked.is_empty(), "{unchecked:?}");
+        assert_eq!(unchecked, vec!["ungeprüfte Steuersache"]);
 
         let found = titles(
             &pool,
