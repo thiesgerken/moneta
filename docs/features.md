@@ -87,10 +87,16 @@ division by hand.
 what it is about to touch, named rather than counted. Six statement lines filed by the wrong
 rule are six rows to open and one press.
 
-An *Unbestätigt* expense's open row has *Bestätigen* beside the badge. `expenses.confirm` clears
+An *Unbestätigt* expense's open row has *Bestätigen* beside its chip. `expenses.confirm` clears
 the flag and nothing else, so reviewing an automatically filed booking that was right does not
 mean a round trip through the form. It takes a list of ids and is all or nothing; an expense
 already confirmed is left alone and gets no changelog entry.
+
+**On a phone the list is a list**: each expense is two lines (title, shop and signed amount; then
+the date, its main account and category as colour dots, and the icons of its states), and a tap
+opens the same detail in one column. The open item starts with *Bestätigen*, *Bearbeiten* and
+*Löschen*, because a quick look on the phone is mostly for confirming what an automation filed.
+The multi-row actions stay on the larger screens.
 
 *Zusammenführen* is the one that needs more than one, and the toolbar only offers it once two
 rows are open: a refund, a repayment or an instalment arrives from the bank as an expense of its

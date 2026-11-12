@@ -94,29 +94,31 @@ page's question, like the wealth figure on the dashboard.
 
 ## Colour
 
-Colour carries meaning here; it is not decoration.
+Colour carries meaning here; it is not decoration. A screen has **one accent and neutral
+surfaces**: the orange, and greys around it. Everything that is coloured beyond that has to be
+saying something a reader would otherwise have to read.
 
-- **Primary** is the moneta orange (`--color-primary-*`), used for the brand, links and primary
-  buttons. It is also the Stichtag marker, which is why the wealth curve is _not_ orange.
-- **Money direction**: green for what came in, red for what went out — `text-green-700
-dark:text-green-400` and `text-red-600 dark:text-red-400`. `deltaColor()` in
-  `analysis/overviews.ts` picks the badge colour by sign. **Zero is grey**, not blank: an expense
-  that nets to nothing moved money between two of your own accounts, which is a third thing
-  rather than a missing one. `amountTint()` in `money.ts` gives expense and balance cells the
-  same sign treatment: pale backgrounds in light mode, subdued red/green backgrounds and
-  brighter figures in dark mode, and a distinct grey cell for zero.
+- **Primary** is the moneta orange (`--color-primary-*`), used for the brand, links and the one
+  primary button on a page. It is also the Stichtag marker, which is why the wealth curve is _not_
+  orange.
+- **Money direction is text, not a surface**: green for what came in, red for what went out —
+  `text-green-700 dark:text-green-400` and `text-red-600 dark:text-red-400` — and always with its
+  sign (`signedEuro()`), so the colour is never the only signal. **Zero is grey**, not blank: an
+  expense that nets to nothing moved money between two of your own accounts, which is a third
+  thing rather than a missing one. `restingAmountColor()` in `money.ts` gives every amount cell
+  that treatment; `deltaColor()` in `analysis/overviews.ts` picks the colour of a delta by sign.
+  A filled cell or pill behind an amount is not used: a column of pink and green blocks is read
+  as a pattern before any figure in it is.
 - **Wealth** is `WEALTH_COLOR` (`#059669`, emerald) in `analysis/cards.ts`. A curve of what you
   own reads as a warning in orange.
-- **Categories and accounts** carry their own colour from the database. `categoryColor()` falls
-  back to a fixed palette hashed from the name, so a category without one at least keeps the
-  same colour between renders.
-- **Coloured cells adapt their surface, not their meaning.** `tint()` and
-  `makeStripedBackground()` in `expense_utils.ts` retain the original colour in light mode.
-  Dark mode mixes 30% of each colour into the grey-800 surface, preserving the stripe widths
-  and making the cell quiet enough for grey-100 text to remain legible even over a white
-  source colour. Light-mode text still comes from `readableTextOn()` across all the stripes.
-  CSS `light-dark()` follows the root `color-scheme`, so cells react to system changes without
-  a second theme store or per-row listeners.
+- **Categories and accounts** carry their own colour from the database, shown as **a dot in front
+  of the name** (`ColorDots.svelte`), never as the fill of a cell. The dot is enough to recognise an
+  account at a glance; a filled cell made the account and category columns the loudest thing in a
+  row whose point is its amount. Several accounts or categories are several dots, the one most
+  money moved on (or the heaviest) first. `categoryColor()` falls back to a fixed palette hashed from
+  the name, so a category without one at least keeps the same colour between renders. Charts are
+  the exception: a series *is* its colour, so there the account and category colours fill bars and
+  slices.
 - **Availability** has no colour of its own, so it gets a warm-to-cool ramp along the liquidity
   order — see `analysis/availability.ts`.
 
@@ -164,21 +166,33 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
 
 ## Tables
 
+- **A list of things becomes a list on the phone; a table of numbers stays a table and drops
+  columns.** The expense list below `sm` is a list of two-line items (title and amount, then date,
+  account, category and state icons), because an expense is a thing to recognise and open, and
+  three table columns at 390px left its title a dozen characters wide. The smaller lists (Konten,
+  Kategorien, Regeln, Lieferungen) keep one column there with a second line carrying what the
+  dropped columns said, and no header naming that one column. A table of figures — the monthly
+  overview, Kontostände, Kontoauszug, the analysis tables — is read across, so it stays a table and
+  each column says from which breakpoint it shows. **Nothing scrolls sideways on a phone**: a
+  table scrolled inside its card hides its most interesting columns behind a gesture nobody
+  expects.
+- **Header icons from `md` up** (`headIcon` in `table_styles.ts`), and **minimum column widths
+  desktop-only** (`md:min-w-*`). On a phone a column is as narrow as its label, and an icon or a
+  minimum width there is what forces the sideways scroll the rule above avoids.
 - One shared look through `table_styles.ts`; the body is `text-sm` over a 10 px vertical cell
   padding, which is a 40 px row. These are lists to scan, not paragraphs to read — but 8 px was
   past scanning and into cramped.
-- **Dark text, faint grid.** The rows are what the reader came for and the ruling is
-  scaffolding, so rows are `gray-900` and every rule is `gray-200`. flowbite has it the other
-  way round — it sets the row text to `gray-500`, and `divide-y` in tailwind 4 defaults to
-  `currentColor`, so the rules between rows came out in that same `gray-500`. Both are fixed in
-  `app.css`, on the `tr`, so that a cell with a colour of its own — an amount, a tinted account
-  — still wins.
-- **Rules in both directions.** Rows come from `divide-y`, columns and the rule under the header
-  from a global rule in `app.css`. The expense list puts three coloured cells next to each other
-  — accounts, categories, amount — and horizontal rules alone let them read as one band.
+- **Dark text, faint grid, rows only.** The rows are what the reader came for and the ruling is
+  scaffolding, so rows are `gray-900` and every rule is `gray-200`. flowbite has it the other way
+  round — it sets the row text to `gray-500`, and `divide-y` in tailwind 4 defaults to
+  `currentColor` — and both are fixed in `app.css`, on the `tr`, so that a cell with a colour of
+  its own still wins. There are no rules between columns: aligned text and right-aligned figures
+  are columns already. The header keeps a rule under it.
 - **Hover and open are the same shade**, `gray-100`, set in `app.css`. There is no zebra
   striping: flowbite painted the even rows in `gray-50` and hovered in `gray-50` too, so half
   the table did not react to the pointer.
+- **What an open row unfolds into stays on the card's surface** (`tr[data-detail]`). Its buttons
+  are a step off that surface, and on the open row's shade they disappeared.
 - The bank's own text is **monospace** wherever it is shown in full — reference numbers and
   IBANs are read character by character. It is a column of its own from `lg`.
 - Sorting and filtering are **server-side**, through typed arguments. The header cell that
@@ -190,13 +204,17 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   every page turn, so the same list moved its columns as you paged through it. A fixed table
   also lays out as many columns as the _widest row_ declares, so a detail row's `colspan` has to
   match the number of columns the breakpoint is actually showing — nine over three invents six
-  empty ones and shares the width between all nine.
+  empty ones and shares the width between all nine. A table that hides its header on a phone
+  takes `md:table-fixed`: without a header the detail row's `colspan` is the widest row.
   The expense date column reserves a full date range's width on desktop. Use a real width:
   fixed table layout ignores cell min-width. The description column yields space below `2xl`
   so dates and titles fit smaller desktops too.
 - **A detail row is two columns from `lg`**: what is prose on the left as a `dl`, what is a table
   on the right. A row of the expense list is two thousand pixels wide and its detail used to be
-  one narrow stack down the left of it.
+  one narrow stack down the left of it. The small tables in it (`detailTable`) are ruled like the
+  list around them and nothing else — no frame, no filled header, no surface of their own.
+- **States, kinds and triggers are chips** (`chip` in `table_styles.ts`): a hairline and muted
+  text with the state's icon. Five pastel fills in one column competed with the amounts and won.
 - A filtered list says so: `ExpenseTable` renders a "Gefiltert nach …" line with one removable
   chip per active filter. A list that arrives pre-filtered from somewhere else must never look
   like the whole list, only shorter.
@@ -224,13 +242,20 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   almost never present is worth more than the thing itself.
 - Only the button that completes the form is `primary`; five orange buttons in a form leave
   nothing to say which one submits it.
-- **A button that can be disabled is a solid colour.** `alternative` and `light` are transparent
-  or white with grey text, which is exactly what a disabled button looks like — so an enabled
-  one and its own 50%-opacity twin were the same button twice. Grey means disabled and nothing
-  else. The expense list's actions are the reference: Neu `primary`, Duplizieren `teal`,
-  Bearbeiten `blue`, Löschen `red`, Einsortieren `gray`, and the same colours again on the
-  expanded row. `alternative` is for the controls that are never disabled — the filter and
-  dropdown triggers, and Abbrechen next to a solid Speichern.
+- **Neu is the only orange button on a page; every other action is one neutral group.**
+  Duplizieren, Bearbeiten, Löschen, Einsortieren and Zusammenführen — in the toolbar and in the open
+  row — share `actionGroup` / `actionButton` from `table_styles.ts`: a solid `gray-100` surface
+  with `gray-900` text (`gray-700` / `gray-100` in dark, a step off the card), divided by hairlines.
+  Löschen is the one with a colour, and only in its text and icon (`dangerText`): it is the one that
+  cannot be undone. The thing a page is for is found without reading, and the rest do not compete
+  with it or with the amounts. Inside a modal, the button that completes the form is `primary`
+  and a destructive confirmation stays solid red: there it is the one decision on screen.
+- **Disabled is 40% opacity and no hover**, which on the neutral surface is clearly lighter than
+  the enabled button beside it. `alternative` and `light` with their own white or transparent
+  faces are kept for the controls that are never disabled — filter and dropdown triggers, and
+  Abbrechen next to a solid Speichern. A button whose disabled state changes needs
+  `ActionButton.svelte`: flowbite works out a button's classes once and keeps the disabled look
+  for the life of the component.
 - Icons carry a **column, a card or a state** — never a button that already says what it does in
   words, and never decoration. Table headers and analysis card titles take one each, in
   `gray-400`, at `h-4` and `h-5` respectively, so that they identify the column without competing
@@ -308,3 +333,13 @@ instantiate apex directly.
   synthesises them by scaling the capitals down and they read thin and light. Real ones would
   mean vendoring Adobe's own build of the same typeface, and the look was not wanted anyway.
   Headers stay 14 px mixed case in Inter.
+- **A solid colour per action** — Duplizieren teal, Bearbeiten yellow, Löschen red, Einsortieren
+  grey, Zusammenführen blue. It made a disabled button easy to tell from an enabled one, but five
+  colours in a row said nothing about the actions beyond "these are buttons", the orange Neu
+  stopped standing out, and colour stopped carrying meaning anywhere near them.
+- **Account and category colours filling their table cells**, striped by share for a shared
+  expense, with the text colour worked out per stripe. Three tinted cells side by side read as
+  one band, they drowned the amount the row is about, and keeping text legible on any colour a
+  picker allows took a contrast calculation per cell. A dot says which account it is just as well.
+- **Amounts on a red or green cell, and states as pastel badges.** Same reason: too loud, and
+  once everything is coloured, colour stops meaning anything.
