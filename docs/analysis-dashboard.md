@@ -299,7 +299,7 @@ period records what each expense is for.
 too, but the missing amount is unknown, so there is no remaining balance to compute — only a
 flag and what has been booked so far. Do not merge the two tables: a *Rest* column would be a
 lie for the incomplete ones. That list needs no endpoint either: `expenses.list` with only
-`incomplete` ticked is exactly that set, whatever else those expenses are flagged as.
+`incomplete` ticked is exactly that set: every incomplete expense that is not a template.
 
 ## Kalender
 
