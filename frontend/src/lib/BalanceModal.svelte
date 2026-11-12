@@ -3,7 +3,7 @@
 
 	import { graphql } from '$houdini';
 	import type { BalanceInput } from '$houdini/graphql/inputs';
-	import { formatAccount, tint } from './expense_utils';
+	import { formatAccount } from './expense_utils';
 	import DateField from './DateField.svelte';
 	import { EditOutline, PlusOutline } from 'flowbite-svelte-icons';
 
@@ -157,7 +157,6 @@
 						)
 					}))}
 					bind:value={accountId}
-					style={tint(accounts.find((a) => a.id === accountId)?.color)}
 					selectClass={accountError ? 'text-red-700 border-red-700 bg-red-100' : undefined}
 					placeholder="Konto"
 					required

@@ -32,15 +32,19 @@
 		AnnotationOutline,
 		CashOutline
 	} from 'flowbite-svelte-icons';
-	import { accountSorter, byUsageThen, tint } from './expense_utils';
-	import { amountTint, euro } from './money';
+	import { accountSorter, byUsageThen, formatAccount } from './expense_utils';
+	import { euro, restingAmountColor } from './money';
+	import ColorDots from './ColorDots.svelte';
 	import { shortDate } from './analysis/dates';
 	import BalanceModal from './BalanceModal.svelte';
 	import {
 		tableSearchClasses,
 		tableSearchTableClass,
 		toolbarControl,
-		headIcon
+		headIcon,
+		actionButton,
+		actionGroup,
+		dangerText
 	} from './table_styles';
 	import QueryError from './QueryError.svelte';
 	import SortIcon from './SortIcon.svelte';
@@ -59,6 +63,12 @@
 	/// What the toolbar acts on. An open row is this list's idea of "the one you mean", and
 	/// several open rows are no answer at all rather than a reason to pick the first.
 	const selectedBalanceId = $derived(expandedRows.length === 1 ? expandedRows[0] : undefined);
+
+	const accountDot = (account: {
+		name: string;
+		color: string | null;
+		owner: { name: string; firstName: string | null };
+	}) => ({ name: formatAccount(account, $basicStore.data?.users.me.name), color: account.color });
 	/// Newest first, and a third click on a header comes back here.
 	const sort = new TableSort({ field: 'date', direction: DESC });
 
@@ -326,8 +336,6 @@
 />
 
 {#snippet newButton(cls: string)}
-	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls
-		     back to `alternative` rather than to primary. -->
 	<Button
 		color="primary"
 		class="{toolbarControl} {cls}"
@@ -358,12 +366,11 @@
 				<div class="flex items-center gap-2">
 					<!-- Bearbeiten and Löschen act on the open row, which a phone has no room for beside
 					     Neu -- and there the open row carries the same two buttons itself. -->
-					{@render newButton('grow md:hidden')}
-					<ButtonGroup class="hidden md:inline-flex">
-						{@render newButton('')}
+					{@render newButton('grow md:grow-0')}
+					<ButtonGroup class="hidden md:inline-flex {actionGroup}">
 						<ActionButton
-							color="yellow"
-							class="{toolbarControl} text-gray-900"
+							color="light"
+							class="{toolbarControl} {actionButton}"
 							disabled={!selectedBalanceId}
 							onclick={() => {
 								balanceIdToEdit = selectedBalanceId;
@@ -373,8 +380,8 @@
 							<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
 						</ActionButton>
 						<ActionButton
-							color="red"
-							class={toolbarControl}
+							color="light"
+							class="{toolbarControl} {actionButton} {dangerText}"
 							disabled={!selectedBalanceId}
 							onclick={() => {
 								balanceIdToDelete = selectedBalanceId;
@@ -500,19 +507,12 @@
 							day: '2-digit'
 						})}
 					</TableBodyCell>
-					<TableBodyCell
-						class="w-full max-w-0 truncate px-2 py-3 md:w-56 md:max-w-56 md:min-w-56 md:px-4"
-						style={tint(balance.account.color)}
-					>
-						{#if balance.account.owner.name != $basicStore.data?.users.me.name}
-							{balance.account.owner.firstName} / {balance.account.name}
-						{:else}
-							{balance.account.name}
-						{/if}
+					<TableBodyCell class="w-full max-w-0 px-2 py-3 md:w-56 md:max-w-56 md:min-w-56 md:px-4">
+						<ColorDots items={[accountDot(balance.account)]} />
 					</TableBodyCell>
 					<TableBodyCell
-						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' + amountTint(balance.amount)}
-						>{euro(balance.amount)}</TableBodyCell
+						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' +
+							restingAmountColor(balance.amount)}>{euro(balance.amount)}</TableBodyCell
 					>
 					<TableBodyCell class="hidden truncate px-4 py-3 md:table-cell md:w-full md:max-w-0"
 						>{balance.comments}</TableBodyCell
@@ -540,23 +540,17 @@
 								{/if}
 								<div>
 									<b>Konto:</b>
-									<span class="rounded-md px-1.5 py-0.5" style={tint(balance.account.color)}>
-										{#if balance.account.owner.name != $basicStore.data?.users.me.name}
-											{balance.account.owner.firstName} / {balance.account.name}
-										{:else}
-											{balance.account.name}
-										{/if}
-									</span>
+									<ColorDots class="inline-flex" items={[accountDot(balance.account)]} />
 								</div>
 								<div>
 									<b>Betrag:</b>
 									{euro(balance.amount)}
 								</div>
 
-								<div class="flex gap-2">
+								<ButtonGroup class="w-fit {actionGroup}">
 									<Button
-										color="yellow"
-										size="xs"
+										color="light"
+										class={actionButton}
 										onclick={() => {
 											balanceIdToEdit = balance.id.toString();
 											showEditBalanceModal = true;
@@ -566,8 +560,8 @@
 										Bearbeiten
 									</Button>
 									<Button
-										color="red"
-										size="xs"
+										color="light"
+										class="{actionButton} {dangerText}"
 										onclick={() => {
 											balanceIdToDelete = balance.id.toString();
 											showDeleteBalanceModal = true;
@@ -576,7 +570,7 @@
 										<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
 										Löschen
 									</Button>
-								</div>
+								</ButtonGroup>
 							</div>
 						</td>
 					</tr>

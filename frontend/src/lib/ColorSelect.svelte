@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { Dropdown } from 'flowbite-svelte';
 	import { ChevronDownOutline } from 'flowbite-svelte-icons';
-	import { tint } from './expense_utils';
 
 	interface Option {
 		value: string;
@@ -42,16 +41,20 @@
 	place in this app -- its colour -- was the one thing missing from the list where you pick
 	it. Dozens of accounts as identical black text is a list you read rather than recognise.
 
-	The trigger is tinted like the table cell it will produce, and each row carries its swatch.
+	The trigger and each row carry the dot the lists draw in front of the name.
 -->
 <button
 	type="button"
 	onclick={() => (isOpen = !isOpen)}
 	class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-gray-300 bg-gray-50 px-2.5 py-2 text-left text-sm dark:border-gray-600 dark:bg-gray-700"
-	style={tint(selected?.color)}
 >
-	<span class="truncate {selected ? '' : 'text-gray-400 dark:text-gray-500'}">
-		{selected?.name ?? placeholder}
+	<span class="flex min-w-0 items-center gap-2">
+		{#if selected?.color}
+			<span class="h-2 w-2 shrink-0 rounded-full" style:background-color={selected.color}></span>
+		{/if}
+		<span class="truncate {selected ? '' : 'text-gray-400 dark:text-gray-500'}">
+			{selected?.name ?? placeholder}
+		</span>
 	</span>
 	<ChevronDownOutline class="h-3 w-3 shrink-0 opacity-60" />
 </button>
@@ -66,10 +69,9 @@
 				? 'font-medium'
 				: ''}"
 		>
-			<!-- a swatch rather than a tinted row: forty rows of full-strength colour is a paint
-			     chart, and the tint is on the trigger where it means "this is what you picked" -->
+			<!-- a dot rather than a tinted row: forty rows of full-strength colour is a paint chart -->
 			<span
-				class="h-3 w-3 shrink-0 rounded-sm border border-black/10"
+				class="h-2 w-2 shrink-0 rounded-full"
 				style="background-color: {option.color ?? 'transparent'}"
 			></span>
 			<span class="truncate">{option.name}</span>

@@ -8,14 +8,9 @@ import {
 	statementLine,
 	formatAccount,
 	formatAccrualPeriod,
-	formatCategories,
-	formatTransactionAccounts,
-	makeAccountColor,
-	makeCategoryColor,
-	makeStripedBackground,
 	referenceAmountMissing,
-	readableTextOn,
-	tint,
+	transactionAccounts,
+	weightedCategories,
 	type SortableAccount
 } from './expense_utils';
 
@@ -115,188 +110,86 @@ describe('formatAccount', () => {
 	});
 });
 
-describe('formatTransactionAccounts', () => {
-	const leg = (name: string, owner: string, effectiveAmount: number) => ({
+describe('transactionAccounts', () => {
+	const leg = (
+		name: string,
+		owner: string,
+		effectiveAmount: number,
+		color: string | null = null
+	) => ({
 		effectiveAmount,
-		account: { name, owner: { name: owner, firstName: null } }
+		account: { name, color, owner: { name: owner, firstName: null } }
 	});
+	const names = (dots: { name: string }[]) => dots.map((d) => d.name);
 
 	it('names the account the most money moved on first', () => {
 		expect(
-			formatTransactionAccounts(
-				[leg('Bargeld', 'alice', -100), leg('Giro', 'alice', -900)],
-				'alice'
+			names(
+				transactionAccounts([leg('Bargeld', 'alice', -100), leg('Giro', 'alice', -900)], 'alice')
 			)
-		).toBe('Giro, Bargeld');
+		).toEqual(['Giro', 'Bargeld']);
 	});
 
 	// two legs on one account are one account, not two entries
 	it('adds up the legs that land on the same account', () => {
 		expect(
-			formatTransactionAccounts(
-				[leg('Giro', 'alice', -100), leg('Bargeld', 'alice', -200), leg('Giro', 'alice', -500)],
-				'alice'
+			names(
+				transactionAccounts(
+					[leg('Giro', 'alice', -100), leg('Bargeld', 'alice', -200), leg('Giro', 'alice', -500)],
+					'alice'
+				)
 			)
-		).toBe('Giro, Bargeld');
+		).toEqual(['Giro', 'Bargeld']);
 	});
 
 	// a transfer has legs pointing opposite ways, and a big one either way is still the big one
 	it('ranks by how much moved, not by which direction', () => {
 		expect(
-			formatTransactionAccounts([leg('Giro', 'alice', 900), leg('Bargeld', 'alice', -100)], 'alice')
-		).toBe('Giro, Bargeld');
+			names(
+				transactionAccounts([leg('Giro', 'alice', 900), leg('Bargeld', 'alice', -100)], 'alice')
+			)
+		).toEqual(['Giro', 'Bargeld']);
+	});
+
+	it("keeps the account's colour and names somebody else's account by its owner", () => {
+		expect(transactionAccounts([leg('Giro', 'bob', -100, '#123456')], 'alice')).toEqual([
+			{ name: 'bob / Giro', color: '#123456' }
+		]);
 	});
 
 	it('has nothing to say about no transactions', () => {
-		expect(formatTransactionAccounts([], 'alice')).toBe('');
+		expect(transactionAccounts([], 'alice')).toEqual([]);
 	});
 });
 
-/// Account and category colours come out of a free picker, so nothing stops one being
-/// near-black — and a cell that writes its name in black on that is a bar with no text in it.
-describe('readableTextOn', () => {
-	it('writes black on a light colour and white on a dark one', () => {
-		expect(readableTextOn('#ffffff')).toBe('#000');
-		expect(readableTextOn('#000000')).toBe('#fff');
+describe('weightedCategories', () => {
+	const category = (name: string, weight: number, color: string | null = null) => ({
+		weight,
+		category: { name, color }
 	});
 
-	/// The crossover sits at a luminance of 0.179, where black and white have equal contrast,
-	/// rather than at the midpoint — which would call the mid greens and purples this palette
-	/// is full of light and leave them barely legible.
-	it('puts the crossover where contrast is equal, not at the midpoint', () => {
-		// #757575 has a luminance just under 0.179, #767676 just over — and both are darker
-		// than the 50% grey a midpoint rule would break at
-		expect(readableTextOn('#757575')).toBe('#fff');
-		expect(readableTextOn('#767676')).toBe('#000');
-	});
-
-	it('understands the short form of a hex colour', () => {
-		expect(readableTextOn('#fff')).toBe(readableTextOn('#ffffff'));
-		expect(readableTextOn('#000')).toBe(readableTextOn('#000000'));
-	});
-
-	/// One piece of text crosses every stripe of a shared expense, so the darkest and the
-	/// lightest decide it together — a colour that would take black on its own takes white
-	/// once there is a dark stripe beside it.
-	it('answers for all the colours at once', () => {
-		expect(readableTextOn('#767676')).toBe('#000');
-		expect(readableTextOn('#767676', '#000000')).toBe('#fff');
-	});
-
-	/// Where a cell mixes a light colour with a dark one neither answer is good and this picks
-	/// the less bad one. Black on white beats white on black, so an exact tie goes to black;
-	/// the honest fix is not to give two accounts colours that far apart.
-	it('gives a tie to black', () => {
-		expect(readableTextOn('#ffffff', '#000000')).toBe('#000');
-	});
-
-	// an unparseable colour is nobody's idea of dark; leave the page's own text colour alone
-	it('leaves the page alone when it cannot read the colour', () => {
-		expect(readableTextOn('rebeccapurple')).toBe('inherit');
-		expect(readableTextOn()).toBe('inherit');
-	});
-});
-
-describe('tint', () => {
-	it('has nothing to say about an uncoloured thing', () => {
-		expect(tint(null)).toBeUndefined();
-		expect(tint(undefined)).toBeUndefined();
-		expect(tint('')).toBeUndefined();
-	});
-});
-
-describe('makeStripedBackground', () => {
-	it('lays the stripes out biggest first, end to end', () => {
-		const style = makeStripedBackground([
-			{ color: '#ff0000', percentage: 0.25 },
-			{ color: '#00ff00', percentage: 0.75 }
+	it('names the heaviest category first, with its colour', () => {
+		expect(
+			weightedCategories([category('Haushalt', 0.25), category('Lebensmittel', 0.75, '#00ff00')])
+		).toEqual([
+			{ name: 'Lebensmittel', color: '#00ff00' },
+			{ name: 'Haushalt', color: null }
 		]);
-
-		expect(style).toContain('0% 75%');
-		expect(style).toContain('75% 100%');
-	});
-
-	/// An empty list used to produce `linear-gradient(to right, )`, which is not a gradient, so
-	/// the browser dropped the whole declaration along with the text colour in it.
-	it('produces nothing at all rather than an invalid gradient', () => {
-		expect(makeStripedBackground([])).toBeUndefined();
-	});
-});
-
-describe('makeAccountColor', () => {
-	const leg = (color: string | null, amount: number | null, fraction: number | null = null) => ({
-		amount,
-		fraction,
-		account: { color }
-	});
-
-	it('gives each account a share of the stripe by what moved on it', () => {
-		const style = makeAccountColor([leg('#00ff00', -750), leg('#ff0000', -250)], null);
-		expect(style).toContain('0% 75%');
-		expect(style).toContain('75% 100%');
-	});
-
-	// the legs of a split point in opposite directions, and a share is a share either way
-	it('weighs a leg by what it moved, not by which way', () => {
-		const style = makeAccountColor([leg('#00ff00', -500), leg('#ff0000', 500)], null);
-		expect(style).toContain('0% 50%');
-	});
-
-	it('resolves a fractional leg against the reference amount', () => {
-		const style = makeAccountColor([leg('#00ff00', -1000), leg('#ff0000', null, 0.25)], -4000);
-		// 1000 against 1000, so the two halves are equal despite the fraction
-		expect(style).toContain('0% 50%');
-	});
-
-	it('has nothing to draw when no account carries a colour', () => {
-		expect(makeAccountColor([leg(null, -500)], null)).toBeUndefined();
-	});
-
-	// an account with a colour but nothing on it would otherwise be a zero-width stripe
-	it('leaves out a leg that moved nothing', () => {
-		expect(makeAccountColor([leg('#00ff00', 0)], null)).toBeUndefined();
-	});
-});
-
-describe('makeCategoryColor', () => {
-	const filed = (color: string | null, weight: number) => ({ weight, category: { color } });
-
-	it('splits the stripe by categorization weight', () => {
-		const style = makeCategoryColor([filed('#00ff00', 0.75), filed('#ff0000', 0.25)]);
-		expect(style).toContain('0% 75%');
-	});
-
-	/// An expense filed partly under a category with no colour keeps the gap: the weights that
-	/// do have one are still measured against the whole, so the stripe stops short rather than
-	/// claiming the uncoloured share.
-	it('measures against the whole weight, colour or not', () => {
-		const style = makeCategoryColor([filed('#00ff00', 0.5), filed(null, 0.5)]);
-		expect(style).toContain('0% 50%');
-	});
-});
-
-describe('formatCategories', () => {
-	const category = (name: string, weight: number) => ({ weight, category: { name } });
-
-	it('names the heaviest category first', () => {
-		expect(formatCategories([category('Haushalt', 0.25), category('Lebensmittel', 0.75)])).toBe(
-			'Lebensmittel, Haushalt'
-		);
 	});
 
 	// the same category twice is one category with the weights added, not two entries
 	it('adds up a category that appears more than once', () => {
 		expect(
-			formatCategories([
+			weightedCategories([
 				category('Haushalt', 0.6),
 				category('Lebensmittel', 0.5),
 				category('Haushalt', 0.3)
-			])
-		).toBe('Haushalt, Lebensmittel');
+			]).map((d) => d.name)
+		).toEqual(['Haushalt', 'Lebensmittel']);
 	});
 
 	it('has nothing to say about an uncategorized expense', () => {
-		expect(formatCategories([])).toBe('');
+		expect(weightedCategories([])).toEqual([]);
 	});
 });
 

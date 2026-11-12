@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { tint } from './expense_utils';
 	import type { ActiveFilter } from './filters';
 
 	interface Props {
@@ -17,21 +16,19 @@
 	<div class="flex flex-wrap items-center gap-2 px-4 pb-3 text-sm sm:px-0">
 		<span class="text-gray-500 dark:text-gray-400">Gefiltert nach</span>
 		{#each filters as filter (filter.label)}
-			<!-- tinted where what is being filtered on has a colour of its own, so the chip and the
-			     cells it left standing look like each other -->
+			<!-- the dot where what is being filtered on has a colour of its own, so the chip and the
+			     rows it left standing look like each other -->
 			<span
-				class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 {filter.color
-					? ''
-					: 'bg-gray-200 dark:bg-gray-700'}"
-				style={tint(filter.color)}
+				class="inline-flex items-center gap-1.5 rounded-full border border-gray-300 px-2 py-0.5 dark:border-gray-600"
 			>
+				{#if filter.color}
+					<span class="h-2 w-2 shrink-0 rounded-full" style:background-color={filter.color}></span>
+				{/if}
 				{filter.label}
-				<!-- dimmed rather than grey: on a tinted chip the text colour is whatever the tint
-				     needs, and a fixed grey × was invisible on the dark ones -->
 				<button
 					type="button"
 					aria-label="{filter.label} entfernen"
-					class="opacity-60 hover:opacity-100"
+					class="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
 					onclick={filter.clear}
 				>
 					×
