@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
 	asMoney,
 	categoryColor,
-	deltaColor,
 	errorClass,
 	integrationError,
 	periodLabel,
@@ -40,14 +39,6 @@ describe('errorClass', () => {
 		expect(errorClass(2500)).toContain('yellow');
 		expect(errorClass(4999)).toContain('yellow');
 		expect(errorClass(5000)).toContain('red');
-	});
-});
-
-describe('deltaColor', () => {
-	it('is red down, green up and grey for nothing at all', () => {
-		expect(deltaColor(-1)).toBe('red');
-		expect(deltaColor(1)).toBe('green');
-		expect(deltaColor(0)).toBe('gray');
 	});
 });
 

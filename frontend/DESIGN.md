@@ -106,7 +106,7 @@ saying something a reader would otherwise have to read.
   sign (`signedEuro()`), so the colour is never the only signal. **Zero is grey**, not blank: an
   expense that nets to nothing moved money between two of your own accounts, which is a third
   thing rather than a missing one. `restingAmountColor()` in `money.ts` gives every amount cell
-  that treatment; `deltaColor()` in `analysis/overviews.ts` picks the colour of a delta by sign.
+  that treatment, deltas included.
   A filled cell or pill behind an amount is not used: a column of pink and green blocks is read
   as a pattern before any figure in it is.
 - **Wealth** is `WEALTH_COLOR` (`#059669`, emerald) in `analysis/cards.ts`. A curve of what you

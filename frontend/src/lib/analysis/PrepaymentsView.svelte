@@ -4,7 +4,6 @@
 		Card,
 		Input,
 		Label,
-		Badge,
 		Table,
 		TableBody,
 		TableBodyCell,
@@ -19,7 +18,8 @@
 	import { shortDate } from './dates';
 	import QueryError from '#lib/QueryError.svelte';
 	import ExpenseDetailModal from '#lib/ExpenseDetailModal.svelte';
-	import { amountColor, euro, signedEuro } from '#lib/money.ts';
+	import { euro, restingAmountColor, signedEuro } from '#lib/money.ts';
+	import { chip } from '#lib/table_styles.ts';
 
 	// How much of a prepayment is laid out, used up or still to come is a quantity of it, not a
 	// movement on an account: 145 € were prepaid, not -145 €. Expense amounts stay signed the way
@@ -163,39 +163,40 @@
 				Leistungszeitraum länger als ein Zeitpunkt ist.
 			</p>
 		{:else}
+			<!-- A phone keeps what was prepaid, for how much, and how far it is used up; the
+			     period behind that share is from md, the day it was paid only from xl. -->
 			<Table hoverable striped class="w-full text-left text-sm">
 				<TableHead>
-					<TableHeadCell class="px-4 py-3">Titel</TableHeadCell>
-					<TableHeadCell class="px-4 py-3">Bezahlt am</TableHeadCell>
-					<TableHeadCell class="px-4 py-3">Zeitraum</TableHeadCell>
-					<TableHeadCell class="px-4 py-3">Betrag</TableHeadCell>
-					<TableHeadCell class="px-4 py-3">Verbraucht</TableHeadCell>
+					<TableHeadCell class="px-2 py-3 sm:px-4">Titel</TableHeadCell>
+					<TableHeadCell class="hidden px-2 py-3 sm:px-4 xl:table-cell">Bezahlt am</TableHeadCell>
+					<TableHeadCell class="hidden px-2 py-3 sm:px-4 md:table-cell">Zeitraum</TableHeadCell>
+					<TableHeadCell class="px-2 py-3 sm:px-4">Betrag</TableHeadCell>
+					<TableHeadCell class="px-2 py-3 sm:px-4">Verbraucht</TableHeadCell>
 				</TableHead>
 				<TableBody class="divide-y">
 					{#each rows as p (p.expense.id)}
 						{@const paid = paidOn(p)}
 						<TableBodyRow class="cursor-pointer" onclick={() => (openExpenseId = p.expense.id)}>
-							<TableBodyCell class="px-4 py-3">
-								<button type="button" class="text-left hover:underline">
-									{p.expense.title}
-								</button>
-								{#if p.expense.store}
-									<span class="text-gray-500 dark:text-gray-400"> · {p.expense.store}</span>
-								{/if}
-							</TableBodyCell>
-							<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
+							{@render title(p.expense)}
+							<TableBodyCell
+								class="hidden px-2 py-3 text-gray-500 sm:px-4 xl:table-cell dark:text-gray-400"
+							>
 								{paid ? shortDate(paid) : '–'}
 							</TableBodyCell>
-							<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
+							<TableBodyCell
+								class="hidden px-2 py-3 text-gray-500 sm:px-4 md:table-cell dark:text-gray-400"
+							>
 								{shortDate(p.expense.accrualStart)} – {shortDate(p.expense.accrualEnd)}
 							</TableBodyCell>
 							<TableBodyCell
-								class="px-4 py-3 whitespace-nowrap {amountColor(p.expense.effectiveAmount)}"
-								>{signedEuro(p.expense.effectiveAmount)}</TableBodyCell
+								class="px-2 py-3 whitespace-nowrap sm:px-4 {restingAmountColor(
+									p.expense.effectiveAmount
+								)}">{signedEuro(p.expense.effectiveAmount)}</TableBodyCell
 							>
-							<TableBodyCell class="px-4 py-3">
+							<TableBodyCell class="px-2 py-3 sm:px-4">
 								<div class="flex items-center gap-2">
-									<div class="h-2 w-24 rounded bg-gray-200 dark:bg-gray-700">
+									<!-- the percentage says it on a phone; the bar is the same number again -->
+									<div class="hidden h-2 w-24 rounded bg-gray-200 sm:block dark:bg-gray-700">
 										<div
 											class="bg-primary-600 h-2 rounded"
 											style="width: {Math.round(p.consumedFraction * 100)}%"
@@ -231,30 +232,30 @@
 		{:else if incomplete.length === 0}
 			<p class="text-sm text-gray-500 dark:text-gray-400">Keine offenen Posten.</p>
 		{:else}
+			<!-- A phone keeps what is incomplete and how much of it is booked so far; the date is
+			     from sm, the status -- the same word on every row of this table -- from md. -->
 			<Table hoverable striped class="w-full text-left text-sm">
 				<TableHead>
-					<TableHeadCell class="px-4 py-3">Titel</TableHeadCell>
-					<TableHeadCell class="px-4 py-3">Datum</TableHeadCell>
-					<TableHeadCell class="px-4 py-3">Bisher gebucht</TableHeadCell>
-					<TableHeadCell class="px-4 py-3">Status</TableHeadCell>
+					<TableHeadCell class="px-2 py-3 sm:px-4">Titel</TableHeadCell>
+					<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Datum</TableHeadCell>
+					<TableHeadCell class="px-2 py-3 sm:px-4">Bisher gebucht</TableHeadCell>
+					<TableHeadCell class="hidden px-2 py-3 sm:px-4 md:table-cell">Status</TableHeadCell>
 				</TableHead>
 				<TableBody class="divide-y">
 					{#each incomplete as e (e.id)}
 						<TableBodyRow class="cursor-pointer" onclick={() => (openExpenseId = e.id)}>
-							<TableBodyCell class="px-4 py-3">
-								<button type="button" class="text-left hover:underline">
-									{e.title}
-								</button>
-								{#if e.store}
-									<span class="text-gray-500 dark:text-gray-400"> · {e.store}</span>
-								{/if}
-							</TableBodyCell>
-							<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
+							{@render title(e)}
+							<TableBodyCell
+								class="hidden px-2 py-3 text-gray-500 sm:table-cell sm:px-4 dark:text-gray-400"
+							>
 								{shortDate(e.accrualStart)}
 							</TableBodyCell>
-							<TableBodyCell class="px-4 py-3">{euro(e.effectiveAmount)}</TableBodyCell>
-							<TableBodyCell class="px-4 py-3">
-								<Badge color="yellow">Unvollständig</Badge>
+							<TableBodyCell
+								class="px-2 py-3 whitespace-nowrap sm:px-4 {restingAmountColor(e.effectiveAmount)}"
+								>{signedEuro(e.effectiveAmount)}</TableBodyCell
+							>
+							<TableBodyCell class="hidden px-2 py-3 sm:px-4 md:table-cell">
+								<span class={chip}>Unvollständig</span>
 							</TableBodyCell>
 						</TableBodyRow>
 					{/each}
@@ -263,3 +264,17 @@
 		{/if}
 	</Card>
 </div>
+
+<!-- The title takes whatever width the figures leave and truncates, so a long one cannot push
+     them off a phone. The store mostly repeats
+     what the title implies and waits for sm. -->
+{#snippet title(expense: { title: string; store: string | null })}
+	<TableBodyCell class="w-full max-w-0 truncate px-2 py-3 sm:px-4">
+		<button type="button" class="max-w-full truncate text-left align-bottom hover:underline">
+			{expense.title}
+		</button>
+		{#if expense.store}
+			<span class="hidden text-gray-500 sm:inline dark:text-gray-400"> · {expense.store}</span>
+		{/if}
+	</TableBodyCell>
+{/snippet}

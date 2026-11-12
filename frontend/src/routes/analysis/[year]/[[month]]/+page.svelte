@@ -2,7 +2,6 @@
 	import {
 		Card,
 		Button,
-		Badge,
 		Table,
 		TableBody,
 		TableBodyCell,
@@ -23,24 +22,15 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { graphql } from '$houdini';
-	import { amountColor } from '#lib/money.ts';
+	import { amountColor, euro, restingAmountColor, signedEuro } from '#lib/money.ts';
 	import Chart from '#lib/Chart.svelte';
 	import ToggleGroup from '#lib/ToggleGroup.svelte';
 	import ExpenseDetailModal from '#lib/ExpenseDetailModal.svelte';
 	import { invalidate, AFTER_WRITE } from '#lib/invalidate.ts';
-	import {
-		integrationError,
-		errorClass,
-		deltaColor,
-		categoryColor,
-		asMoney
-	} from '#lib/analysis/format.ts';
+	import { integrationError, errorClass, categoryColor, asMoney } from '#lib/analysis/format.ts';
 	import { DATE_AXES, accrued, axisState } from '#lib/analysis/state.svelte.ts';
 	import { accrualShare, isoDate } from '#lib/analysis/dates.ts';
 	import QueryError from '#lib/QueryError.svelte';
-
-	const euro = (cents: number) =>
-		(cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
 	const year = $derived(Number(page.params.year));
 
@@ -810,55 +800,55 @@
 		{#if byYear && months.length > 0}
 			<Card class="max-w-none min-w-0 p-4">
 				<h3 class="mb-2 text-lg font-semibold">Monate</h3>
-				<div class="min-w-0 overflow-x-auto">
-					<Table hoverable striped class="w-full text-left text-sm">
-						<TableHead>
-							<TableHeadCell class="px-4 py-3">Monat</TableHeadCell>
-							<TableHeadCell class="px-4 py-3">Delta</TableHeadCell>
-							<TableHeadCell class="px-4 py-3">Einnahmen</TableHeadCell>
-							<TableHeadCell class="px-4 py-3">Ausgaben</TableHeadCell>
-							<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Anzahl</TableHeadCell>
-							{#if !accrued()}
-								<TableHeadCell class="px-4 py-3">Vermögen Ende</TableHeadCell>
-							{/if}
-						</TableHead>
-						<TableBody class="divide-y">
-							{#each months as m (m.start.getTime())}
-								{@const moved = m.income + m.expenses}
-								<TableBodyRow>
-									<TableBodyCell class="px-4 py-3 whitespace-nowrap">
-										<a
-											class="text-primary-600 dark:text-primary-500 font-medium hover:underline"
-											href={resolve('/analysis/[year]/[[month]]', {
-												year: `${m.start.getUTCFullYear()}`,
-												month: `${m.start.getUTCMonth() + 1}`
-											})}
-										>
-											{m.start.toLocaleDateString('de-DE', { month: 'long', timeZone: 'UTC' })}
-										</a>
-									</TableBodyCell>
-									<TableBodyCell class="px-4 py-3">
-										<Badge color={deltaColor(moved)} class="text-sm font-semibold">
-											{euro(moved)}
-										</Badge>
-									</TableBodyCell>
-									<TableBodyCell class="px-4 py-3 text-green-700 dark:text-green-400"
-										>{euro(m.income)}</TableBodyCell
+				<!-- The same columns at the same breakpoints as the overview table: a phone keeps
+				     month, delta and closing wealth, the two sides from sm, the count from xl. -->
+				<Table hoverable striped class="w-full text-left text-sm">
+					<TableHead>
+						<TableHeadCell class="px-2 py-3 sm:px-4">Monat</TableHeadCell>
+						<TableHeadCell class="px-2 py-3 sm:px-4">Delta</TableHeadCell>
+						<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Einnahmen</TableHeadCell>
+						<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Ausgaben</TableHeadCell>
+						<TableHeadCell class="hidden px-2 py-3 sm:px-4 xl:table-cell">Anzahl</TableHeadCell>
+						{#if !accrued()}
+							<TableHeadCell class="px-2 py-3 sm:px-4">Vermögen Ende</TableHeadCell>
+						{/if}
+					</TableHead>
+					<TableBody class="divide-y">
+						{#each months as m (m.start.getTime())}
+							{@const moved = m.income + m.expenses}
+							<TableBodyRow>
+								<TableBodyCell class="px-2 py-3 whitespace-nowrap sm:px-4">
+									<a
+										class="text-primary-600 dark:text-primary-500 font-medium hover:underline"
+										href={resolve('/analysis/[year]/[[month]]', {
+											year: `${m.start.getUTCFullYear()}`,
+											month: `${m.start.getUTCMonth() + 1}`
+										})}
 									>
-									<TableBodyCell class="px-4 py-3 text-red-600 dark:text-red-400"
-										>{euro(m.expenses)}</TableBodyCell
-									>
-									<TableBodyCell class="hidden px-4 py-3 sm:table-cell"
-										>{m.expenseCount}</TableBodyCell
-									>
-									{#if !accrued()}
-										<TableBodyCell class="px-4 py-3">{euro(m.endTotal)}</TableBodyCell>
-									{/if}
-								</TableBodyRow>
-							{/each}
-						</TableBody>
-					</Table>
-				</div>
+										{m.start.toLocaleDateString('de-DE', { month: 'long', timeZone: 'UTC' })}
+									</a>
+								</TableBodyCell>
+								<TableBodyCell class="px-2 py-3 font-semibold sm:px-4 {restingAmountColor(moved)}">
+									{signedEuro(moved)}
+								</TableBodyCell>
+								<TableBodyCell
+									class="hidden px-2 py-3 sm:table-cell sm:px-4 {restingAmountColor(m.income)}"
+									>{signedEuro(m.income)}</TableBodyCell
+								>
+								<TableBodyCell
+									class="hidden px-2 py-3 sm:table-cell sm:px-4 {restingAmountColor(m.expenses)}"
+									>{signedEuro(m.expenses)}</TableBodyCell
+								>
+								<TableBodyCell class="hidden px-2 py-3 sm:px-4 xl:table-cell"
+									>{m.expenseCount}</TableBodyCell
+								>
+								{#if !accrued()}
+									<TableBodyCell class="px-2 py-3 sm:px-4">{euro(m.endTotal)}</TableBodyCell>
+								{/if}
+							</TableBodyRow>
+						{/each}
+					</TableBody>
+				</Table>
 				<!-- The months do not add up to the year above them, and saying so beats leaving
 				     it to be discovered: a transfer out in May and back in June is gone from both
 				     of those months and never left the year. -->
@@ -876,60 +866,64 @@
 			<!-- A row of its own rather than a column beside the two lists: it is as wide as the
 			     accounts make it, and sharing a row pushed the lists onto separate ones, where
 			     what a month took in and what it spent are meant to be read against each other. -->
-			<!-- min-w-0 twice over: a grid track and a flex child both size to their content
-			     unless told otherwise, so without it the table widens the page rather than
-			     scrolling inside the card -->
-			<Card class="max-w-none min-w-0 p-4">
+			<Card class="max-w-none p-4">
 				<h3 class="mb-2 text-lg font-semibold">Konten</h3>
-				<div class="min-w-0 overflow-x-auto">
-					<Table hoverable striped class="w-full text-left text-sm">
-						<TableHead>
-							<TableHeadCell class="px-4 py-3">Konto</TableHeadCell>
-							<TableHeadCell class="px-4 py-3">Beginn</TableHeadCell>
-							<TableHeadCell class="px-4 py-3">Ende</TableHeadCell>
-							<TableHeadCell class="px-4 py-3">Delta</TableHeadCell>
-							<TableHeadCell class="px-4 py-3">Fehler</TableHeadCell>
-						</TableHead>
-						<TableBody class="divide-y">
-							{#each detail.byAccount as a (a.account.id)}
-								<!-- null on the accrual axis: a share of a subscription is a cost the month
-								     carried, not money that left this account, so there is nothing to
-								     reconcile it against -->
-								{@const error =
-									a.integratedEndAmount === null
-										? null
-										: Math.abs(a.endAmount - a.integratedEndAmount)}
-								<TableBodyRow>
-									<TableBodyCell class="px-4 py-3">
-										<span
-											class="mr-2 inline-block h-3 w-3 rounded-full align-middle"
-											style="background-color: {a.account.color ?? '#94a3b8'}"
-										></span>{a.account.name}
-									</TableBodyCell>
-									<TableBodyCell class="px-4 py-3">{euro(a.startAmount)}</TableBodyCell>
-									<TableBodyCell class="px-4 py-3">{euro(a.endAmount)}</TableBodyCell>
-									<TableBodyCell class="px-4 py-3">
-										<Badge
-											color={deltaColor(a.endAmount - a.startAmount)}
-											class="text-sm font-semibold"
-										>
-											{euro(a.endAmount - a.startAmount)}
-										</Badge>
-									</TableBodyCell>
-									<TableBodyCell class="px-4 py-3 {error === null ? '' : errorClass(error)}">
-										{error === null ? '—' : euro(error)}
-									</TableBodyCell>
-								</TableBodyRow>
-							{/each}
-						</TableBody>
-					</Table>
-				</div>
+				<!-- A phone keeps account and closing balance, what the account holds; the delta
+				     comes back from sm, the opening balance and the reconciliation error from md. -->
+				<Table hoverable striped class="w-full text-left text-sm">
+					<TableHead>
+						<TableHeadCell class="px-2 py-3 sm:px-4">Konto</TableHeadCell>
+						<TableHeadCell class="hidden px-2 py-3 sm:px-4 md:table-cell">Beginn</TableHeadCell>
+						<TableHeadCell class="px-2 py-3 sm:px-4">Ende</TableHeadCell>
+						<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Delta</TableHeadCell>
+						<TableHeadCell class="hidden px-2 py-3 sm:px-4 md:table-cell">Fehler</TableHeadCell>
+					</TableHead>
+					<TableBody class="divide-y">
+						{#each detail.byAccount as a (a.account.id)}
+							<!-- null on the accrual axis: a share of a subscription is a cost the month
+							     carried, not money that left this account, so there is nothing to
+							     reconcile it against -->
+							{@const error =
+								a.integratedEndAmount === null
+									? null
+									: Math.abs(a.endAmount - a.integratedEndAmount)}
+							<TableBodyRow>
+								<!-- a long name wraps rather than push the balance off a phone -->
+								<TableBodyCell class="px-2 py-3 whitespace-normal sm:px-4">
+									<span
+										class="mr-2 inline-block h-3 w-3 rounded-full align-middle"
+										style="background-color: {a.account.color ?? '#94a3b8'}"
+									></span>{a.account.name}
+								</TableBodyCell>
+								<TableBodyCell class="hidden px-2 py-3 sm:px-4 md:table-cell"
+									>{euro(a.startAmount)}</TableBodyCell
+								>
+								<TableBodyCell class="px-2 py-3 sm:px-4">{euro(a.endAmount)}</TableBodyCell>
+								{@const moved = a.endAmount - a.startAmount}
+								<TableBodyCell
+									class="hidden px-2 py-3 font-semibold sm:table-cell sm:px-4 {restingAmountColor(
+										moved
+									)}"
+								>
+									{signedEuro(moved)}
+								</TableBodyCell>
+								<TableBodyCell
+									class="hidden px-2 py-3 sm:px-4 md:table-cell {error === null
+										? ''
+										: errorClass(error)}"
+								>
+									{error === null ? '—' : euro(error)}
+								</TableBodyCell>
+							</TableBodyRow>
+						{/each}
+					</TableBody>
+				</Table>
 			</Card>
 		{/if}
 
 		<div class="grid gap-4 lg:grid-cols-2">
-			{@render extremes('Größte Ausgaben', biggest, 'text-red-600 dark:text-red-400')}
-			{@render extremes('Größte Einnahmen', earned, 'text-green-700 dark:text-green-400')}
+			{@render extremes('Größte Ausgaben', biggest)}
+			{@render extremes('Größte Einnahmen', earned)}
 		</div>
 	{/if}
 </div>
@@ -946,7 +940,7 @@
 	</div>
 {/snippet}
 
-{#snippet extremes(heading: string, rows: typeof biggest, color: string)}
+{#snippet extremes(heading: string, rows: typeof biggest)}
 	<Card class="max-w-none min-w-0 p-4">
 		<h3 class="mb-2 text-lg font-semibold">
 			{heading}
@@ -963,16 +957,19 @@
 			message="Die größten Posten konnten nicht geladen werden."
 			class="mb-3"
 		/>
+		<!-- A phone keeps title and amount; the categories, a list of their own, from sm. -->
 		<Table hoverable striped class="w-full text-left text-sm">
 			<TableHead>
-				<TableHeadCell class="px-4 py-3">Titel</TableHeadCell>
-				<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Kategorie</TableHeadCell>
-				<TableHeadCell class="px-4 py-3">Betrag</TableHeadCell>
+				<TableHeadCell class="px-2 py-3 sm:px-4">Titel</TableHeadCell>
+				<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Kategorie</TableHeadCell>
+				<TableHeadCell class="px-2 py-3 sm:px-4">Betrag</TableHeadCell>
 			</TableHead>
 			<TableBody class="divide-y">
 				{#each rows as e (e.id)}
 					<TableBodyRow>
-						<TableBodyCell class="px-4 py-3">
+						<!-- takes what the amount leaves and truncates, so a long title cannot widen
+						     the table past a phone -->
+						<TableBodyCell class="w-full max-w-0 truncate px-2 py-3 sm:px-4">
 							{e.title}
 							{#if e.store}
 								<span class="text-gray-500 dark:text-gray-400"> · {e.store}</span>
@@ -980,7 +977,7 @@
 						</TableBodyCell>
 						<!-- an expense can sit in several, which is why this is a list and not a
 						     word; the amount beside it is the whole expense either way -->
-						<TableBodyCell class="hidden px-4 py-3 sm:table-cell">
+						<TableBodyCell class="hidden px-2 py-3 sm:table-cell sm:px-4">
 							<div class="flex flex-wrap gap-x-2 gap-y-1">
 								{#each e.categories as c (c.category.id)}
 									<span class="inline-flex items-center gap-1 text-xs whitespace-nowrap">
@@ -992,8 +989,10 @@
 								{/each}
 							</div>
 						</TableBodyCell>
-						<TableBodyCell class="px-4 py-3 whitespace-nowrap {color}">
-							{euro(e.amount)}
+						<TableBodyCell
+							class="px-2 py-3 whitespace-nowrap sm:px-4 {restingAmountColor(e.amount)}"
+						>
+							{signedEuro(e.amount)}
 							<!-- under the figure, for the same reason as in the expense table: a second
 							     amount on the line is what the column has no room for -->
 							{#if e.whole !== null}

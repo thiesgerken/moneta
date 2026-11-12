@@ -13,7 +13,6 @@
 		TableBodyRow,
 		TableHead,
 		TableHeadCell,
-		Badge,
 		Spinner,
 		Tooltip
 	} from 'flowbite-svelte';
@@ -25,14 +24,7 @@
 	import SeriesToggle from './SeriesToggle.svelte';
 	import ToggleGroup from '#lib/ToggleGroup.svelte';
 	import { overviewsStore, periodDrilldown, periodHref, type OverviewsData } from './overviews';
-	import {
-		integrationError,
-		errorClass,
-		deltaColor,
-		periodLabel,
-		periodTicks,
-		categoryColor
-	} from './format';
+	import { integrationError, errorClass, periodLabel, periodTicks, categoryColor } from './format';
 	import {
 		DATE_AXES,
 		YEARS_FALLBACK_SPAN,
@@ -47,7 +39,7 @@
 	import { ANALYSIS_CARD } from './cards';
 	import { isoDate } from './dates';
 	import QueryError from '#lib/QueryError.svelte';
-	import { euro, signedEuro } from '#lib/money.ts';
+	import { euro, restingAmountColor, signedEuro } from '#lib/money.ts';
 
 	// Kept here rather than read off the store so the chart never sees an empty intermediate
 	// state: houdini clears `data` while a fetch is in flight, which drew the chart once
@@ -106,6 +98,9 @@
 	});
 
 	const periods = $derived(overviews?.periods ?? []);
+
+	const monthName = (d: Date, month: 'short' | 'long') =>
+		d.toLocaleDateString('de-DE', { month, year: 'numeric', timeZone: 'UTC' });
 
 	/// Whether the chart splits a month into categories instead of into its two sides. The
 	/// table below is the same table either way -- a balance and an integration error are facts
@@ -369,99 +364,98 @@
 					class="me-2 inline h-5 w-5 align-[-0.2em] text-gray-400 dark:text-gray-500"
 				/>Übersichten je {periodWord}
 			</h3>
-			<div class="overflow-x-auto">
-				<Table hoverable striped class="w-full text-left text-sm">
-					<!-- What the period did comes before what it left behind: delta, then the two
-					     sides it is made of, then the balances they moved between. On a phone the
-					     columns behind Ausgaben are off the screen, and what is dropped there is
-					     what answers a question nobody asks on a phone -- how many expenses it
-					     took, where the period started, and how far the two ways of counting
-					     disagree.
+			<Table hoverable striped class="w-full text-left text-sm">
+				<!-- What the period did comes before what it left behind: delta, then the two
+				     sides it is made of, then the balances they moved between. A phone keeps the
+				     period, its delta and the wealth it ended on, which is the whole answer to
+				     "how did that month go"; the sides come back from sm, and the count, the
+				     opening wealth -- the previous row's closing one -- and the error only from xl.
 
-					     The balances are gone entirely on the accrual axis, along with the error
-					     that reconciles against them: they are money in an account, which does
-					     not move when a cost is filed under a different month, so a column that
-					     reads the same either way sitting next to four that do not is a column
-					     inviting the wrong subtraction. -->
-					<TableHead>
-						<TableHeadCell class="px-4 py-3">{periodWord}</TableHeadCell>
-						<TableHeadCell class="px-4 py-3">Delta</TableHeadCell>
-						<TableHeadCell class="px-4 py-3">Einnahmen</TableHeadCell>
-						<TableHeadCell class="px-4 py-3">Ausgaben</TableHeadCell>
-						<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Anzahl</TableHeadCell>
-						{#if !accrued()}
-							<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Vermögen Beginn</TableHeadCell>
-							<TableHeadCell class="px-4 py-3">Vermögen Ende</TableHeadCell>
-						{/if}
-						<!-- Only on the value axis. The error is the gap between the balances and what the
-						     period booked, and on the accrual axis those are answers to different
-						     questions: a sixth of a subscription is a cost the period carried, not money
-						     that left an account, so there is nothing to reconcile. -->
-						{#if !accrued()}
-							<TableHeadCell class="hidden px-4 py-3 sm:table-cell">
-								<span class="underline decoration-dotted">Fehler</span>
-								<Tooltip class="max-w-xs text-xs font-normal normal-case">
-									Die Lücke zwischen dem fortgeschriebenen und dem gemessenen Endvermögen. Eine
-									große Lücke heißt nicht, dass die Rechnung driftet, sondern dass eine Ausgabe
-									fehlt.
-								</Tooltip>
-							</TableHeadCell>
-						{/if}
-					</TableHead>
-					<TableBody class="divide-y">
-						{#each periods.toReversed() as o (o.start.getTime())}
-							<TableBodyRow>
-								<!-- The link that made these pages reachable in the first place. A year
-								     has one of its own now, so both grains are the same anchor. -->
-								<TableBodyCell class="px-4 py-3 whitespace-nowrap">
-									<a
-										class="text-primary-600 dark:text-primary-500 font-medium hover:underline"
-										href={periodHref(o.start, granularity)}
-									>
-										{byYear
-											? o.start.getUTCFullYear()
-											: o.start.toLocaleDateString('de-DE', {
-													month: 'long',
-													year: 'numeric',
-													timeZone: 'UTC'
-												})}
-									</a>
+				     The balances are gone entirely on the accrual axis, along with the error
+				     that reconciles against them: they are money in an account, which does
+				     not move when a cost is filed under a different month, so a column that
+				     reads the same either way sitting next to four that do not is a column
+				     inviting the wrong subtraction. -->
+				<TableHead>
+					<TableHeadCell class="px-2 py-3 sm:px-4">{periodWord}</TableHeadCell>
+					<TableHeadCell class="px-2 py-3 sm:px-4">Delta</TableHeadCell>
+					<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Einnahmen</TableHeadCell>
+					<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Ausgaben</TableHeadCell>
+					<TableHeadCell class="hidden px-2 py-3 sm:px-4 xl:table-cell">Anzahl</TableHeadCell>
+					{#if !accrued()}
+						<TableHeadCell class="hidden px-2 py-3 sm:px-4 xl:table-cell"
+							>Vermögen Beginn</TableHeadCell
+						>
+						<TableHeadCell class="px-2 py-3 sm:px-4">Vermögen Ende</TableHeadCell>
+					{/if}
+					<!-- Only on the value axis. The error is the gap between the balances and what the
+					     period booked, and on the accrual axis those are answers to different
+					     questions: a sixth of a subscription is a cost the period carried, not money
+					     that left an account, so there is nothing to reconcile. -->
+					{#if !accrued()}
+						<TableHeadCell class="hidden px-2 py-3 sm:px-4 xl:table-cell">
+							<span class="underline decoration-dotted">Fehler</span>
+							<Tooltip class="max-w-xs text-xs font-normal normal-case">
+								Die Lücke zwischen dem fortgeschriebenen und dem gemessenen Endvermögen. Eine große
+								Lücke heißt nicht, dass die Rechnung driftet, sondern dass eine Ausgabe fehlt.
+							</Tooltip>
+						</TableHeadCell>
+					{/if}
+				</TableHead>
+				<TableBody class="divide-y">
+					{#each periods.toReversed() as o (o.start.getTime())}
+						<TableBodyRow>
+							<!-- The link that made these pages reachable in the first place. A year
+							     has one of its own now, so both grains are the same anchor. -->
+							<TableBodyCell class="px-2 py-3 whitespace-nowrap sm:px-4">
+								<a
+									class="text-primary-600 dark:text-primary-500 font-medium hover:underline"
+									href={periodHref(o.start, granularity)}
+								>
+									{#if byYear}
+										{o.start.getUTCFullYear()}
+									{:else}
+										<!-- "September 2026" in full is wide enough to push the closing
+										     wealth off a phone -->
+										<span class="sm:hidden">{monthName(o.start, 'short')}</span>
+										<span class="hidden sm:inline">{monthName(o.start, 'long')}</span>
+									{/if}
+								</a>
+							</TableBodyCell>
+							<!-- what the period booked, not what the balances did: on the accrual axis
+							     the balances stand still while the two columns beside this one move,
+							     and a delta that disagreed with the sum of them read as an error -->
+							{@const delta = o.income + o.expenses}
+							<TableBodyCell class="px-2 py-3 font-semibold sm:px-4 {restingAmountColor(delta)}">
+								{signedEuro(delta)}
+							</TableBodyCell>
+							<TableBodyCell
+								class="hidden px-2 py-3 sm:table-cell sm:px-4 {restingAmountColor(o.income)}"
+								>{signedEuro(o.income)}</TableBodyCell
+							>
+							<TableBodyCell
+								class="hidden px-2 py-3 sm:table-cell sm:px-4 {restingAmountColor(o.expenses)}"
+								>{signedEuro(o.expenses)}</TableBodyCell
+							>
+							<TableBodyCell class="hidden px-2 py-3 sm:px-4 xl:table-cell"
+								>{o.expenseCount}</TableBodyCell
+							>
+							{#if !accrued()}
+								<TableBodyCell class="hidden px-2 py-3 sm:px-4 xl:table-cell"
+									>{euro(o.startTotal)}</TableBodyCell
+								>
+								<TableBodyCell class="px-2 py-3 sm:px-4">{euro(o.endTotal)}</TableBodyCell>
+							{/if}
+							{@const error = integrationError(o)}
+							{#if error !== null}
+								<TableBodyCell class="hidden px-2 py-3 sm:px-4 xl:table-cell {errorClass(error)}">
+									{signedEuro(error)}
 								</TableBodyCell>
-								<!-- what the period booked, not what the balances did: on the accrual axis
-								     the balances stand still while the two columns beside this one move,
-								     and a delta that disagreed with the sum of them read as an error -->
-								{@const delta = o.income + o.expenses}
-								<TableBodyCell class="px-4 py-3">
-									<Badge color={deltaColor(delta)} class="text-sm font-semibold">
-										{signedEuro(delta)}
-									</Badge>
-								</TableBodyCell>
-								<TableBodyCell class="px-4 py-3 text-green-700 dark:text-green-400"
-									>{euro(o.income)}</TableBodyCell
-								>
-								<TableBodyCell class="px-4 py-3 text-red-600 dark:text-red-400"
-									>{euro(o.expenses)}</TableBodyCell
-								>
-								<TableBodyCell class="hidden px-4 py-3 sm:table-cell"
-									>{o.expenseCount}</TableBodyCell
-								>
-								{#if !accrued()}
-									<TableBodyCell class="hidden px-4 py-3 sm:table-cell"
-										>{euro(o.startTotal)}</TableBodyCell
-									>
-									<TableBodyCell class="px-4 py-3">{euro(o.endTotal)}</TableBodyCell>
-								{/if}
-								{@const error = integrationError(o)}
-								{#if error !== null}
-									<TableBodyCell class="hidden px-4 py-3 sm:table-cell {errorClass(error)}">
-										{signedEuro(error)}
-									</TableBodyCell>
-								{/if}
-							</TableBodyRow>
-						{/each}
-					</TableBody>
-				</Table>
-			</div>
+							{/if}
+						</TableBodyRow>
+					{/each}
+				</TableBody>
+			</Table>
 		</Card>
 	{/if}
 </div>

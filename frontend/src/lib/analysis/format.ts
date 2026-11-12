@@ -25,9 +25,6 @@ export const errorClass = (e: number) =>
 			? 'text-yellow-600 dark:text-yellow-400'
 			: 'text-gray-400 dark:text-gray-500';
 
-/// What a month or an account came to, which is what a reader is here for.
-export const deltaColor = (cents: number) => (cents < 0 ? 'red' : cents > 0 ? 'green' : 'gray');
-
 /// What one bar of an overview is called. A year needs all four digits: `26` under a bar a
 /// year wide reads as a day of the month.
 export const periodLabel = (d: Date, granularity: Granularity) =>
