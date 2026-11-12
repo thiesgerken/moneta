@@ -105,12 +105,15 @@ kubectl -n apps-moneta create job --from=cronjob/moneta-export precutover
 
 ## What you read in the real data stays out of the repository
 
-The repository is public. Nothing in it (code, comments, tests, fixtures, docs, commit messages)
-may carry what the real database or a bank export holds: names of the household's people,
-merchants and places from real statements, contract or customer numbers, IBANs, amounts,
-balances, counts ("35 of the imported accounts") or dates of real bookings. Reading the cluster
-database to settle a question is fine; writing down what it answered is not. Describe the
-behaviour, not the figures it was found with.
+The repository is public. Nothing in it (code, comments, tests, fixtures, docs, commit messages,
+issues, PRs, screenshots) may carry what the real database or a bank export holds: names of the
+household's people, merchants and places from real statements, contract or customer numbers,
+IBANs, amounts, balances, counts ("35 of the imported accounts") or dates of real bookings.
+Reading the cluster database to settle a question is fine; writing down what it answered is not.
+Describe the behaviour, not the figures it was found with.
+
+Screenshots, in the repository or attached to a PR or issue, only ever show the demo household
+from `docs/demo/`.
 
 `moneta export` is the whole database in one file: every name, IBAN, statement line and
 amount. Keep such a file out of the working tree, or at least under the gitignored
@@ -128,6 +131,8 @@ Fixtures and examples are invented, keeping only the format and the boundary und
 
 Hostnames of the owner's infrastructure may appear. The secrets in `docker-compose.yaml` are demo
 values; real secrets never go into the repository.
+
+When in doubt whether something is personal, ask instead of committing it.
 
 ## The data model carries data now
 
