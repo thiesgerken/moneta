@@ -122,12 +122,15 @@ saying something a reader would otherwise have to read.
 - **Categories and accounts** carry their own colour from the database, shown as **a dot in front
   of the name** (`ColorDots.svelte`), never as the fill of a cell. The dot is enough to recognise
   an account at a glance; a filled cell made the account and category columns the loudest thing
-  in a row whose point is its amount. Several accounts or categories are several dots, the one
-  most money moved on (or the heaviest) first and the only one named; the others carry their name
-  on hover, because a second name squeezed into a narrow cell is a single letter.
-  `categoryColor()` falls back to a fixed palette hashed from the name, so a category without one
-  at least keeps the same colour between renders. Charts are the exception: a series _is_ its
-  colour, so there the account and category colours fill bars and slices.
+  in a row whose point is its amount. Several accounts or categories are **a small capsule split
+  by share** in front of the main one's name, then a muted `+N`: accounts by how much moved on
+  each with the reader's own named first, categories by weight, every segment at least two pixels
+  wide, the shares in words on hover. It keeps what the striped fill used to tell (whether an
+  expense is shared, and how unevenly) with the colour inside a glyph, and it reads the same in
+  the table and on the phone. `categoryColor()` falls back to a fixed palette hashed from the
+  name, so a category without one at least keeps the same colour between renders. Charts are the
+  exception: a series _is_ its colour, so there the account and category colours fill bars and
+  slices.
 - **Availability** has no colour of its own, so it gets a warm-to-cool ramp along the liquidity
   order — see `analysis/availability.ts`.
 

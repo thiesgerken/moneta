@@ -111,12 +111,15 @@ describe('formatAccount', () => {
 });
 
 describe('transactionAccounts', () => {
+	// the reader's own part defaults to the whole leg, which is what an expense of their own is
 	const leg = (
 		name: string,
 		owner: string,
-		effectiveAmount: number,
-		color: string | null = null
+		calculatedAmount: number,
+		color: string | null = null,
+		effectiveAmount = calculatedAmount
 	) => ({
+		calculatedAmount,
 		effectiveAmount,
 		account: { name, color, owner: { name: owner, firstName: null } }
 	});
@@ -153,8 +156,46 @@ describe('transactionAccounts', () => {
 
 	it("keeps the account's colour and names somebody else's account by its owner", () => {
 		expect(transactionAccounts([leg('Giro', 'bob', -100, '#123456')], 'alice')).toEqual([
-			{ name: 'bob / Giro', color: '#123456' }
+			{ name: 'bob / Giro', color: '#123456', share: 1 }
 		]);
+	});
+
+	it('gives each account its share of what moved', () => {
+		const dots = transactionAccounts(
+			[leg('Giro', 'alice', -750), leg('Schulden', 'alice', -250)],
+			'alice'
+		);
+		expect(dots.map((d) => d.share)).toEqual([0.75, 0.25]);
+	});
+
+	// a transfer's legs point opposite ways and cancel out as a sum; as shares they are halves
+	it('counts a transfer by the size of each leg, not by their sum', () => {
+		const dots = transactionAccounts(
+			[leg('Giro', 'alice', -500), leg('Bargeld', 'alice', 500)],
+			'alice'
+		);
+		expect(dots.map((d) => d.share)).toEqual([0.5, 0.5]);
+	});
+
+	// a purchase split with someone else: the reader carries a third, on their own account, and
+	// the other person's account moved the two thirds they paid
+	it("shares by what moved on each account but names the reader's side first", () => {
+		const dots = transactionAccounts(
+			[leg('Giro', 'krösus', -200, null, 0), leg('Schulden', 'alice', -100)],
+			'alice'
+		);
+		expect(dots.map((d) => [d.name, Math.round(d.share * 100)])).toEqual([
+			['Schulden', 33],
+			['krösus / Giro', 67]
+		]);
+	});
+
+	it('shares evenly when nothing moved at all', () => {
+		const dots = transactionAccounts(
+			[leg('Giro', 'alice', 0), leg('Bargeld', 'alice', 0)],
+			'alice'
+		);
+		expect(dots.map((d) => d.share)).toEqual([0.5, 0.5]);
 	});
 
 	it('has nothing to say about no transactions', () => {
@@ -172,8 +213,8 @@ describe('weightedCategories', () => {
 		expect(
 			weightedCategories([category('Haushalt', 0.25), category('Lebensmittel', 0.75, '#00ff00')])
 		).toEqual([
-			{ name: 'Lebensmittel', color: '#00ff00' },
-			{ name: 'Haushalt', color: null }
+			{ name: 'Lebensmittel', color: '#00ff00', share: 0.75 },
+			{ name: 'Haushalt', color: null, share: 0.25 }
 		]);
 	});
 
@@ -186,6 +227,18 @@ describe('weightedCategories', () => {
 				category('Haushalt', 0.3)
 			]).map((d) => d.name)
 		).toEqual(['Haushalt', 'Lebensmittel']);
+	});
+
+	it("adds a repeated category's weights into its share", () => {
+		const dots = weightedCategories([
+			category('Haushalt', 0.25),
+			category('Lebensmittel', 0.5),
+			category('Haushalt', 0.25)
+		]);
+		expect(dots.map((d) => [d.name, d.share])).toEqual([
+			['Haushalt', 0.5],
+			['Lebensmittel', 0.5]
+		]);
 	});
 
 	it('has nothing to say about an uncategorized expense', () => {

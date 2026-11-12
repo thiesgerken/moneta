@@ -68,7 +68,11 @@
 		name: string;
 		color: string | null;
 		owner: { name: string; firstName: string | null };
-	}) => ({ name: formatAccount(account, $basicStore.data?.users.me.name), color: account.color });
+	}) => ({
+		name: formatAccount(account, $basicStore.data?.users.me.name),
+		color: account.color,
+		share: 1
+	});
 	/// Newest first, and a third click on a header comes back here.
 	const sort = new TableSort({ field: 'date', direction: DESC });
 

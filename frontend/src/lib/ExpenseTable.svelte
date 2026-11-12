@@ -527,6 +527,7 @@
 							transactions {
 								fraction
 								effectiveAmount
+								calculatedAmount
 								amount
 								date
 								bookingDate
@@ -1057,7 +1058,8 @@
 										items={[
 											{
 												name: formatAccount(transaction.account, $basicStore.data?.users.me.name),
-												color: transaction.account.color
+												color: transaction.account.color,
+												share: 1
 											}
 										]}
 									/>
@@ -1091,7 +1093,7 @@
 							{#each expense.categories as category (category.category.id)}
 								<tr>
 									<td class="px-3 py-2">
-										<ColorDots items={[category.category]} />
+										<ColorDots items={[{ ...category.category, share: 1 }]} />
 									</td>
 									<td class="px-3 py-2 text-right">{category.weight}</td>
 								</tr>
@@ -1908,14 +1910,11 @@
 							</span>
 							<span class="mt-1 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
 								<span class="shrink-0">{shortDate(axisPeriod(expense)[0])}</span>
-								<!-- the account the most money moved on and the heaviest category, each
-								     truncating on its own: the rest is a tap away, and four names in this
-								     line left a few letters of each -->
-								<ColorDots class="min-w-0" items={accountsOf(expense).slice(0, 1)} />
-								<ColorDots
-									class="min-w-0 flex-1"
-									items={weightedCategories(expense.categories).slice(0, 1)}
-								/>
+								<!-- the accounts and the categories, each the same glyph as in the table;
+								     both give way in proportion to their length, so the longer name is the
+								     one cut short -->
+								<ColorDots class="min-w-0" items={accountsOf(expense)} />
+								<ColorDots class="min-w-0" items={weightedCategories(expense.categories)} />
 								<span class="flex shrink-0 gap-1">{@render statusIcons(expense)}</span>
 							</span>
 						</button>

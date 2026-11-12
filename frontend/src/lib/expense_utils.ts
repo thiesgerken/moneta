@@ -67,15 +67,33 @@ export function formatAccount(
 export interface Dot {
 	name: string;
 	color: string | null;
+	/// What part of the whole this one is, between 0 and 1; the parts of one list add up to 1.
+	share: number;
 }
 
-/// The accounts an expense moved money on, the one most money moved on first.
+/// Weighted entries as dots in the order given, each with its part of the total.
 ///
-/// Two legs on one account are one account, and a leg counts by how much moved rather than by
-/// which way: the legs of a transfer point in opposite directions and the big one is still the
-/// big one.
+/// Nothing weighed anything -- an expense whose every leg is zero -- shares evenly rather than
+/// dividing by zero.
+function shares(entries: { name: string; color: string | null; weight: number }[]): Dot[] {
+	const total = entries.reduce((sum, e) => sum + e.weight, 0);
+	return entries.map(({ name, color, weight }) => ({
+		name,
+		color,
+		share: total > 0 ? weight / total : 1 / entries.length
+	}));
+}
+
+/// The accounts an expense moved money on, the reader's own first.
+///
+/// The share is how much moved on each account, whoever it belongs to: a purchase split between
+/// two people is shared two ways even though the reader carries only one side, and each leg of a
+/// transfer counts by its size although the two cancel out as a sum. The order is the reader's:
+/// the account their own part of the money moved on comes first, so a shared purchase is named by
+/// the side of it that is theirs.
 export function transactionAccounts(
 	transactions: {
+		calculatedAmount: number;
 		effectiveAmount: number;
 		account: {
 			name: string;
@@ -85,34 +103,42 @@ export function transactionAccounts(
 	}[],
 	user_name: string | undefined
 ): Dot[] {
-	const sums = new Map<string, { dot: Dot; moved: number }>();
+	const moved = new Map<
+		string,
+		{ name: string; color: string | null; weight: number; mine: number }
+	>();
 	for (const transaction of transactions) {
 		const name = formatAccount(transaction.account, user_name);
-		const entry = sums.get(name) ?? { dot: { name, color: transaction.account.color }, moved: 0 };
-		entry.moved += transaction.effectiveAmount;
-		sums.set(name, entry);
+		const entry = moved.get(name) ?? {
+			name,
+			color: transaction.account.color,
+			weight: 0,
+			mine: 0
+		};
+		entry.weight += Math.abs(transaction.calculatedAmount);
+		entry.mine += Math.abs(transaction.effectiveAmount);
+		moved.set(name, entry);
 	}
 
-	return [...sums.values()]
-		.sort((a, b) => Math.abs(b.moved) - Math.abs(a.moved))
-		.map(({ dot }) => dot);
+	return shares([...moved.values()].toSorted((a, b) => b.mine - a.mine || b.weight - a.weight));
 }
 
 /// The categories an expense is filed under, the heaviest first, a repeated one added up.
 export function weightedCategories(
 	categories: { weight: number; category: { name: string; color: string | null } }[]
 ): Dot[] {
-	const sums = new Map<string, { dot: Dot; weight: number }>();
+	const filed = new Map<string, { name: string; color: string | null; weight: number }>();
 	for (const { weight, category } of categories) {
-		const entry = sums.get(category.name) ?? {
-			dot: { name: category.name, color: category.color },
+		const entry = filed.get(category.name) ?? {
+			name: category.name,
+			color: category.color,
 			weight: 0
 		};
 		entry.weight += weight;
-		sums.set(category.name, entry);
+		filed.set(category.name, entry);
 	}
 
-	return [...sums.values()].sort((a, b) => b.weight - a.weight).map(({ dot }) => dot);
+	return shares([...filed.values()].toSorted((a, b) => b.weight - a.weight));
 }
 
 export interface SortableAccount {
