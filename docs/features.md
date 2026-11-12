@@ -82,15 +82,17 @@ Creating and editing happen in a modal too. A transaction takes either an amount
 of the expense's reference amount, which is how a shared purchase is entered without doing the
 division by hand.
 
-**An open row is the selection.** *Duplizieren* and *Bearbeiten* want exactly one; *Löschen*,
-*Einsortieren* and *Zusammenführen* act on all of them, and each confirms against a list of
-what it is about to touch, named rather than counted. Six statement lines filed by the wrong
-rule are six rows to open and one press.
+**An open row is the selection.** *Duplizieren* and *Bearbeiten* want exactly one; *Bestätigen*,
+*Löschen*, *Einsortieren* and *Zusammenführen* act on all of them, and the last three confirm
+against a list of what they are about to touch, named rather than counted. Six statement lines
+filed by the wrong rule are six rows to open and one press.
 
-An *Unbestätigt* expense's open row has *Bestätigen* beside its chip. `expenses.confirm` clears
-the flag and nothing else, so reviewing an automatically filed booking that was right does not
-mean a round trip through the form. It takes a list of ids and is all or nothing; an expense
-already confirmed is left alone and gets no changelog entry.
+*Bestätigen* clears the *Unbestätigt* flag and nothing else (`expenses.confirm`), so reviewing an
+automatically filed booking that was right does not mean a round trip through the form. In the
+toolbar it confirms every open row that is unconfirmed, in one call, and is disabled when there
+is none; an open row's own action group, at the top of its detail, starts with it whenever that
+row is unconfirmed. The mutation takes a list of ids and is all or nothing; an expense already
+confirmed is left alone and gets no changelog entry.
 
 **On a phone the list is a list**: each expense is two lines (title, shop and signed amount; then
 the date, its main account and category as colour dots, and the icons of its states), and a tap

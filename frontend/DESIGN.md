@@ -252,8 +252,8 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
 - Only the button that completes the form is `primary`; five orange buttons in a form leave
   nothing to say which one submits it.
 - **Neu is the only orange button on a page; every other action is one neutral group.**
-  Duplizieren, Bearbeiten, Löschen, Einsortieren and Zusammenführen — in the toolbar and in the open
-  row — share `actionGroup` / `actionButton` from `table_styles.ts`: a solid `gray-100` surface
+  Bestätigen, Duplizieren, Bearbeiten, Löschen, Einsortieren and Zusammenführen — in the toolbar
+  and at the top of the open row — share `actionGroup` / `actionButton` from `table_styles.ts`: a solid `gray-100` surface
   with `gray-900` text (`gray-700` / `gray-100` in dark, a step off the card), divided by hairlines.
   Löschen is the one with a colour, and only in its text and icon (`dangerText`): it is the one that
   cannot be undone. The thing a page is for is found without reading, and the rest do not compete

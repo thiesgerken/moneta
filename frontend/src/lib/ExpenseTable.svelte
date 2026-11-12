@@ -43,6 +43,7 @@
 		TagOutline,
 		WalletOutline,
 		CheckCircleOutline,
+		CheckOutline,
 		FileCloneOutline,
 		LandmarkOutline,
 		QuestionCircleOutline,
@@ -877,20 +878,29 @@
 		if (expenses.some((e) => e.id === merged)) openEditModal(merged);
 	}
 
-	/// Which row's Bestätigen failed, and why. Said beside the button rather than in a modal:
-	/// there is no modal here to stay open, and a row that keeps its badge is not an explanation.
-	let confirmError: { id: string; message: string } | undefined = $state(undefined);
+	/// Which open rows a Bestätigen failed for, and why. Said in each of those rows rather than in
+	/// a modal: there is no modal here to stay open, and a row that keeps its chip is not an
+	/// explanation. The rows stay open either way, since confirming rewrites nothing they show.
+	let confirmError: { ids: string[]; message: string } | undefined = $state(undefined);
 
-	async function handleConfirmExpense(id: string) {
+	/// One call for all of them: `confirm` is all or nothing, so a failure leaves every one of
+	/// these as it was rather than half of them done.
+	async function handleConfirmExpenses(ids: string[]) {
+		if (ids.length === 0) return;
 		confirmError = undefined;
 
-		const result = await ConfirmExpenses.mutate({ ids: [id] });
+		const result = await ConfirmExpenses.mutate({ ids });
 		if (result.errors?.length) {
-			confirmError = { id, message: result.errors.map((e) => e.message).join(' ') };
+			confirmError = { ids, message: result.errors.map((e) => e.message).join(' ') };
 		}
 
 		await afterAction(true);
 	}
+
+	/// What the toolbar's Bestätigen confirms: the open rows that are unconfirmed. The backend
+	/// would skip the others anyway; leaving them out keeps the button honest about when it has
+	/// nothing to do.
+	const unconfirmedSelection = $derived(selectedExpenses.filter((e) => e.isUnchecked));
 </script>
 
 {#snippet fieldLabel(text: string)}
@@ -908,18 +918,9 @@
 	<h4 class="mb-1 text-xs font-semibold text-gray-500 dark:text-gray-400">{text}</h4>
 {/snippet}
 
-<!-- `onconfirm` puts Bestätigen beside Unbestätigt. Only the expanded row passes it, where the
-     row's other actions are: in the list's own cells a button would sit inside the row's click
-     target, and a press meant to open the row would confirm it. -->
-{#snippet statusBadges(expense: Flagged, onconfirm?: () => void)}
+{#snippet statusBadges(expense: Flagged)}
 	{#each STATES.filter((state) => expense[state.flag]) as state (state.flag)}
 		<span class={chip}><state.icon class="h-3.5 w-3.5 shrink-0" />{state.label}</span>
-		{#if state.flag === 'isUnchecked' && onconfirm}
-			{@render confirmButton(
-				onconfirm,
-				'hidden h-6 px-2 py-0 text-xs sm:inline-flex [&:not(:last-child)]:border-e-0'
-			)}
-		{/if}
 	{/each}
 {/snippet}
 
@@ -934,17 +935,39 @@
 	{/each}
 {/snippet}
 
-{#snippet confirmButton(onconfirm: () => void, cls: string)}
-	<Button color="light" class="{actionButton} {cls}" onclick={onconfirm}>Bestätigen</Button>
+{#snippet confirmAction(expense: (typeof rows)[number], cls: string)}
+	<Button
+		color="light"
+		class="{actionButton} {cls}"
+		onclick={() => handleConfirmExpenses([expense.id.toString()])}
+	>
+		<CheckOutline class="mr-2 hidden h-3.5 w-3.5 sm:inline" />Bestätigen
+	</Button>
 {/snippet}
 
 {#snippet expenseDetail(expense: (typeof rows)[number])}
-	<!-- On a phone the detail is one long column, and what a quick look on the go is for --
-	     confirming, fixing, removing -- has to be under the thumb when it opens, not past the
-	     changelog. -->
+	<!-- The row's actions come first, above what they act on: a statement of a dozen lines and a
+	     long changelog pushed them out of sight when they sat at the end. Bestätigen leads when
+	     there is anything to confirm, since that is most of what opening an automatically filed
+	     expense is for.
+
+	     Two groups rather than one with buttons hidden per breakpoint: a ButtonGroup rounds its
+	     first and last child and draws the dividers between them, and a hidden last child leaves
+	     the visible one square-cornered. On a phone the group is the three a quick look needs,
+	     across the width under the thumb; Duplizieren and Einsortieren wait at the end. Their icons
+	     show from sm: three labelled buttons with an icon each are wider than a phone. -->
+	<ButtonGroup class="mb-4 hidden sm:inline-flex {actionGroup}">
+		{#if expense.isUnchecked}
+			{@render confirmAction(expense, '')}
+		{/if}
+		{@render duplicateAction(expense)}
+		{@render editAction(expense, '')}
+		{@render deleteAction(expense, '')}
+		{@render resortAction(expense)}
+	</ButtonGroup>
 	<ButtonGroup class="mb-4 flex sm:hidden {actionGroup}">
 		{#if expense.isUnchecked}
-			{@render confirmButton(() => handleConfirmExpense(expense.id), 'flex-1')}
+			{@render confirmAction(expense, 'flex-1')}
 		{/if}
 		{@render editAction(expense, 'flex-1')}
 		{@render deleteAction(expense, 'flex-1')}
@@ -973,12 +996,12 @@
 				{@render fieldLabel('Status')}
 				<dd class="mt-1 flex flex-wrap items-center gap-1 text-xs">
 					{#if expense.isTaxRelevant || expense.isTemplate || expense.isUnchecked || expense.isIncomplete || expense.isExtraordinary}
-						{@render statusBadges(expense, () => handleConfirmExpense(expense.id))}
+						{@render statusBadges(expense)}
 					{:else}
 						<span class="text-sm text-gray-500 dark:text-gray-400">Normal</span>
 					{/if}
 				</dd>
-				{#if confirmError?.id === expense.id}
+				{#if confirmError?.ids.includes(expense.id)}
 					<dd class="mt-1 text-sm text-red-600 dark:text-red-400">
 						{confirmError.message}
 					</dd>
@@ -1180,15 +1203,6 @@
 		</div>
 	</div>
 
-	<!-- The toolbar's group again, minus Neu, which is the one button up there that is not about
-	     a particular expense. On a phone Bearbeiten and Löschen moved to the top, next to
-	     Bestätigen, so the two left down here are the ones a quick look does not need. -->
-	<ButtonGroup class="mt-6 hidden sm:inline-flex {actionGroup}">
-		{@render duplicateAction(expense)}
-		{@render editAction(expense, '')}
-		{@render deleteAction(expense, '')}
-		{@render resortAction(expense)}
-	</ButtonGroup>
 	<ButtonGroup class="mt-6 sm:hidden {actionGroup}">
 		{@render duplicateAction(expense)}
 		{@render resortAction(expense)}
@@ -1226,7 +1240,7 @@
 		class={actionButton}
 		onclick={() => openEditModal(expense.id.toString(), true)}
 	>
-		<FileCopyAltOutline class="mr-2 h-3.5 w-3.5" />Duplizieren
+		<FileCopyAltOutline class="mr-2 hidden h-3.5 w-3.5 sm:inline" />Duplizieren
 	</Button>
 {/snippet}
 
@@ -1236,7 +1250,7 @@
 		class="{actionButton} {cls}"
 		onclick={() => openEditModal(expense.id.toString())}
 	>
-		<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
+		<EditOutline class="mr-2 hidden h-3.5 w-3.5 sm:inline" />Bearbeiten
 	</Button>
 {/snippet}
 
@@ -1253,7 +1267,7 @@
 			showDeleteExpenseModal = true;
 		}}
 	>
-		<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
+		<TrashBinOutline class="mr-2 hidden h-3.5 w-3.5 sm:inline" />Löschen
 	</Button>
 {/snippet}
 
@@ -1267,7 +1281,7 @@
 			showResortExpenseModal = true;
 		}}
 	>
-		<ArchiveArrowDownOutline class="mr-2 h-3.5 w-3.5" />Einsortieren
+		<ArchiveArrowDownOutline class="mr-2 hidden h-3.5 w-3.5 sm:inline" />Einsortieren
 	</Button>
 {/snippet}
 
@@ -1482,6 +1496,16 @@
 						<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
 					</Button>
 					<ButtonGroup class="hidden sm:inline-flex {actionGroup}">
+						<!-- Every open row that is unconfirmed, in one call: an upload's worth of
+						     automatically filed bookings is opened, read and confirmed as a batch. -->
+						<ActionButton
+							color="light"
+							class="{toolbarControl} {actionButton}"
+							disabled={unconfirmedSelection.length === 0}
+							onclick={() => handleConfirmExpenses(unconfirmedSelection.map((e) => e.id))}
+						>
+							<CheckOutline class="mr-2 h-3.5 w-3.5" />Bestätigen
+						</ActionButton>
 						<ActionButton
 							color="light"
 							class="{toolbarControl} {actionButton}"
