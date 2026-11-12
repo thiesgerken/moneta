@@ -112,13 +112,14 @@ saying something a reader would otherwise have to read.
 - **Wealth** is `WEALTH_COLOR` (`#059669`, emerald) in `analysis/cards.ts`. A curve of what you
   own reads as a warning in orange.
 - **Categories and accounts** carry their own colour from the database, shown as **a dot in front
-  of the name** (`ColorDots.svelte`), never as the fill of a cell. The dot is enough to recognise an
-  account at a glance; a filled cell made the account and category columns the loudest thing in a
-  row whose point is its amount. Several accounts or categories are several dots, the one most
-  money moved on (or the heaviest) first. `categoryColor()` falls back to a fixed palette hashed from
-  the name, so a category without one at least keeps the same colour between renders. Charts are
-  the exception: a series _is_ its colour, so there the account and category colours fill bars and
-  slices.
+  of the name** (`ColorDots.svelte`), never as the fill of a cell. The dot is enough to recognise
+  an account at a glance; a filled cell made the account and category columns the loudest thing
+  in a row whose point is its amount. Several accounts or categories are several dots, the one
+  most money moved on (or the heaviest) first and the only one named; the others carry their name
+  on hover, because a second name squeezed into a narrow cell is a single letter.
+  `categoryColor()` falls back to a fixed palette hashed from the name, so a category without one
+  at least keeps the same colour between renders. Charts are the exception: a series _is_ its
+  colour, so there the account and category colours fill bars and slices.
 - **Availability** has no colour of its own, so it gets a warm-to-cool ramp along the liquidity
   order — see `analysis/availability.ts`.
 
@@ -194,7 +195,7 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
 - **What an open row unfolds into stays on the card's surface** (`tr[data-detail]`). Its buttons
   are a step off that surface, and on the open row's shade they disappeared.
 - The bank's own text is **monospace** wherever it is shown in full — reference numbers and
-  IBANs are read character by character. It is a column of its own from `lg`.
+  IBANs are read character by character. It is a column of its own from `2xl`.
 - Sorting and filtering are **server-side**, through typed arguments. The header cell that
   sorts carries the arrow, and clicking it a third time drops back to the list's default sort —
   sorting lives in the component rather than in the url, so without that there was no way back

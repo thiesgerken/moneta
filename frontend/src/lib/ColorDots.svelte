@@ -5,25 +5,31 @@
 </script>
 
 <!--
-	Accounts and categories as a dot in their own colour plus the name, on one line.
+	Accounts or categories as a dot in their own colour, the first one named.
 
-	The colour used to fill the whole cell, striped by share for a shared expense. Three tinted
-	cells side by side read as one band, and the account and category colours drowned out the
-	amount, which is what a row is about. A dot keeps the colour as a way to recognise an account
-	without letting it decide what the eye lands on. An uncoloured one gets a grey dot rather than
-	none, so the names stay in line.
+	A dot identifies an account at a glance without competing with the amount beside it. The ones
+	after the first are a bare dot with the name on hover: a second name shrunk to fit a narrow
+	cell ends as a single letter, which reads like a rendering glitch rather than a name. An
+	uncoloured one gets a grey dot rather than none, so the names stay in line.
 -->
-<span class="flex min-w-0 items-center gap-x-3 {cls}">
-	<!-- The ones after the first give way a hundred times faster, down to their dot: a shared
-	     expense's main account by name and the other as a dot says more than both cut to three
-	     letters. -->
+<span class="flex min-w-0 items-center gap-x-2 {cls}">
 	{#each items as item, i (i)}
-		<span class="flex min-w-0 items-center gap-1.5 {i === 0 ? 'shrink' : 'shrink-[100]'}">
+		{#if i === 0}
+			<span class="flex min-w-0 items-center gap-1.5">
+				<span
+					class="h-2 w-2 shrink-0 rounded-full bg-gray-300 dark:bg-gray-600"
+					style:background-color={item.color}
+				></span>
+				<span class="truncate">{item.name}</span>
+			</span>
+		{:else}
 			<span
+				role="img"
+				aria-label={item.name}
+				title={item.name}
 				class="h-2 w-2 shrink-0 rounded-full bg-gray-300 dark:bg-gray-600"
 				style:background-color={item.color}
 			></span>
-			<span class="truncate">{item.name}</span>
-		</span>
+		{/if}
 	{/each}
 </span>

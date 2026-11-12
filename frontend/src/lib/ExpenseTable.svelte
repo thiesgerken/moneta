@@ -1015,7 +1015,9 @@
 						<tr>
 							<th class="px-3 py-2" scope="col">Konto</th>
 							<th class="px-3 py-2 text-right" scope="col">Betrag</th>
-							<th class="px-3 py-2" scope="col">Grund</th>
+							<!-- From sm: on a phone three columns squeezed the reason onto three lines,
+							     so there it is a second line under the account instead. -->
+							<th class="hidden px-3 py-2 sm:table-cell" scope="col">Grund</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y">
@@ -1033,31 +1035,15 @@
 											}
 										]}
 									/>
+									<span class="mt-0.5 block text-xs text-gray-500 sm:hidden dark:text-gray-400">
+										{@render reason(expense, transaction)}
+									</span>
 								</td>
 								<td class={'px-3 py-2 text-right whitespace-nowrap ' + restingAmountColor(amount)}>
 									{signedEuro(amount)}
 								</td>
-								<td class="px-3 py-2 text-gray-500 dark:text-gray-400">
-									{#if transaction.fraction}
-										Anteilig · {(transaction.fraction * 100).toFixed(0)}% von {euro(
-											expense.referenceAmount ?? 0
-										)}
-									{:else}
-										Direkt
-									{/if}
-									<!-- only when it is news: a transaction booked inside its own accrual
-									     period tells you nothing you did not already read above -->
-									{#if transaction.date.toISOString() !== expense.accrualStart.toISOString() || transaction.date.toISOString() !== expense.accrualEnd.toISOString()}
-										<span class="block text-xs">
-											gebucht {transaction.date.toLocaleString('de-DE', {
-												year: 'numeric',
-												month: '2-digit',
-												day: '2-digit',
-												hour: '2-digit',
-												minute: '2-digit'
-											})}
-										</span>
-									{/if}
+								<td class="hidden px-3 py-2 text-gray-500 sm:table-cell dark:text-gray-400">
+									{@render reason(expense, transaction)}
 								</td>
 							</tr>
 						{/each}
@@ -1204,6 +1190,31 @@
 		{@render duplicateAction(expense)}
 		{@render resortAction(expense)}
 	</ButtonGroup>
+{/snippet}
+
+<!-- Why a transaction is the amount it is, and when it was booked if that is news. -->
+{#snippet reason(
+	expense: (typeof rows)[number],
+	transaction: (typeof rows)[number]['transactions'][number]
+)}
+	{#if transaction.fraction}
+		Anteilig · {(transaction.fraction * 100).toFixed(0)}% von {euro(expense.referenceAmount ?? 0)}
+	{:else}
+		Direkt
+	{/if}
+	<!-- only when it is news: a transaction booked inside its own accrual
+	     period tells you nothing you did not already read above -->
+	{#if transaction.date.toISOString() !== expense.accrualStart.toISOString() || transaction.date.toISOString() !== expense.accrualEnd.toISOString()}
+		<span class="block text-xs">
+			gebucht {transaction.date.toLocaleString('de-DE', {
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit'
+			})}
+		</span>
+	{/if}
 {/snippet}
 
 {#snippet duplicateAction(expense: (typeof rows)[number])}
@@ -1658,10 +1669,10 @@
 			</div>
 		{/snippet}
 
-		<!-- A phone keeps date, title and amount and hides the other five. They are not lost: the
-		     row expands into all of them, and the title cell carries the status flags on its own
-		     line, since "braucht Prüfung" is what somebody opens this list on a phone for. Eight
-		     columns on a 390px screen meant scrolling sideways past the date to reach the amount. -->
+		<!-- From sm to md the table keeps date, title and amount. The rest are not lost: the row
+		     expands into all of them, and the title cell carries the status chips on its own line
+		     until the Status column arrives. Below sm the table is not drawn; the list in the
+		     footer is. -->
 		<TableHead>
 			<!-- pl to clear the chevron: it hangs in the column's left margin, and without this the
 			     label started 24px to the left of every date under it. -->
@@ -1772,7 +1783,7 @@
 							? 'bg-red-50 dark:bg-red-950/40'
 							: ''}"
 					>
-						<!-- wraps rather than truncates on a phone: with five columns gone the title is
+						<!-- wraps rather than truncates below md: with the other columns gone the title is
 						     most of what identifies the row, and there is no second place to read it -->
 						<!-- wrap-anywhere, not break-words: only `overflow-wrap: anywhere` counts towards
 					     the cell's min-content width, and a table column is sized by that. With
@@ -1875,12 +1886,10 @@
 								<!-- the account the most money moved on and the heaviest category, each
 								     truncating on its own: the rest is a tap away, and four names in this
 								     line left a few letters of each -->
+								<ColorDots class="min-w-0" items={accountsOf(expense).slice(0, 1)} />
 								<ColorDots
-									class="flex-1"
-									items={[
-										...accountsOf(expense).slice(0, 1),
-										...weightedCategories(expense.categories).slice(0, 1)
-									]}
+									class="min-w-0 flex-1"
+									items={weightedCategories(expense.categories).slice(0, 1)}
 								/>
 								<span class="flex shrink-0 gap-1">{@render statusIcons(expense)}</span>
 							</span>
