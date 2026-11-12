@@ -6,7 +6,9 @@ export const tableSearchClasses = {
 	// it, and the shadow was the widest of the several frames between the window and the data.
 	// shadow-none because flowbite merges its own `shadow-md` in rather than being replaced, and
 	// a hairline under a drop shadow is two frames doing one frame's job
-	root: 'bg-white dark:bg-gray-800 relative border border-gray-200 dark:border-gray-700 shadow-none sm:rounded-lg overflow-x-auto',
+	// From sm only: on a phone the list fills the width, and a frame around it spends that width
+	// on a box saying "this is a thing" where the whole page is the same thing.
+	root: 'bg-white dark:bg-gray-800 relative border-gray-200 sm:border dark:border-gray-700 shadow-none sm:rounded-lg overflow-x-auto',
 	// p-2 on a phone: the page, the section and this bar each used to add their own gutter, which
 	// together took a fifth of the screen before anything was in it
 	// flex-wrap and a narrower search: the filter row is a fixed 600px of buttons, and at a 1280px
@@ -27,6 +29,11 @@ export const tableSearchClasses = {
 
 export const tableSearchTableClass = 'w-full text-left text-sm';
 
+/// A small table inside an open row -- transactions, categories, positions. The same ruling as
+/// the list around it and nothing else: a frame, a filled header and a surface of its own made
+/// it a second, darker table on top of the first.
+export const detailTable = 'w-full text-left text-sm';
+
 /// The height every control in a table's toolbar is pinned to.
 ///
 /// flowbite sizes controls by padding, so at the same nominal `size` a borderless primary button
@@ -40,4 +47,38 @@ export const toolbarControl = 'h-10 py-0';
 /// A row of headings in one weight is read word by word; the same row with a shape in front of
 /// each is recognised. `align-[-0.15em]` because an inline svg sits on the baseline and the
 /// text does not.
-export const headIcon = 'me-1.5 inline h-4 w-4 align-[-0.15em] text-gray-400 dark:text-gray-500';
+///
+/// From `md` only: on a phone a column is as narrow as its label, and icon plus label in it
+/// either wraps the heading onto two lines or widens the column past the screen.
+export const headIcon =
+	'me-1.5 hidden h-4 w-4 align-[-0.15em] text-gray-400 md:inline dark:text-gray-500';
+
+/// Every action on an expense, account, category or rule that is not "create", as one neutral
+/// group: `ButtonGroup class={actionGroup}` around buttons with `class={actionButton}`.
+///
+/// Neu is the one orange button on a page, so it is found without reading. Five solid colours
+/// in a row said nothing beyond "these are buttons" -- teal, yellow, red, grey and blue were
+/// not five kinds of action -- and they drowned the colours that do carry meaning, the amounts.
+/// The surface is a step off the card's in both themes, so the group reads as buttons without
+/// needing a colour; the dividers keep five labels from running into one band.
+///
+/// Disabled is 40% rather than flowbite's 50%: at 50% a grey button is barely lighter than the
+/// enabled grey beside it. `ActionButton` is still needed for any whose disabled state changes.
+///
+/// The divider is each button's own end border, in the same `[&:not(:last-child)]` variant
+/// flowbite uses to take it away inside a group, so that tailwind-merge swaps theirs for this
+/// one. `divide-x` on the group loses to that variant.
+export const actionGroup = 'shadow-none';
+export const actionButton =
+	'border-0 [&:not(:last-child)]:border-e border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200 focus-within:ring-gray-300 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600 dark:focus-within:ring-gray-600';
+
+/// Löschen is the one action in the group with a colour, and only in its text: it is the one
+/// that cannot be undone, and red text says so without a red block shouting it at every row.
+export const dangerText = 'text-red-700 dark:text-red-300';
+
+/// A state, a kind or a trigger: a hairline and muted text rather than a coloured fill.
+///
+/// Five pastel fills in one column competed with the amounts for the eye and won, although the
+/// amount is what a row is about. The icon in front of each state is what tells them apart.
+export const chip =
+	'inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-0.5 text-xs whitespace-nowrap text-gray-600 dark:border-gray-600 dark:text-gray-300';

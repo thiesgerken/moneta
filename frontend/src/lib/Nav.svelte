@@ -63,18 +63,21 @@
      every page under it runs full width, which left the brand adrift from the tab strip below -->
 <!-- py-1.5 and a smaller wordmark: 92px of bar stood between the window and the first row of
      every list in the app, and none of it was information. -->
-<Navbar fluid class="px-4 py-1.5 sm:px-8">
+<!-- xl rather than flowbite's md: the brand, eight labels and the avatar are about 1100px of
+     bar. Unfolded from md a tablet scrolled the whole page sideways to reach the last of them,
+     and from lg the list broke onto a second row under the brand. -->
+<Navbar fluid breakpoint="xl" class="px-4 py-1.5 sm:px-8">
 	<NavBrand href="/">
 		<Brand class="h-8 w-auto" />
 	</NavBrand>
 	<!-- The open state is ours rather than flowbite's: its hamburger and its list talk to each
 	     other through a context the two never share here, so the menu stayed shut on phones. -->
 	<NavHamburger onclick={() => (open = !open)} />
-	<!-- md:p-0 is what the bar's height came from: flowbite's own `p-4` is there for the stacked
+	<!-- xl:p-0 is what the bar's height came from: flowbite's own `p-4` is there for the stacked
 	     phone menu and it kept padding the row on a desktop too, where the list is one line -->
-	<!-- md:items-center: the list stretches its children, and the avatar is the one child with a
+	<!-- xl:items-center: the list stretches its children, and the avatar is the one child with a
 	     height of its own, so it hung from the top of a row the labels had made taller. -->
-	<NavUl class={open ? 'block' : ''} classes={{ ul: 'md:items-center md:gap-6 md:p-0' }}>
+	<NavUl class={open ? 'block' : ''} classes={{ ul: 'xl:items-center xl:gap-6 xl:p-0' }}>
 		{#if me}
 			{#each NAV as { href, label } (href)}
 				<!-- a tap navigates without a page load, which would otherwise leave the menu

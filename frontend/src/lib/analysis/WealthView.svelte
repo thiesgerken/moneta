@@ -26,7 +26,7 @@
 	import { priced } from '#lib/investments.ts';
 	import { ANALYSIS_CARD, WEALTH_COLOR } from './cards';
 	import QueryError from '#lib/QueryError.svelte';
-	import { amountColor, euro, signedEuro } from '#lib/money.ts';
+	import { balanceColor, euro, signedEuro } from '#lib/money.ts';
 
 	const DAY = 86400000;
 
@@ -558,54 +558,59 @@
 					{/if}
 				</div>
 			</div>
-			<Table hoverable striped class="w-full text-left text-sm">
+			<Table hoverable class="w-full text-left text-sm">
 				<TableHead>
-					<TableHeadCell class="px-4 py-3">Konto</TableHeadCell>
-					<TableHeadCell class="px-4 py-3">Stand</TableHeadCell>
-					<!-- what the number was worked out from is the footnote, not the reading, and it is
-				     what made the table wider than a phone -->
-					<TableHeadCell class="hidden px-4 py-3 sm:table-cell">Berechnet aus</TableHeadCell>
+					<TableHeadCell class="px-2 py-3 sm:px-4">Konto</TableHeadCell>
+					<TableHeadCell class="px-2 py-3 text-right sm:px-4">Stand</TableHeadCell>
+					<!-- A phone keeps account and balance, the reading; what the number was worked
+					     out from is the footnote, and from sm on. -->
+					<TableHeadCell class="hidden px-2 py-3 sm:table-cell sm:px-4">Berechnet aus</TableHeadCell
+					>
 				</TableHead>
 				<TableBody class="divide-y">
 					<!-- First, because it is the number the table exists to produce; the rows below are
-				     how it was arrived at. The rule under it is what keeps `striped` from making
-				     this read as an ordinary row that happens to be bold. -->
+				     how it was arrived at. The rule under it is what keeps it from reading as an
+				     ordinary row that happens to be bold. -->
 					<TableBodyRow class="border-b-2 border-gray-300 dark:border-gray-600">
-						<TableBodyCell class="px-4 py-3 font-semibold">Gesamt</TableBodyCell>
-						<TableBodyCell class="px-4 py-3 font-semibold">{euro(total)}</TableBodyCell>
-						<TableBodyCell class="hidden px-4 py-3 sm:table-cell"></TableBodyCell>
+						<TableBodyCell class="px-2 py-3 font-semibold sm:px-4">Gesamt</TableBodyCell>
+						<TableBodyCell class="px-2 py-3 text-right font-semibold sm:px-4 {balanceColor(total)}"
+							>{euro(total)}</TableBodyCell
+						>
+						<TableBodyCell class="hidden px-2 py-3 sm:table-cell sm:px-4"></TableBodyCell>
 					</TableBodyRow>
 					<!-- What the rows below do not account for, in the two columns a phone also
 					     shows. Without it the total silently fails to add up to the column under it. -->
 					{#if hiddenTotal !== 0}
 						<TableBodyRow>
-							<TableBodyCell class="px-4 py-3 text-gray-500 italic dark:text-gray-400">
+							<TableBodyCell class="px-2 py-3 text-gray-500 italic sm:px-4 dark:text-gray-400">
 								{hiddenBalances.length === 1
 									? 'ein ausgeblendetes Konto'
 									: `${hiddenBalances.length} ausgeblendete Konten`}
 							</TableBodyCell>
-							<TableBodyCell class="px-4 py-3 text-gray-500 italic dark:text-gray-400">
+							<TableBodyCell
+								class="px-2 py-3 text-right text-gray-500 italic sm:px-4 dark:text-gray-400"
+							>
 								{signedEuro(hiddenTotal)}
 							</TableBodyCell>
-							<TableBodyCell class="hidden px-4 py-3 sm:table-cell"></TableBodyCell>
+							<TableBodyCell class="hidden px-2 py-3 sm:table-cell sm:px-4"></TableBodyCell>
 						</TableBodyRow>
 					{/if}
 					{#each shownBalances as b (b.account.id)}
 						<TableBodyRow>
 							<!-- long account names wrap rather than widen the table; on a phone that is
 						     the difference between two lines and a sideways scroll -->
-							<TableBodyCell class="max-w-40 px-4 py-3 whitespace-normal sm:max-w-none">
+							<TableBodyCell class="max-w-40 px-2 py-3 whitespace-normal sm:max-w-none sm:px-4">
 								<span
 									class="mr-2 inline-block h-3 w-3 rounded-full align-middle"
 									style="background-color: {b.account.color ?? '#94a3b8'}"
 								></span>{b.account.name}
 							</TableBodyCell>
 							{@const shown = shownAmount(b.account.id, b.amount)}
-							<TableBodyCell class="px-4 py-3 {amountColor(shown)}">
+							<TableBodyCell class="px-2 py-3 text-right sm:px-4 {balanceColor(shown)}">
 								{euro(shown)}
 							</TableBodyCell>
 							<TableBodyCell
-								class="hidden px-4 py-3 text-gray-500 sm:table-cell dark:text-gray-400"
+								class="hidden px-2 py-3 text-gray-500 sm:table-cell sm:px-4 dark:text-gray-400"
 							>
 								<!-- A depot shown at its market value says so, and what was booked for it
 								     stays visible beside it -- that difference is the whole point. -->

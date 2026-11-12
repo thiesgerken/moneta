@@ -23,10 +23,10 @@ export const amountColor = (cents: number) =>
 export const restingAmountColor = (cents: number) =>
 	cents === 0 ? 'text-gray-500 dark:text-gray-400' : amountColor(cents);
 
-/// A zero still gets its own cell: it can describe a transfer rather than a missing amount.
-export const amountTint = (cents: number) =>
-	cents < 0
-		? 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300'
-		: cents > 0
-			? 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300'
-			: 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-200';
+/// A balance: red only below zero, grey at zero, and otherwise the page's own text colour.
+///
+/// Money in an account is not money moving. A positive balance is the normal case, so painting
+/// every one of them green says nothing, and the red of an overdrawn account is only noticed
+/// when it is the one coloured figure in the column. Flows keep `restingAmountColor`.
+export const balanceColor = (cents: number) =>
+	cents < 0 ? amountColor(cents) : cents === 0 ? 'text-gray-500 dark:text-gray-400' : '';

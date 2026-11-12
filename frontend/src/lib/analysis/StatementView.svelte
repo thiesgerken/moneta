@@ -5,7 +5,6 @@
 		Label,
 		Select,
 		Button,
-		Badge,
 		Table,
 		TableBody,
 		TableBodyCell,
@@ -20,7 +19,7 @@
 	import { ANALYSIS_CARD } from './cards';
 	import { shortDate } from './dates';
 	import QueryError from '#lib/QueryError.svelte';
-	import { amountColor, euro } from '#lib/money.ts';
+	import { balanceColor, euro, restingAmountColor, signedEuro } from '#lib/money.ts';
 
 	const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -163,7 +162,9 @@
 		</Card>
 		<Card class={ANALYSIS_CARD}>
 			<span class="text-sm text-gray-500 dark:text-gray-400">Saldo am {statementState.to}</span>
-			<span class="text-2xl font-semibold">{euro(rows[0]?.balance ?? 0)}</span>
+			<span class="text-2xl font-semibold {balanceColor(rows[0]?.balance ?? 0)}"
+				>{euro(rows[0]?.balance ?? 0)}</span
+			>
 		</Card>
 	</div>
 
@@ -182,47 +183,60 @@
 				message="Der Kontoauszug konnte nicht geladen werden."
 			/>
 		{:else}
-			<div class="overflow-x-auto">
-				<Table hoverable striped class="w-full text-left text-sm">
-					<TableHead>
-						<TableHeadCell class="px-4 py-3">Datum</TableHeadCell>
-						<TableHeadCell class="px-4 py-3 text-right">Betrag</TableHeadCell>
-						<TableHeadCell class="px-4 py-3 text-right">Saldo</TableHeadCell>
-						<TableHeadCell class="px-4 py-3">Titel</TableHeadCell>
-						<TableHeadCell class="px-4 py-3">Geschäft</TableHeadCell>
-					</TableHead>
-					<TableBody class="divide-y">
-						{#each rows as r, i (`${r.kind}-${r.date.getTime()}-${r.expenseId ?? i}`)}
-							<TableBodyRow class={r.kind === 'EXPENSE' ? '' : 'bg-gray-50/80 dark:bg-gray-900/60'}>
-								<TableBodyCell class="px-4 py-3 whitespace-nowrap">
-									{shortDate(r.date)}
-								</TableBodyCell>
-								<TableBodyCell
-									class="px-4 py-3 text-right whitespace-nowrap {amountColor(r.amount ?? 0)}"
-								>
-									{r.amount == null ? '' : euro(r.amount)}
-								</TableBodyCell>
-								<TableBodyCell class="px-4 py-3 text-right font-medium whitespace-nowrap">
-									{euro(r.balance)}
-								</TableBodyCell>
-								<TableBodyCell class="px-4 py-3">
-									{#if r.kind === 'EXPENSE'}
-										{r.title}
-									{:else}
-										<span class="text-gray-600 italic dark:text-gray-300">{label(r.kind)}</span>
-										{#if r.drift}
-											<Badge color="red" class="ml-2">weicht um {euro(r.drift)} ab</Badge>
-										{/if}
+			<!-- A phone keeps date, amount and title: what happened, and when. The running
+			     balance is from sm on, the store -- mostly a repeat of the title -- from xl. The
+			     title takes what is left and truncates, so a long one cannot widen the table. -->
+			<Table hoverable class="w-full text-left text-sm">
+				<TableHead>
+					<TableHeadCell class="px-2 py-3 sm:px-4">Datum</TableHeadCell>
+					<TableHeadCell class="px-2 py-3 text-right sm:px-4">Betrag</TableHeadCell>
+					<TableHeadCell class="hidden px-2 py-3 text-right sm:table-cell sm:px-4"
+						>Saldo</TableHeadCell
+					>
+					<TableHeadCell class="px-2 py-3 sm:px-4">Titel</TableHeadCell>
+					<TableHeadCell class="hidden px-2 py-3 sm:px-4 xl:table-cell">Geschäft</TableHeadCell>
+				</TableHead>
+				<TableBody class="divide-y">
+					{#each rows as r, i (`${r.kind}-${r.date.getTime()}-${r.expenseId ?? i}`)}
+						<TableBodyRow class={r.kind === 'EXPENSE' ? '' : 'bg-gray-50/80 dark:bg-gray-900/60'}>
+							<TableBodyCell class="px-2 py-3 whitespace-nowrap sm:px-4">
+								{shortDate(r.date)}
+							</TableBodyCell>
+							<TableBodyCell
+								class="px-2 py-3 text-right whitespace-nowrap sm:px-4 {restingAmountColor(
+									r.amount ?? 0
+								)}"
+							>
+								{r.amount == null ? '' : signedEuro(r.amount)}
+							</TableBodyCell>
+							<TableBodyCell
+								class="hidden px-2 py-3 text-right font-medium whitespace-nowrap sm:table-cell sm:px-4 {balanceColor(
+									r.balance
+								)}"
+							>
+								{euro(r.balance)}
+							</TableBodyCell>
+							<TableBodyCell class="w-full max-w-0 truncate px-2 py-3 sm:px-4">
+								{#if r.kind === 'EXPENSE'}
+									{r.title}
+								{:else}
+									<span class="text-gray-600 italic dark:text-gray-300">{label(r.kind)}</span>
+									{#if r.drift}
+										<span class="ml-2 text-red-600 dark:text-red-400"
+											>weicht um {euro(r.drift)} ab</span
+										>
 									{/if}
-								</TableBodyCell>
-								<TableBodyCell class="px-4 py-3 text-gray-500 dark:text-gray-400">
-									{r.store}
-								</TableBodyCell>
-							</TableBodyRow>
-						{/each}
-					</TableBody>
-				</Table>
-			</div>
+								{/if}
+							</TableBodyCell>
+							<TableBodyCell
+								class="hidden max-w-48 truncate px-2 py-3 text-gray-500 sm:px-4 xl:table-cell dark:text-gray-400"
+							>
+								{r.store}
+							</TableBodyCell>
+						</TableBodyRow>
+					{/each}
+				</TableBody>
+			</Table>
 		{/if}
 	</Card>
 </div>
