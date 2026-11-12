@@ -39,7 +39,11 @@
 		tableSearchClasses,
 		tableSearchTableClass,
 		toolbarControl,
-		headIcon
+		headIcon,
+		actionButton,
+		actionGroup,
+		dangerText,
+		chip
 	} from './table_styles';
 	import QueryError from './QueryError.svelte';
 	import SortIcon from './SortIcon.svelte';
@@ -317,18 +321,6 @@
 		};
 		return riskMap[risk] || risk;
 	}
-
-	function getRiskColor(risk: string): string {
-		const riskColorMap: Record<string, string> = {
-			NONE: 'bg-green-100 text-green-700',
-			SLIGHT: 'bg-green-100 text-green-700',
-			LOW: 'bg-blue-100 text-blue-700',
-			MEDIUM: 'bg-yellow-100 text-yellow-700',
-			HIGH: 'bg-orange-100 text-orange-700',
-			HUGE: 'bg-red-100 text-red-700'
-		};
-		return riskColorMap[risk] || 'bg-gray-100 text-gray-700';
-	}
 </script>
 
 <Modal bind:open={showDeleteAccountModal} size="xs">
@@ -425,8 +417,6 @@
 />
 
 {#snippet newButton(cls: string)}
-	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls
-		     back to `alternative` rather than to primary. -->
 	<Button
 		color="primary"
 		class="{toolbarControl} {cls}"
@@ -456,12 +446,11 @@
 			>
 				<!-- Bearbeiten and Löschen act on the open row, which a phone has no room for beside
 				     Neu -- and there the open row carries the same two buttons itself. -->
-				{@render newButton('grow md:hidden')}
-				<ButtonGroup class="hidden md:inline-flex">
-					{@render newButton('')}
+				{@render newButton('grow md:grow-0')}
+				<ButtonGroup class="hidden md:inline-flex {actionGroup}">
 					<ActionButton
-						color="yellow"
-						class="{toolbarControl} text-gray-900"
+						color="light"
+						class="{toolbarControl} {actionButton}"
 						disabled={!selectedAccountId}
 						onclick={() => {
 							accountIdToEdit = selectedAccountId;
@@ -471,8 +460,8 @@
 						<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
 					</ActionButton>
 					<ActionButton
-						color="red"
-						class={toolbarControl}
+						color="light"
+						class="{toolbarControl} {actionButton} {dangerText}"
 						disabled={!selectedAccountId}
 						onclick={() => {
 							accountIdToDelete = selectedAccountId;
@@ -495,7 +484,9 @@
 			</div>
 		{/snippet}
 
-		<TableHead>
+		<!-- No header on a phone: one column is left there, and a heading over a list of names
+		     names nothing. What the dropped columns said is the second line of each row. -->
+		<TableHead class="hidden sm:table-header-group">
 			<TableHeadCell
 				class="px-4 py-3 md:whitespace-nowrap"
 				scope="col"
@@ -513,7 +504,7 @@
 				<SortIcon direction={sort.on('description')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="px-4 py-3 md:whitespace-nowrap"
+				class="hidden px-4 py-3 sm:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sort.by('kind')}
 			>
@@ -563,7 +554,10 @@
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each filteredAccounts as account (account.id)}
-				<TableBodyRow onclick={() => toggleRow(account.id)}>
+				<TableBodyRow
+					onclick={() => toggleRow(account.id)}
+					data-expanded={expandedRows.includes(account.id) ? '' : undefined}
+				>
 					<TableBodyCell class="px-4 py-3">
 						<button type="button" class="mr-2 focus:outline-none">
 							{#if expandedRows.includes(account.id)}
@@ -577,18 +571,21 @@
 							style={account.color ? `background-color: ${account.color}` : undefined}
 						></span>
 						{account.name}
+						<span class="ms-11 block text-xs text-gray-500 sm:hidden dark:text-gray-400">
+							{[getKindDisplayName(account.kind), account.description].filter(Boolean).join(' · ')}
+						</span>
 					</TableBodyCell>
 					<TableBodyCell class="hidden max-w-96 truncate px-4 py-3 md:table-cell">
 						{account.description || '-'}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="hidden px-4 py-3 sm:table-cell">
 						{getKindDisplayName(account.kind)}
 					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{getAvailabilityDisplayName(account.availability)}
 					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
-						<span class={`rounded-md px-2 py-1 text-xs ${getRiskColor(account.risk)}`}>
+						<span class={chip}>
 							{getRiskDisplayName(account.risk)}
 						</span>
 					</TableBodyCell>
@@ -611,8 +608,8 @@
 					</TableBodyCell>
 				</TableBodyRow>
 				{#if expandedRows.includes(account.id)}
-					<tr>
-						<td colspan="8" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
+					<tr data-detail>
+						<td colspan="8" class="px-4 py-4">
 							<div class="flex flex-col gap-2">
 								<div>
 									<b>Name:</b>
@@ -748,11 +745,11 @@
 									{/if}
 								{/if}
 
-								<div class="flex gap-2">
+								<ButtonGroup class="w-fit {actionGroup}">
 									{#if investmentFor(account.id)?.value != null}
 										<Button
-											color="alternative"
-											size="xs"
+											color="light"
+											class={actionButton}
 											onclick={() => {
 												balancePrefill = {
 													amount: investmentFor(account.id)!.value!,
@@ -767,8 +764,8 @@
 										</Button>
 									{/if}
 									<Button
-										color="yellow"
-										size="xs"
+										color="light"
+										class={actionButton}
 										onclick={() => {
 											accountIdToEdit = account.id.toString();
 											showEditAccountModal = true;
@@ -778,8 +775,8 @@
 										Bearbeiten
 									</Button>
 									<Button
-										color="red"
-										size="xs"
+										color="light"
+										class="{actionButton} {dangerText}"
 										onclick={() => {
 											accountIdToDelete = account.id.toString();
 											showDeleteAccountModal = true;
@@ -788,7 +785,7 @@
 										<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
 										Löschen
 									</Button>
-								</div>
+								</ButtonGroup>
 							</div>
 						</td>
 					</tr>

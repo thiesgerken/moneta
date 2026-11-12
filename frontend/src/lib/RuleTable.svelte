@@ -11,7 +11,6 @@
 		TableSearch,
 		Button,
 		ButtonGroup,
-		Badge,
 		Dropdown,
 		DropdownItem,
 		Modal
@@ -46,7 +45,11 @@
 		tableSearchClasses,
 		tableSearchTableClass,
 		toolbarControl,
-		headIcon
+		headIcon,
+		actionButton,
+		actionGroup,
+		dangerText,
+		chip
 	} from './table_styles';
 	import { shortDate } from './analysis/dates';
 	import { describeAccrual, formatAccrualPeriod } from './expense_utils';
@@ -330,9 +333,7 @@
 </script>
 
 {#snippet kindBadge(kind: Row['kind'])}
-	<Badge color={kind === 'automation' ? 'blue' : 'purple'}>
-		{kind === 'automation' ? 'Bankumsatz' : 'Kalender'}
-	</Badge>
+	<span class={chip}>{kind === 'automation' ? 'Bankumsatz' : 'Kalender'}</span>
 {/snippet}
 
 {#snippet amount(cents: number | null, absent: string)}
@@ -369,14 +370,12 @@
 	{:else}
 		{row.trigger}
 		{#if row.pending}
-			<Badge color="yellow" class="ml-2">{row.pending} fällig</Badge>
+			<span class="{chip} ml-2">{row.pending} fällig</span>
 		{/if}
 	{/if}
 {/snippet}
 
 {#snippet newButton(cls: string)}
-	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls back
-	     to `alternative` rather than to primary. -->
 	<Button data-new-rule color="primary" class="{toolbarControl} {cls}">
 		<PlusOutline class="mr-2 h-3.5 w-3.5" />Neu
 		<ChevronDownOutline class="ml-2 h-3 w-3" />
@@ -387,8 +386,8 @@
 	<!-- A `title` rather than a flowbite Tooltip: that renders a sibling element, and inside the
 	     ButtonGroup it would take the last-child position this button needs for its rounded edge. -->
 	<Button
-		color="teal"
-		class="{toolbarControl} {cls}"
+		color="light"
+		class="{toolbarControl} {actionButton} {cls}"
 		title="Erzeugt die fälligen Ausgaben aller periodischen Regeln, nicht nur der ausgewählten."
 		onclick={handleRun}
 	>
@@ -464,7 +463,7 @@
 		placeholder="Suchen"
 		hoverable={true}
 		bind:inputValue={searchTerm}
-		class="{tableSearchTableClass} table-fixed"
+		class="{tableSearchTableClass} md:table-fixed"
 		classes={tableSearchClasses}
 	>
 		{#snippet header()}
@@ -474,33 +473,32 @@
 				<!-- Bearbeiten and Löschen act on the open row, which a phone has no room for beside
 				     Neu -- and there the open row carries the same two buttons itself. Jetzt erzeugen
 				     acts on every periodic rule at once, so it stays whatever is open. -->
-				<div class="flex items-center gap-2 md:hidden">
-					{@render newButton('grow')}
-					{@render runButton('')}
+				<div class="flex items-center gap-2">
+					{@render newButton('grow md:grow-0')}
+					{@render runButton('md:hidden')}
+					<ButtonGroup class="hidden md:inline-flex {actionGroup}">
+						<ActionButton
+							color="light"
+							class="{toolbarControl} {actionButton}"
+							disabled={!selected}
+							onclick={() => edit(selected!.id)}
+						>
+							<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
+						</ActionButton>
+						<ActionButton
+							color="light"
+							class="{toolbarControl} {actionButton} {dangerText}"
+							disabled={!selected}
+							onclick={() => {
+								ruleIdToDelete = selected!.id;
+								showDeleteModal = true;
+							}}
+						>
+							<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
+						</ActionButton>
+						{@render runButton('')}
+					</ButtonGroup>
 				</div>
-				<ButtonGroup class="hidden md:inline-flex">
-					{@render newButton('')}
-					<ActionButton
-						color="yellow"
-						class="{toolbarControl} text-gray-900"
-						disabled={!selected}
-						onclick={() => edit(selected!.id)}
-					>
-						<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
-					</ActionButton>
-					<ActionButton
-						color="red"
-						class={toolbarControl}
-						disabled={!selected}
-						onclick={() => {
-							ruleIdToDelete = selected!.id;
-							showDeleteModal = true;
-						}}
-					>
-						<TrashBinOutline class="mr-2 h-3.5 w-3.5" />Löschen
-					</ActionButton>
-					{@render runButton('')}
-				</ButtonGroup>
 				<OptionFilter
 					label="Auslöser"
 					options={KINDS}
@@ -517,7 +515,9 @@
 			</div>
 		{/snippet}
 
-		<TableHead>
+		<!-- No header below md: the title column is the only one left, and its second line says
+		     what the dropped columns said. -->
+		<TableHead class="hidden md:table-header-group">
 			<TableHeadCell
 				class="px-4 py-3 md:w-64 md:whitespace-nowrap"
 				scope="col"
@@ -558,7 +558,10 @@
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each visible as row (row.id)}
-				<TableBodyRow onclick={() => toggleRow(row.id)}>
+				<TableBodyRow
+					onclick={() => toggleRow(row.id)}
+					data-expanded={expandedRows.includes(row.id) ? '' : undefined}
+				>
 					<TableBodyCell class="px-4 py-3 wrap-anywhere whitespace-normal">
 						<button type="button" class="mr-2 focus:outline-none" aria-label="Details">
 							{#if expandedRows.includes(row.id)}
@@ -569,7 +572,7 @@
 						</button>
 						{row.title}
 						{#if !row.templateId}
-							<Badge color="red" class="ml-2">Vorlage fehlt</Badge>
+							<span class="{chip} {dangerText} ml-2">Vorlage fehlt</span>
 						{/if}
 						<!-- Four columns do not fit on a phone, and a rule is nothing without what fires
 						     it, so they come back as a line under the title rather than being dropped. -->
@@ -596,8 +599,8 @@
 					</TableBodyCell>
 				</TableBodyRow>
 				{#if expandedRows.includes(row.id)}
-					<tr>
-						<td colspan="5" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
+					<tr data-detail>
+						<td colspan="5" class="px-4 py-4">
 							<div class="flex flex-col gap-2">
 								{#if row.automation}
 									{@const rule = row.automation}
@@ -663,24 +666,24 @@
 									{row.lastUsed ? shortDate(row.lastUsed) : 'nie'}
 								</div>
 
-								<div class="flex gap-2">
+								<ButtonGroup class="w-fit {actionGroup}">
 									{#if row.templateId}
 										<Button
-											color="alternative"
-											size="xs"
+											color="light"
+											class={actionButton}
 											href="{resolve('/expenses')}?expense={row.templateId}"
 										>
 											<FileCloneOutline class="mr-2 h-3.5 w-3.5" />
 											Vorlage
 										</Button>
 									{/if}
-									<Button color="yellow" size="xs" onclick={() => edit(row.id)}>
+									<Button color="light" class={actionButton} onclick={() => edit(row.id)}>
 										<EditOutline class="mr-2 h-3.5 w-3.5" />
 										Bearbeiten
 									</Button>
 									<Button
-										color="red"
-										size="xs"
+										color="light"
+										class="{actionButton} {dangerText}"
 										onclick={() => {
 											ruleIdToDelete = row.id;
 											showDeleteModal = true;
@@ -689,7 +692,7 @@
 										<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
 										Löschen
 									</Button>
-								</div>
+								</ButtonGroup>
 							</div>
 						</td>
 					</tr>

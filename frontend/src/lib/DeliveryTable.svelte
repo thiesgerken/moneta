@@ -7,11 +7,11 @@
 		TableHead,
 		TableHeadCell,
 		TableSearch,
-		Badge,
 		Checkbox
 	} from 'flowbite-svelte';
 	import TableSection from './TableSection.svelte';
-	import { tableSearchClasses, tableSearchTableClass, headIcon } from './table_styles';
+	import { restingAmountColor, signedEuro } from './money';
+	import { chip, tableSearchClasses, tableSearchTableClass, headIcon } from './table_styles';
 	import {
 		CalendarMonthOutline,
 		CashOutline,
@@ -86,20 +86,22 @@
 			</div>
 		{/snippet}
 
-		<TableHead>
+		<!-- No header below md: the two columns left are a line and its amount, and the line says
+		     what the dropped columns said. -->
+		<TableHead class="hidden md:table-header-group">
 			<TableHeadCell class="px-4 py-3 md:whitespace-nowrap">
 				<CalendarMonthOutline class={headIcon} />Datum
 			</TableHeadCell>
 			<TableHeadCell class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap">
 				<WalletOutline class={headIcon} />Konto
 			</TableHeadCell>
-			<TableHeadCell class="px-2 py-3 text-right md:px-4 md:text-left md:whitespace-nowrap">
+			<TableHeadCell class="px-2 py-3 text-right md:px-4 md:whitespace-nowrap">
 				<CashOutline class={headIcon} />Betrag
 			</TableHeadCell>
 			<TableHeadCell class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap">
 				<SearchOutline class={headIcon} />Verwendungszweck
 			</TableHeadCell>
-			<TableHeadCell class="px-4 py-3 md:whitespace-nowrap">
+			<TableHeadCell class="hidden px-4 py-3 md:table-cell md:whitespace-nowrap">
 				<FlagOutline class={headIcon} />Status
 			</TableHeadCell>
 		</TableHead>
@@ -113,22 +115,27 @@
 						<span class="mt-1 block text-xs text-gray-500 md:hidden dark:text-gray-400">
 							{accountNames.get(delivery.accountId) ?? '?'} ·
 							<span class="wrap-anywhere">{delivery.statement}</span>
+							· {delivery.matched ? 'Ausgabe erzeugt' : 'Keine Regel'}
 						</span>
 					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{accountNames.get(delivery.accountId) ?? '?'}
 					</TableBodyCell>
-					<TableBodyCell class="px-2 py-3 text-right whitespace-nowrap md:px-4 md:text-left">
-						{(delivery.amount / 100).toFixed(2)}€
+					<TableBodyCell
+						class="px-2 py-3 text-right align-top whitespace-nowrap md:px-4 md:align-middle {restingAmountColor(
+							delivery.amount
+						)}"
+					>
+						{signedEuro(delivery.amount)}
 					</TableBodyCell>
 					<TableBodyCell class="hidden max-w-md truncate px-4 py-3 text-xs md:table-cell">
 						{delivery.statement}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						{#if delivery.matched}
-							<Badge color="green">Ausgabe erzeugt</Badge>
+							<span class={chip}>Ausgabe erzeugt</span>
 						{:else}
-							<Badge color="yellow">Keine Regel</Badge>
+							<span class={chip}>Keine Regel</span>
 						{/if}
 					</TableBodyCell>
 				</TableBodyRow>

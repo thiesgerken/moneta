@@ -492,7 +492,10 @@
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each balances as balance (balance.id)}
-				<TableBodyRow onclick={() => toggleRow(balance.id)}>
+				<TableBodyRow
+					onclick={() => toggleRow(balance.id)}
+					data-expanded={expandedRows.includes(balance.id) ? '' : undefined}
+				>
 					<TableBodyCell class="px-2 py-3 text-xs whitespace-nowrap md:px-4 md:text-sm">
 						<button type="button" class="mr-1 focus:outline-none md:mr-2">
 							{#if expandedRows.includes(balance.id)}
@@ -519,8 +522,8 @@
 					>
 				</TableBodyRow>
 				{#if expandedRows.includes(balance.id)}
-					<tr>
-						<td colspan="4" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
+					<tr data-detail>
+						<td colspan="4" class="px-4 py-4">
 							<div class="flex flex-col gap-2">
 								<div>
 									<b>Datum:</b>

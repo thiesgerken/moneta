@@ -32,7 +32,10 @@
 		tableSearchClasses,
 		tableSearchTableClass,
 		toolbarControl,
-		headIcon
+		headIcon,
+		actionButton,
+		actionGroup,
+		dangerText
 	} from './table_styles';
 	import QueryError from './QueryError.svelte';
 	import SortIcon from './SortIcon.svelte';
@@ -192,8 +195,6 @@
 />
 
 {#snippet newButton(cls: string)}
-	<!-- `primary` spelled out: inside a ButtonGroup a Button with no colour of its own falls
-		     back to `alternative` rather than to primary. -->
 	<Button
 		color="primary"
 		class="{toolbarControl} {cls}"
@@ -222,12 +223,11 @@
 			>
 				<!-- Bearbeiten and Löschen act on the open row, which a phone has no room for beside
 				     Neu -- and there the open row carries the same two buttons itself. -->
-				{@render newButton('grow md:hidden')}
-				<ButtonGroup class="hidden md:inline-flex">
-					{@render newButton('')}
+				{@render newButton('grow md:grow-0')}
+				<ButtonGroup class="hidden md:inline-flex {actionGroup}">
 					<ActionButton
-						color="yellow"
-						class="{toolbarControl} text-gray-900"
+						color="light"
+						class="{toolbarControl} {actionButton}"
 						disabled={!selectedCategoryId}
 						onclick={() => {
 							categoryIdToEdit = selectedCategoryId;
@@ -237,8 +237,8 @@
 						<EditOutline class="mr-2 h-3.5 w-3.5" />Bearbeiten
 					</ActionButton>
 					<ActionButton
-						color="red"
-						class={toolbarControl}
+						color="light"
+						class="{toolbarControl} {actionButton} {dangerText}"
 						disabled={!selectedCategoryId}
 						onclick={() => {
 							categoryIdToDelete = selectedCategoryId;
@@ -251,7 +251,9 @@
 			</div>
 		{/snippet}
 
-		<TableHead>
+		<!-- No header on a phone: one column is left there, and a heading over a list of names
+		     names nothing. What the dropped columns said is the second line of each row. -->
+		<TableHead class="hidden sm:table-header-group">
 			<TableHeadCell
 				class="px-4 py-3 md:whitespace-nowrap"
 				scope="col"
@@ -269,7 +271,7 @@
 				<SortIcon direction={sort.on('description')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="px-4 py-3 md:whitespace-nowrap"
+				class="hidden px-4 py-3 sm:table-cell md:whitespace-nowrap"
 				scope="col"
 				onclick={() => sort.by('parent')}
 			>
@@ -287,7 +289,10 @@
 		</TableHead>
 		<TableBody class="divide-y">
 			{#each filteredCategories as category (category.id)}
-				<TableBodyRow onclick={() => toggleRow(category.id)}>
+				<TableBodyRow
+					onclick={() => toggleRow(category.id)}
+					data-expanded={expandedRows.includes(category.id) ? '' : undefined}
+				>
 					<TableBodyCell
 						class="w-full max-w-0 px-4 py-3 wrap-anywhere whitespace-normal md:w-56 md:max-w-56 md:min-w-56"
 					>
@@ -303,11 +308,16 @@
 							style={category.color ? `background-color: ${category.color}` : undefined}
 						></span>
 						{category.name}
+						{#if category.parent}
+							<span class="ms-11 block text-xs text-gray-500 sm:hidden dark:text-gray-400">
+								{category.parent.name}
+							</span>
+						{/if}
 					</TableBodyCell>
 					<TableBodyCell class="hidden truncate px-4 py-3 md:table-cell md:w-full md:max-w-0">
 						{category.description || '-'}
 					</TableBodyCell>
-					<TableBodyCell class="px-4 py-3">
+					<TableBodyCell class="hidden px-4 py-3 sm:table-cell">
 						{category.parent?.name || '-'}
 					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
@@ -315,8 +325,8 @@
 					</TableBodyCell>
 				</TableBodyRow>
 				{#if expandedRows.includes(category.id)}
-					<tr>
-						<td colspan="4" class="border-b bg-gray-100 px-4 py-3 dark:bg-gray-800">
+					<tr data-detail>
+						<td colspan="4" class="px-4 py-4">
 							<div class="flex flex-col gap-2">
 								<div>
 									<b>Name:</b>
@@ -353,10 +363,10 @@
 										: 'Kein Limit'}
 								</div>
 
-								<div class="flex gap-2">
+								<ButtonGroup class="w-fit {actionGroup}">
 									<Button
-										color="yellow"
-										size="xs"
+										color="light"
+										class={actionButton}
 										onclick={() => {
 											categoryIdToEdit = category.id.toString();
 											showEditCategoryModal = true;
@@ -366,8 +376,8 @@
 										Bearbeiten
 									</Button>
 									<Button
-										color="red"
-										size="xs"
+										color="light"
+										class="{actionButton} {dangerText}"
 										onclick={() => {
 											categoryIdToDelete = category.id.toString();
 											showDeleteCategoryModal = true;
@@ -376,7 +386,7 @@
 										<TrashBinOutline class="mr-2 h-3.5 w-3.5" />
 										Löschen
 									</Button>
-								</div>
+								</ButtonGroup>
 							</div>
 						</td>
 					</tr>
