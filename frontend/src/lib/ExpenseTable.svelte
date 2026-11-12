@@ -231,6 +231,16 @@
 	const partOf = (expense: { accrualStart: Date; accrualEnd: Date }) =>
 		accrualWindow ? accrualShare(expense, accrualWindow.from, accrualWindow.before) : 1;
 
+	/// Who a changelog entry names. `firstName` is the part of the full name before its first
+	/// space, so a user whose full name is one word has none and is named by their login instead;
+	/// an entry without an author at all, an import, names nobody rather than an empty name.
+	const authorOf = (user: { name: string; firstName: string | null } | null) =>
+		!user
+			? null
+			: user.name === $basicStore.data?.users.me.name
+				? 'Du'
+				: (user.firstName ?? user.name);
+
 	const accountsOf = (expense: { transactions: Parameters<typeof transactionAccounts>[0] }) =>
 		transactionAccounts(expense.transactions, $basicStore.data?.users.me.name);
 
@@ -551,10 +561,7 @@
 		byUsageThen($basicStore.data?.accounts.list ?? [], (a, b) =>
 			accountSorter(a, b, $basicStore.data?.users.me.name || '')
 		).map((account) => ({
-			name:
-				account.owner.name == $basicStore.data?.users.me.name
-					? account.name
-					: `${account.owner.firstName} / ${account.name}`,
+			name: formatAccount(account, $basicStore.data?.users.me.name),
 			value: account.id,
 			color: account.color
 		}))
@@ -1144,17 +1151,20 @@
 								class="absolute top-1.5 -left-[4.5px] h-2 w-2 rounded-full bg-gray-300 dark:bg-gray-600"
 							></span>
 							<div class="text-xs text-gray-500 dark:text-gray-400">
-								{change.user!.name == $basicStore.data?.users.me.name
-									? 'Du'
-									: change.user!.firstName} · {change.date.toLocaleString('de-DE', {
-									year: 'numeric',
-									month: '2-digit',
-									day: '2-digit',
-									hour: '2-digit',
-									minute: '2-digit'
-								})}{change.tool ? ` · ${change.tool}` : ''}{change.automatic
-									? ' · automatisch'
-									: ''}
+								{[
+									authorOf(change.user),
+									change.date.toLocaleString('de-DE', {
+										year: 'numeric',
+										month: '2-digit',
+										day: '2-digit',
+										hour: '2-digit',
+										minute: '2-digit'
+									}),
+									change.tool,
+									change.automatic ? 'automatisch' : null
+								]
+									.filter(Boolean)
+									.join(' · ')}
 							</div>
 							{#if !change.oldState}
 								<div class="text-xs text-gray-500 dark:text-gray-400">Ausgabe erstellt</div>

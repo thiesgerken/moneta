@@ -577,18 +577,18 @@
 	</ActionButton>
 {/snippet}
 
-{#snippet flagChip(label: string, Icon: Component, on: boolean, toggle: () => void, tone: string)}
-	<!-- A chip rather than a checkbox, and when it is on it is the badge the list draws for the
-	     same flag: what you switch on here is what you then look for in the row. Off is an
-	     outline rather than a grey fill -- grey is what a disabled control is, and there is one
-	     of those in this dialog already. -->
+{#snippet flagChip(label: string, Icon: Component, on: boolean, toggle: () => void)}
+	<!-- A chip rather than a checkbox, and when it is on it is the chip the list draws for the
+	     same flag, icon and all: what you switch on here is what you then look for in the row. On
+	     is that chip with full-strength text on a light surface; off is a dashed outline in grey
+	     text, which reads as "could be" rather than as a state. -->
 	<button
 		type="button"
 		aria-pressed={on}
 		onclick={toggle}
 		class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm transition-colors {on
-			? tone
-			: 'border-gray-300 text-gray-500 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
+			? 'border-gray-400 bg-gray-100 text-gray-900 dark:border-gray-400 dark:bg-gray-700 dark:text-white'
+			: 'border-dashed border-gray-300 text-gray-500 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
 	>
 		<Icon class="h-4 w-4 shrink-0" />{label}
 	</button>
@@ -731,36 +731,31 @@
 					'Vorlage',
 					FileCloneOutline,
 					isTemplate,
-					() => (isTemplate = !isTemplate),
-					'border-transparent bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+					() => (isTemplate = !isTemplate)
 				)}
 				{@render flagChip(
 					'Unbestätigt',
 					QuestionCircleOutline,
 					isUnchecked,
-					() => (isUnchecked = !isUnchecked),
-					'border-transparent bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200'
+					() => (isUnchecked = !isUnchecked)
 				)}
 				{@render flagChip(
 					'Unvollständig',
 					ExclamationCircleOutline,
 					isIncomplete,
-					() => (isIncomplete = !isIncomplete),
-					'border-transparent bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200'
+					() => (isIncomplete = !isIncomplete)
 				)}
 				{@render flagChip(
 					'Außergewöhnlich',
 					StarOutline,
 					isExtraordinary,
-					() => (isExtraordinary = !isExtraordinary),
-					'border-transparent bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200'
+					() => (isExtraordinary = !isExtraordinary)
 				)}
 				{@render flagChip(
 					'Steuerrelevant',
 					LandmarkOutline,
 					isTaxRelevant,
-					() => (isTaxRelevant = !isTaxRelevant),
-					'border-transparent bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
+					() => (isTaxRelevant = !isTaxRelevant)
 				)}
 			</div>
 		</div>

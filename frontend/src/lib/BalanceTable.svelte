@@ -180,10 +180,7 @@
 		byUsageThen($basicStore.data?.accounts.list ?? [], (a, b) =>
 			accountSorter(a, b, $basicStore.data?.users.me.name || '')
 		).map((account) => ({
-			name:
-				account.owner.name == $basicStore.data?.users.me.name
-					? account.name
-					: `${account.owner.firstName} / ${account.name}`,
+			name: formatAccount(account, $basicStore.data?.users.me.name),
 			value: account.id,
 			color: account.color
 		}))
