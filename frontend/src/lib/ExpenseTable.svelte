@@ -685,7 +685,7 @@
 	$effect(() => {
 		// Which columns a breakpoint adds: Status from md, Konten and Kategorien from lg, Details
 		// from xl. Any earlier and the fixed widths add up to the whole card at the bottom of a
-		// range, and the title, the one column without a width, gets none.
+		// range, and the title, the one column without a width below xl, gets none.
 		const added = [
 			['(min-width: 768px)', 1],
 			['(min-width: 1024px)', 2],
@@ -1750,6 +1750,18 @@
 				<CalendarMonthOutline class={headIcon} />{axis.label}
 				<SortIcon direction={sort.on(axis.sort)} />
 			</TableHeadCell>
+			<!-- Second, next to the date: the amount is what a row is about, and here it keeps
+			     one place however long the title is. "-12.345,67 €" and "von 12.345,67 €" need
+			     96px; the left padding gives up all but 8px of it, the right keeps the gap to the
+			     title that every other pair of columns has. -->
+			<TableHeadCell
+				class="w-30 px-2 py-3 text-right md:w-32 md:pr-4"
+				scope="col"
+				onclick={() => sort.by('effectiveAmount')}
+			>
+				<EuroOutline class={headIcon} />Betrag
+				<SortIcon direction={sort.on('effectiveAmount')} />
+			</TableHeadCell>
 			<TableHeadCell class="px-2 py-3 md:px-4" scope="col" onclick={() => sort.by('title')}>
 				<TextSizeOutline class={headIcon} />Titel
 				<SortIcon direction={sort.on('title')} />
@@ -1770,21 +1782,14 @@
 				<TagOutline class={headIcon} />Kategorien
 				<SortIcon direction={sort.on('categories')} />
 			</TableHeadCell>
-			<!-- "-12.345,67 €" and "von 12.345,67 €" need 96px; the padding sits on the right,
-			     where the figures align, and the left gives up all but 8px of it. -->
-			<TableHeadCell
-				class="w-30 px-2 py-3 text-right md:pr-3"
-				scope="col"
-				onclick={() => sort.by('effectiveAmount')}
-			>
-				<EuroOutline class={headIcon} />Betrag
-				<SortIcon direction={sort.on('effectiveAmount')} />
-			</TableHeadCell>
 			<!-- Geschäft, Beschreibung and the bank's text in one column: an expense rarely has all
 			     three, nobody sorts by them, and three columns of mostly empty cells took the width
 			     Konten and Kategorien needed to show a name in full. No sort arrow for the same
-			     reason; the open row still has each of them in full. -->
-			<TableHeadCell class="hidden px-4 py-3 xl:table-cell xl:w-48 2xl:w-64" scope="col">
+			     reason; the open row still has each of them in full. From 2xl no width: it shares
+			     what the fixed columns leave evenly with the title, which used to take all of it
+			     while store names and statement text were cut short beside it. At xl an even half
+			     of that remainder would be narrower than these 192px. -->
+			<TableHeadCell class="hidden px-4 py-3 xl:table-cell xl:w-48 2xl:w-auto" scope="col">
 				<ReceiptOutline class={headIcon} />Details
 			</TableHeadCell>
 			<TableHeadCell
@@ -1826,6 +1831,21 @@
 							<span>{formatAccrualPeriod(...axisPeriod(expense))}</span>
 						</span>
 					</TableBodyCell>
+					{@const part = partOf(expense)}
+					<TableBodyCell
+						class={'px-2 py-3 text-right whitespace-nowrap md:pr-4 ' +
+							restingAmountColor(expense.effectiveAmount)}
+					>
+						{signedEuro(expense.effectiveAmount * part)}
+						<!-- under the figure rather than beside it: the column is as wide as an
+						     amount, and a second one on the same line was cut off by the one after
+						     it. Unsigned, because the sign is already above it. -->
+						{#if part < 1}
+							<div class="text-xs font-normal text-gray-500 dark:text-gray-400">
+								von {euro(Math.abs(expense.effectiveAmount))}
+							</div>
+						{/if}
+					</TableBodyCell>
 					<!-- `w-full max-w-0` is what makes the inner block truncate: a table cell is as wide
 					     as its content unless something says otherwise, and `truncate` on the cell
 					     itself is gone now that the cell holds two lines rather than one string. Zero
@@ -1850,21 +1870,6 @@
 					</TableBodyCell>
 					<TableBodyCell class="hidden max-w-64 px-4 py-3 lg:table-cell">
 						<ColorDots items={weightedCategories(expense.categories)} />
-					</TableBodyCell>
-					{@const part = partOf(expense)}
-					<TableBodyCell
-						class={'px-2 py-3 text-right whitespace-nowrap md:pr-3 ' +
-							restingAmountColor(expense.effectiveAmount)}
-					>
-						{signedEuro(expense.effectiveAmount * part)}
-						<!-- under the figure rather than beside it: the column is as wide as an
-						     amount, and a second one on the same line was cut off by the one after
-						     it. Unsigned, because the sign is already above it. -->
-						{#if part < 1}
-							<div class="text-xs font-normal text-gray-500 dark:text-gray-400">
-								von {euro(Math.abs(expense.effectiveAmount))}
-							</div>
-						{/if}
 					</TableBodyCell>
 					{@const notes = descriptionOf(expense)}
 					<TableBodyCell

@@ -230,8 +230,14 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   The expense date column reserves a range's width on the Leistungszeitraum axis and a single
   date's on the other two, since that is all they show. Use a real width: fixed table layout
   ignores cell min-width. Betrag is as wide as a five-digit amount with its `von` line and no
-  wider, with its padding on the right where the figures align, Konten and Kategorien grow with
-  the breakpoint, and the title takes the rest.
+  wider, with its padding on the right where the figures align. Konten and Kategorien grow with
+  the breakpoint. From `2xl` Titel and Details have no width and split the rest evenly; at `xl`
+  half of that rest is less than Details' `w-48`, so it keeps that, and below `xl`, where Details
+  is hidden, the title takes all of it.
+- **The expense table reads Datum, Betrag, Titel, Konten, Kategorien, Details, Status.** The
+  amount is what a row is about, so it sits next to the date, at one place however long the
+  title is, rather than after three columns of names. The phone list keeps the amount at the
+  end of the title's line, where a thumb-width list puts it.
 - **A detail row is two columns from `lg`**: what is prose on the left as a `dl`, what is a table
   on the right. A row of the expense list is two thousand pixels wide and its detail used to be
   one narrow stack down the left of it. The small tables in it (`detailTable`) are ruled like the
