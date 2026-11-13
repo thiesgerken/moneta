@@ -34,12 +34,10 @@
 		TrashBinOutline,
 		ExclamationCircleOutline,
 		CalendarMonthOutline,
-		AlignLeftOutline,
 		EuroOutline,
 		FlagOutline,
 		TextSizeOutline,
 		ReceiptOutline,
-		StoreOutline,
 		TagOutline,
 		WalletOutline,
 		CheckCircleOutline,
@@ -66,6 +64,8 @@
 	import {
 		actionButton,
 		actionGroup,
+		attentionChip,
+		attentionText,
 		chip,
 		dangerText,
 		detailTable,
@@ -101,12 +101,22 @@
 
 	/// Every state an expense can carry, with its icon, for the chips and the phone list. The
 	/// status filter and the edit dialog spell the same icons out: one shape per state wherever
-	/// that state is named.
-	const STATES: { flag: keyof Flagged; label: string; icon: typeof QuestionCircleOutline }[] = [
+	/// that state is named. `attention` marks the states that wait for a person, which are amber.
+	const STATES: {
+		flag: keyof Flagged;
+		label: string;
+		icon: typeof QuestionCircleOutline;
+		attention?: boolean;
+	}[] = [
 		{ flag: 'isTaxRelevant', label: 'Steuerrelevant', icon: LandmarkOutline },
 		{ flag: 'isTemplate', label: 'Vorlage', icon: FileCloneOutline },
-		{ flag: 'isUnchecked', label: 'Unbestätigt', icon: QuestionCircleOutline },
-		{ flag: 'isIncomplete', label: 'Unvollständig', icon: ExclamationCircleOutline },
+		{ flag: 'isUnchecked', label: 'Unbestätigt', icon: QuestionCircleOutline, attention: true },
+		{
+			flag: 'isIncomplete',
+			label: 'Unvollständig',
+			icon: ExclamationCircleOutline,
+			attention: true
+		},
 		{ flag: 'isExtraordinary', label: 'Außergewöhnlich', icon: StarOutline }
 	];
 	/// Unbestätigt and unvollständig first, which is the list somebody opens this page to work
@@ -126,7 +136,9 @@
 	} as const;
 	type DateAxis = keyof typeof DATE_AXES;
 
-	let dateAxis = $state<DateAxis>('accrual');
+	/// Wertstellung by default: the list is mostly opened to find a booking, and a booking is
+	/// filed under the day the money moved. Every page that hands a period over names its axis.
+	let dateAxis = $state<DateAxis>('value');
 	const axis = $derived(DATE_AXES[dateAxis]);
 
 	/// only consulted below `md`, where the filters are collapsed
@@ -364,8 +376,6 @@
 		valueDate: 'VALUE_DATE',
 		bookingDate: 'BOOKING_DATE',
 		title: 'TITLE',
-		store: 'STORE',
-		description: 'DESCRIPTION',
 		comments: 'COMMENTS',
 		effectiveAmount: 'EFFECTIVE_AMOUNT',
 		accounts: 'ACCOUNTS',
@@ -650,23 +660,36 @@
 			.filter(Boolean)
 			.join(' · ');
 
+	/// The description with the positions after it, which is what an expense says about itself.
+	const descriptionOf = (expense: {
+		description: string | null;
+		positions: { quantity: number | null; unit: string | null; title: string }[];
+	}) =>
+		[
+			expense.description,
+			...expense.positions.map(
+				(position) =>
+					`${position.quantity ? position.quantity + (position.unit ? ' ' + position.unit : '') + ' ' : ''}${position.title}`
+			)
+		]
+			.filter(Boolean)
+			.join(', ');
+
 	/// How many columns the header is showing, which is what the detail row has to span.
 	///
-	/// A fixed layout lays out as many columns as the widest row declares, so `colspan="9"` over
-	/// the three columns a phone shows invents six empty ones and shares the width between all
-	/// nine -- the title ended up a character wide. Auto layout collapsed them to nothing, which
+	/// A fixed layout lays out as many columns as the widest row declares, so `colspan="7"` over
+	/// the three columns a phone shows invents four empty ones and shares the width between all
+	/// seven -- the title ended up a character wide. Auto layout collapsed them to nothing, which
 	/// is why this only became a problem with `table-fixed`.
-	let columns = $state(9);
+	let columns = $state(7);
 	$effect(() => {
-		// Which columns a breakpoint adds: Status from md, Konten and Kategorien from lg,
-		// Geschäft and Beschreibung from xl, the bank's text from 2xl. Any earlier and the fixed
-		// widths add up to the whole card at the bottom of a range, and the title, the one column
-		// without a width, gets none.
+		// Which columns a breakpoint adds: Status from md, Konten and Kategorien from lg, Details
+		// from xl. Any earlier and the fixed widths add up to the whole card at the bottom of a
+		// range, and the title, the one column without a width, gets none.
 		const added = [
 			['(min-width: 768px)', 1],
 			['(min-width: 1024px)', 2],
-			['(min-width: 1280px)', 2],
-			['(min-width: 1536px)', 1]
+			['(min-width: 1280px)', 1]
 		] as const;
 		const queries = added.map(([query, count]) => [window.matchMedia(query), count] as const);
 		const update = () =>
@@ -680,13 +703,12 @@
 	});
 
 	/// A title that names no expense: the automation rules give one this when their template has
-	/// no title of its own, and it then says the same thing on every row it produced. Red text is
-	/// the only thing in the list that says "this one still needs a human", in the table and in the
-	/// phone list alike; red rather than a filled cell, because colour here is text.
+	/// no title of its own, and it then says the same thing on every row it produced. Amber text,
+	/// like the Unbestätigt and Unvollständig chips: a person still has to name it.
 	const PLACEHOLDER_TITLE = 'Automatisch Generiert';
 	const titleIsPlaceholder = (title: string) => !title.trim() || title.trim() === PLACEHOLDER_TITLE;
 	const titleColor = (title: string) =>
-		titleIsPlaceholder(title) ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white';
+		titleIsPlaceholder(title) ? attentionText : 'text-gray-900 dark:text-white';
 
 	function toggleRow(id: string) {
 		if (expandedRows.includes(id)) expandedRows = expandedRows.filter((rowId) => rowId !== id);
@@ -921,7 +943,9 @@
 
 {#snippet statusBadges(expense: Flagged)}
 	{#each STATES.filter((state) => expense[state.flag]) as state (state.flag)}
-		<span class={chip}><state.icon class="h-3.5 w-3.5 shrink-0" />{state.label}</span>
+		<span class={state.attention ? attentionChip : chip}
+			><state.icon class="h-3.5 w-3.5 shrink-0" />{state.label}</span
+		>
 	{/each}
 {/snippet}
 
@@ -930,7 +954,9 @@
 {#snippet statusIcons(expense: Flagged)}
 	{#each STATES.filter((state) => expense[state.flag]) as state (state.flag)}
 		<state.icon
-			class="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400"
+			class="h-4 w-4 shrink-0 {state.attention
+				? attentionText
+				: 'text-gray-500 dark:text-gray-400'}"
 			aria-label={state.label}
 		/>
 	{/each}
@@ -1483,10 +1509,12 @@
 		classes={tableSearchClasses}
 	>
 		{#snippet header()}
-			<div
-				class="flex w-full flex-col items-stretch justify-start gap-2 md:w-auto md:flex-row md:flex-wrap md:items-center md:gap-3"
-			>
-				<div class="flex flex-wrap items-center gap-2">
+			<!-- From md the wrapper dissolves (`contents`) and its two rows become rows of the bar
+			     itself: Neu and the actions take the whole first row, the filters and the search
+			     share the second. Wrapped as one, the filters sat beside the actions until opening a
+			     second row brought Zusammenführen, and then jumped down under the reader's pointer. -->
+			<div class="flex w-full flex-col items-stretch justify-start gap-2 md:contents">
+				<div class="flex flex-wrap items-center gap-2 md:basis-full">
 					<!-- Everything but Neu acts on whichever row is open, so on a phone the group
                          goes and Neu stands on its own: the item you opened carries its own
                          buttons there, and the multi-row actions are a desktop job. -->
@@ -1678,10 +1706,12 @@
 								<CheckCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Normal
 							</Checkbox>
 							<Checkbox bind:checked={showUnchecked}>
-								<QuestionCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Unbestätigt
+								<QuestionCircleOutline class="me-1.5 h-4 w-4 shrink-0 {attentionText}" />Unbestätigt
 							</Checkbox>
 							<Checkbox bind:checked={showIncomplete}>
-								<ExclamationCircleOutline class="me-1.5 h-4 w-4 shrink-0" />Unvollständig
+								<ExclamationCircleOutline
+									class="me-1.5 h-4 w-4 shrink-0 {attentionText}"
+								/>Unvollständig
 							</Checkbox>
 							<Checkbox bind:checked={showExtraordinary}>
 								<StarOutline class="me-1.5 h-4 w-4 shrink-0" />Außergewöhnlich
@@ -1705,11 +1735,15 @@
 		<TableHead>
 			<!-- pl to clear the chevron: it hangs in the column's left margin, and without this the
 			     label started 24px to the left of every date under it. -->
-			<!-- Fixed table layout ignores a cell's min-width, so reserve a full date range's
-			     width on desktop. On phones the axis label wraps instead, since an unbroken
-			     "Leistungszeitraum" would take half the title's space. -->
+			<!-- Fixed table layout ignores a cell's min-width, so reserve on desktop what the axis
+			     shows: a range's width for the Leistungszeitraum, a single date's otherwise. On
+			     phones the axis label wraps instead, since an unbroken "Leistungszeitraum" would
+			     take half the title's space. -->
 			<TableHeadCell
-				class="w-28 py-3 pr-2 pl-7 wrap-anywhere md:w-60 md:pr-4 md:pl-10 md:whitespace-nowrap"
+				class="w-28 py-3 pr-2 pl-7 wrap-anywhere md:pr-4 md:pl-10 md:whitespace-nowrap {dateAxis ===
+				'accrual'
+					? 'md:w-60'
+					: 'md:w-48'}"
 				scope="col"
 				onclick={() => sort.by(axis.sort)}
 			>
@@ -1721,7 +1755,7 @@
 				<SortIcon direction={sort.on('title')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:w-36 lg:table-cell"
+				class="hidden px-4 py-3 lg:table-cell lg:w-40 xl:w-48 2xl:w-56"
 				scope="col"
 				onclick={() => sort.by('accounts')}
 			>
@@ -1729,43 +1763,29 @@
 				<SortIcon direction={sort.on('accounts')} />
 			</TableHeadCell>
 			<TableHeadCell
-				class="hidden px-4 py-3 md:w-36 lg:table-cell"
+				class="hidden px-4 py-3 lg:table-cell lg:w-40 xl:w-48 2xl:w-56"
 				scope="col"
 				onclick={() => sort.by('categories')}
 			>
 				<TagOutline class={headIcon} />Kategorien
 				<SortIcon direction={sort.on('categories')} />
 			</TableHeadCell>
+			<!-- "-12.345,67 €" and "von 12.345,67 €" need 96px; the padding sits on the right,
+			     where the figures align, and the left gives up all but 8px of it. -->
 			<TableHeadCell
-				class="w-28 px-2 py-3 text-right md:w-32 md:px-4"
+				class="w-30 px-2 py-3 text-right md:pr-3"
 				scope="col"
 				onclick={() => sort.by('effectiveAmount')}
 			>
 				<EuroOutline class={headIcon} />Betrag
 				<SortIcon direction={sort.on('effectiveAmount')} />
 			</TableHeadCell>
-			<TableHeadCell
-				class="hidden px-4 py-3 md:w-32 xl:table-cell"
-				scope="col"
-				onclick={() => sort.by('store')}
-			>
-				<StoreOutline class={headIcon} />Geschäft
-				<SortIcon direction={sort.on('store')} />
-			</TableHeadCell>
-			<TableHeadCell
-				class="hidden px-4 py-3 md:w-40 xl:table-cell 2xl:w-56"
-				scope="col"
-				onclick={() => sort.by('description')}
-			>
-				<AlignLeftOutline class={headIcon} />Beschreibung
-				<SortIcon direction={sort.on('description')} />
-			</TableHeadCell>
-			<!-- What the bank wrote, cut to the line of it that says something: see `statementLine`.
-			     No sort arrow: the backend names its sortable columns and this is not one of them. From 2xl only, and it shares what the fixed columns leave with
-			     the title: at 1280 the nine columns together are wider than the window, and both of
-			     them end up too narrow to read. Below that the expanded row still has it in full. -->
-			<TableHeadCell class="hidden px-4 py-3 2xl:table-cell" scope="col">
-				<ReceiptOutline class={headIcon} />Transaktionstext
+			<!-- Geschäft, Beschreibung and the bank's text in one column: an expense rarely has all
+			     three, nobody sorts by them, and three columns of mostly empty cells took the width
+			     Konten and Kategorien needed to show a name in full. No sort arrow for the same
+			     reason; the open row still has each of them in full. -->
+			<TableHeadCell class="hidden px-4 py-3 xl:table-cell xl:w-48 2xl:w-64" scope="col">
+				<ReceiptOutline class={headIcon} />Details
 			</TableHeadCell>
 			<TableHeadCell
 				class="hidden px-4 py-3 md:table-cell md:w-36"
@@ -1791,16 +1811,20 @@
 				>
 					<!-- text-xs on a phone: a date is what the row is filed under rather than what it
 					     says, and the ten characters it takes are ten the title does not get -->
-					<TableBodyCell class="px-2 py-3 text-xs whitespace-nowrap md:px-4 md:text-sm">
-						<button type="button" class="mr-1 focus:outline-none md:mr-2">
-							{#if expandedRows.includes(expense.id)}
-								<ChevronDownOutline class="inline h-4 w-4" />
-							{:else}
-								<ChevronRightOutline class="inline h-4 w-4" />
-							{/if}
-						</button>
-						{@const period = axisPeriod(expense)}
-						{formatAccrualPeriod(period[0], period[1], false)}
+					<!-- The dates wrap after the dash rather than run into the title: the column is a
+					     single date wide off the accrual axis, and a merged or chained expense whose
+					     transactions sit on different days still shows a range there. -->
+					<TableBodyCell class="px-2 py-3 text-xs whitespace-normal md:px-4 md:text-sm">
+						<span class="flex items-center">
+							<button type="button" class="mr-1 shrink-0 focus:outline-none md:mr-2">
+								{#if expandedRows.includes(expense.id)}
+									<ChevronDownOutline class="h-4 w-4" />
+								{:else}
+									<ChevronRightOutline class="h-4 w-4" />
+								{/if}
+							</button>
+							<span>{formatAccrualPeriod(...axisPeriod(expense))}</span>
+						</span>
 					</TableBodyCell>
 					<!-- `w-full max-w-0` is what makes the inner block truncate: a table cell is as wide
 					     as its content unless something says otherwise, and `truncate` on the cell
@@ -1829,7 +1853,7 @@
 					</TableBodyCell>
 					{@const part = partOf(expense)}
 					<TableBodyCell
-						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' +
+						class={'px-2 py-3 text-right whitespace-nowrap md:pr-3 ' +
 							restingAmountColor(expense.effectiveAmount)}
 					>
 						{signedEuro(expense.effectiveAmount * part)}
@@ -1842,25 +1866,22 @@
 							</div>
 						{/if}
 					</TableBodyCell>
-					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 xl:table-cell"
-						>{expense.store}</TableBodyCell
-					>
-					<TableBodyCell class="hidden max-w-64 truncate px-4 py-3 xl:table-cell"
-						>{expense.description}
-						{expense.positions
-							.map(
-								(position) =>
-									`${position.quantity ? position.quantity + (position.unit ? ' ' + position.unit : '') : ''}${position.title}`
-							)
-							.join(', ')}
-					</TableBodyCell>
-					<!-- monospace because it is machine output: the reference numbers and IBANs in it
-					     are read character by character, and a proportional font makes that work -->
+					{@const notes = descriptionOf(expense)}
 					<TableBodyCell
-						class="hidden truncate px-4 py-3 font-mono text-xs 2xl:table-cell"
+						class="hidden truncate px-4 py-3 xl:table-cell"
 						title={transactionText(expense.transactions)}
 					>
-						{transactionSummary(expense.transactions)}
+						{#if expense.store || notes}
+							{expense.store}<span class="text-gray-500 dark:text-gray-400"
+								>{expense.store && notes ? ' · ' : ''}{notes}</span
+							>
+						{:else}
+							<!-- monospace because it is machine output: the reference numbers and IBANs
+							     in it are read character by character -->
+							<span class="font-mono text-xs text-gray-500 dark:text-gray-400"
+								>{transactionSummary(expense.transactions)}</span
+							>
+						{/if}
 					</TableBodyCell>
 					<TableBodyCell class="hidden px-4 py-3 md:table-cell">
 						<span class="flex flex-wrap gap-1">{@render statusBadges(expense)}</span>

@@ -7,7 +7,7 @@ a flat, a child in Kita and a pair of debt accounts, and everything in their boo
 | File | Page | What it shows |
 | --- | --- | --- |
 | `overview-*.png` | `/` | net worth and its curve, the to-do cards (changes by Krösus, unchecked REWE purchases, last month to go through), the running month's categories and the activity since the last visit |
-| `expenses-*.png` | `/expenses` | the expense list: an incomplete online order and unchecked groceries on top, shared bookings across Girokonto and the debt account, rent and Kita over their whole month |
+| `expenses-*.png` | `/expenses` | the expense list on the value date: an incomplete online order and unchecked groceries on top, shared bookings across Girokonto and the debt account, store, description or bank text in the Details column |
 | `analysis-*.png` | `/analysis?tab=history` | income and spending per month over the last year, and the monthly overview with wealth at either end |
 | `accounts-*.png` | `/accounts` | Rudolph's accounts, the debt account opened up to show it mirrors Krösus' with the sign flipped |
 | `rules-*.png` | `/rules` | periodic and automation rules side by side, the REWE rule opened |

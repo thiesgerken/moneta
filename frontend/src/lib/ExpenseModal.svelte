@@ -577,17 +577,26 @@
 	</ActionButton>
 {/snippet}
 
-{#snippet flagChip(label: string, Icon: Component, on: boolean, toggle: () => void)}
+{#snippet flagChip(
+	label: string,
+	Icon: Component,
+	on: boolean,
+	toggle: () => void,
+	attention = false
+)}
 	<!-- A chip rather than a checkbox, and when it is on it is the chip the list draws for the
 	     same flag, icon and all: what you switch on here is what you then look for in the row. On
 	     is that chip with full-strength text on a light surface; off is a dashed outline in grey
-	     text, which reads as "could be" rather than as a state. -->
+	     text, which reads as "could be" rather than as a state. A state waiting for a person is
+	     amber when on, as in the list. -->
 	<button
 		type="button"
 		aria-pressed={on}
 		onclick={toggle}
 		class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm transition-colors {on
-			? 'border-gray-400 bg-gray-100 text-gray-900 dark:border-gray-400 dark:bg-gray-700 dark:text-white'
+			? attention
+				? 'border-amber-600 bg-gray-100 text-amber-700 dark:border-amber-500 dark:bg-gray-700 dark:text-amber-400'
+				: 'border-gray-400 bg-gray-100 text-gray-900 dark:border-gray-400 dark:bg-gray-700 dark:text-white'
 			: 'border-dashed border-gray-300 text-gray-500 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700'}"
 	>
 		<Icon class="h-4 w-4 shrink-0" />{label}
@@ -737,13 +746,15 @@
 					'Unbestätigt',
 					QuestionCircleOutline,
 					isUnchecked,
-					() => (isUnchecked = !isUnchecked)
+					() => (isUnchecked = !isUnchecked),
+					true
 				)}
 				{@render flagChip(
 					'Unvollständig',
 					ExclamationCircleOutline,
 					isIncomplete,
-					() => (isIncomplete = !isIncomplete)
+					() => (isIncomplete = !isIncomplete),
+					true
 				)}
 				{@render flagChip(
 					'Außergewöhnlich',

@@ -19,9 +19,11 @@ export const tableSearchClasses = {
 	inner:
 		'flex flex-col md:flex-row md:flex-wrap items-center justify-between gap-y-2 space-y-2 md:space-y-0 md:gap-x-4 p-2 sm:p-3',
 	// order-last: the buttons that act on the table belong at the reading edge, the search that
-	// narrows it at the far one, and every table here says it the same way. `min-w-0 flex-1` so
-	// a wide filter row takes the width off the search rather than wrapping it onto its own line
-	search: 'relative w-full min-w-0 flex-1 md:order-last md:w-56 md:max-w-xs',
+	// narrows it at the far one, and every table here says it the same way. `flex-1` so a wide
+	// filter row takes the width off the search rather than wrapping it onto its own line, down to
+	// `md:min-w-40`: below that a search field is a sliver nobody can type into, and it is better
+	// off on a line of its own under the filters (the expense list between 768 and ~1000px)
+	search: 'relative w-full min-w-0 flex-1 md:order-last md:w-56 md:max-w-xs md:min-w-40',
 	// flowbite sizes the input itself at a fixed `w-80`, which ignores whatever width the
 	// wrapper around it was given and hangs 25px out of the card on the expense list.
 	input: 'w-full ps-10 h-10 py-0'
@@ -80,5 +82,14 @@ export const dangerText = 'text-red-700 dark:text-red-300';
 ///
 /// Five pastel fills in one column competed with the amounts for the eye and won, although the
 /// amount is what a row is about. The icon in front of each state is what tells them apart.
-export const chip =
-	'inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-0.5 text-xs whitespace-nowrap text-gray-600 dark:border-gray-600 dark:text-gray-300';
+const chipShape =
+	'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs whitespace-nowrap';
+export const chip = `${chipShape} border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300`;
+
+/// Amber means a person still has to do something: confirm what an automation filed, finish
+/// what is incomplete, name what came in without a title. It is the one colour among the states
+/// because it is the one thing in the list that asks for the reader; red already means money out
+/// and Löschen. amber-700 on white and amber-400 on gray-800 both clear 4.5:1, and on the open
+/// row's shade as well.
+export const attentionText = 'text-amber-700 dark:text-amber-400';
+export const attentionChip = `${chipShape} border-amber-600 text-amber-700 dark:border-amber-500 dark:text-amber-400`;
