@@ -685,7 +685,7 @@
 	$effect(() => {
 		// Which columns a breakpoint adds: Status from md, Konten and Kategorien from lg, Details
 		// from xl. Any earlier and the fixed widths add up to the whole card at the bottom of a
-		// range, and the title, the one column without a width below xl, gets none.
+		// range, and the title, the one column without a width below 2xl, gets none.
 		const added = [
 			['(min-width: 768px)', 1],
 			['(min-width: 1024px)', 2],
@@ -1786,9 +1786,8 @@
 			     three, nobody sorts by them, and three columns of mostly empty cells took the width
 			     Konten and Kategorien needed to show a name in full. No sort arrow for the same
 			     reason; the open row still has each of them in full. From 2xl no width: it shares
-			     what the fixed columns leave evenly with the title, which used to take all of it
-			     while store names and statement text were cut short beside it. At xl an even half
-			     of that remainder would be narrower than these 192px. -->
+			     what the fixed columns leave evenly with the title. At xl an even half of that
+			     remainder would be narrower than these 192px. -->
 			<TableHeadCell class="hidden px-4 py-3 xl:table-cell xl:w-48 2xl:w-auto" scope="col">
 				<ReceiptOutline class={headIcon} />Details
 			</TableHeadCell>
