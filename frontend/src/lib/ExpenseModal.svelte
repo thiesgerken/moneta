@@ -588,7 +588,7 @@
 	     same flag, icon and all: what you switch on here is what you then look for in the row. On
 	     is that chip with full-strength text on a light surface; off is a dashed outline in grey
 	     text, which reads as "could be" rather than as a state. A state waiting for a person is
-     amber when on, as in the list. -->
+	     amber when on, as in the list. -->
 	<button
 		type="button"
 		aria-pressed={on}

@@ -229,7 +229,8 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   takes `md:table-fixed`: without a header the detail row's `colspan` is the widest row.
   The expense date column reserves a range's width on the Leistungszeitraum axis and a single
   date's on the other two, since that is all they show. Use a real width: fixed table layout
-  ignores cell min-width. Betrag is as wide as a typical amount, Konten and Kategorien grow with
+  ignores cell min-width. Betrag is as wide as a five-digit amount with its `von` line and no
+  wider, with its padding on the right where the figures align, Konten and Kategorien grow with
   the breakpoint, and the title takes the rest.
 - **A detail row is two columns from `lg`**: what is prose on the left as a `dl`, what is a table
   on the right. A row of the expense list is two thousand pixels wide and its detail used to be

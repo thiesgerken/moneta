@@ -1770,8 +1770,10 @@
 				<TagOutline class={headIcon} />Kategorien
 				<SortIcon direction={sort.on('categories')} />
 			</TableHeadCell>
+			<!-- "-12.345,67 €" and "von 12.345,67 €" need 96px; the padding sits on the right,
+			     where the figures align, and the left gives up all but 8px of it. -->
 			<TableHeadCell
-				class="w-28 px-2 py-3 text-right md:px-4"
+				class="w-30 px-2 py-3 text-right md:pr-3"
 				scope="col"
 				onclick={() => sort.by('effectiveAmount')}
 			>
@@ -1809,16 +1811,20 @@
 				>
 					<!-- text-xs on a phone: a date is what the row is filed under rather than what it
 					     says, and the ten characters it takes are ten the title does not get -->
-					<TableBodyCell class="px-2 py-3 text-xs whitespace-nowrap md:px-4 md:text-sm">
-						<button type="button" class="mr-1 focus:outline-none md:mr-2">
-							{#if expandedRows.includes(expense.id)}
-								<ChevronDownOutline class="inline h-4 w-4" />
-							{:else}
-								<ChevronRightOutline class="inline h-4 w-4" />
-							{/if}
-						</button>
-						{@const period = axisPeriod(expense)}
-						{formatAccrualPeriod(period[0], period[1], false)}
+					<!-- The dates wrap after the dash rather than run into the title: the column is a
+					     single date wide off the accrual axis, and a merged or chained expense whose
+					     transactions sit on different days still shows a range there. -->
+					<TableBodyCell class="px-2 py-3 text-xs whitespace-normal md:px-4 md:text-sm">
+						<span class="flex items-center">
+							<button type="button" class="mr-1 shrink-0 focus:outline-none md:mr-2">
+								{#if expandedRows.includes(expense.id)}
+									<ChevronDownOutline class="h-4 w-4" />
+								{:else}
+									<ChevronRightOutline class="h-4 w-4" />
+								{/if}
+							</button>
+							<span>{formatAccrualPeriod(...axisPeriod(expense))}</span>
+						</span>
 					</TableBodyCell>
 					<!-- `w-full max-w-0` is what makes the inner block truncate: a table cell is as wide
 					     as its content unless something says otherwise, and `truncate` on the cell
@@ -1847,7 +1853,7 @@
 					</TableBodyCell>
 					{@const part = partOf(expense)}
 					<TableBodyCell
-						class={'px-2 py-3 text-right whitespace-nowrap md:px-4 ' +
+						class={'px-2 py-3 text-right whitespace-nowrap md:pr-3 ' +
 							restingAmountColor(expense.effectiveAmount)}
 					>
 						{signedEuro(expense.effectiveAmount * part)}

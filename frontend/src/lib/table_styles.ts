@@ -19,9 +19,11 @@ export const tableSearchClasses = {
 	inner:
 		'flex flex-col md:flex-row md:flex-wrap items-center justify-between gap-y-2 space-y-2 md:space-y-0 md:gap-x-4 p-2 sm:p-3',
 	// order-last: the buttons that act on the table belong at the reading edge, the search that
-	// narrows it at the far one, and every table here says it the same way. `min-w-0 flex-1` so
-	// a wide filter row takes the width off the search rather than wrapping it onto its own line
-	search: 'relative w-full min-w-0 flex-1 md:order-last md:w-56 md:max-w-xs',
+	// narrows it at the far one, and every table here says it the same way. `flex-1` so a wide
+	// filter row takes the width off the search rather than wrapping it onto its own line, down to
+	// `md:min-w-40`: below that a search field is a sliver nobody can type into, and it is better
+	// off on a line of its own under the filters (the expense list between 768 and ~1000px)
+	search: 'relative w-full min-w-0 flex-1 md:order-last md:w-56 md:max-w-xs md:min-w-40',
 	// flowbite sizes the input itself at a fixed `w-80`, which ignores whatever width the
 	// wrapper around it was given and hangs 25px out of the card on the expense list.
 	input: 'w-full ps-10 h-10 py-0'
