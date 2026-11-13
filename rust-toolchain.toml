@@ -3,7 +3,7 @@
 # pin, every stable release that promotes a new clippy lint turns main red on its own schedule --
 # renovate offers the bump as a reviewable PR instead.
 [toolchain]
-channel = "1.99.1"
+channel = "1.100.0"
 # llvm-tools is what cargo-llvm-cov needs to read the instrumented profiles.
 components = ["rustfmt", "clippy", "llvm-tools-preview"]
 profile = "minimal"
