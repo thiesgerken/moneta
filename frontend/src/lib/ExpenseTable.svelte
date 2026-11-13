@@ -1733,17 +1733,19 @@
 		     until the Status column arrives. Below sm the table is not drawn; the list in the
 		     footer is. -->
 		<TableHead>
-			<!-- pl to clear the chevron: it hangs in the column's left margin, and without this the
-			     label started 24px to the left of every date under it. -->
+			<!-- pl-7 below md to clear the chevron, which hangs in the column's left margin: without
+			     it the label started 24px to the left of every date under it. From md the column's
+			     icon takes that place, over the chevron, and the label lines up with the date. -->
 			<!-- Fixed table layout ignores a cell's min-width, so reserve on desktop what the axis
-			     shows: a range's width for the Leistungszeitraum, a single date's otherwise. On
-			     phones the axis label wraps instead, since an unbroken "Leistungszeitraum" would
-			     take half the title's space. -->
+			     shows: a range's width for the Leistungszeitraum, a single date's otherwise. The
+			     header is the wider of the two: "Buchungstag" with its icon and sort arrow is 126px,
+			     the chevron and a date 104. On phones the axis label wraps instead, since an
+			     unbroken "Leistungszeitraum" would take half the title's space. -->
 			<TableHeadCell
-				class="w-28 py-3 pr-2 pl-7 wrap-anywhere md:pr-4 md:pl-10 md:whitespace-nowrap {dateAxis ===
+				class="w-28 py-3 pr-2 pl-7 wrap-anywhere md:px-4 md:whitespace-nowrap {dateAxis ===
 				'accrual'
 					? 'md:w-60'
-					: 'md:w-48'}"
+					: 'md:w-40'}"
 				scope="col"
 				onclick={() => sort.by(axis.sort)}
 			>
