@@ -114,9 +114,14 @@ saying something a reader would otherwise have to read.
   wealth figure. A positive balance is the normal case, so green on all of them says nothing, and
   the red of an overdrawn account is only noticed when it is the one coloured figure in the
   column. Expense amounts, monthly in and out, and deltas are flows and keep green and red.
-- **A placeholder title is red text** ("Automatisch Generiert", or none at all), in the table and
-  in the phone list alike: the one sign in the list that an automation filed something a person
-  still has to name.
+- **Amber means a person still has to do something** (`attentionText`, `attentionChip` in
+  `table_styles.ts`): the Unbestätigt and Unvollständig chips, their icons in the phone list, the
+  Status filter and the edit dialog, and a placeholder title ("Automatisch Generiert", or none at
+  all). It is text and a hairline, never a fill. Those are the rows somebody opens the list to
+  work through, so they are the ones coloured among the states; Vorlage, Steuerrelevant and
+  Außergewöhnlich describe an expense and stay grey. Not red: red already means money out and
+  Löschen, and a placeholder title in red was louder than an overdrawn account.
+  `amber-700` / `amber-400` clear 4.5:1 on the card and on the open row's shade in both themes.
 - **Wealth** is `WEALTH_COLOR` (`#059669`, emerald) in `analysis/cards.ts`. A curve of what you
   own reads as a warning in orange.
 - **Categories and accounts** carry their own colour from the database, shown as **a dot in front
@@ -206,7 +211,11 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
 - **What an open row unfolds into stays on the card's surface** (`tr[data-detail]`). Its buttons
   are a step off that surface, and on the open row's shade they disappeared.
 - The bank's own text is **monospace** wherever it is shown in full — reference numbers and
-  IBANs are read character by character. It is a column of its own from `2xl`.
+  IBANs are read character by character. In the expense table it shares the **Details** column
+  (from `xl`) with Geschäft and Beschreibung: `Geschäft · Beschreibung` on one line, the bank's
+  text only when both are empty, in full on hover. An expense rarely has all three, nobody sorted
+  by them, and three mostly empty columns took the width Konten and Kategorien needed to show a
+  name in full. The open row still has each of them on its own.
 - Sorting and filtering are **server-side**, through typed arguments. The header cell that
   sorts carries the arrow, and clicking it a third time drops back to the list's default sort —
   sorting lives in the component rather than in the url, so without that there was no way back
@@ -215,18 +224,19 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   on every header cell but the one or two that take what is left. Auto layout re-measured on
   every page turn, so the same list moved its columns as you paged through it. A fixed table
   also lays out as many columns as the _widest row_ declares, so a detail row's `colspan` has to
-  match the number of columns the breakpoint is actually showing — nine over three invents six
-  empty ones and shares the width between all nine. A table that hides its header on a phone
+  match the number of columns the breakpoint is actually showing — seven over three invents four
+  empty ones and shares the width between all seven. A table that hides its header on a phone
   takes `md:table-fixed`: without a header the detail row's `colspan` is the widest row.
-  The expense date column reserves a full date range's width on desktop. Use a real width:
-  fixed table layout ignores cell min-width. The description column yields space below `2xl`
-  so dates and titles fit smaller desktops too.
+  The expense date column reserves a range's width on the Leistungszeitraum axis and a single
+  date's on the other two, since that is all they show. Use a real width: fixed table layout
+  ignores cell min-width. Betrag is as wide as a typical amount, Konten and Kategorien grow with
+  the breakpoint, and the title takes the rest.
 - **A detail row is two columns from `lg`**: what is prose on the left as a `dl`, what is a table
   on the right. A row of the expense list is two thousand pixels wide and its detail used to be
   one narrow stack down the left of it. The small tables in it (`detailTable`) are ruled like the
   list around them and nothing else — no frame, no filled header, no surface of their own.
 - **States, kinds and triggers are chips** (`chip` in `table_styles.ts`): a hairline and muted
-  text with the state's icon. Five pastel fills in one column competed with the amounts and won.
+  text with the state's icon, amber for the two that wait for a person (see Colour). Five pastel fills in one column competed with the amounts and won.
 - A filtered list says so: `ExpenseTable` renders a "Gefiltert nach …" line with one removable
   chip per active filter. A list that arrives pre-filtered from somewhere else must never look
   like the whole list, only shorter.
@@ -254,6 +264,11 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   almost never present is worth more than the thing itself.
 - Only the button that completes the form is `primary`; five orange buttons in a form leave
   nothing to say which one submits it.
+- **The toolbar does not move when the selection does.** From `md` it is two fixed rows: Neu and
+  the action group take the first, the filters and the search share the second. As one wrapping
+  row, the filters sat beside the actions until a second open row brought Zusammenführen, and
+  then jumped down under the reader's pointer. On the phone the filters fold away behind a
+  button, so the question does not arise.
 - **Neu is the only orange button on a page; every other action is one neutral group.**
   Bestätigen, Duplizieren, Bearbeiten, Löschen, Einsortieren and Zusammenführen — in the toolbar
   and at the top of the open row — share `actionGroup` / `actionButton` from `table_styles.ts`: a solid `gray-100` surface

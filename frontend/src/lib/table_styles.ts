@@ -80,5 +80,14 @@ export const dangerText = 'text-red-700 dark:text-red-300';
 ///
 /// Five pastel fills in one column competed with the amounts for the eye and won, although the
 /// amount is what a row is about. The icon in front of each state is what tells them apart.
-export const chip =
-	'inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-0.5 text-xs whitespace-nowrap text-gray-600 dark:border-gray-600 dark:text-gray-300';
+const chipShape =
+	'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs whitespace-nowrap';
+export const chip = `${chipShape} border-gray-300 text-gray-600 dark:border-gray-600 dark:text-gray-300`;
+
+/// Amber means a person still has to do something: confirm what an automation filed, finish
+/// what is incomplete, name what came in without a title. It is the one colour among the states
+/// because it is the one thing in the list that asks for the reader; red already means money out
+/// and Löschen. amber-700 on white and amber-400 on gray-800 both clear 4.5:1, and on the open
+/// row's shade as well.
+export const attentionText = 'text-amber-700 dark:text-amber-400';
+export const attentionChip = `${chipShape} border-amber-600 text-amber-700 dark:border-amber-500 dark:text-amber-400`;

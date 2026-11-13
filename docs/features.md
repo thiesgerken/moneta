@@ -70,7 +70,13 @@ query language.
 Filters: free-text search, accounts, categories, the five flags, and a period. The search
 covers the text fields, the positions, the bank's statement text on each transaction, and an
 amount in either sign. The period filter and the date column both follow whichever of the
-three dates is selected — accrual, value or booking. Active filters show as removable chips.
+three dates is selected — accrual, value or booking. The list opens on the value date, since it
+is mostly opened to find a booking; a page that hands a period over (the analysis drilldowns)
+names its axis in `?axis=`. Active filters show as removable chips.
+
+On desktop, Geschäft, Beschreibung and the bank's statement text share one **Details** column:
+the store and the description, or the statement line when neither is set. None of the three is
+sortable there; the search covers them, and the open row shows each in full.
 
 Clicking a row opens it in place: the transactions with their per-account amounts, the
 categorizations and their weights, receipts, positions, and the **changelog** with a rendered

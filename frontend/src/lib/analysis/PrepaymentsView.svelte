@@ -19,7 +19,7 @@
 	import QueryError from '#lib/QueryError.svelte';
 	import ExpenseDetailModal from '#lib/ExpenseDetailModal.svelte';
 	import { euro, restingAmountColor, signedEuro } from '#lib/money.ts';
-	import { chip } from '#lib/table_styles.ts';
+	import { attentionChip } from '#lib/table_styles.ts';
 
 	// How much of a prepayment is laid out, used up or still to come is a quantity of it, not a
 	// movement on an account: 145 € were prepaid, not -145 €. Expense amounts stay signed the way
@@ -256,7 +256,7 @@
 								)}">{signedEuro(e.effectiveAmount)}</TableBodyCell
 							>
 							<TableBodyCell class="hidden px-2 py-3 sm:px-4 md:table-cell">
-								<span class={chip}>Unvollständig</span>
+								<span class={attentionChip}>Unvollständig</span>
 							</TableBodyCell>
 						</TableBodyRow>
 					{/each}
