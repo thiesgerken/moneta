@@ -23,6 +23,8 @@ const THEIR_ACCOUNT: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000
 const MY_UNCHECKED: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00e1);
 const MY_CHECKED: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00e2);
 const THEIR_UNCHECKED: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00e3);
+/// accrued last of all but paid first of all, so the two date axes order it differently
+const MY_PREPAID: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00e4);
 
 const CONFIRM: &str =
     "mutation($ids: [UUID!]!) { expenses { confirm(ids: $ids) { id isUnchecked } } }";
@@ -83,6 +85,30 @@ fn expense(id: Uuid, account_id: Uuid, is_unchecked: bool) -> Expense {
     }
 }
 
+fn prepaid() -> Expense {
+    let mut e = expense(MY_PREPAID, MY_ACCOUNT, false);
+    e.accrual_start = at(2030, 12, 1);
+    e.accrual_end = at(2030, 12, 31);
+    e.transactions[0].date = at(2030, 1, 1);
+    e
+}
+
+async fn listed(client: &Client, sort_by: &str, sort_dir: &str) -> Vec<Uuid> {
+    let response = post(
+        client,
+        "query($sortBy: ExpenseSortField, $sortDir: SortDirection) { \
+         expenses { list(sortBy: $sortBy, sortDir: $sortDir) { edges { node { id } } } } }",
+        json!({ "sortBy": sort_by, "sortDir": sort_dir }),
+    )
+    .await;
+    response["data"]["expenses"]["list"]["edges"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{response}"))
+        .iter()
+        .map(|n| serde_json::from_value(n["node"]["id"].clone()).unwrap())
+        .collect()
+}
+
 async fn fixtures(conn: &mut AsyncPgConnection) {
     diesel::sql_query(
         "TRUNCATE expense_changes, seen_deliveries, automation_rules, periodic_rules, \
@@ -126,6 +152,7 @@ async fn fixtures(conn: &mut AsyncPgConnection) {
         expense(MY_UNCHECKED, MY_ACCOUNT, true),
         expense(MY_CHECKED, MY_ACCOUNT, false),
         expense(THEIR_UNCHECKED, THEIR_ACCOUNT, true),
+        prepaid(),
     ] {
         moneta::queries::insert_expense(conn, &e)
             .await
@@ -253,5 +280,20 @@ async fn confirm_clears_the_flag_on_what_the_reader_can_see() {
             .unwrap(),
         2,
         "a confirmation has to empty the analysis cache"
+    );
+
+    // with nothing left to attend to, the default sort falls through to the Wertstellung,
+    // which is what the date column shows by default, not the accrual period
+    assert_eq!(
+        listed(&client, "STATUS", "DESC").await,
+        [MY_UNCHECKED, MY_CHECKED, MY_PREPAID]
+    );
+    assert_eq!(
+        listed(&client, "VALUE_DATE", "ASC").await,
+        [MY_PREPAID, MY_UNCHECKED, MY_CHECKED]
+    );
+    assert_eq!(
+        listed(&client, "BOOKING_DATE", "DESC").await,
+        [MY_UNCHECKED, MY_CHECKED, MY_PREPAID]
     );
 }
