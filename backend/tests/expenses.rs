@@ -1,4 +1,5 @@
-//! Expense mutations through the real GraphQL handler, against disposable PostgreSQL 18.
+//! Expense mutations and the order of the expense list through the real GraphQL handler,
+//! against disposable PostgreSQL 18.
 //!
 //! Needs an empty database of its own, handed in as `TEST_DATABASE_URL`. It applies the
 //! migrations and truncates as it goes, so run it after the other suites, not alongside them.
@@ -23,6 +24,8 @@ const THEIR_ACCOUNT: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000
 const MY_UNCHECKED: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00e1);
 const MY_CHECKED: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00e2);
 const THEIR_UNCHECKED: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00e3);
+/// accrued and booked last of all but valued first of all, so the date axes order it differently
+const MY_PREPAID: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00e4);
 
 const CONFIRM: &str =
     "mutation($ids: [UUID!]!) { expenses { confirm(ids: $ids) { id isUnchecked } } }";
@@ -83,6 +86,32 @@ fn expense(id: Uuid, account_id: Uuid, is_unchecked: bool) -> Expense {
     }
 }
 
+fn prepaid() -> Expense {
+    let mut e = expense(MY_PREPAID, MY_ACCOUNT, false);
+    e.accrual_start = at(2030, 12, 1);
+    e.accrual_end = at(2030, 12, 31);
+    e.transactions[0].date = at(2030, 1, 1);
+    e.transactions[0].booking_date = Some(at(2030, 12, 20));
+    e
+}
+
+async fn listed(client: &Client, sort_by: &str, sort_dir: &str, date_axis: Value) -> Vec<Uuid> {
+    let response = post(
+        client,
+        "query($sortBy: ExpenseSortField, $sortDir: SortDirection, $dateAxis: ExpenseDateAxis) { \
+         expenses { list(sortBy: $sortBy, sortDir: $sortDir, dateAxis: $dateAxis) { \
+         edges { node { id } } } } }",
+        json!({ "sortBy": sort_by, "sortDir": sort_dir, "dateAxis": date_axis }),
+    )
+    .await;
+    response["data"]["expenses"]["list"]["edges"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{response}"))
+        .iter()
+        .map(|n| serde_json::from_value(n["node"]["id"].clone()).unwrap())
+        .collect()
+}
+
 async fn fixtures(conn: &mut AsyncPgConnection) {
     diesel::sql_query(
         "TRUNCATE expense_changes, seen_deliveries, automation_rules, periodic_rules, \
@@ -126,6 +155,7 @@ async fn fixtures(conn: &mut AsyncPgConnection) {
         expense(MY_UNCHECKED, MY_ACCOUNT, true),
         expense(MY_CHECKED, MY_ACCOUNT, false),
         expense(THEIR_UNCHECKED, THEIR_ACCOUNT, true),
+        prepaid(),
     ] {
         moneta::queries::insert_expense(conn, &e)
             .await
@@ -172,7 +202,7 @@ async fn changes(pool: &moneta::Pool) -> Vec<(Uuid, Value, Value)> {
 /// One test rather than several: they share one database, and a second test truncating it
 /// while the first is reading would be a race with a very confusing failure.
 #[tokio::test]
-async fn confirm_clears_the_flag_on_what_the_reader_can_see() {
+async fn confirms_and_lists_what_the_reader_can_see() {
     let Ok(url) = std::env::var("TEST_DATABASE_URL") else {
         assert!(
             std::env::var("MONETA_REQUIRE_DB_TESTS").is_err(),
@@ -253,5 +283,36 @@ async fn confirm_clears_the_flag_on_what_the_reader_can_see() {
             .unwrap(),
         2,
         "a confirmation has to empty the analysis cache"
+    );
+
+    // with nothing left to attend to, the default sort falls through to the date the column
+    // shows, Wertstellung unless it says otherwise
+    let newest_valued = [MY_UNCHECKED, MY_CHECKED, MY_PREPAID];
+    let oldest_valued = [MY_PREPAID, MY_UNCHECKED, MY_CHECKED];
+    assert_eq!(
+        listed(&client, "STATUS", "DESC", Value::Null).await,
+        newest_valued
+    );
+    assert_eq!(
+        listed(&client, "STATUS", "DESC", json!("VALUE")).await,
+        newest_valued
+    );
+    assert_eq!(
+        listed(&client, "STATUS", "DESC", json!("ACCRUAL")).await,
+        oldest_valued
+    );
+    assert_eq!(
+        listed(&client, "STATUS", "DESC", json!("BOOKING")).await,
+        oldest_valued
+    );
+
+    assert_eq!(
+        listed(&client, "VALUE_DATE", "ASC", Value::Null).await,
+        oldest_valued
+    );
+    // the prepayment's Buchungstag is the latest of all, its Wertstellung the earliest
+    assert_eq!(
+        listed(&client, "BOOKING_DATE", "DESC", Value::Null).await,
+        oldest_valued
     );
 }

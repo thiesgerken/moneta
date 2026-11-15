@@ -22,8 +22,8 @@
 		{ value: CUSTOM_SPAN, name: 'Eigener Zeitraum', months: null }
 	];
 
-	// Sorted by accrual start rather than by a transaction date, which is not a sort the list
-	// offers -- for an imported expense the two are the same day anyway.
+	// Sorted by accrual start rather than by a transaction date -- for an imported expense the
+	// two are the same day anyway.
 	// No error surface, deliberately: this only finds how far back the data goes, and a failure
 	// falls back to the last year (see `ready`). The views it feeds report their own.
 	const firstExpenseStore = graphql(`
