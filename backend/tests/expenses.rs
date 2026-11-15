@@ -1,4 +1,5 @@
-//! Expense mutations and the order of the expense list through the real GraphQL handler, against disposable PostgreSQL 18.
+//! Expense mutations and the order of the expense list through the real GraphQL handler,
+//! against disposable PostgreSQL 18.
 //!
 //! Needs an empty database of its own, handed in as `TEST_DATABASE_URL`. It applies the
 //! migrations and truncates as it goes, so run it after the other suites, not alongside them.
