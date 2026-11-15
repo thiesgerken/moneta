@@ -90,6 +90,16 @@ enum DeliveryStatus {
   """ FAILED
 }
 
+"""
+  The three dates an expense can be listed by, for the status sort to rank by inside each of
+  its groups: whichever the date column shows, or the rows look unsorted under it.
+"""
+enum ExpenseDateAxis {
+  ACCRUAL
+  VALUE
+  BOOKING
+}
+
 enum ExpenseSortField {
   ACCRUAL_START
   "earliest Wertstellung among the transactions" VALUE_DATE
@@ -798,7 +808,7 @@ type ExpensePosition {
 }
 
 type ExpenseQuery {
-  list(limit: Int, skip: Int, search: String, ids: [UUID!], accountIds: [UUID!], categoryIds: [UUID!], flags: ExpenseFlagFilter, accruedAfter: DateTime, accruedBefore: DateTime, valuedAfter: DateTime, valuedBefore: DateTime, bookedAfter: DateTime, bookedBefore: DateTime, sortBy: ExpenseSortField, sortDir: SortDirection): ExpenseConnection!
+  list(limit: Int, skip: Int, search: String, ids: [UUID!], accountIds: [UUID!], categoryIds: [UUID!], flags: ExpenseFlagFilter, accruedAfter: DateTime, accruedBefore: DateTime, valuedAfter: DateTime, valuedBefore: DateTime, bookedAfter: DateTime, bookedBefore: DateTime, sortBy: ExpenseSortField, sortDir: SortDirection, dateAxis: ExpenseDateAxis): ExpenseConnection!
   get(id: UUID!): Expense!
   changelog(limit: Int, skip: Int, author: ChangelogAuthor, since: DateTime): ExpenseChangelogConnection!
 }

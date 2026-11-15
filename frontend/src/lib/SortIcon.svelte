@@ -8,7 +8,7 @@
 	let { direction }: Props = $props();
 </script>
 
-<!-- the point of the arrow is where the small end is: up for ascending, as everywhere else -->
+<!-- the tip is the small end: up for ascending, as in spreadsheets and file managers -->
 {#if direction === ASC}
 	▲
 {:else if direction === DESC}

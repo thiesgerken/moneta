@@ -217,7 +217,7 @@ Code, comments and commit messages are English. Only what a reader sees is Germa
   by them, and three mostly empty columns took the width Konten and Kategorien needed to show a
   name in full. The open row still has each of them on its own.
 - Sorting and filtering are **server-side**, through typed arguments. The header cell that
-  sorts carries the arrow, and clicking it a third time drops back to the list's default sort —
+  sorts carries the arrow, ▲ ascending and ▼ descending, and clicking it a third time drops back to the list's default sort —
   sorting lives in the component rather than in the url, so without that there was no way back
   to it but a reload. One column at a time; the API takes one `sortBy`.
 - **Column widths are fixed**, not derived from the page being shown. `table-fixed` with a width
