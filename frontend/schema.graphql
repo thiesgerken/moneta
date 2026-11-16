@@ -497,6 +497,8 @@ type AutomationRule {
     for them
   """
   templateId: UUID
+  "see `AutomationRule.templateId`"
+  template: Expense
   "null when the template is gone, in which case the rule cannot fire anyway"
   accrual: AccrualShape
 }
@@ -1007,6 +1009,8 @@ type PeriodicRule {
   updatedAt: DateTime!
   "see `AutomationRule.templateId`"
   templateId: UUID
+  "see `AutomationRule.templateId`"
+  template: Expense
   "the instants this rule would generate expenses for on the next run"
   pending: [DateTime!]!
 }
