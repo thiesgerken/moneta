@@ -33,9 +33,9 @@ The DB-backed Rust suites take `TEST_DATABASE_URL`: run `cargo test --test scopi
 fixtures, so never run two concurrently against one database. The API-key suite exercises the
 production GraphQL HTTP handler with dummy users; the backup suite round-trips every table
 through `moneta export` and `moneta import`; the trusted-header suite drives `Remote-User` from
-inside and outside the proxy allowlist; the expense suite drives expense mutations through the
-real handler. `MONETA_REQUIRE_DB_TESTS=1` forbids skipping them when the URL is absent. CI runs
-all five sequentially in its database-backed job.
+inside and outside the proxy allowlist; the expense suite drives expense mutations and the
+list's sort order through the real handler. `MONETA_REQUIRE_DB_TESTS=1` forbids skipping them
+when the URL is absent. CI runs all five sequentially in its database-backed job.
 
 CI runs exactly these and is strict — `clippy -D warnings` and `fmt --check` both fail the
 build, including on test code.

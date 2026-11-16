@@ -1,5 +1,9 @@
 <script lang="ts">
-	import type { ExpenseSortField$options, SortDirection$options } from '$houdini';
+	import type {
+		ExpenseDateAxis$options,
+		ExpenseSortField$options,
+		SortDirection$options
+	} from '$houdini';
 	import { graphql } from '$houdini';
 	import { invalidate, AFTER_WRITE } from './invalidate';
 
@@ -406,7 +410,9 @@
 		bookedAfter: dateAxis === 'booking' ? filterDateRange.from : undefined,
 		bookedBefore: dateAxis === 'booking' ? filterBefore : undefined,
 		sortBy: SORT_FIELDS[sort.field],
-		sortDir: (sort.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options
+		sortDir: (sort.direction < 0 ? 'DESC' : 'ASC') as SortDirection$options,
+		// what the status sort ranks by inside its groups, so the default order matches the column
+		dateAxis: dateAxis.toUpperCase() as ExpenseDateAxis$options
 	});
 
 	// Stuff that we always need independently of the current page and sorting and so on
@@ -461,6 +467,7 @@
 			$bookedBefore: DateTime
 			$sortBy: ExpenseSortField
 			$sortDir: SortDirection
+			$dateAxis: ExpenseDateAxis
 		) {
 			expenses {
 				list(
@@ -479,6 +486,7 @@
 					bookedBefore: $bookedBefore
 					sortBy: $sortBy
 					sortDir: $sortDir
+					dateAxis: $dateAxis
 				) {
 					totalCount
 					edges {
@@ -726,8 +734,6 @@
 		selectedExpenses.length === 1 ? selectedExpenses[0].id : undefined
 	);
 
-	/// Descending, ascending, off. The third state is what there was no way back to: sorting
-	/// lives in the component rather than in the url, so a header clicked by accident could only
 	/// Switching the column takes the sort with it, but only if the sort was on a date: someone
 	/// who ordered by amount asked for that, and it does not become a different question here.
 	function setDateAxis(next: DateAxis) {
