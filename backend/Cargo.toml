@@ -41,7 +41,7 @@ diesel = { version = "2.3", features = [
     "serde_json",
     "uuid",
 ] }
-diesel-async = { version = "0.9", features = [
+diesel-async = { version = "0.10", features = [
     "async-connection-wrapper",
     "deadpool",
     "migrations",
