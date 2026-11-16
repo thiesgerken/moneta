@@ -187,15 +187,15 @@
 			// anything that sorts by what a rule matched.
 			bookingDate: duplicate || !tx.bookingDate ? undefined : new Date(tx.bookingDate),
 			accountId: tx.account.id.toString(),
-			amount: tx.amount ? (tx.amount / 100).toFixed(2) : '',
+			amount: tx.amount !== null ? (tx.amount / 100).toFixed(2) : '',
 			statement: duplicate ? '' : tx.statement || '',
 			isRelative: tx.fraction !== null,
-			percentage: tx.fraction ? (100 * tx.fraction).toString() : ''
+			percentage: tx.fraction !== null ? (100 * tx.fraction).toString() : ''
 		})) || [emptyTransaction()];
 		positions =
 			expense?.positions.map((pos) => ({
 				title: pos.title,
-				totalAmount: pos.amount ? (pos.amount / 100).toString() : '',
+				totalAmount: pos.amount !== null ? (pos.amount / 100).toString() : '',
 				quantity: pos.quantity?.toString() || '',
 				unit: pos.unit || '',
 				comments: pos.comments || ''

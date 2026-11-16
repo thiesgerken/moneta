@@ -29,8 +29,7 @@
 		WandMagicSparklesOutline,
 		SearchOutline,
 		SortOutline,
-		ClockArrowOutline,
-		FileCloneOutline
+		ClockArrowOutline
 	} from 'flowbite-svelte-icons';
 	import AutomationRuleModal from './AutomationRuleModal.svelte';
 	import PeriodicRuleModal from './PeriodicRuleModal.svelte';
@@ -49,7 +48,8 @@
 		actionButton,
 		actionGroup,
 		dangerText,
-		chip
+		chip,
+		attentionChip
 	} from './table_styles';
 	import { shortDate } from './analysis/dates';
 	import { describeAccrual, formatAccrualPeriod } from './expense_utils';
@@ -84,7 +84,11 @@
 					filterAmount
 					filterAccountId
 					lastDelivery
-					templateId
+					template {
+						id
+						title
+						accrualStart
+					}
 					accrual {
 						months
 						days
@@ -103,7 +107,11 @@
 					period
 					titleReplacement
 					lastCreation
-					templateId
+					template {
+						id
+						title
+						accrualStart
+					}
 					pending
 				}
 			}
@@ -151,7 +159,7 @@
 		/// the text the trigger sorts and searches on
 		trigger: string;
 		lastUsed: Date | null;
-		templateId: string | null;
+		template: (typeof automation)[number]['template'];
 		priority: number | null;
 		pending: number | null;
 		automation?: (typeof automation)[number];
@@ -165,7 +173,7 @@
 			title: r.title,
 			trigger: r.regexStatement ?? '',
 			lastUsed: r.lastDelivery,
-			templateId: r.templateId,
+			template: r.template,
 			priority: r.priority,
 			pending: null,
 			automation: r
@@ -176,7 +184,7 @@
 			title: r.title,
 			trigger: PERIOD_NAMES[r.period] ?? r.period,
 			lastUsed: r.lastCreation,
-			templateId: r.templateId,
+			template: r.template,
 			priority: null,
 			pending: r.pending.length,
 			periodic: r
@@ -571,8 +579,8 @@
 							{/if}
 						</button>
 						{row.title}
-						{#if !row.templateId}
-							<span class="{chip} {dangerText} ml-2">Vorlage fehlt</span>
+						{#if !row.template}
+							<span class="{attentionChip} ml-2">Vorlage fehlt</span>
 						{/if}
 						<!-- Four columns do not fit on a phone, and a rule is nothing without what fires
 						     it, so they come back as a line under the title rather than being dropped. -->
@@ -651,7 +659,7 @@
 									</div>
 									<div>
 										<b>Fällig:</b>
-										{#if !rule.templateId}
+										{#if !row.template}
 											Die Vorlage gibt es nicht mehr, die Regel kann nichts erzeugen.
 										{:else if rule.pending.length > 0}
 											{rule.pending.map(shortDate).join(', ')}
@@ -661,22 +669,27 @@
 									</div>
 								{/if}
 
+								<!-- A missing template already says so beside the title. -->
+								{#if row.template}
+									<div>
+										<b>Vorlage:</b>
+										<a
+											class="text-primary-600 dark:text-primary-400 hover:underline"
+											href="{resolve('/expenses')}?expense={row.template.id}"
+											>{row.template.title}</a
+										>
+										<span class="text-gray-500 dark:text-gray-400">
+											· {shortDate(row.template.accrualStart)}
+										</span>
+									</div>
+								{/if}
+
 								<div>
 									<b>Zuletzt ausgelöst:</b>
 									{row.lastUsed ? shortDate(row.lastUsed) : 'nie'}
 								</div>
 
 								<ButtonGroup class="w-fit {actionGroup}">
-									{#if row.templateId}
-										<Button
-											color="light"
-											class={actionButton}
-											href="{resolve('/expenses')}?expense={row.templateId}"
-										>
-											<FileCloneOutline class="mr-2 h-3.5 w-3.5" />
-											Vorlage
-										</Button>
-									{/if}
 									<Button color="light" class={actionButton} onclick={() => edit(row.id)}>
 										<EditOutline class="mr-2 h-3.5 w-3.5" />
 										Bearbeiten

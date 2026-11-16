@@ -15,7 +15,7 @@
 			readonly period: string;
 			readonly titleReplacement: string | null;
 			readonly lastCreation: Date;
-			readonly templateId: string | null;
+			readonly template: { readonly id: string } | null;
 		};
 	}
 	let { open = $bindable(), rule, onsubmit }: Props = $props();
@@ -24,7 +24,7 @@
 	let period = $derived(rule?.period || 'MONTHLY');
 	let titleReplacement = $derived(rule?.titleReplacement || '');
 	let lastCreation = $derived((rule?.lastCreation ?? new Date()).toISOString().slice(0, 10));
-	let templateId = $derived(rule?.templateId || '');
+	let templateId = $derived(rule?.template?.id || '');
 
 	const titleError = $derived(!title.trim());
 	const templateError = $derived(!templateId);

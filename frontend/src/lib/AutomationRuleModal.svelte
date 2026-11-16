@@ -22,7 +22,7 @@
 			readonly regexStatement: string | null;
 			readonly filterAmount: number | null;
 			readonly filterAccountId: string | null;
-			readonly templateId: string | null;
+			readonly template: { readonly id: string } | null;
 			readonly lastDelivery: Date | null;
 		};
 	}
@@ -36,7 +36,7 @@
 		rule?.filterAmount != null ? (rule.filterAmount / 100).toFixed(2) : ''
 	);
 	let filterAccountId = $derived(rule?.filterAccountId || '');
-	let templateId = $derived(rule?.templateId || '');
+	let templateId = $derived(rule?.template?.id || '');
 
 	const titleError = $derived(!title.trim());
 	const templateError = $derived(!templateId);

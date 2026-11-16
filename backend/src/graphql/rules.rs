@@ -7,8 +7,10 @@ use juniper::{FieldResult, GraphQLEnum, graphql_object};
 
 use super::util::{self, SortDirection};
 use crate::accrual;
+use crate::graphql::expenses::GraphQLExpense;
 use crate::graphql::root::{Context, require_user};
 use crate::graphql::scoped;
+use crate::models::rendering::RenderedExpense;
 use crate::models::{
     AutomationRule, AutomationRuleInput, ExpenseDelivery, PeriodicInterval, PeriodicRule,
     PeriodicRuleInput, SeenDelivery,
@@ -33,6 +35,21 @@ async fn visible_expense(conn: &mut Conn, user_id: Uuid, id: Uuid) -> FieldResul
         .first(conn)
         .await
         .optional()?)
+}
+
+/// The expense a rule copies, under the same visibility as `visible_expense`.
+async fn visible_template(
+    conn: &mut Conn,
+    user_id: Uuid,
+    id: Uuid,
+) -> FieldResult<Option<GraphQLExpense>> {
+    Ok(scoped::expenses(user_id)
+        .filter(expenses_rendered::id.eq(id))
+        .select(RenderedExpense::as_select())
+        .first(conn)
+        .await
+        .optional()?
+        .map(GraphQLExpense::new))
 }
 
 /// A rule may only copy a template. Anything else is a real booking, and a rule pointing at one
@@ -104,6 +121,13 @@ impl GraphQLAutomationRule {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
         visible_expense(conn, user_id, self.data.template_id).await
+    }
+
+    /// see `AutomationRule.templateId`
+    async fn template(&self, context: &Context) -> FieldResult<Option<GraphQLExpense>> {
+        let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
+        visible_template(conn, user_id, self.data.template_id).await
     }
 
     /// null when the template is gone, in which case the rule cannot fire anyway
@@ -217,6 +241,13 @@ impl GraphQLPeriodicRule {
         let user_id = require_user(context).await?;
         let conn = &mut context.conn().await?;
         visible_expense(conn, user_id, self.data.template_id).await
+    }
+
+    /// see `AutomationRule.templateId`
+    async fn template(&self, context: &Context) -> FieldResult<Option<GraphQLExpense>> {
+        let user_id = require_user(context).await?;
+        let conn = &mut context.conn().await?;
+        visible_template(conn, user_id, self.data.template_id).await
     }
 
     /// the instants this rule would generate expenses for on the next run
