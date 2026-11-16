@@ -48,7 +48,8 @@
 		actionButton,
 		actionGroup,
 		dangerText,
-		chip
+		chip,
+		attentionChip
 	} from './table_styles';
 	import { shortDate } from './analysis/dates';
 	import { describeAccrual, formatAccrualPeriod } from './expense_utils';
@@ -83,7 +84,6 @@
 					filterAmount
 					filterAccountId
 					lastDelivery
-					templateId
 					template {
 						id
 						title
@@ -107,7 +107,6 @@
 					period
 					titleReplacement
 					lastCreation
-					templateId
 					template {
 						id
 						title
@@ -581,7 +580,7 @@
 						</button>
 						{row.title}
 						{#if !row.template}
-							<span class="{chip} {dangerText} ml-2">Vorlage fehlt</span>
+							<span class="{attentionChip} ml-2">Vorlage fehlt</span>
 						{/if}
 						<!-- Four columns do not fit on a phone, and a rule is nothing without what fires
 						     it, so they come back as a line under the title rather than being dropped. -->
@@ -670,9 +669,10 @@
 									</div>
 								{/if}
 
-								<div>
-									<b>Vorlage:</b>
-									{#if row.template}
+								<!-- A missing template already says so beside the title. -->
+								{#if row.template}
+									<div>
+										<b>Vorlage:</b>
 										<a
 											class="text-primary-600 dark:text-primary-400 hover:underline"
 											href="{resolve('/expenses')}?expense={row.template.id}"
@@ -681,10 +681,8 @@
 										<span class="text-gray-500 dark:text-gray-400">
 											· {shortDate(row.template.accrualStart)}
 										</span>
-									{:else}
-										<span class={dangerText}>fehlt</span>
-									{/if}
-								</div>
+									</div>
+								{/if}
 
 								<div>
 									<b>Zuletzt ausgelöst:</b>

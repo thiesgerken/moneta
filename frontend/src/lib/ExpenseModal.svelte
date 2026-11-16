@@ -195,7 +195,7 @@
 		positions =
 			expense?.positions.map((pos) => ({
 				title: pos.title,
-				totalAmount: pos.amount ? (pos.amount / 100).toString() : '',
+				totalAmount: pos.amount !== null ? (pos.amount / 100).toString() : '',
 				quantity: pos.quantity?.toString() || '',
 				unit: pos.unit || '',
 				comments: pos.comments || ''
