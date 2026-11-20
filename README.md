@@ -98,13 +98,13 @@ invented years of their books. [Retaking them](docs/screenshots/README.md) is sc
 ## 🚀 Getting started
 
 The quickest way to see Moneta with something in it is to run it locally and import the demo
-household. You need Docker (for PostgreSQL 18), Rust (rustup picks the pinned toolchain from
+household. You need Docker (for PostgreSQL 19), Rust (rustup picks the pinned toolchain from
 `rust-toolchain.toml`) and Node. With Nix, `nix develop` brings all of them except Docker.
 
 In one terminal, from the top of the repository:
 
 ```sh
-docker compose up -d postgres                       # PostgreSQL 18 on 127.0.0.1:5433
+docker compose up -d postgres                       # PostgreSQL 19 on 127.0.0.1:5433
 cd backend
 cargo run -- import < ../docs/demo/rudolph.json     # into the still empty database
 cargo run -- user --update Rudolph                  # imported users have no password yet

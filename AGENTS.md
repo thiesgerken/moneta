@@ -60,7 +60,7 @@ real. If codegen gets into a bad state, `rm -rf .houdini .svelte-kit` and rebuil
 ## Never touch `volumes/postgres` directly
 
 That directory is real personal financial data. It is gitignored and there is no other copy
-of most of it.
+of most of it. It holds a PostgreSQL 18 cluster that `docker-compose.yaml` no longer mounts.
 
 Use the unit tests and the SQL fixtures against a dedicated throwaway PostgreSQL 18 container:
 
